@@ -11,37 +11,28 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
-    /**
-     * The attributes that are mass assignable.
-     *
-     * @var array<int, string>
-     */
+    protected $primaryKey = 'user_id';
+
     protected $fillable = [
         'name',
         'email',
         'password',
+        'role',
+        'office_id',
+        'is_verified',
     ];
 
-    /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var array<int, string>
-     */
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
-
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
+    // Relationship with real estate office if the user is an agent
+    public function office()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        return $this->belongsTo(RealEstateOffice::class, 'office_id', 'office_id');
     }
+
+    public function reviews()
+    {
+
+    return $this->hasMany(Review::class, 'user_id', 'user_id');
+
+    }
+
 }
