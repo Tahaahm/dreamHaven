@@ -11,9 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('agents', function (Blueprint $table) {
+        Schema::create('agents', callback: function (Blueprint $table) {
             $table->bigIncrements('agent_id');
-            $table->unsignedBigInteger('office_id');  // Foreign key to real estate office
+            $table->unsignedBigInteger('office_id')->nullable();  // Foreign key to real estate office
             $table->string('agent_name');
             $table->string('email')->unique();
             $table->string('phone');
@@ -21,9 +21,8 @@ return new class extends Migration
             $table->string('profile_photo')->nullable();
             $table->timestamps();
 
-            $table->foreign('office_id')->references('office_id')->on('real_estate_offices')->onDelete('cascade');
+            $table->foreign('office_id')->references('office_id')->on('real_estate_offices')->onDelete('set null');
         });
-
     }
 
     /**

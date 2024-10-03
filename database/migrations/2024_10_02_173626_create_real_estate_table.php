@@ -29,6 +29,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('real_estate');
+        Schema::dropIfExists('real_estate_offices'); // Ensure table name matches the one in the 'up' method
     }
 };

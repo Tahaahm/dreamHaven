@@ -22,7 +22,8 @@ return new class extends Migration
             $table->rememberToken();
             $table->timestamps();
 
-            $table->foreign('office_id')->references('office_id')->on('real_estate_offices')->onDelete('cascade');
+            // For now, remove the foreign key constraint. You can add this later.
+            // $table->foreign('office_id')->references('office_id')->on('real_estate_offices')->onDelete('cascade');
         });
     }
 

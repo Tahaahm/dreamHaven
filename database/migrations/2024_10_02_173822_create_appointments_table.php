@@ -21,7 +21,6 @@ return new class extends Migration
             $table->enum('status', ['pending', 'processing', 'accepted'])->default('pending'); // Appointment status
             $table->text('location');
             $table->timestamps();
-
             $table->foreign('user_id')->references('user_id')->on('users')->onDelete('cascade');
             $table->foreign('agent_id')->references('agent_id')->on('agents')->onDelete('cascade');
             $table->foreign('office_id')->references('office_id')->on('real_estate_offices')->onDelete('cascade');

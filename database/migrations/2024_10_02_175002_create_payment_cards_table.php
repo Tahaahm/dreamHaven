@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('cardholder_name');  // Name on the card
             $table->string('card_number');  // Card number
             $table->string('expiry_date');  // Expiration date (MM/YY)
-            $table->string('cvv');  // CVV code (encrypted)
+            $table->string(column: 'cvv');  // CVV code (encrypted)
             $table->timestamps();  // created_at and updated_at
 
             $table->foreign('agent_id')->references('agent_id')->on('agents')->onDelete('set null');
