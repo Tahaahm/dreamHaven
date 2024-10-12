@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Appointment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+
 
 class AppointmentController extends Controller
 {
-   /**
-     * Get all appointments or filter by user/agent/office.
+    /**
+     * Display a listing of appointments.
      */
     public function index(Request $request)
     {
@@ -22,16 +24,15 @@ class AppointmentController extends Controller
             $appointments = Appointment::all();
         }
 
-        return response()->json($appointments, 200);
+        return response()->json($appointments);
     }
 
     /**
-     * Create a new appointment between a user and an agent/office.
+     * Store a newly created appointment in storage.
      */
     public function store(Request $request)
     {
-        // Validate the incoming request
-        $validatedData = $request->validate([
+        $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,user_id',
             'agent_id' => 'nullable|exists:agents,agent_id',
             'office_id' => 'nullable|exists:real_estate_offices,office_id',
@@ -41,50 +42,65 @@ class AppointmentController extends Controller
             'location' => 'required|string',
         ]);
 
-        // Create a new appointment
-        $appointment = Appointment::create($validatedData);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        $appointment = Appointment::create($request->all());
 
         return response()->json(['message' => 'Appointment created successfully', 'appointment' => $appointment], 201);
     }
 
     /**
-     * Update an appointment's details.
+     * Display the specified appointment.
+     */
+    public function show($id)
+    {
+        $appointment = Appointment::find($id);
+        if (!$appointment) {
+            return response()->json(['message' => 'Appointment not found'], 404);
+        }
+        return response()->json($appointment);
+    }
+
+    /**
+     * Update the specified appointment in storage.
      */
     public function update(Request $request, $id)
     {
         $appointment = Appointment::find($id);
-
         if (!$appointment) {
             return response()->json(['message' => 'Appointment not found'], 404);
         }
 
-        // Validate the incoming request
-        $validatedData = $request->validate([
+        $validator = Validator::make($request->all(), [
             'date' => 'date',
             'time' => 'string',
             'status' => 'in:pending,processing,accepted',
             'location' => 'string',
         ]);
 
-        // Update the appointment
-        $appointment->update($validatedData);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 400);
+        }
+
+        $appointment->update($request->all());
 
         return response()->json(['message' => 'Appointment updated successfully', 'appointment' => $appointment]);
     }
 
     /**
-     * Cancel an appointment (delete).
+     * Remove the specified appointment from storage.
      */
     public function destroy($id)
     {
         $appointment = Appointment::find($id);
-
         if (!$appointment) {
             return response()->json(['message' => 'Appointment not found'], 404);
         }
 
         $appointment->delete();
 
-        return response()->json(['message' => 'Appointment cancelled successfully']);
+        return response()->json(['message' => 'Appointment deleted successfully']);
     }
 }

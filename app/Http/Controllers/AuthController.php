@@ -6,81 +6,123 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
-   /**
-     * User registration (sign-up).
-     * Handles the creation of a new user.
+    /**
+     * Display a listing of the users.
      */
-    public function register(Request $request)
+    public function index()
     {
-        // Validate the incoming request
+        $users = User::all();
+        return response()->json($users);
+    }
+
+    /**
+     * Show the form for creating a new user.
+     */
+    public function create()
+    {
+        //
+    }
+
+    /**
+     * Store a newly created user in storage.
+     */
+    public function store(Request $request)
+    {
+        Log::info('User Validation ');
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'required|string|email|max:255|unique:users',
             'password' => 'required|string|min:8',
             'role' => 'required|in:user,agent,real_estate_office',
+            'office_id' => 'nullable|exists:real_estate_offices,office_id'
         ]);
-
-        // If validation fails, return the errors
+        Log::info('User Created: ');
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 400);
+            Log::error('Validation failed: ', $validator->errors()->toArray());
+            return response()->json($validator->errors(), 400);
         }
 
-        // Create a new user
+
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
-            'password' => Hash::make($request->password), // Encrypt the password
-            'role' => $request->role, // Either 'user', 'agent', or 'real_estate_office'
+            'password' => Hash::make($request->password),
+            'role' => $request->role,
+            'office_id' => $request->office_id,
+            'is_verified' => false
         ]);
+        Log::info('User Created: ', $user->toArray());
 
-        // Generate a token for the user
-        $token = $user->createToken('authToken')->plainTextToken;
 
-        // Return success response with token
-        return response()->json(['message' => 'User registered successfully', 'token' => $token], 201);
+
+        return response()->json(['message' => 'User created successfully', 'user' => $user], 201);
     }
 
     /**
-     * User login.
-     * Handles user authentication.
+     * Display the specified user.
      */
-    public function login(Request $request)
+    public function show($id)
     {
-        // Validate the incoming request
-        $credentials = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
-        ]);
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+        return response()->json($user);
+    }
 
-        // Attempt to log the user in
-        if (!Auth::attempt($credentials)) {
-            return response()->json(['message' => 'Invalid login credentials'], 401);
+    /**
+     * Update the specified user in storage.
+     */
+    public function update(Request $request, $id)
+{
+    $user = User::find($id);
+    if (!$user) {
+        return response()->json(['message' => 'User not found'], 404);
+    }
+
+    $validator = Validator::make($request->all(), [
+        'name' => 'string|max:255',
+        'email' => 'string|email|max:255|unique:users,email,' . $user->user_id . ',user_id',  // Explicitly mention the primary key
+        'password' => 'nullable|string|min:8',
+        'role' => 'in:user,agent,real_estate_office',
+        'office_id' => 'nullable|exists:real_estate_offices,office_id'
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json($validator->errors(), 400);
+    }
+
+    // Update user attributes except password
+    $user->update($request->only('name', 'email', 'role', 'office_id', 'is_verified'));
+
+    // Handle password update separately
+    if ($request->filled('password')) {
+        $user->password = Hash::make($request->password);
+        $user->save();
+    }
+
+    return response()->json(['message' => 'User updated successfully', 'user' => $user]);
+}
+
+
+
+    /**
+     * Remove the specified user from storage.
+     */
+    public function destroy($id)
+    {
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
         }
 
-        // Get the authenticated user
-        $user = Auth::user();
+        $user->delete();
 
-        // Generate a token for the user
-        $token = $user->createToken('authToken')->plainTextToken;
-
-        // Return success response with token
-        return response()->json(['message' => 'Login successful', 'token' => $token], 200);
-    }
-
-    /**
-     * Logout the user.
-     * Revoke all user tokens.
-     */
-    public function logout(Request $request)
-    {
-        // Revoke all tokens for the authenticated user
-        $request->user()->tokens()->delete();
-
-        // Return success response
-        return response()->json(['message' => 'Logged out successfully'], 200);
+        return response()->json(['message' => 'User deleted successfully']);
     }
 }

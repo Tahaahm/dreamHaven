@@ -12,6 +12,21 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         //
+
+        $middleware->validateCsrfTokens( $except = [
+            'users',
+            '/users/*',
+            'real-estate-offices',
+            'real-estate-offices/*',
+            'agents',
+            'agents/*',
+            'properties',
+            'properties/*',
+            'projects',
+            'projects/*',
+            'appointments',
+            'appointments/*',
+        ] );
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
