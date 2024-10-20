@@ -35,12 +35,19 @@ return [
     |
     */
 
-    'guards' => [
-        'web' => [
-            'driver' => 'session',
-            'provider' => 'users',
-        ],
+   'guards' => [
+    'web' => [
+        'driver' => 'session',
+        'provider' => 'users',
     ],
+    'api' => [
+        'driver' => 'token',
+        'provider' => 'users',
+        'hash' => false,
+    ],
+ ],
+
+
 
     /*
     |--------------------------------------------------------------------------
@@ -59,17 +66,17 @@ return [
     |
     */
 
-    'providers' => [
-        'users' => [
-            'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', App\Models\User::class),
-        ],
-
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
+   'providers' => [
+    'users' => [
+        'driver' => 'eloquent',
+        'model' => App\Models\User::class,
     ],
+    'real_estate_offices' => [
+        'driver' => 'eloquent',
+        'model' => App\Models\RealEstateOffice::class,  // If you're using RealEstateOffice model for authentication
+    ],
+],
+
 
     /*
     |--------------------------------------------------------------------------

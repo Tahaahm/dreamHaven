@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Helper\ApiResponse;
+use App\Helper\ResponseDetails;
 use App\Models\Appointment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -24,10 +26,14 @@ class AppointmentController extends Controller
             $appointments = Appointment::all();
         }
 
-        return response()->json($appointments);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Appointments retrieved successfully'),
+            $appointments,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
-    /**
+     /**
      * Store a newly created appointment in storage.
      */
     public function store(Request $request)
@@ -43,14 +49,21 @@ class AppointmentController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $appointment = Appointment::create($request->all());
 
-        return response()->json(['message' => 'Appointment created successfully', 'appointment' => $appointment], 201);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Appointment created successfully'),
+            $appointment,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
-
     /**
      * Display the specified appointment.
      */
@@ -58,10 +71,20 @@ class AppointmentController extends Controller
     {
         $appointment = Appointment::find($id);
         if (!$appointment) {
-            return response()->json(['message' => 'Appointment not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Appointment not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
-        return response()->json($appointment);
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Appointment retrieved successfully'),
+            $appointment,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
+
 
     /**
      * Update the specified appointment in storage.
@@ -70,7 +93,11 @@ class AppointmentController extends Controller
     {
         $appointment = Appointment::find($id);
         if (!$appointment) {
-            return response()->json(['message' => 'Appointment not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Appointment not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $validator = Validator::make($request->all(), [
@@ -81,12 +108,20 @@ class AppointmentController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $appointment->update($request->all());
 
-        return response()->json(['message' => 'Appointment updated successfully', 'appointment' => $appointment]);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Appointment updated successfully'),
+            $appointment,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -96,11 +131,19 @@ class AppointmentController extends Controller
     {
         $appointment = Appointment::find($id);
         if (!$appointment) {
-            return response()->json(['message' => 'Appointment not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Appointment not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $appointment->delete();
 
-        return response()->json(['message' => 'Appointment deleted successfully']);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Appointment deleted successfully'),
+            null,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 }

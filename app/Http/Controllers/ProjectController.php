@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Helper\ApiResponse;
+use App\Helper\ResponseDetails;
 use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -18,7 +20,11 @@ class ProjectController extends Controller
             $projects = Project::all();
         }
 
-        return response()->json($projects);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Projects retrieved successfully'),
+            $projects,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -35,12 +41,20 @@ class ProjectController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $project = Project::create($request->all());
 
-        return response()->json(['message' => 'Project created successfully', 'project' => $project], 201);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Project created successfully'),
+            $project,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -50,9 +64,17 @@ class ProjectController extends Controller
     {
         $project = Project::find($id);
         if (!$project) {
-            return response()->json(['message' => 'Project not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Project not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
-        return response()->json($project);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Project retrieved successfully'),
+            $project,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -62,7 +84,11 @@ class ProjectController extends Controller
     {
         $project = Project::find($id);
         if (!$project) {
-            return response()->json(['message' => 'Project not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Project not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $validator = Validator::make($request->all(), [
@@ -74,14 +100,21 @@ class ProjectController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $project->update($request->all());
 
-        return response()->json(['message' => 'Project updated successfully', 'project' => $project]);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Project updated successfully'),
+            $project,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
-
     /**
      * Remove the specified project from storage.
      */
@@ -89,11 +122,19 @@ class ProjectController extends Controller
     {
         $project = Project::find($id);
         if (!$project) {
-            return response()->json(['message' => 'Project not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Project not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $project->delete();
 
-        return response()->json(['message' => 'Project deleted successfully']);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Project deleted successfully'),
+            null,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 }

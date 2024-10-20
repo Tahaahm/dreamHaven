@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Agent;
+use App\Models\RealEstateOffice;
+
 
 class AuthController extends Controller
 {
@@ -125,4 +128,50 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'User deleted successfully']);
     }
+
+
+    //
+    public function loginRealEstateOffice(Request $request)
+    {
+        $credentials = $request->only('admin_email', 'password');
+
+        // Find the RealEstateOffice by email
+        $office = RealEstateOffice::where('admin_email', $request->admin_email)->first();
+
+        if ($office && Hash::check($request->password, $office->password)) {
+            // Generate token (using Sanctum)
+            $token = $office->createToken('authToken')->plainTextToken;
+
+            return response()->json([
+                'token' => $token,
+                'office' => $office
+            ]);
+        } else {
+            return response()->json(['error' => 'Invalid credentials'], 401);
+        }
+    }
+
+
+    // Login for Agents
+    public function loginAgent(Request $request)
+    {
+        $credentials = $request->only('email', 'password');
+
+        // Find the agent by email
+        $agent = Agent::where('email', $request->email)->first();
+
+        if ($agent && Hash::check($request->password, $agent->password)) {
+            $token = $agent->createToken('authToken')->plainTextToken;
+
+            return response()->json([
+                'token' => $token,
+                'agent' => $agent
+            ]);
+        } else {
+            return response()->json(['error' => 'Invalid credentials'], 401);
+        }
+    }
+
+    // Login for regular Users
+
 }

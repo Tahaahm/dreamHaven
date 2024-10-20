@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Helper\ApiResponse;
+use App\Helper\ResponseDetails;
 use App\Models\Property;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -13,7 +15,6 @@ class PropertyController extends Controller
      */
     public function index(Request $request)
     {
-        // Filter properties by agent or office if provided
         if ($request->has('agent_id')) {
             $properties = Property::where('agent_id', $request->agent_id)->get();
         } elseif ($request->has('office_id')) {
@@ -22,7 +23,11 @@ class PropertyController extends Controller
             $properties = Property::all();
         }
 
-        return response()->json($properties);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Properties retrieved successfully'),
+            $properties,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -35,16 +40,16 @@ class PropertyController extends Controller
             'description' => 'required|string',
             'price' => 'required|numeric',
             'address' => 'required|string',
-            'location' => 'required|json', // (latitude, longitude) as JSON
+            'location' => 'required|json',
             'property_type' => 'required|string|in:apartment,house,commercial',
             'bedrooms' => 'integer',
             'bathrooms' => 'integer',
             'kitchen_rooms' => 'integer',
             'reception_rooms' => 'integer',
             'area' => 'required|numeric',
-            'images' => 'nullable|json', // List of image URLs as JSON
+            'images' => 'nullable|json',
             'video_tour' => 'nullable|url',
-            'amenities' => 'nullable|json', // List of amenities as JSON
+            'amenities' => 'nullable|json',
             'project_name' => 'nullable|string',
             'project_description' => 'nullable|string',
             'status' => 'required|in:available,sold,rented',
@@ -58,13 +63,22 @@ class PropertyController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $property = Property::create($request->all());
 
-        return response()->json(['message' => 'Property created successfully', 'property' => $property], 201);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Property created successfully'),
+            $property,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
+
 
     /**
      * Display the specified property.
@@ -73,9 +87,18 @@ class PropertyController extends Controller
     {
         $property = Property::find($id);
         if (!$property) {
-            return response()->json(['message' => 'Property not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Property not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
-        return response()->json($property);
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Property retrieved successfully'),
+            $property,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -85,7 +108,11 @@ class PropertyController extends Controller
     {
         $property = Property::find($id);
         if (!$property) {
-            return response()->json(['message' => 'Property not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Property not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $validator = Validator::make($request->all(), [
@@ -93,16 +120,16 @@ class PropertyController extends Controller
             'description' => 'string',
             'price' => 'numeric',
             'address' => 'string',
-            'location' => 'json', // (latitude, longitude) as JSON
+            'location' => 'json',
             'property_type' => 'string|in:apartment,house,commercial',
             'bedrooms' => 'integer',
             'bathrooms' => 'integer',
             'kitchen_rooms' => 'integer',
             'reception_rooms' => 'integer',
             'area' => 'numeric',
-            'images' => 'nullable|json', // List of image URLs as JSON
+            'images' => 'nullable|json',
             'video_tour' => 'nullable|url',
-            'amenities' => 'nullable|json', // List of amenities as JSON
+            'amenities' => 'nullable|json',
             'project_name' => 'string|nullable',
             'project_description' => 'string|nullable',
             'status' => 'in:available,sold,rented',
@@ -116,12 +143,20 @@ class PropertyController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $property->update($request->all());
 
-        return response()->json(['message' => 'Property updated successfully', 'property' => $property]);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Property updated successfully'),
+            $property,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -131,11 +166,19 @@ class PropertyController extends Controller
     {
         $property = Property::find($id);
         if (!$property) {
-            return response()->json(['message' => 'Property not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Property not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $property->delete();
 
-        return response()->json(['message' => 'Property deleted successfully']);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Property deleted successfully'),
+            null,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 }

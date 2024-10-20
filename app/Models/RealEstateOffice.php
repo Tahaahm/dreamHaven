@@ -4,10 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Facades\Hash;
 
-class RealEstateOffice extends Model
+
+
+class RealEstateOffice extends Authenticatable
 {
-    use HasFactory;
+    use HasApiTokens, HasFactory, Notifiable;
 
     protected $primaryKey = 'office_id';
 
@@ -15,11 +21,25 @@ class RealEstateOffice extends Model
         'office_name',
         'admin_name',
         'admin_email',
+        'password',
         'phone',
         'address',
         'profile_photo',
+        'description',   // Include description
+        'location',      // Include location
         'is_verified',
     ];
+
+
+
+    protected $hidden = [
+        'password', 'remember_token',
+    ];
+
+    public function setPasswordAttribute($password)
+    {
+        $this->attributes['password'] = Hash::make($password);
+    }
 
     // Relationship with agents
     public function agents()

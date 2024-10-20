@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'projects/*',
             'appointments',
             'appointments/*',
+            "real-estate-office/login",
         ] );
     })
     ->withExceptions(function (Exceptions $exceptions) {

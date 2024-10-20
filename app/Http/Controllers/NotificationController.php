@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Helper\ApiResponse;
+use App\Helper\ResponseDetails;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -22,9 +24,12 @@ class NotificationController extends Controller
             $notifications = Notification::all();
         }
 
-        return response()->json($notifications);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Notifications retrieved successfully'),
+            $notifications,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
-
     /**
      * Store a newly created notification in storage.
      */
@@ -40,12 +45,20 @@ class NotificationController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $notification = Notification::create($request->all());
 
-        return response()->json(['message' => 'Notification created successfully', 'notification' => $notification], 201);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Notification created successfully'),
+            $notification,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -55,13 +68,21 @@ class NotificationController extends Controller
     {
         $notification = Notification::find($id);
         if (!$notification) {
-            return response()->json(['message' => 'Notification not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Notification not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $notification->is_read = true;
         $notification->save();
 
-        return response()->json(['message' => 'Notification marked as read', 'notification' => $notification]);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Notification marked as read'),
+            $notification,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -71,9 +92,18 @@ class NotificationController extends Controller
     {
         $notification = Notification::find($id);
         if (!$notification) {
-            return response()->json(['message' => 'Notification not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Notification not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
-        return response()->json($notification);
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Notification retrieved successfully'),
+            $notification,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -83,11 +113,19 @@ class NotificationController extends Controller
     {
         $notification = Notification::find($id);
         if (!$notification) {
-            return response()->json(['message' => 'Notification not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Notification not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $notification->delete();
 
-        return response()->json(['message' => 'Notification deleted successfully']);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Notification deleted successfully'),
+            null,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 }

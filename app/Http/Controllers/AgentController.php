@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Helper\ApiResponse;
+use App\Helper\ResponseDetails;
 use App\Models\Agent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -15,7 +17,11 @@ class AgentController extends Controller
     public function index()
     {
         $agents = Agent::all();
-        return response()->json($agents);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Agents retrieved successfully'),
+            $agents,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 
     /**
@@ -33,14 +39,21 @@ class AgentController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
         }
 
         $agent = Agent::create($request->all());
 
-        return response()->json(['message' => 'Agent created successfully', 'agent' => $agent], 201);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Agent created successfully'),
+            $agent,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
-
     /**
      * Display the specified agent.
      */
@@ -48,39 +61,60 @@ class AgentController extends Controller
     {
         $agent = Agent::find($id);
         if (!$agent) {
-            return response()->json(['message' => 'Agent not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Agent not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
-        return response()->json($agent);
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Agent retrieved successfully'),
+            $agent,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
+
 
     /**
      * Update the specified agent in storage.
      */
     public function update(Request $request, $id)
-{
-    $agent = Agent::find($id);
-    if (!$agent) {
-        return response()->json(['message' => 'Agent not found'], 404);
+    {
+        $agent = Agent::find($id);
+        if (!$agent) {
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Agent not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
+        }
+
+        $validator = Validator::make($request->all(), [
+            'agent_name' => 'string|max:255',
+            'email' => 'email|unique:agents,email,' . $agent->agent_id . ',agent_id',
+            'phone' => 'string|max:20',
+            'office_id' => 'nullable|exists:real_estate_offices,office_id',
+            'profile_photo' => 'nullable|url',
+            'is_verified' => 'boolean'
+        ]);
+
+        if ($validator->fails()) {
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
+        }
+
+        $agent->update($request->all());
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Agent updated successfully'),
+            $agent,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
-
-    $validator = Validator::make($request->all(), [
-        'agent_name' => 'string|max:255',
-        'email' => 'email|unique:agents,email,' . $agent->agent_id . ',agent_id', // Changed here
-        'phone' => 'string|max:20',
-        'office_id' => 'nullable|exists:real_estate_offices,office_id',
-        'profile_photo' => 'nullable|url',
-        'is_verified' => 'boolean'
-    ]);
-
-    if ($validator->fails()) {
-        return response()->json($validator->errors(), 400);
-    }
-
-    $agent->update($request->all());
-
-    return response()->json(['message' => 'Agent updated successfully', 'agent' => $agent]);
-}
-
 
     /**
      * Remove the specified agent from storage.
@@ -89,11 +123,19 @@ class AgentController extends Controller
     {
         $agent = Agent::find($id);
         if (!$agent) {
-            return response()->json(['message' => 'Agent not found'], 404);
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Agent not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
         }
 
         $agent->delete();
 
-        return response()->json(['message' => 'Agent deleted successfully']);
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Agent deleted successfully'),
+            null,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 }
