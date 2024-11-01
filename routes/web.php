@@ -24,7 +24,6 @@ Route::delete('/users/{id}', [AuthController::class, 'destroy']); // Delete a us
 
 
 // Real Estate Office Routes
-// Real Estate Office Routes
 Route::get('/real-estate-offices', [RealEstateOfficeController::class, 'index']); // List all offices
 Route::post('/real-estate-offices', [RealEstateOfficeController::class, 'store']); // Create a new office
 Route::post('/real-estate-office/login', [RealEstateOfficeController::class, 'login']);
@@ -33,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/real-estate-offices/{id}', [RealEstateOfficeController::class, 'update']);
     Route::delete('/real-estate-offices/{id}', [RealEstateOfficeController::class, 'destroy']);
 });
+Route::get('/real-estate-offices/{id}/properties', [RealEstateOfficeController::class, 'fetchProperties']);
 
 
 

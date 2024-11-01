@@ -20,11 +20,12 @@ return new class extends Migration
             $table->decimal('price', 10, 2);
             $table->string('address');
             $table->json('location'); // GeoPoint (latitude, longitude) as JSON
+            $table->string('nameLocation')->nullable(); // Descriptive location name
             $table->string('property_type'); // e.g., 'apartment', 'house', 'commercial'
             $table->integer('bedrooms');
             $table->integer('bathrooms');
             $table->integer('kitchen_rooms');
-            $table->integer('reception_rooms');
+            $table->integer('reception_rooms')->nullable();
             $table->float('area'); // Area in square meters
             $table->json('images'); // List of image URLs
             $table->string('video_tour')->nullable(); // URL to video tour
@@ -37,8 +38,10 @@ return new class extends Migration
             $table->integer('views')->default(0); // Number of views
             $table->integer('favorites_count')->default(0); // Number of favorites
             $table->boolean('availability')->default(true); // Availability status
-            $table->timestamps(); // createdAt and updatedAt
+            $table->boolean('isBoosted')->default(false); // Promotion status of the property
+            $table->timestamps(); // created_at and updated_at
 
+            // Foreign key constraints
             $table->foreign('agent_id')->references('agent_id')->on('agents')->onDelete('set null');
             $table->foreign('office_id')->references('office_id')->on('real_estate_offices')->onDelete('set null');
         });

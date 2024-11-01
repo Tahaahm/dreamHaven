@@ -202,4 +202,26 @@ class RealEstateOfficeController extends Controller
             ResponseDetails::CODE_SUCCESS
         );
     }
+
+    public function fetchProperties($id)
+{
+
+    Log::info("Fetching properties for office ID: $id");
+    $office = RealEstateOffice::with('properties')->find($id);
+
+    if (!$office) {
+        return ApiResponse::error(
+            ResponseDetails::notFoundMessage('Office not found'),
+            null,
+            ResponseDetails::CODE_NOT_FOUND
+        );
+    }
+
+    return ApiResponse::success(
+        ResponseDetails::successMessage('Properties retrieved successfully'),
+        $office->properties,
+        ResponseDetails::CODE_SUCCESS
+    );
+}
+
 }

@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class property extends Model
+class Property extends Model
 {
     use HasFactory;
 
@@ -17,6 +17,7 @@ class property extends Model
         'price',
         'address',
         'location',
+        'nameLocation', // Added new field for descriptive location name
         'property_type',
         'bedrooms',
         'bathrooms',
@@ -34,8 +35,9 @@ class property extends Model
         'views',
         'favorites_count',
         'availability',
+        'isBoosted', // Added new field for promotion status
         'agent_id',
-        'office_id'
+        'office_id',
     ];
 
     // Relationships
@@ -50,9 +52,7 @@ class property extends Model
     }
 
     public function reviews()
-{
-    return $this->hasMany(Review::class, 'property_id', 'property_id');
-}
-
-
+    {
+        return $this->hasMany(Review::class, 'property_id', 'property_id');
+    }
 }
