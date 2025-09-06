@@ -6,14 +6,14 @@ use Illuminate\Foundation\Configuration\Middleware;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        commands: __DIR__.'/../routes/console.php',
+        web: __DIR__ . '/../routes/web.php',
+        commands: __DIR__ . '/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
         //
 
-        $middleware->validateCsrfTokens( $except = [
+        $middleware->validateCsrfTokens($except = [
             'users',
             '/users/*',
             'real-estate-offices',
@@ -27,7 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'appointments',
             'appointments/*',
             "real-estate-office/login",
-        ] );
+            "api/*",
+            "v1/api/properties/map",
+            "/v1/api/properties"
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

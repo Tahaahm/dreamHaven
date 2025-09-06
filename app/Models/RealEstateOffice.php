@@ -2,60 +2,143 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-
-
-class RealEstateOffice extends Authenticatable
+class RealEstateOffice extends Model
 {
-    use HasApiTokens, HasFactory, Notifiable;
-
-    protected $primaryKey = 'office_id';
+    use HasFactory, HasUuids;
 
     protected $fillable = [
-        'office_name',
-        'admin_name',
-        'admin_email',
-        'password',
-        'phone',
-        'address',
-        'profile_photo',
-        'description',   // Include description
-        'location',      // Include location
+        'company_name',
+        'company_bio',
+        'company_bio_image',
+        'profile_image',
+        'account_type',
+        'subscription_id',
+        'current_plan',
         'is_verified',
+        'average_rating',
+        'email_address',
+        'phone_number',
+        'office_address',
+        'latitude',
+        'longitude',
+        'city',
+        'district',
+        'properties_sold',
+        'years_experience',
+        'about_company',
+        'availability_schedule',
+        'password', // Add this if you need authentication
     ];
-
-
 
     protected $hidden = [
-        'password', 'remember_token',
+        'password', // Hide password in JSON responses
     ];
 
-    public function setPasswordAttribute($password)
+    protected function casts(): array
     {
-        $this->attributes['password'] = Hash::make($password);
+        return [
+            'is_verified' => 'boolean',
+            'average_rating' => 'decimal:2',
+            'latitude' => 'decimal:8',
+            'longitude' => 'decimal:8',
+            'properties_sold' => 'integer',
+            'years_experience' => 'integer',
+            'availability_schedule' => 'array',
+        ];
     }
 
-    // Relationship with agents
-    public function agents()
+    // Relationships
+    public function subscription(): BelongsTo
     {
-        return $this->hasMany(Agent::class, 'office_id', 'office_id');
+        return $this->belongsTo(Subscription::class, 'subscription_id');
     }
 
-    // Relationship with properties
-    public function properties()
+    public function propertyTypes(): HasMany
     {
-        return $this->hasMany(Property::class, 'office_id', 'office_id');
+        return $this->hasMany(OfficePropertyType::class, 'office_id');
     }
 
-    // Relationship with projects
-    public function projects()
+    public function propertyListings(): HasMany
     {
-        return $this->hasMany(Project::class, 'office_id', 'office_id');
+        return $this->hasMany(OfficePropertyListing::class, 'office_id');
+    }
+
+    public function projectPortfolio(): HasMany
+    {
+        return $this->hasMany(OfficeProjectPortfolio::class, 'office_id');
+    }
+
+    public function companyAgents(): HasMany
+    {
+        return $this->hasMany(OfficeCompanyAgent::class, 'office_id');
+    }
+
+    public function agents(): HasMany
+    {
+        return $this->hasMany(Agent::class, 'company_id');
+    }
+
+    public function socialMedia(): HasMany
+    {
+        return $this->hasMany(OfficeSocialMedia::class, 'office_id');
+    }
+
+    public function customerReviews(): HasMany
+    {
+        return $this->hasMany(OfficeCustomerReview::class, 'office_id');
+    }
+
+    public function notificationReferences(): HasMany
+    {
+        return $this->hasMany(OfficeNotificationReference::class, 'office_id');
+    }
+
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class, 'office_id');
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class, 'office_id');
+    }
+
+    public function systemNotifications(): HasMany
+    {
+        return $this->hasMany(Notification::class, 'office_id');
+    }
+
+    public function ownedProperties(): MorphMany
+    {
+        return $this->morphMany(Property::class, 'owner');
+    }
+
+    // Scopes
+    public function scopeVerified($query)
+    {
+        return $query->where('is_verified', true);
+    }
+
+    public function scopeByCity($query, $city)
+    {
+        return $query->where('city', $city);
+    }
+
+    public function scopeByPlan($query, $plan)
+    {
+        return $query->where('current_plan', $plan);
+    }
+
+    // Accessors
+    public function getActiveAgentsCountAttribute()
+    {
+        return $this->companyAgents()->where('is_active', true)->count();
     }
 }

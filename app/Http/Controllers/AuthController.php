@@ -34,23 +34,28 @@ class AuthController extends Controller
     /**
      * Store a newly created user in storage.
      */
-    public function store(Request $request)
-    {
-        Log::info('User Validation ');
-        $validator = Validator::make($request->all(), [
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8',
-            'role' => 'required|in:user,agent,real_estate_office',
-            'office_id' => 'nullable|exists:real_estate_offices,office_id'
-        ]);
-        Log::info('User Created: ');
-        if ($validator->fails()) {
-            Log::error('Validation failed: ', $validator->errors()->toArray());
-            return response()->json($validator->errors(), 400);
-        }
+   public function store(Request $request)
+{
+    Log::info('User Validation');
 
+    $validator = Validator::make($request->all(), [
+        'name' => 'required|string|max:255',
+        'email' => 'required|string|email|max:255|unique:users',
+        'password' => 'required|string|min:8',
+        'role' => 'required|in:user,agent,admin',  // Changed this
+        'office_id' => 'nullable|exists:real_estate_offices,office_id'
+    ]);
 
+    if ($validator->fails()) {
+        Log::error('Validation failed: ', $validator->errors()->toArray());
+        return response()->json([
+            'status' => false,
+            'message' => 'Validation failed',
+            'errors' => $validator->errors()
+        ], 400);
+    }
+
+    try {
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -59,12 +64,24 @@ class AuthController extends Controller
             'office_id' => $request->office_id,
             'is_verified' => false
         ]);
+
         Log::info('User Created: ', $user->toArray());
 
+        return response()->json([
+            'status' => true,
+            'message' => 'User created successfully',
+            'data' => $user
+        ], 201);
 
-
-        return response()->json(['message' => 'User created successfully', 'user' => $user], 201);
+    } catch (\Exception $e) {
+        Log::error('User creation failed: ' . $e->getMessage());
+        return response()->json([
+            'status' => false,
+            'message' => 'User creation failed',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Display the specified user.

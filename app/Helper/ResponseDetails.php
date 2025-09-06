@@ -9,7 +9,8 @@ class ResponseDetails
 
     // Updated to use valid HTTP status codes
     const CODE_SUCCESS = 200;
-    const CODE_FAILURE = 500;
+    const CODE_FAILURE = 500;  // General failure code
+    const CODE_SERVER_ERROR = 500; // Specific 500 code for server errors
     const CODE_UNAUTHORIZED = 401;
     const CODE_NOT_FOUND = 404;
     const CODE_VALIDATION_ERROR = 400;
@@ -30,10 +31,9 @@ class ResponseDetails
     }
 
     public static function notFoundMessage($customMessage = null)
-{
-    return $customMessage ?? 'Resource not found';
-}
-
+    {
+        return $customMessage ?? 'Resource not found';
+    }
 
     public static function validationErrorMessage()
     {

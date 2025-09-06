@@ -2,33 +2,138 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+use App\Models\NotificationPreference;
 
 class Agent extends Model
 {
-    use HasFactory;
-
-    protected $primaryKey = 'agent_id';
+    use HasFactory, HasUuids;
 
     protected $fillable = [
         'agent_name',
-        'email',
-        'phone',
-        'office_id',
+        'agent_bio',
+        'bio_image',
+        'profile_image',
+        'type',
+        'subscriber_id',
         'is_verified',
-        'profile_photo',
+        'overall_rating',
+        'subscription_id',
+        'current_plan',
+        'properties_uploaded_this_month',
+        'remaining_property_uploads',
+        'primary_email',
+        'primary_phone',
+        'whatsapp_number',
+        'office_address',
+        'latitude',
+        'longitude',
+        'city',
+        'district',
+        'properties_sold',
+        'years_experience',
+        'license_number',
+        'company_id',
+        'company_name',
+        'employment_status',
+        'agent_overview',
+        'working_hours',
+        'commission_rate',
+        'consultation_fee',
+        'currency',
     ];
 
-    // Relationship with the real estate office
-    public function office()
+    protected function casts(): array
     {
-        return $this->belongsTo(RealEstateOffice::class, 'office_id', 'office_id');
+        return [
+            'is_verified' => 'boolean',
+            'overall_rating' => 'decimal:2',
+            'properties_uploaded_this_month' => 'integer',
+            'remaining_property_uploads' => 'integer',
+            'latitude' => 'decimal:8',
+            'longitude' => 'decimal:8',
+            'properties_sold' => 'integer',
+            'years_experience' => 'integer',
+            'working_hours' => 'array',
+            'commission_rate' => 'decimal:2',
+            'consultation_fee' => 'decimal:2',
+        ];
     }
 
-    // Relationship with properties the agent manages
-    public function properties()
+    // Relationships
+    public function subscription(): BelongsTo
     {
-        return $this->hasMany(Property::class, 'agent_id', 'agent_id');
+        return $this->belongsTo(Subscription::class, 'subscription_id');
+    }
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(RealEstateOffice::class, 'company_id');
+    }
+
+    public function specializations(): HasMany
+    {
+        return $this->hasMany(AgentSpecialization::class, 'agent_id');
+    }
+
+    public function uploadedProperties(): HasMany
+    {
+        return $this->hasMany(AgentUploadedProperty::class, 'agent_id');
+    }
+
+    public function socialPlatforms(): HasMany
+    {
+        return $this->hasMany(AgentSocialPlatform::class, 'agent_id');
+    }
+
+    public function clientReviews(): HasMany
+    {
+        return $this->hasMany(AgentClientReview::class, 'agent_id');
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(AgentNotification::class, 'agent_id');
+    }
+
+    public function appointments(): HasMany
+    {
+        return $this->hasMany(Appointment::class, 'agent_id');
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class, 'agent_id');
+    }
+
+    public function systemNotifications(): HasMany
+    {
+        return $this->hasMany(Notification::class, 'agent_id');
+    }
+
+    public function ownedProperties(): MorphMany
+    {
+        return $this->morphMany(Property::class, 'owner');
+    }
+
+    // Scopes
+    public function scopeVerified($query)
+    {
+        return $query->where('is_verified', true);
+    }
+
+    public function scopeByCity($query, $city)
+    {
+        return $query->where('city', $city);
+    }
+
+    public function scopeByPlan($query, $plan)
+    {
+        return $query->where('current_plan', $plan);
     }
 }
