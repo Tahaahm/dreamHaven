@@ -2,36 +2,40 @@
 
 namespace App\Models\Support;
 
+use App\Models\Agent;
+use App\Models\Property;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-// User Related Models
-class UserNotificationReference extends Model
+
+class AgentUploadedProperty extends Model
 {
     use HasFactory, HasUuids;
 
     protected $fillable = [
-        'user_id',
-        'notification_id',
-        'notification_date',
-        'notification_status',
-        'title',
-        'message',
-        'type'
+        'agent_id',
+        'property_id',
+        'upload_date',
+        'property_status'
     ];
 
     protected function casts(): array
     {
         return [
-            'notification_date' => 'datetime',
+            'upload_date' => 'date',
         ];
     }
 
-    public function user(): BelongsTo
+    public function agent(): BelongsTo
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Agent::class);
+    }
+
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class);
     }
 }

@@ -2,6 +2,9 @@
 
 namespace App\Models;
 
+use App\Models\Support\UserFavoriteProperty;
+use App\Models\Support\UserNotificationReference;
+use App\Services\User\UserAppointmentService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -40,7 +43,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'language',
         'search_preferences',
         'device_tokens',
-
+        'email_verified_at',
         'is_active'
     ];
 
@@ -85,7 +88,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function appointments(): HasMany
     {
-        return $this->hasMany(UserAppointment::class, 'user_id');
+        return $this->hasMany(UserAppointmentService::class, 'user_id');
     }
 
     /**
@@ -198,5 +201,18 @@ class User extends Authenticatable implements MustVerifyEmail
     public function getDisplayNameAttribute(): string
     {
         return $this->username;
+    }
+    public function getFCMTokens(): array
+    {
+        $deviceTokens = $this->device_tokens ?? [];
+        $fcmTokens = [];
+
+        foreach ($deviceTokens as $device) {
+            if (!empty($device['fcm_token'])) {
+                $fcmTokens[] = $device['fcm_token'];
+            }
+        }
+
+        return $fcmTokens;
     }
 }

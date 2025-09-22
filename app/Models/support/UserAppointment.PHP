@@ -8,25 +8,25 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-// User Related Models
-class UserNotificationReference extends Model
+class UserAppointment extends Model
 {
     use HasFactory, HasUuids;
 
     protected $fillable = [
         'user_id',
-        'notification_id',
-        'notification_date',
-        'notification_status',
-        'title',
-        'message',
-        'type'
+        'appointment_id',
+        'appointment_title',
+        'with_whom',
+        'appointment_date',
+        'description',
+        'status',
+        'notes'
     ];
 
     protected function casts(): array
     {
         return [
-            'notification_date' => 'datetime',
+            'appointment_date' => 'datetime',
         ];
     }
 

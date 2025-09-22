@@ -20,7 +20,7 @@ return new class extends Migration
 
             // Subscription status
             $table->enum('status', ['active', 'inactive', 'suspended', 'cancelled'])
-                  ->default('inactive');
+                ->default('inactive');
 
             // Subscription dates
             $table->date('start_date');
@@ -54,7 +54,7 @@ return new class extends Migration
             $table->decimal('prorated_amount', 10, 2)->default(0.00);
             $table->integer('prorated_days')->default(0);
             $table->decimal('credit_balance', 10, 2)->default(0.00);
-            $table->enum('proration_method', ['daily', 'none'])->default('daily');
+            $table->enum('proration_method', allowed: ['daily', 'none'])->default('daily');
 
             // Laravel timestamps
             $table->timestamps();

@@ -6,6 +6,9 @@ use Illuminate\Support\Str;
 use App\Helper\ApiResponse;
 use App\Models\User;
 use App\Models\Appointment;
+use App\Services\FirebaseAuthService;
+use App\Services\FirebaseService;
+use App\Services\FirebaseFirestoreService;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -17,8 +20,37 @@ use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class UserController extends Controller
 {
+    protected $firebaseAuth;
+    protected $firebaseService;
+    protected $firebaseFirestore;
+
+    public function __construct()
+    {
+        // Initialize Firebase services with error handling
+        try {
+            $this->firebaseAuth = app(FirebaseAuthService::class);
+        } catch (\Exception $e) {
+            Log::warning('FirebaseAuthService not available', ['error' => $e->getMessage()]);
+            $this->firebaseAuth = null;
+        }
+
+        try {
+            $this->firebaseService = app(FirebaseService::class);
+        } catch (\Exception $e) {
+            Log::warning('FirebaseService not available', ['error' => $e->getMessage()]);
+            $this->firebaseService = null;
+        }
+
+        try {
+            $this->firebaseFirestore = app(FirebaseFirestoreService::class);
+        } catch (\Exception $e) {
+            Log::warning('FirebaseFirestoreService not available', ['error' => $e->getMessage()]);
+            $this->firebaseFirestore = null;
+        }
+    }
+
     /**
-     * Register a new user
+     * Register a new user with Firebase integration
      */
     public function register(Request $request)
     {
@@ -57,7 +89,7 @@ class UserController extends Controller
             ]);
 
             $userData['id'] = (string) Str::uuid();
-            $userData['password'] = Hash::make(value: $request->password);
+            $userData['password'] = Hash::make($request->password);
             $userData['language'] = $request->get('language', 'en');
 
             // Handle search preferences
@@ -65,23 +97,97 @@ class UserController extends Controller
                 ? json_encode($request->search_preferences)
                 : json_encode($this->getDefaultSearchPreferences());
 
-            // Handle device token during registration - ENCODE AS JSON
+            // Handle device token during registration - FIXED STRUCTURE
             $deviceTokens = [];
             if ($request->has('device_token') && $request->has('device_name')) {
                 $deviceTokens[] = [
-                    'device' => $request->device_name,
-                    'tokenId' => $request->device_token,
+                    'device_name' => $request->device_name, // Fixed: use device_name consistently
+                    'fcm_token' => $request->device_token,  // Fixed: use fcm_token consistently
                     'created_at' => now()->toISOString(),
                     'last_used' => now()->toISOString()
                 ];
             }
-            $userData['device_tokens'] = json_encode($deviceTokens); // JSON ENCODE HERE
+            $userData['device_tokens'] = json_encode($deviceTokens);
 
+            // Create Firebase Auth user first (if available)
+            $firebaseResult = null;
+            if ($this->firebaseAuth) {
+                Log::info('Creating Firebase Auth user', [
+                    'email' => $userData['email'],
+                    'username' => $userData['username']
+                ]);
+
+                $firebaseResult = $this->firebaseAuth->createUser(
+                    $userData['email'],
+                    $request->password,
+                    $userData
+                );
+
+                if (!$firebaseResult['success']) {
+                    DB::rollback();
+                    Log::error('Firebase user creation failed during registration', [
+                        'email' => $userData['email'],
+                        'error' => $firebaseResult['error']
+                    ]);
+
+                    return ApiResponse::error(
+                        'Registration failed - Firebase Auth error',
+                        $firebaseResult['error'],
+                        500
+                    );
+                }
+
+                Log::info('Firebase Auth user created successfully', [
+                    'email' => $userData['email']
+                ]);
+            } else {
+                Log::info('Firebase Auth not available, skipping Firebase user creation');
+            }
+
+            // Create Laravel user
             $userData['created_at'] = now();
             $userData['updated_at'] = now();
 
             DB::table('users')->insert($userData);
             $user = User::find($userData['id']);
+
+            // Create Firestore document (if available)
+            if ($this->firebaseFirestore && $firebaseResult && $firebaseResult['success']) {
+                Log::info('Creating Firestore user document', [
+                    'user_id' => $user->id,
+                    'email' => $user->email
+                ]);
+
+                $firestoreResult = $this->firebaseFirestore->createUserDocument($user);
+
+                if (!$firestoreResult['success']) {
+                    if (isset($firestoreResult['skipped']) && $firestoreResult['skipped']) {
+                        Log::info('Firestore document creation skipped', [
+                            'user_id' => $user->id,
+                            'reason' => $firestoreResult['error']
+                        ]);
+                    } else {
+                        Log::warning('Firestore document creation failed, continuing with registration', [
+                            'user_id' => $user->id,
+                            'error' => $firestoreResult['error']
+                        ]);
+                    }
+                } else {
+                    Log::info('Firestore document created successfully', [
+                        'user_id' => $user->id,
+                        'document_id' => $firestoreResult['document_id']
+                    ]);
+
+                    // Create user sub-collections
+                    $subCollectionsResult = $this->firebaseFirestore->createUserSubCollections($user);
+                    if ($subCollectionsResult['success']) {
+                        Log::info('User sub-collections created', [
+                            'user_id' => $user->id,
+                            'collections' => $subCollectionsResult['collections']
+                        ]);
+                    }
+                }
+            }
 
             DB::commit();
 
@@ -92,16 +198,163 @@ class UserController extends Controller
                 app(NotificationController::class)->sendWelcomeNotification($user->id);
             }
 
-            return ApiResponse::success('User registered successfully', [
+            $responseData = [
                 'user' => $this->transformUserData($user),
                 'token' => $token
-            ], 201);
+            ];
+
+            // Add Firebase token if available
+            if ($firebaseResult && $firebaseResult['success']) {
+                $responseData['firebase_token'] = $firebaseResult['custom_token'];
+            }
+
+            Log::info('User registration completed successfully', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'firebase_created' => $firebaseResult ? $firebaseResult['success'] : false
+            ]);
+
+            return ApiResponse::success('User registered successfully', $responseData, 201);
         } catch (\Exception $e) {
             DB::rollback();
             Log::error('User registration error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Registration failed', $e->getMessage(), 500);
         }
     }
+
+    /**
+     * Login with Firebase integration and password sync
+     */
+    public function login(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'login' => 'required|string', // Can be username or email
+                'password' => 'required|string',
+                'device_name' => 'nullable|string|max:255',
+                'device_token' => 'nullable|string|max:500' // FCM token
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Login validation failed', $validator->errors(), 400);
+            }
+
+            $loginField = filter_var($request->login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+            $user = User::where($loginField, $request->login)->first();
+
+            if (!$user) {
+                return ApiResponse::error('Invalid credentials', ['login' => 'User not found'], 401);
+            }
+
+            // Firebase integration - check Firebase Auth first (if available)
+            $firebaseResult = null;
+            $firebaseUserExists = false;
+
+            if ($this->firebaseAuth) {
+                $firebaseUserExists = $this->firebaseAuth->userExists($user->email);
+
+                Log::info('Checking Firebase authentication', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'firebase_exists' => $firebaseUserExists
+                ]);
+
+                if ($firebaseUserExists) {
+                    // Try to authenticate with Firebase
+                    $firebaseResult = $this->firebaseAuth->authenticateUser($user->email, $request->password);
+
+                    Log::info('Firebase authentication attempt', [
+                        'user_id' => $user->id,
+                        'firebase_success' => $firebaseResult['success']
+                    ]);
+                } else {
+                    // Create Firebase user for existing Laravel user
+                    Log::info('Creating Firebase user for existing Laravel user', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
+
+                    $firebaseCreationResult = $this->firebaseAuth->createUserFromLaravel($user, $request->password);
+
+                    if ($firebaseCreationResult['success']) {
+                        $firebaseResult = $firebaseCreationResult;
+
+                        Log::info('Firebase user created successfully during login', [
+                            'user_id' => $user->id,
+                            'email' => $user->email
+                        ]);
+                    } else {
+                        Log::warning('Firebase user creation failed during login, continuing with Laravel auth', [
+                            'user_id' => $user->id,
+                            'error' => $firebaseCreationResult['error']
+                        ]);
+                    }
+                }
+            }
+
+            // Verify Laravel password
+            $laravelPasswordValid = Hash::check($request->password, $user->password);
+
+            // Handle password mismatch scenarios
+            if ($firebaseResult && $firebaseResult['success'] && !$laravelPasswordValid) {
+                // Firebase auth succeeded but Laravel failed - update Laravel password
+                Log::info('Password mismatch detected, updating Laravel password to match Firebase', [
+                    'user_id' => $user->id
+                ]);
+
+                $user->update([
+                    'password' => Hash::make($request->password),
+                    'updated_at' => now()
+                ]);
+
+                Log::info('Laravel password synchronized with Firebase', [
+                    'user_id' => $user->id
+                ]);
+            } elseif (!$laravelPasswordValid && (!$firebaseResult || !$firebaseResult['success'])) {
+                // Both authentications failed
+                return ApiResponse::error('Invalid credentials', ['login' => 'The provided credentials are incorrect'], 401);
+            }
+
+            $deviceName = $request->get('device_name', 'Unknown Device');
+            $deviceToken = $request->get('device_token'); // This is the FCM token
+
+            // Handle device token management if both device_name and device_token exist
+            if ($deviceToken && $deviceName) {
+                $this->updateUserDeviceToken($user, $deviceName, $deviceToken);
+            }
+
+            $token = $user->createToken('auth-token - ' . $deviceName)->plainTextToken;
+
+            $user->update(['last_login_at' => now()]);
+
+            // Send login notification (optional for security)
+            if (class_exists('App\Http\Controllers\NotificationController')) {
+                app(NotificationController::class)->sendLoginNotification($user->id, $deviceName);
+            }
+
+            $responseData = [
+                'user' => $this->transformUserData($user->fresh()),
+                'token' => $token
+            ];
+
+            // Add Firebase token if available
+            if ($firebaseResult && $firebaseResult['success']) {
+                $responseData['firebase_token'] = $firebaseResult['custom_token'];
+            }
+
+            Log::info('Login completed successfully', [
+                'user_id' => $user->id,
+                'firebase_authenticated' => $firebaseResult ? $firebaseResult['success'] : false,
+                'password_synced' => $firebaseResult && $firebaseResult['success'] && !$laravelPasswordValid
+            ]);
+
+            return ApiResponse::success('Login successful', $responseData, 200);
+        } catch (\Exception $e) {
+            Log::error('User login error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Login failed', $e->getMessage(), 500);
+        }
+    }
+
     public function changePassword(Request $request)
     {
         try {
@@ -129,10 +382,58 @@ class UserController extends Controller
                 );
             }
 
-            // Update password
+            DB::beginTransaction();
+
+            // Update Laravel password
             $user->password = Hash::make($request->new_password);
             $user->updated_at = now();
             $user->save();
+
+            // Update Firebase password using email to find user (if available)
+            if ($this->firebaseAuth) {
+                $firebaseUserExists = $this->firebaseAuth->userExists($user->email);
+
+                if ($firebaseUserExists) {
+                    Log::info('Updating Firebase password', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
+
+                    // Get Firebase user by email to get their UID
+                    $firebaseUser = $this->firebaseAuth->getUserByEmail($user->email);
+
+                    if ($firebaseUser) {
+                        $firebaseResult = $this->firebaseAuth->updateUserPassword(
+                            $firebaseUser->uid,
+                            $request->new_password
+                        );
+
+                        if (!$firebaseResult) {
+                            Log::warning('Firebase password update failed', [
+                                'user_id' => $user->id,
+                                'email' => $user->email
+                            ]);
+                        } else {
+                            Log::info('Firebase password updated successfully', [
+                                'user_id' => $user->id,
+                                'email' => $user->email
+                            ]);
+                        }
+                    }
+                } else {
+                    Log::info('Firebase user does not exist, skipping Firebase password sync', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            Log::info('Password changed successfully', [
+                'user_id' => $user->id,
+                'firebase_synced' => $this->firebaseAuth && $firebaseUserExists ?? false
+            ]);
 
             return ApiResponse::success(
                 'Password changed successfully',
@@ -140,6 +441,7 @@ class UserController extends Controller
                 200
             );
         } catch (\Exception $e) {
+            DB::rollback();
             Log::error('Password change error', ['message' => $e->getMessage()]);
             return ApiResponse::error(
                 'Failed to change password',
@@ -148,61 +450,6 @@ class UserController extends Controller
             );
         }
     }
-
-
-
-    public function login(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'login' => 'required|string', // Can be username or email
-                'password' => 'required|string',
-                'device_name' => 'nullable|string|max:255',
-                'device_token' => 'nullable|string|max:500' // FCM token
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error('Login validation failed', $validator->errors(), 400);
-            }
-
-            $loginField = filter_var($request->login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
-            $user = User::where($loginField, $request->login)->first();
-
-            if (!$user || !Hash::check($request->password, $user->password)) {
-                return ApiResponse::error('Invalid credentials', ['login' => 'The provided credentials are incorrect'], 401);
-            }
-
-            $deviceName = $request->get('device_name', 'Unknown Device');
-            $deviceToken = $request->get('device_token'); // This is the FCM token
-
-            // Handle device token management if both device_name and device_token exist
-            if ($deviceToken && $deviceName) {
-                $this->updateUserDeviceToken($user, $deviceName, $deviceToken);
-            }
-
-            $token = $user->createToken('auth-token - ' . $deviceName)->plainTextToken;
-
-            $user->update(['last_login_at' => now()]);
-
-            // Send login notification (optional for security)
-            if (class_exists('App\Http\Controllers\NotificationController')) {
-                app(NotificationController::class)->sendLoginNotification($user->id, $deviceName);
-            }
-
-            return ApiResponse::success('Login successful', [
-                'user' => $this->transformUserData($user->fresh()),
-                'token' => $token
-            ], 200);
-        } catch (\Exception $e) {
-            Log::error('User login error', ['message' => $e->getMessage()]);
-            return ApiResponse::error('Login failed', $e->getMessage(), 500);
-        }
-    }
-
-
-    /**
-     * Update or insert user device token in the device_tokens array
-     */
 
     /**
      * Logout user
@@ -251,7 +498,7 @@ class UserController extends Controller
     }
 
     /**
-     * Update user location and other profile data (PATCH method)
+     * Update user location and other profile data (PATCH method) with Firebase sync
      */
     public function updateLocation(Request $request)
     {
@@ -304,17 +551,82 @@ class UserController extends Controller
                 'update_data' => $updateData
             ]);
 
-            // Update user with the provided data
+            // Update Laravel user with the provided data
             if (!empty($updateData)) {
                 $user->update($updateData);
 
+                // Sync with Firebase Auth using email to find user (if available)
+                if ($this->firebaseAuth) {
+                    $firebaseUserExists = $this->firebaseAuth->userExists($user->email);
+
+                    if ($firebaseUserExists) {
+                        Log::info('Syncing profile updates with Firebase Auth', [
+                            'user_id' => $user->id,
+                            'email' => $user->email
+                        ]);
+
+                        // Get Firebase user by email to get their UID
+                        $firebaseUser = $this->firebaseAuth->getUserByEmail($user->email);
+
+                        if ($firebaseUser) {
+                            $firebaseUpdateResult = $this->firebaseAuth->updateUser($firebaseUser->uid, $updateData);
+
+                            if (!$firebaseUpdateResult['success']) {
+                                Log::warning('Firebase Auth profile update failed', [
+                                    'user_id' => $user->id,
+                                    'email' => $user->email,
+                                    'error' => $firebaseUpdateResult['error']
+                                ]);
+                            } else {
+                                Log::info('Firebase Auth profile updated successfully', [
+                                    'user_id' => $user->id,
+                                    'email' => $user->email
+                                ]);
+                            }
+                        }
+                    } else {
+                        Log::info('Firebase Auth user does not exist, skipping Firebase Auth sync', [
+                            'user_id' => $user->id,
+                            'email' => $user->email
+                        ]);
+                    }
+                }
+
+                // Sync with Firestore (if available)
+                if ($this->firebaseFirestore) {
+                    Log::info('Syncing profile updates with Firestore', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
+
+                    $firestoreUpdateResult = $this->firebaseFirestore->updateUserDocument($user, $updateData);
+
+                    if (!$firestoreUpdateResult['success']) {
+                        if (!isset($firestoreUpdateResult['skipped'])) {
+                            Log::warning('Firestore profile update failed', [
+                                'user_id' => $user->id,
+                                'email' => $user->email,
+                                'error' => $firestoreUpdateResult['error']
+                            ]);
+                        }
+                    } else {
+                        Log::info('Firestore profile updated successfully', [
+                            'user_id' => $user->id,
+                            'email' => $user->email,
+                            'updated_fields' => $firestoreUpdateResult['updated_fields'] ?? []
+                        ]);
+                    }
+                }
+
                 // Send nearby property notifications if location changed
                 if (isset($updateData['lat']) && isset($updateData['lng'])) {
-                    app(NotificationController::class)->sendNearbyPropertyNotifications(
-                        $user->id,
-                        $updateData['lat'],
-                        $updateData['lng']
-                    );
+                    if (class_exists('App\Http\Controllers\NotificationController')) {
+                        app(NotificationController::class)->sendNearbyPropertyNotifications(
+                            $user->id,
+                            $updateData['lat'],
+                            $updateData['lng']
+                        );
+                    }
                 }
             }
 
@@ -357,7 +669,6 @@ class UserController extends Controller
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
             'search_preferences' => $user->search_preferences ?? $this->getDefaultSearchPreferences(),
-
         ];
     }
 
@@ -747,6 +1058,7 @@ class UserController extends Controller
             'updated_at' => $appointment->updated_at,
         ];
     }
+
     /**
      * Get single appointment details
      */
@@ -881,7 +1193,9 @@ class UserController extends Controller
                 ]);
 
             // Send appointment status notification
-            app(NotificationController::class)->sendAppointmentStatusNotification($appointmentId, 'cancelled');
+            if (class_exists('App\Http\Controllers\NotificationController')) {
+                app(NotificationController::class)->sendAppointmentStatusNotification($appointmentId, 'cancelled');
+            }
 
             DB::commit();
 
@@ -1016,6 +1330,7 @@ class UserController extends Controller
             return ApiResponse::error('Failed to create notifications', $e->getMessage(), 500);
         }
     }
+
     public function createAppointment(Request $request)
     {
         try {
@@ -1063,7 +1378,9 @@ class UserController extends Controller
             DB::table('appointments')->insert($appointmentData);
 
             // Send appointment notifications
-            app(NotificationController::class)->sendAppointmentNotifications($appointmentData['id']);
+            if (class_exists('App\Http\Controllers\NotificationController')) {
+                app(NotificationController::class)->sendAppointmentNotifications($appointmentData['id']);
+            }
 
             DB::commit();
 
@@ -1272,6 +1589,7 @@ class UserController extends Controller
             return ApiResponse::error('Failed to clear all notifications', $e->getMessage(), 500);
         }
     }
+
     /**
      * Reschedule appointment (user can only reschedule their own appointments)
      */
@@ -1332,7 +1650,9 @@ class UserController extends Controller
             }
 
             // Send appointment status notification for rescheduling
-            app(NotificationController::class)->sendAppointmentStatusNotification($appointmentId, 'pending');
+            if (class_exists('App\Http\Controllers\NotificationController')) {
+                app(NotificationController::class)->sendAppointmentStatusNotification($appointmentId, 'pending');
+            }
 
             // Get the updated appointment data
             $updatedAppointment = DB::table('appointments')
@@ -1363,6 +1683,7 @@ class UserController extends Controller
             return ApiResponse::error('Failed to reschedule appointment', $e->getMessage(), 500);
         }
     }
+
     public function getSearchPreferences(Request $request)
     {
         try {
@@ -1385,7 +1706,6 @@ class UserController extends Controller
             return ApiResponse::error('Failed to retrieve search preferences', null, 500);
         }
     }
-
 
     /**
      * Update user's search preferences
@@ -1529,6 +1849,7 @@ class UserController extends Controller
             return ApiResponse::error('Failed to reset search preferences', null, 500);
         }
     }
+
     /**
      * Get search filters for property search
      */
@@ -1607,6 +1928,7 @@ class UserController extends Controller
             return ApiResponse::error('Failed to get search filters', null, 500);
         }
     }
+
     public function searchProperties(Request $request)
     {
         try {
@@ -1716,6 +2038,7 @@ class UserController extends Controller
             return ApiResponse::error('Failed to search properties', null, 500);
         }
     }
+
     public function getRecommendations(Request $request)
     {
         try {
@@ -1763,6 +2086,7 @@ class UserController extends Controller
             return ApiResponse::error('Failed to get recommendations', null, 500);
         }
     }
+
     private function getMockProperties($query, $filters, $page, $perPage)
     {
         $mockData = [
@@ -1856,6 +2180,7 @@ class UserController extends Controller
             'total' => $total
         ];
     }
+
     private function generateRecommendations($user, $preferences, $type, $limit)
     {
         // Mock recommendations based on user preferences
@@ -1869,6 +2194,7 @@ class UserController extends Controller
 
         return $recommendations->toArray();
     }
+
     private function getRecommendationReason($type)
     {
         $reasons = [
@@ -1880,6 +2206,7 @@ class UserController extends Controller
 
         return $reasons[$type] ?? 'Recommended for you';
     }
+
     /**
      * Get default search preferences structure
      */
@@ -1913,16 +2240,13 @@ class UserController extends Controller
             ]
         ];
     }
+
     /**
-     * Update or insert device token for user
-     */
-    /**
-     * Update or insert device token for user
+     * Update or insert device token for user - FIXED VERSION
      */
     private function updateUserDeviceToken(User $user, string $deviceName, string $fcmToken)
     {
         try {
-            // Debug: Log what we're starting with
             Log::info('Starting device token update', [
                 'user_id' => $user->id,
                 'device_name' => $deviceName,
@@ -1937,11 +2261,11 @@ class UserController extends Controller
             $deviceExists = false;
             foreach ($deviceTokens as $index => $deviceData) {
                 if (isset($deviceData['device_name']) && $deviceData['device_name'] === $deviceName) {
-                    // Update existing device token
+                    // Update existing device token - FIXED STRUCTURE
                     $deviceTokens[$index] = [
                         'device_name' => $deviceName,
-                        'fcm_token' => $fcmToken,
-                        'last_updated' => now()->format('Y-m-d H:i:s'), // Use standard format
+                        'fcm_token' => $fcmToken,  // Fixed: consistent key naming
+                        'last_updated' => now()->format('Y-m-d H:i:s'),
                         'last_login' => now()->format('Y-m-d H:i:s')
                     ];
                     $deviceExists = true;
@@ -1950,11 +2274,11 @@ class UserController extends Controller
                 }
             }
 
-            // If device doesn't exist, add new device
+            // If device doesn't exist, add new device - FIXED STRUCTURE
             if (!$deviceExists) {
                 $newDevice = [
                     'device_name' => $deviceName,
-                    'fcm_token' => $fcmToken,
+                    'fcm_token' => $fcmToken,  // Fixed: consistent key naming
                     'created_at' => now()->format('Y-m-d H:i:s'),
                     'last_updated' => now()->format('Y-m-d H:i:s'),
                     'last_login' => now()->format('Y-m-d H:i:s')
@@ -1964,7 +2288,6 @@ class UserController extends Controller
                 Log::info('Added new device token', ['new_device' => $newDevice]);
             }
 
-            // Debug: Log what we're about to save
             Log::info('About to save device tokens', [
                 'user_id' => $user->id,
                 'device_tokens_count' => count($deviceTokens),
@@ -1974,7 +2297,6 @@ class UserController extends Controller
             // Update user's device_tokens field
             $updateResult = $user->update(['device_tokens' => $deviceTokens]);
 
-            // Debug: Check if update was successful
             Log::info('Update result', [
                 'update_successful' => $updateResult,
                 'user_device_tokens_after_update' => $user->fresh()->device_tokens
@@ -2002,8 +2324,6 @@ class UserController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            // Don't throw exception here to prevent login failure
-            // Just log the error and continue with login process
         }
     }
 
@@ -2029,15 +2349,16 @@ class UserController extends Controller
             return response()->json(['error' => 'Failed to fetch device tokens'], 500);
         }
     }
-    // Add this method to UserController
+
+    // UPDATED DEVICE TOKEN METHODS - FIXED TO MATCH STRUCTURE
     public function updateDeviceToken(Request $request)
     {
         try {
             $user = Auth::user();
 
             $validator = Validator::make($request->all(), [
-                'device' => 'required|string|max:255',
-                'token_id' => 'required|string|max:500',
+                'device_name' => 'required|string|max:255',  // Fixed: match structure
+                'fcm_token' => 'required|string|max:500',    // Fixed: match structure
             ]);
 
             if ($validator->fails()) {
@@ -2045,18 +2366,18 @@ class UserController extends Controller
             }
 
             $deviceTokens = $user->device_tokens ?? [];
-            $tokenId = $request->token_id;
-            $deviceName = $request->device;
+            $fcmToken = $request->fcm_token;      // Fixed: use fcm_token
+            $deviceName = $request->device_name;  // Fixed: use device_name
 
-            // Remove existing token for this device if exists
+            // Remove existing token for this device if exists - FIXED STRUCTURE
             $deviceTokens = array_filter($deviceTokens, function ($token) use ($deviceName) {
-                return $token['device'] !== $deviceName;
+                return ($token['device_name'] ?? '') !== $deviceName;  // Fixed: check device_name
             });
 
-            // Add new token
+            // Add new token - FIXED STRUCTURE
             $deviceTokens[] = [
-                'device' => $deviceName,
-                'tokenId' => $tokenId,
+                'device_name' => $deviceName,     // Fixed: consistent naming
+                'fcm_token' => $fcmToken,         // Fixed: consistent naming
                 'created_at' => now()->toISOString(),
                 'last_used' => now()->toISOString()
             ];
@@ -2079,7 +2400,126 @@ class UserController extends Controller
 
             return ApiResponse::error('Failed to update device token', $e->getMessage(), 500);
         }
-    } // Add these methods to UserController
+    }
+    /**
+     * Send password reset email via Firebase
+     */
+    public function forgotPassword(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email|exists:users,email'
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            $user = User::where('email', $request->email)->first();
+
+            // Check if Firebase user exists, create if needed
+            if ($this->firebaseAuth) {
+                $firebaseUserExists = $this->firebaseAuth->userExists($user->email);
+
+                if (!$firebaseUserExists) {
+                    // Create Firebase user first with a temporary password
+                    $tempPassword = Str::random(16);
+                    $firebaseResult = $this->firebaseAuth->createUserFromLaravel($user, $tempPassword);
+
+                    if (!$firebaseResult['success']) {
+                        return ApiResponse::error('Failed to prepare password reset', $firebaseResult['error'], 500);
+                    }
+
+                    Log::info('Firebase user created for password reset', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
+                }
+
+                // Send Firebase password reset email
+                $resetResult = $this->firebaseAuth->sendPasswordResetEmail($user->email);
+
+                if ($resetResult['success']) {
+                    Log::info('Firebase password reset email sent', [
+                        'email' => $request->email,
+                        'user_id' => $user->id
+                    ]);
+
+                    return ApiResponse::success('Password reset email sent successfully', null, 200);
+                } else {
+                    Log::error('Firebase password reset failed', [
+                        'email' => $request->email,
+                        'error' => $resetResult['error']
+                    ]);
+
+                    return ApiResponse::error('Failed to send reset email', $resetResult['error'], 500);
+                }
+            } else {
+                return ApiResponse::error('Password reset service unavailable', null, 503);
+            }
+        } catch (\Exception $e) {
+            Log::error('Forgot password error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to send reset email', $e->getMessage(), 500);
+        }
+    }
+    /**
+     * Confirm password reset and sync with Laravel
+     */
+    public function confirmPasswordReset(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'oob_code' => 'required|string', // Firebase reset code
+                'new_password' => ['required', 'confirmed', PasswordRule::defaults()]
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            DB::beginTransaction();
+
+            if ($this->firebaseAuth) {
+                // Confirm password reset with Firebase
+                $resetResult = $this->firebaseAuth->confirmPasswordReset(
+                    $request->oob_code,
+                    $request->new_password
+                );
+
+                if ($resetResult['success']) {
+                    // Get user email from Firebase reset result
+                    $userEmail = $resetResult['email'];
+                    $user = User::where('email', $userEmail)->first();
+
+                    if ($user) {
+                        // Update Laravel password to match Firebase
+                        $user->update([
+                            'password' => Hash::make($request->new_password),
+                            'updated_at' => now()
+                        ]);
+
+                        Log::info('Password reset completed and synced', [
+                            'user_id' => $user->id,
+                            'email' => $userEmail
+                        ]);
+                    }
+
+                    DB::commit();
+                    return ApiResponse::success('Password reset successfully', null, 200);
+                } else {
+                    DB::rollback();
+                    return ApiResponse::error('Invalid or expired reset code', $resetResult['error'], 400);
+                }
+            } else {
+                DB::rollback();
+                return ApiResponse::error('Password reset service unavailable', null, 503);
+            }
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Password reset confirmation error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to reset password', $e->getMessage(), 500);
+        }
+    }
 
     public function removeDeviceToken(Request $request)
     {

@@ -29,7 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
             "real-estate-office/login",
             "api/*",
             "v1/api/properties/map",
-            "/v1/api/properties"
+            "/v1/api/properties",
+            "/v1/api/properties/*"
+
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

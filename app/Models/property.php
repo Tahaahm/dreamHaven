@@ -182,11 +182,7 @@ class Property extends Model
         };
     }
 
-    // Status-related scopes and methods
-    public function scopePublished($query)
-    {
-        return $query->where('published', true);
-    }
+
 
     public function scopeByStatus($query, string $status)
     {
@@ -259,15 +255,6 @@ class Property extends Model
         return $query->where('listing_type', $listingType);
     }
 
-    public function scopeBoosted($query)
-    {
-        return $query->where('is_boosted', true)
-            ->where('boost_start_date', '<=', now())
-            ->where(function ($q) {
-                $q->whereNull('boost_end_date')
-                    ->orWhere('boost_end_date', '>=', now());
-            });
-    }
 
     // Add utility methods
     public function isForRent(): bool
@@ -285,16 +272,7 @@ class Property extends Model
         return $this->published === true;
     }
 
-    public function isBoosted(): bool
-    {
-        if (!$this->is_boosted) return false;
 
-        $now = now();
-        if ($this->boost_start_date && $now < $this->boost_start_date) return false;
-        if ($this->boost_end_date && $now > $this->boost_end_date) return false;
-
-        return true;
-    }
 
     // Keep all your existing methods...
     public function getName(string $language = 'en'): string
@@ -441,18 +419,7 @@ class Property extends Model
     /**
      * Scope: Active properties only
      */
-    public function scopeActive($query)
-    {
-        return $query->where('is_active', true);
-    }
 
-    /**
-     * Scope: Verified properties only
-     */
-    public function scopeVerified($query)
-    {
-        return $query->where('verified', true);
-    }
 
     /**
      * Scope: Properties for sale
@@ -497,10 +464,7 @@ class Property extends Model
     /**
      * Scope: Properties in specific city
      */
-    public function scopeInCity($query, string $city, string $language = 'en')
-    {
-        return $query->whereJsonContains("address_details->city->{$language}", $city);
-    }
+
 
     /**
      * Scope: Properties with specific amenities
@@ -513,10 +477,6 @@ class Property extends Model
     /**
      * Scope: Furnished properties
      */
-    public function scopeFurnished($query)
-    {
-        return $query->where('furnished', true);
-    }
 
     /**
      * Get property coordinates
@@ -530,6 +490,8 @@ class Property extends Model
             'lng' => $buildingEntrance['lng'] ?? null,
         ];
     }
+
+
 
     /**
      * Calculate distance to a point (in kilometers)
@@ -693,5 +655,276 @@ class Property extends Model
             'is_approved' => $this->isApproved(),
             'is_available' => $this->isAvailable(),
         ];
+    }
+
+
+
+
+
+    /**
+     * Scope for active properties
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
+    /**
+     * Scope for published properties
+     */
+    public function scopePublished($query)
+    {
+        return $query->where('published', true);
+    }
+
+    /**
+     * Scope for verified properties
+     */
+    public function scopeVerified($query)
+    {
+        return $query->where('verified', true);
+    }
+
+    /**
+     * Scope for boosted properties that are currently active
+     */
+    public function scopeBoosted($query)
+    {
+        return $query->where('is_boosted', true)
+            ->where('boost_start_date', '<=', now())
+            ->where(function ($q) {
+                $q->whereNull('boost_end_date')
+                    ->orWhere('boost_end_date', '>=', now());
+            });
+    }
+
+    /**
+     * Scope for high-performing properties (for featured selection)
+     */
+    public function scopeHighPerforming($query)
+    {
+        return $query->where('views', '>', 50)
+            ->where('favorites_count', '>', 5)
+            ->whereRaw('(favorites_count / GREATEST(views, 1)) > 0.05'); // Good engagement ratio
+    }
+
+    /**
+     * Scope for recently created properties
+     */
+    public function scopeRecent($query, $days = 30)
+    {
+        return $query->where('created_at', '>=', now()->subDays($days));
+    }
+
+    /**
+     * Scope for trending properties (growing engagement)
+     */
+    public function scopeTrending($query)
+    {
+        return $query->whereRaw('(views + favorites_count * 3) > 20') // Weighted engagement score
+            ->where('created_at', '>=', now()->subDays(60)); // Not too old
+    }
+
+    /**
+     * Scope for properties in a specific city
+     */
+    public function scopeInCity($query, $city)
+    {
+        return $query->whereRaw("JSON_EXTRACT(address_details, '$.city.en') = ?", [$city])
+            ->orWhereRaw("JSON_EXTRACT(address_details, '$.city.ar') = ?", [$city])
+            ->orWhereRaw("JSON_EXTRACT(address_details, '$.city.ku') = ?", [$city]);
+    }
+
+    /**
+     * Scope for properties of a specific type
+     */
+    public function scopeOfType($query, $type)
+    {
+        return $query->whereRaw("JSON_EXTRACT(type, '$.category') = ?", [strtolower($type)]);
+    }
+
+    /**
+     * Scope for properties within a price range (USD)
+     */
+    public function scopePriceBetween($query, $min, $max)
+    {
+        return $query->whereRaw("JSON_EXTRACT(price, '$.usd') BETWEEN ? AND ?", [$min, $max]);
+    }
+
+    /**
+     * Scope for properties with specific number of bedrooms
+     */
+    public function scopeWithBedrooms($query, $count)
+    {
+        return $query->whereRaw("JSON_EXTRACT(rooms, '$.bedroom.count') = ?", [$count]);
+    }
+
+    /**
+     * Scope for furnished properties
+     */
+    public function scopeFurnished($query, $furnished = true)
+    {
+        return $query->where('furnished', $furnished);
+    }
+
+    /**
+     * Scope for properties with virtual tours
+     */
+    public function scopeWithVirtualTour($query)
+    {
+        return $query->whereNotNull('virtual_tour_url')
+            ->where('virtual_tour_url', '!=', '');
+    }
+
+    /**
+     * Check if property boost is currently active
+     */
+    public function isBoosted()
+    {
+        if (!$this->is_boosted) {
+            return false;
+        }
+
+        $now = now();
+
+        // Check if boost period has started
+        if ($this->boost_start_date && $this->boost_start_date > $now) {
+            return false;
+        }
+
+        // Check if boost period has ended
+        if ($this->boost_end_date && $this->boost_end_date < $now) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get property performance score (cached)
+     */
+    public function getPerformanceScore()
+    {
+        // You can cache this if needed
+        $viewsScore = min(($this->views / 100) * 30, 30);
+        $favoritesScore = min(($this->favorites_count / 50) * 25, 25);
+        $ratingScore = ($this->rating / 5) * 25;
+        $verificationScore = $this->verified ? 10 : 0;
+        $ageDays = $this->created_at->diffInDays(now());
+        $ageScore = max(10 - ($ageDays / 30), 0);
+
+        return $viewsScore + $favoritesScore + $ratingScore + $verificationScore + $ageScore;
+    }
+
+    /**
+     * Get similar properties based on this property
+     */
+    public function getSimilarProperties($limit = 5)
+    {
+        return Property::where('id', '!=', $this->id)
+            ->active()
+            ->published()
+            ->when(isset($this->type['category']), function ($query) {
+                $query->ofType($this->type['category']);
+            })
+            ->when(isset($this->price['usd']), function ($query) {
+                $minPrice = $this->price['usd'] * 0.7;
+                $maxPrice = $this->price['usd'] * 1.3;
+                $query->priceBetween($minPrice, $maxPrice);
+            })
+            ->when($this->area, function ($query) {
+                $minArea = $this->area * 0.8;
+                $maxArea = $this->area * 1.2;
+                $query->whereBetween('area', [$minArea, $maxArea]);
+            })
+            ->when(isset($this->address_details['city']['en']), function ($query) {
+                $query->inCity($this->address_details['city']['en']);
+            })
+            ->orderByDesc('verified')
+            ->orderByDesc('rating')
+            ->orderByDesc('views')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Accessor for formatted price
+     */
+    public function getFormattedPriceAttribute()
+    {
+        $usdPrice = $this->price['usd'] ?? 0;
+
+        if ($usdPrice >= 1000000) {
+            return '$' . number_format($usdPrice / 1000000, 1) . 'M';
+        } elseif ($usdPrice >= 1000) {
+            return '$' . number_format($usdPrice / 1000, 0) . 'K';
+        }
+
+        return '$' . number_format($usdPrice, 0);
+    }
+
+    /**
+     * Accessor for main image
+     */
+    public function getMainImageAttribute()
+    {
+        return $this->images[0] ?? null;
+    }
+
+    /**
+     * Accessor for bedroom count
+     */
+    public function getBedroomsAttribute()
+    {
+        return $this->rooms['bedroom']['count'] ?? 0;
+    }
+
+    /**
+     * Accessor for bathroom count
+     */
+    public function getBathroomsAttribute()
+    {
+        return $this->rooms['bathroom']['count'] ?? 0;
+    }
+
+    /**
+     * Accessor for property category
+     */
+    public function getCategoryAttribute()
+    {
+        return $this->type['category'] ?? null;
+    }
+
+    /**
+     * Check if property has specific feature
+     */
+    public function hasFeature($feature)
+    {
+        return in_array($feature, $this->features ?? []);
+    }
+
+    /**
+     * Check if property has specific amenity
+     */
+    public function hasAmenity($amenity)
+    {
+        return in_array($amenity, $this->amenities ?? []);
+    }
+
+
+    /**
+     * Get multilingual field value
+     */
+    public function getLocalizedField($field, $language = 'en')
+    {
+        if (is_string($this->$field)) {
+            return $this->$field;
+        }
+
+        if (is_array($this->$field)) {
+            return $this->$field[$language] ?? $this->$field['en'] ?? $this->$field['ar'] ?? $this->$field['ku'] ?? '';
+        }
+
+        return '';
     }
 }

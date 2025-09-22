@@ -71,8 +71,17 @@ return [
             'block_for' => null,
             'after_commit' => false,
         ],
+        'redis-notifications' => [
+            'driver' => 'redis',
+            'connection' => 'default',
+            'queue' => env('REDIS_NOTIFICATION_QUEUE', 'notifications-default'),
+            'retry_after' => 90,
+            'block_for' => null,
+        ],
 
     ],
+
+
 
     /*
     |--------------------------------------------------------------------------

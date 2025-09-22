@@ -1166,15 +1166,13 @@ class PropertyController extends Controller
 
 
 
-    /**
-     * Get featured properties (if you want to add this feature to your model)
-     */
     public function getFeatured(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
                 'limit' => 'integer|min:1|max:50',
-                'language' => 'in:en,ar,ku'
+                'language' => 'in:en,ar,ku',
+                'strategy' => 'in:balanced,premium,engagement,recent'
             ]);
 
             if ($validator->fails()) {
@@ -1187,24 +1185,29 @@ class PropertyController extends Controller
 
             $limit = $request->get('limit', 10);
             $language = $request->get('language', 'en');
+            $strategy = $request->get('strategy', 'balanced');
 
-            // Get most viewed or recently created properties as "featured"
-            $featured = Property::where('is_active', true)
-                ->where('verified', true)
-                ->orderBy('views', 'desc')
-                ->orderBy('created_at', 'desc')
-                ->limit($limit)
-                ->get();
+            // Base query for all featured properties
+            $baseQuery = Property::where('is_active', true)
+                ->where('published', true)
+                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
+
+            $featured = $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
 
             $transformedData = $featured->map(function ($property) use ($language) {
-                return $this->transformPropertyForSearch($property, $language);
+                $propertyData = $this->transformPropertyForSearch($property, $language);
+                // Add featured reason for transparency
+                $propertyData['featured_reason'] = $this->getFeaturedReason($property);
+                $propertyData['featured_score'] = $this->calculateFeaturedScore($property);
+                return $propertyData;
             });
 
             return ApiResponse::success(
                 'Featured properties retrieved',
                 [
                     'data' => $transformedData,
-                    'total' => $transformedData->count()
+                    'total' => $transformedData->count(),
+                    'strategy' => $strategy
                 ],
                 200
             );
@@ -1221,6 +1224,358 @@ class PropertyController extends Controller
                 500
             );
         }
+    }
+
+    /**
+     * Get featured properties based on different strategies
+     */
+    private function getFeaturedByStrategy($baseQuery, $strategy, $limit)
+    {
+        switch ($strategy) {
+            case 'premium':
+                return $this->getPremiumFeatured($baseQuery, $limit);
+
+            case 'engagement':
+                return $this->getEngagementFeatured($baseQuery, $limit);
+
+            case 'recent':
+                return $this->getRecentFeatured($baseQuery, $limit);
+
+            case 'balanced':
+            default:
+                return $this->getBalancedFeatured($baseQuery, $limit);
+        }
+    }
+
+    /**
+     * Balanced approach - mix of all factors (MORE SELECTIVE)
+     */
+    private function getBalancedFeatured($baseQuery, $limit)
+    {
+        // First, get top performers using percentile-based selection
+        $totalCount = $baseQuery->count();
+        $topPercentile = max(1, intval($totalCount * 0.15)); // Top 15% of properties
+
+        $candidates = $baseQuery
+            ->select('*')
+            ->selectRaw('
+            (
+                -- Boost score (50% weight - higher priority for paid)
+                (CASE WHEN is_boosted = 1 AND boost_start_date <= NOW()
+                      AND (boost_end_date IS NULL OR boost_end_date >= NOW())
+                 THEN 50 ELSE 0 END) +
+
+                -- Performance score (30% weight - stricter thresholds)
+                (CASE
+                    WHEN views >= 50 THEN 20
+                    WHEN views >= 25 THEN 15
+                    WHEN views >= 10 THEN 10
+                    ELSE views * 0.5
+                END) +
+                (CASE
+                    WHEN favorites_count >= 10 THEN 15
+                    WHEN favorites_count >= 5 THEN 10
+                    WHEN favorites_count >= 2 THEN 5
+                    ELSE favorites_count * 2
+                END) +
+
+                -- Quality score (20% weight - must be high quality)
+                (CASE WHEN verified = 1 THEN 15 ELSE 0 END) +
+                (CASE WHEN rating >= 4.5 THEN 10
+                      WHEN rating >= 4.0 THEN 8
+                      WHEN rating >= 3.5 THEN 5
+                      ELSE 0 END) +
+                (CASE WHEN JSON_LENGTH(images) >= 5 THEN 5 ELSE 0 END) +
+
+                -- Premium content bonus (Additional quality indicators)
+                (CASE WHEN virtual_tour_url IS NOT NULL THEN 5 ELSE 0 END) +
+                (CASE WHEN floor_plan_url IS NOT NULL THEN 3 ELSE 0 END) +
+                (CASE WHEN energy_rating IN ("A+", "A") THEN 2 ELSE 0 END)
+
+            ) as featured_score
+        ')
+            // Much higher minimum threshold - only truly exceptional properties
+            ->having('featured_score', '>=', 35)
+            ->orderByDesc('featured_score')
+            ->orderByDesc('is_boosted')
+            ->orderByDesc('verified')
+            ->limit(min($limit, $topPercentile * 2)) // Don't exceed reasonable limits
+            ->get();
+
+        // Additional filtering: ensure diversity and avoid over-saturation
+        return $this->diversifyFeaturedProperties($candidates, $limit);
+    }
+
+    /**
+     * Premium strategy - prioritize paid and high-quality
+     */
+    private function getPremiumFeatured($baseQuery, $limit)
+    {
+        return $baseQuery
+            ->where(function ($query) {
+                $query->where('is_boosted', true)
+                    ->orWhere('verified', true)
+                    ->orWhere('rating', '>=', 4);
+            })
+            ->orderByRaw('
+            (CASE WHEN is_boosted = 1 THEN 3 ELSE 0 END) +
+            (CASE WHEN verified = 1 THEN 2 ELSE 0 END) +
+            (rating / 5) DESC
+        ')
+            ->orderByDesc('views')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Engagement strategy - most popular properties
+     */
+    private function getEngagementFeatured($baseQuery, $limit)
+    {
+        return $baseQuery
+            ->where('views', '>', 0)
+            ->orderByRaw('(views * 0.7) + (favorites_count * 2) + (rating * 10) DESC')
+            ->orderByDesc('updated_at')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Recent strategy - newest and recently updated
+     */
+    private function getRecentFeatured($baseQuery, $limit)
+    {
+        return $baseQuery
+            ->where('created_at', '>=', now()->subDays(30))
+            ->orderByDesc('created_at')
+            ->orderByDesc('is_boosted')
+            ->orderByDesc('verified')
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Calculate featured score for a property
+     */
+    private function calculateFeaturedScore($property)
+    {
+        $score = 0;
+
+        // Boost bonus (40 points max)
+        if (
+            $property->is_boosted &&
+            $property->boost_start_date <= now() &&
+            (!$property->boost_end_date || $property->boost_end_date >= now())
+        ) {
+            $score += 40;
+        }
+
+        // Performance metrics (25 points max)
+        $score += min($property->views / 10, 15); // Up to 15 points for views
+        $score += min($property->favorites_count * 2, 10); // Up to 10 points for favorites
+
+        // Quality indicators (20 points max)
+        if ($property->verified) $score += 10;
+        $score += min($property->rating, 5);
+        $score += min(count($property->images ?? []), 5);
+
+        // Content completeness (10 points max)
+        if ($property->virtual_tour_url) $score += 3;
+        if ($property->floor_plan_url) $score += 2;
+        if (!empty($property->description['en']) && strlen($property->description['en']) > 100) $score += 3;
+        if (count($property->features ?? []) >= 5) $score += 2;
+
+        // Freshness (15 points max - decays over time)
+        $daysSinceCreated = $property->created_at->diffInDays(now());
+        $score += max(15 - ($daysSinceCreated / 7), 0);
+
+        return round($score, 2);
+    }
+
+    /**
+     * Get human-readable reason why property is featured
+     */
+    private function getFeaturedReason($property)
+    {
+        $reasons = [];
+
+        if ($property->is_boosted) {
+            $reasons[] = 'Promoted listing';
+        }
+
+        if ($property->verified) {
+            $reasons[] = 'Verified property';
+        }
+
+        if ($property->views > 100) {
+            $reasons[] = 'High popularity';
+        }
+
+        if ($property->rating >= 4) {
+            $reasons[] = 'Highly rated';
+        }
+
+        if ($property->favorites_count > 10) {
+            $reasons[] = 'Frequently saved';
+        }
+
+        if ($property->created_at >= now()->subDays(7)) {
+            $reasons[] = 'Recently listed';
+        }
+
+        if (count($property->images ?? []) >= 8) {
+            $reasons[] = 'Comprehensive photos';
+        }
+
+        if ($property->virtual_tour_url) {
+            $reasons[] = 'Virtual tour available';
+        }
+
+        return $reasons;
+    }
+
+    /**
+     * Add a property to featured (admin function)
+     */
+    public function addToFeatured(Request $request, $id)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'featured_until' => 'nullable|date|after:now',
+                'reason' => 'nullable|string|max:255',
+                'priority' => 'integer|between:1,10'
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
+            }
+
+            $property = Property::find($id);
+            if (!$property) {
+                return ApiResponse::error('Property not found', ['id' => $id], 404);
+            }
+
+            // Add to featured (you might want a separate featured_properties table)
+            $property->update([
+                'is_boosted' => true,
+                'boost_start_date' => now(),
+                'boost_end_date' => $request->get('featured_until'),
+            ]);
+
+            return ApiResponse::success('Property added to featured', [
+                'id' => $property->id,
+                'featured_until' => $request->get('featured_until'),
+                'reason' => $request->get('reason'),
+            ], 200);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Failed to add to featured', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Remove from featured
+     */
+    public function removeFromFeatured($id)
+    {
+        try {
+            $property = Property::find($id);
+            if (!$property) {
+                return ApiResponse::error('Property not found', ['id' => $id], 404);
+            }
+
+            $property->update([
+                'is_boosted' => false,
+                'boost_start_date' => null,
+                'boost_end_date' => null,
+            ]);
+
+            return ApiResponse::success('Property removed from featured', ['id' => $property->id], 200);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Failed to remove from featured', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get featured properties analytics
+     */
+    public function getFeaturedAnalytics()
+    {
+        try {
+            $analytics = [
+                'total_featured' => Property::where('is_boosted', true)->count(),
+                'active_featured' => Property::where('is_boosted', true)
+                    ->where('boost_start_date', '<=', now())
+                    ->where(function ($q) {
+                        $q->whereNull('boost_end_date')
+                            ->orWhere('boost_end_date', '>=', now());
+                    })->count(),
+                'average_views' => Property::where('is_boosted', true)->avg('views'),
+                'average_favorites' => Property::where('is_boosted', true)->avg('favorites_count'),
+                'performance_comparison' => [
+                    'featured_avg_views' => Property::where('is_boosted', true)->avg('views'),
+                    'regular_avg_views' => Property::where('is_boosted', false)->avg('views'),
+                    'featured_avg_favorites' => Property::where('is_boosted', true)->avg('favorites_count'),
+                    'regular_avg_favorites' => Property::where('is_boosted', false)->avg('favorites_count'),
+                ]
+            ];
+
+            return ApiResponse::success('Featured analytics', $analytics, 200);
+        } catch (\Exception $e) {
+            return ApiResponse::error('Failed to get featured analytics', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Ensure diversity in featured properties (avoid showing similar properties)
+     */
+    private function diversifyFeaturedProperties($candidates, $finalLimit)
+    {
+        if ($candidates->count() <= $finalLimit) {
+            return $candidates;
+        }
+
+        $selected = collect();
+        $cityCount = [];
+        $typeCount = [];
+
+        // Prioritize variety while maintaining quality scores
+        foreach ($candidates as $candidate) {
+            $city = $candidate->address_details['city']['en'] ?? 'Unknown';
+            $propertyType = $candidate->type['category'] ?? 'Unknown';
+
+            $cityLimit = max(1, intval($finalLimit * 0.4)); // Max 40% from same city
+            $typeLimit = max(1, intval($finalLimit * 0.5)); // Max 50% of same type
+
+            $canAdd = true;
+
+            // Check city diversity
+            if (($cityCount[$city] ?? 0) >= $cityLimit) {
+                $canAdd = false;
+            }
+
+            // Check property type diversity
+            if (($typeCount[$propertyType] ?? 0) >= $typeLimit) {
+                $canAdd = false;
+            }
+
+            if ($canAdd && $selected->count() < $finalLimit) {
+                $selected->push($candidate);
+                $cityCount[$city] = ($cityCount[$city] ?? 0) + 1;
+                $typeCount[$propertyType] = ($typeCount[$propertyType] ?? 0) + 1;
+            }
+
+            if ($selected->count() >= $finalLimit) {
+                break;
+            }
+        }
+
+        // If we still need more properties, add highest scoring ones regardless of diversity
+        if ($selected->count() < $finalLimit) {
+            $remaining = $candidates->diff($selected)->take($finalLimit - $selected->count());
+            $selected = $selected->merge($remaining);
+        }
+
+        return $selected;
     }
     public function getByListingType($listingType, Request $request)
     {

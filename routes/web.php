@@ -1,12 +1,12 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\RealEstateOfficeController;
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\BannerAdController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ServiceProviderController;
@@ -57,42 +57,39 @@ Route::prefix('v1/api/agents')->group(function () {
 
 
 
-// routes/api.php or routes/web.php
+// Property Routes - Cleaned and Organized
 Route::prefix('v1/api/properties')->group(function () {
 
+    // ===== PUBLIC ROUTES (No Authentication Required) =====
+
+    // Search and filtering routes (specific routes first)
     Route::get('/search', [PropertyController::class, 'search']);
     Route::get('/nearby', [PropertyController::class, 'nearby']);
     Route::get('/featured', [PropertyController::class, 'getFeatured']);
     Route::get('/boosted', [PropertyController::class, 'getBoosted']);
     Route::get('/statistics', [PropertyController::class, 'getStatistics']);
+
+    // Map functionality
     Route::post('/map', [PropertyController::class, 'getMapProperties']);
 
-    // Listing type routes (NEW)
-    Route::get('/for-rent', [PropertyController::class, 'getByListingType'])
-        ->defaults('listingType', 'rent');
-    Route::get('/for-sale', [PropertyController::class, 'getByListingType'])
-        ->defaults('listingType', 'sell');
-
-    // Owner-specific properties (before generic {id})
     Route::get('/owner/{ownerType}/{ownerId}', [PropertyController::class, 'getByOwner'])
         ->where(['ownerType' => 'User|Agent|RealEstateOffice']);
 
-    // Basic CRUD (public read operations)
+    // Basic CRUD - public read operations
     Route::get('/', [PropertyController::class, 'index']);
-    Route::get('/{id}', [PropertyController::class, 'show']); // This should be last
+    Route::get('/{id}', [PropertyController::class, 'show']);
 
     // ===== AUTHENTICATED ROUTES =====
-
     Route::middleware(['auth:sanctum'])->group(function () {
-        //get map
 
-        // Property Management (Owner/Agent operations)
-        Route::post('/', [PropertyController::class, 'store']);              // Create
-        Route::put('/{id}', [PropertyController::class, 'update']);          // Update
+        // Property CRUD Operations
+        Route::post('/', [PropertyController::class, 'store']);              // Create new property
+        Route::post('/store', [PropertyController::class, 'store']);         // Alternative create endpoint (keeping for frontend compatibility)
+        Route::put('/{id}', [PropertyController::class, 'update']);          // Full update
         Route::patch('/{id}', [PropertyController::class, 'update']);        // Partial update
-        Route::delete('/{id}', [PropertyController::class, 'destroy']);      // Delete
+        Route::delete('/{id}', [PropertyController::class, 'destroy']);      // Delete property
 
-        // Property Status Management (NEW)
+        // Property Status Management
         Route::patch('/{id}/status', [PropertyController::class, 'updateStatus']);     // Update status (available/sold/rented/pending)
         Route::patch('/{id}/boost', [PropertyController::class, 'toggleBoost']);       // Toggle boost/promotion
 
@@ -100,48 +97,42 @@ Route::prefix('v1/api/properties')->group(function () {
         Route::post('/{id}/favorites', [PropertyController::class, 'addToFavorites']);
         Route::delete('/{id}/favorites', [PropertyController::class, 'removeFromFavorites']);
 
-        // Bulk Operations (UPDATED)
+        // User's Property Management
+        Route::get('/my-properties', [PropertyController::class, 'getMyProperties']);          // Current user's properties
+
+        // Bulk Operations
         Route::patch('/bulk-update', [PropertyController::class, 'bulkUpdate']);
-
-        // Owner Management Routes (NEW)
-        Route::get('/my-properties', [PropertyController::class, 'getMyProperties']);          // Get current user's properties
-        Route::get('/my-properties/drafts', [PropertyController::class, 'getMyDrafts']);       // Get unpublished properties
-        Route::get('/my-properties/analytics', [PropertyController::class, 'getMyAnalytics']); // Get property analytics
-
     });
 
-    // ===== ADMIN/AGENT ONLY ROUTES =====
-
+    // ===== ADMIN/AGENT ROUTES =====
     Route::middleware(['auth:sanctum', 'role:admin,agent'])->group(function () {
 
-        // Property Verification & Management
+        // Property Management & Verification
         Route::patch('/{id}/verification', [PropertyController::class, 'toggleVerification']);
         Route::patch('/{id}/active', [PropertyController::class, 'toggleActive']);
-        Route::patch('/{id}/publish', [PropertyController::class, 'togglePublish']);           // NEW: Toggle publish status
+        Route::patch('/{id}/publish', [PropertyController::class, 'togglePublish']);
 
-        // Advanced Analytics (NEW)
+        // Advanced Analytics
         Route::get('/analytics/overview', [PropertyController::class, 'getAnalyticsOverview']);
         Route::get('/analytics/trends', [PropertyController::class, 'getTrends']);
         Route::get('/{id}/analytics', [PropertyController::class, 'getPropertyAnalytics']);
 
-        // Bulk Management Operations (ENHANCED)
+        // Bulk Management Operations
         Route::patch('/bulk-verify', [PropertyController::class, 'bulkVerify']);
         Route::patch('/bulk-publish', [PropertyController::class, 'bulkPublish']);
         Route::patch('/bulk-status', [PropertyController::class, 'bulkStatusUpdate']);
     });
 
-    // ===== SUPER ADMIN ONLY ROUTES =====
-
+    // ===== SUPER ADMIN ROUTES =====
     Route::middleware(['auth:sanctum', 'role:super_admin'])->group(function () {
 
-        // Advanced Management
+        // Administrative Management
         Route::get('/admin/dashboard', [PropertyController::class, 'getAdminDashboard']);
+        Route::get('/admin/flagged', [PropertyController::class, 'getFlaggedProperties']);
         Route::delete('/admin/bulk-delete', [PropertyController::class, 'bulkDelete']);
         Route::patch('/admin/force-verify/{id}', [PropertyController::class, 'forceVerify']);
-        Route::get('/admin/flagged', [PropertyController::class, 'getFlaggedProperties']);
     });
 });
-
 
 
 
@@ -171,56 +162,73 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/announcement', [NotificationController::class, 'sendSystemAnnouncement']);
     });
 });
+
 Route::prefix('api/v1')->group(function () {
-    Route::post('/auth/login', [UserController::class, 'login']);
-    Route::post('/auth/register', [UserController::class, 'register']);
 
-    // Protected routes (require authentication)
+    // ===== PUBLIC AUTHENTICATION ROUTES =====
+    Route::prefix('auth')->group(function () {
+        Route::post('/login', [UserController::class, 'login']);
+        Route::post('/register', [UserController::class, 'register']);
+        Route::post('/forgot-password', [UserController::class, 'forgotPassword']);
+        Route::post('/confirm-password-reset', [UserController::class, 'confirmPasswordReset']);
+    });
+
+    // ===== AUTHENTICATED USER ROUTES =====
     Route::middleware('auth:sanctum')->group(function () {
-        // Authentication management
-        Route::post('/auth/logout', [UserController::class, 'logout']);
-        Route::post('/auth/refresh', [UserController::class, 'refresh']);
-        Route::patch('/auth/change-password', [UserController::class, 'changePassword']);
 
+        // Authentication Management
+        Route::prefix('auth')->group(function () {
+            Route::post('/logout', [UserController::class, 'logout']);
+            Route::post('/refresh', [UserController::class, 'refresh']);
+            Route::patch('/change-password', [UserController::class, 'changePassword']);
+        });
 
-        // User profile management (PATCH method as requested)
-        Route::patch('/user/profile', [UserController::class, 'updateLocation']);
-        Route::get('/user/profile', [UserController::class, 'getProfile']);
+        // User Profile Management - MOVED INSIDE AUTH GROUP
+        Route::prefix('user')->group(function () {
+            Route::get('/profile', [UserController::class, 'getProfile']); // ← FIXED: Now authenticated
+            Route::patch('/profile', [UserController::class, 'updateLocation']);
 
-        Route::patch('/user/device-token', [UserController::class, 'updateDeviceToken']);
-        Route::delete('/user/device-token', [UserController::class, 'removeDeviceToken']);
-        Route::get('/user/device-tokens', [UserController::class, 'getDeviceTokens']);
+            // Device Token Management
+            Route::patch('/device-token', [UserController::class, 'updateDeviceToken']);
+            Route::delete('/device-token', [UserController::class, 'removeDeviceToken']);
+            Route::get('/device-tokens', [UserController::class, 'getDeviceTokens']);
 
+            // Search Preferences Management
+            Route::get('/search-preferences', [UserController::class, 'getSearchPreferences']);
+            Route::patch('/search-preferences', [UserController::class, 'updateSearchPreferences']);
+            Route::post('/search-preferences/reset', [UserController::class, 'resetSearchPreferences']);
+            Route::get('/search-filters', [UserController::class, 'getSearchFilters']);
 
-        // Search Preferences (added to UserController)
-        Route::get('/user/search-preferences', [UserController::class, 'getSearchPreferences']);
-        Route::patch('/user/search-preferences', [UserController::class, 'updateSearchPreferences']);
-        Route::post('/user/search-preferences/reset', [UserController::class, 'resetSearchPreferences']);
-        Route::get('/user/search-filters', [UserController::class, 'getSearchFilters']);
+            // User Notifications Management
+            Route::get('/notifications', [UserController::class, 'getNotifications']);
+            Route::patch('/notifications/{id}/read', [UserController::class, 'markNotificationRead']);
+            Route::patch('/notifications/read-all', [UserController::class, 'markAllNotificationsRead']);
+            Route::delete('/notifications/{notificationId}', [UserController::class, 'deleteNotification']);
+            Route::delete('/notifications', [UserController::class, 'clearAllNotifications']);
 
-        // Property Search (added to UserController)
-        Route::get('/properties/search', [UserController::class, 'searchProperties']);
-        Route::get('/properties/recommendations', [UserController::class, 'getRecommendations']);
+            // User Appointments Management
+            Route::get('/appointments', [UserController::class, 'getAppointments']);
+            Route::get('/appointments/{userId}', [UserController::class, 'getAppointmentsByUser']);
+            Route::patch('/appointments/{id}/cancel', [UserController::class, 'cancelAppointment']);
+            Route::patch('/appointments/{appointmentId}/reschedule', [UserController::class, 'rescheduleAppointment']);
+            Route::delete('/appointments/{appointmentId}', [UserController::class, 'deleteAppointment']);
+        });
 
-        // Notification routes
-        Route::get('/user/notifications', [UserController::class, 'getNotifications']);
-        Route::patch('/user/notifications/{id}/read', [UserController::class, 'markNotificationRead']);
-        Route::patch('/user/notifications/read-all', [UserController::class, 'markAllNotificationsRead']);
+        // Property Search & Recommendations (User Context)
+        Route::prefix('properties')->group(function () {
+            Route::get('/search', [UserController::class, 'searchProperties']);
+            Route::get('/recommendations', [UserController::class, 'getRecommendations']);
+        });
+
+        // Admin/System Operations (if needed in user context)
         Route::post('/notifications', [UserController::class, 'createNotification']);
         Route::post('/notifications/bulk', [UserController::class, 'createBulkNotifications']);
-        Route::delete('/user/notifications/{notificationId}', [UserController::class, 'deleteNotification']);
-        Route::delete('/user/notifications', [UserController::class, 'clearAllNotifications']);
-
-        // Appointment routes
-        Route::get('/user/appointments', [UserController::class, 'getAppointments']);
-        Route::patch('/user/appointments/{id}/cancel', [UserController::class, 'cancelAppointment']);
         Route::post('/appointments', [UserController::class, 'createAppointment']);
         Route::post('/appointments/bulk', [UserController::class, 'createBulkAppointments']);
-        Route::patch('/user/appointments/{appointmentId}/reschedule', [UserController::class, 'rescheduleAppointment']);
-        Route::delete('/user/appointments/{appointmentId}', [UserController::class, 'deleteAppointment']);
-        Route::get('/user/appointments/{userId}', action: [UserController::class, 'getAppointmentsByUser']);
     });
 });
+
+
 // Appointment routes
 Route::prefix('appointments')->group(function () {
     Route::get('/', [AppointmentController::class, 'index']);
@@ -284,11 +292,44 @@ Route::prefix('v1/api/service-providers')->group(function () {
     });
 });
 
-Route::get('/status', function () {
-    return response()->json([
-        'database' => 'connected',
-        'cache' => 'active',
-        'queue' => 'running',
-        'storage' => 'available'
-    ]);
+
+// Add this to your existing routes/web.php or routes/api.php
+
+// Banner Ad Routes
+Route::prefix('v1/api/banner-ads')->group(function () {
+
+    // ===== PUBLIC ROUTES (No Authentication Required) =====
+    Route::get('/active', [BannerAdController::class, 'getActiveForDisplay']); // Get banners for display
+    Route::post('/{id}/click', [BannerAdController::class, 'recordClick']); // Track clicks
+
+    // ===== AUTHENTICATED ROUTES =====
+    Route::middleware(['auth:sanctum'])->group(function () {
+
+        // Basic CRUD Operations
+        Route::get('/', [BannerAdController::class, 'index']); // List banners with filters
+        Route::post('/', [BannerAdController::class, 'store']); // Create banner
+        Route::get('/{id}', [BannerAdController::class, 'show']); // Get single banner
+        Route::put('/{id}', [BannerAdController::class, 'update']); // Update banner
+        Route::delete('/{id}', [BannerAdController::class, 'destroy']); // Delete banner
+
+        // Banner Management
+        Route::patch('/{id}/pause', [BannerAdController::class, 'pause']); // Pause banner
+        Route::patch('/{id}/resume', [BannerAdController::class, 'resume']); // Resume banner
+        Route::post('/{id}/boost', [BannerAdController::class, 'boost']); // Boost banner
+
+        // Analytics & Performance
+        Route::get('/{id}/analytics', [BannerAdController::class, 'analytics']); // Get analytics
+
+        // File Upload
+        Route::post('/upload-image', [BannerAdController::class, 'uploadImage']); // Upload banner image
+    });
+
+    // ===== ADMIN ROUTES =====
+    Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+
+        // Admin Management
+        Route::get('/pending-approval', [BannerAdController::class, 'pendingApproval']); // Pending banners
+        Route::patch('/{id}/approve', [BannerAdController::class, 'approve']); // Approve banner
+        Route::patch('/{id}/reject', [BannerAdController::class, 'reject']); // Reject banner
+    });
 });
