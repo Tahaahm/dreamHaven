@@ -2,6 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Support\OfficeCompanyAgent;
+use App\Models\Support\OfficeCustomerReview;
+use App\Models\Support\OfficeNotificationReference;
+use App\Models\Support\OfficeProjectPortfolio;
+use App\Models\Support\OfficePropertyListing;
+use App\Models\Support\OfficePropertyType;
+use App\Models\Support\OfficeSocialMedia;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

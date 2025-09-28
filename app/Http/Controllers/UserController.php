@@ -223,7 +223,7 @@ class UserController extends Controller
     }
 
     /**
-     * Login with Firebase integration and password sync
+     * Login with Firebase-first authentication strategy
      */
     public function login(Request $request)
     {
@@ -246,92 +246,157 @@ class UserController extends Controller
                 return ApiResponse::error('Invalid credentials', ['login' => 'User not found'], 401);
             }
 
-            // Firebase integration - check Firebase Auth first (if available)
             $firebaseResult = null;
-            $firebaseUserExists = false;
+            $authenticationSuccess = false;
+            $passwordSyncRequired = false;
 
+            // Check if Firebase Auth is available and if Firebase user exists
             if ($this->firebaseAuth) {
                 $firebaseUserExists = $this->firebaseAuth->userExists($user->email);
 
-                Log::info('Checking Firebase authentication', [
+                Log::info('Login attempt - Firebase availability check', [
                     'user_id' => $user->id,
                     'email' => $user->email,
                     'firebase_exists' => $firebaseUserExists
                 ]);
 
                 if ($firebaseUserExists) {
-                    // Try to authenticate with Firebase
-                    $firebaseResult = $this->firebaseAuth->authenticateUser($user->email, $request->password);
-
-                    Log::info('Firebase authentication attempt', [
-                        'user_id' => $user->id,
-                        'firebase_success' => $firebaseResult['success']
-                    ]);
-                } else {
-                    // Create Firebase user for existing Laravel user
-                    Log::info('Creating Firebase user for existing Laravel user', [
+                    // Firebase user exists - rely 100% on Firebase authentication
+                    Log::info('Firebase user exists - using Firebase authentication priority', [
                         'user_id' => $user->id,
                         'email' => $user->email
                     ]);
 
-                    $firebaseCreationResult = $this->firebaseAuth->createUserFromLaravel($user, $request->password);
+                    $firebaseResult = $this->firebaseAuth->authenticateUser($user->email, $request->password);
 
-                    if ($firebaseCreationResult['success']) {
-                        $firebaseResult = $firebaseCreationResult;
+                    if ($firebaseResult['success']) {
+                        // Firebase authentication successful
+                        $authenticationSuccess = true;
 
-                        Log::info('Firebase user created successfully during login', [
+                        Log::info('Firebase authentication successful', [
                             'user_id' => $user->id,
                             'email' => $user->email
                         ]);
+
+                        // Check if Laravel password matches Firebase password
+                        $laravelPasswordValid = Hash::check($request->password, $user->password);
+
+                        if (!$laravelPasswordValid) {
+                            // Laravel password doesn't match - sync it with Firebase
+                            $passwordSyncRequired = true;
+
+                            Log::info('Password sync required - Laravel password will be updated to match Firebase', [
+                                'user_id' => $user->id
+                            ]);
+
+                            $user->update([
+                                'password' => Hash::make($request->password),
+                                'updated_at' => now()
+                            ]);
+
+                            Log::info('Laravel password synchronized with Firebase successfully', [
+                                'user_id' => $user->id
+                            ]);
+                        }
                     } else {
-                        Log::warning('Firebase user creation failed during login, continuing with Laravel auth', [
+                        // Firebase authentication failed
+                        Log::warning('Firebase authentication failed', [
                             'user_id' => $user->id,
-                            'error' => $firebaseCreationResult['error']
+                            'email' => $user->email,
+                            'error' => $firebaseResult['error']
                         ]);
+
+                        return ApiResponse::error('Invalid credentials', [
+                            'login' => 'The provided credentials are incorrect'
+                        ], 401);
                     }
+                } else {
+                    // No Firebase user exists - rely on Laravel password authentication
+                    Log::info('No Firebase user found - using Laravel authentication', [
+                        'user_id' => $user->id,
+                        'email' => $user->email
+                    ]);
+
+                    $laravelPasswordValid = Hash::check($request->password, $user->password);
+
+                    if ($laravelPasswordValid) {
+                        $authenticationSuccess = true;
+
+                        // Optionally create Firebase user for future logins
+                        Log::info('Laravel authentication successful - creating Firebase user for future use', [
+                            'user_id' => $user->id,
+                            'email' => $user->email
+                        ]);
+
+                        $firebaseCreationResult = $this->firebaseAuth->createUserFromLaravel($user, $request->password);
+
+                        if ($firebaseCreationResult['success']) {
+                            $firebaseResult = $firebaseCreationResult;
+
+                            Log::info('Firebase user created successfully during login', [
+                                'user_id' => $user->id,
+                                'email' => $user->email
+                            ]);
+                        } else {
+                            Log::warning('Firebase user creation failed during login, continuing with Laravel auth', [
+                                'user_id' => $user->id,
+                                'error' => $firebaseCreationResult['error']
+                            ]);
+                        }
+                    } else {
+                        // Laravel authentication failed
+                        Log::warning('Laravel authentication failed', [
+                            'user_id' => $user->id,
+                            'email' => $user->email
+                        ]);
+
+                        return ApiResponse::error('Invalid credentials', [
+                            'login' => 'The provided credentials are incorrect'
+                        ], 401);
+                    }
+                }
+            } else {
+                // Firebase Auth not available - fall back to Laravel only
+                Log::info('Firebase Auth not available, using Laravel authentication only', [
+                    'user_id' => $user->id
+                ]);
+
+                $laravelPasswordValid = Hash::check($request->password, $user->password);
+
+                if ($laravelPasswordValid) {
+                    $authenticationSuccess = true;
+                } else {
+                    return ApiResponse::error('Invalid credentials', [
+                        'login' => 'The provided credentials are incorrect'
+                    ], 401);
                 }
             }
 
-            // Verify Laravel password
-            $laravelPasswordValid = Hash::check($request->password, $user->password);
-
-            // Handle password mismatch scenarios
-            if ($firebaseResult && $firebaseResult['success'] && !$laravelPasswordValid) {
-                // Firebase auth succeeded but Laravel failed - update Laravel password
-                Log::info('Password mismatch detected, updating Laravel password to match Firebase', [
-                    'user_id' => $user->id
-                ]);
-
-                $user->update([
-                    'password' => Hash::make($request->password),
-                    'updated_at' => now()
-                ]);
-
-                Log::info('Laravel password synchronized with Firebase', [
-                    'user_id' => $user->id
-                ]);
-            } elseif (!$laravelPasswordValid && (!$firebaseResult || !$firebaseResult['success'])) {
-                // Both authentications failed
-                return ApiResponse::error('Invalid credentials', ['login' => 'The provided credentials are incorrect'], 401);
+            // At this point, authentication has succeeded
+            if (!$authenticationSuccess) {
+                return ApiResponse::error('Authentication failed', null, 401);
             }
 
+            // Handle device token management
             $deviceName = $request->get('device_name', 'Unknown Device');
-            $deviceToken = $request->get('device_token'); // This is the FCM token
+            $deviceToken = $request->get('device_token'); // FCM token
 
-            // Handle device token management if both device_name and device_token exist
             if ($deviceToken && $deviceName) {
                 $this->updateUserDeviceToken($user, $deviceName, $deviceToken);
             }
 
+            // Create authentication token
             $token = $user->createToken('auth-token - ' . $deviceName)->plainTextToken;
 
+            // Update last login timestamp
             $user->update(['last_login_at' => now()]);
 
-            // Send login notification (optional for security)
+            // Send login notification (optional)
             if (class_exists('App\Http\Controllers\NotificationController')) {
                 app(NotificationController::class)->sendLoginNotification($user->id, $deviceName);
             }
 
+            // Prepare response data
             $responseData = [
                 'user' => $this->transformUserData($user->fresh()),
                 'token' => $token
@@ -344,17 +409,21 @@ class UserController extends Controller
 
             Log::info('Login completed successfully', [
                 'user_id' => $user->id,
+                'email' => $user->email,
                 'firebase_authenticated' => $firebaseResult ? $firebaseResult['success'] : false,
-                'password_synced' => $firebaseResult && $firebaseResult['success'] && !$laravelPasswordValid
+                'password_synced' => $passwordSyncRequired,
+                'authentication_method' => $this->firebaseAuth && $this->firebaseAuth->userExists($user->email) ? 'firebase_primary' : 'laravel_primary'
             ]);
 
             return ApiResponse::success('Login successful', $responseData, 200);
         } catch (\Exception $e) {
-            Log::error('User login error', ['message' => $e->getMessage()]);
+            Log::error('User login error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return ApiResponse::error('Login failed', $e->getMessage(), 500);
         }
     }
-
     public function changePassword(Request $request)
     {
         try {

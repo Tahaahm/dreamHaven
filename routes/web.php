@@ -134,15 +134,31 @@ Route::prefix('v1/api/properties')->group(function () {
     });
 });
 
+Route::prefix('v1/api/projects')->group(function () {
 
+    // ===== PUBLIC ROUTES (No Authentication Required) =====
 
-// Project Routes
-Route::get('/projects', [ProjectController::class, 'index']); // لیستی هەموو پرۆژەکان
-Route::post('/projects', [ProjectController::class, 'store']); // دروستکردنی پرۆژەی نوێ
-Route::get('/projects/{id}', [ProjectController::class, 'show']); // وەرگرتنی پرۆژەی دیاری کراو
-Route::put('/projects/{id}', [ProjectController::class, 'update']); // نوێکردنەوەی پرۆژە
-Route::delete('/projects/{id}', [ProjectController::class, 'destroy']); // سڕینەوەی پرۆژە
+    // Search and filtering routes (specific routes first)
+    Route::get('/featured', [ProjectController::class, 'featured']); // GET /v1/api/projects/featured
 
+    // Developer-specific projects
+    Route::get('/developer/{developerId}', [ProjectController::class, 'byDeveloper']); // GET /v1/api/projects/developer/{id}
+
+    // Basic CRUD - public read operations
+    Route::get('/', [ProjectController::class, 'index']); // GET /v1/api/projects
+    Route::get('/{id}', [ProjectController::class, 'show']); // GET /v1/api/projects/{id}
+
+    // ===== AUTHENTICATED ROUTES =====
+    Route::middleware(['auth:sanctum'])->group(function () {
+
+        // Project CRUD Operations
+        Route::post('/', [ProjectController::class, 'store']); // Create new project
+        Route::put('/{id}', [ProjectController::class, 'update']); // Full update
+        Route::patch('/{id}', [ProjectController::class, 'update']); // Partial update
+        Route::delete('/{id}', [ProjectController::class, 'destroy']); // Delete project
+
+    });
+});
 
 
 

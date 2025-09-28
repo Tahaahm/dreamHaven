@@ -197,47 +197,89 @@ class FirebaseAuthService
     }
 
     /**
-     * Authenticate user with Firebase
      */
     public function authenticateUser($email, $password)
     {
         try {
-            // Get user by email to verify they exist
-            $user = $this->auth->getUserByEmail($email);
-            $firebaseUid = $user->uid;
+            $webApiKey = config('firebase.api_key');
 
-            // Generate custom token for this user
-            $customToken = $this->auth->createCustomToken($firebaseUid);
+            if (!$webApiKey) {
+                throw new \Exception('Firebase Web API key not configured');
+            }
 
-            Log::info('Firebase authentication successful', [
+            // Use Firebase REST API to actually verify the password
+            $response = \Illuminate\Support\Facades\Http::timeout(30)->post(
+                'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' . $webApiKey,
+                [
+                    'email' => $email,
+                    'password' => $password,
+                    'returnSecureToken' => true
+                ]
+            );
+
+            $data = $response->json();
+
+            Log::info('Firebase authentication attempt', [
                 'email' => $email,
-                'firebase_uid' => $firebaseUid
+                'response_status' => $response->status(),
+                'has_id_token' => isset($data['idToken']),
+                'error' => $data['error']['message'] ?? null
+            ]);
+
+            if ($response->successful() && isset($data['idToken'])) {
+                // Password verification successful - get user details from Admin SDK
+                $user = $this->auth->getUserByEmail($email);
+
+                Log::info('Firebase authentication successful', [
+                    'email' => $email,
+                    'firebase_uid' => $user->uid
+                ]);
+
+                return [
+                    'success' => true,
+                    'firebase_uid' => $user->uid,
+                    'email' => $user->email,
+                    'custom_token' => $this->auth->createCustomToken($user->uid)->toString(),
+                    'id_token' => $data['idToken'],
+                    'firebase_user' => $user
+                ];
+            }
+
+            // Authentication failed
+            $errorMessage = 'Authentication failed';
+            if (isset($data['error']['message'])) {
+                $errorMessage = $data['error']['message'];
+
+                // Make error messages more user-friendly
+                if (strpos($errorMessage, 'INVALID_PASSWORD') !== false) {
+                    $errorMessage = 'Invalid password';
+                } elseif (strpos($errorMessage, 'EMAIL_NOT_FOUND') !== false) {
+                    $errorMessage = 'User not found';
+                } elseif (strpos($errorMessage, 'TOO_MANY_ATTEMPTS_TRY_LATER') !== false) {
+                    $errorMessage = 'Too many failed attempts. Please try again later.';
+                } elseif (strpos($errorMessage, 'USER_DISABLED') !== false) {
+                    $errorMessage = 'User account has been disabled';
+                }
+            }
+
+            Log::warning('Firebase authentication failed', [
+                'email' => $email,
+                'error' => $errorMessage,
+                'full_response' => $data
             ]);
 
             return [
-                'success' => true,
-                'firebase_uid' => $firebaseUid,
-                'custom_token' => $customToken->toString(),
-                'id_token' => $customToken->toString(), // Added for compatibility
-                'firebase_user' => $user
-            ];
-        } catch (UserNotFound $e) {
-            return [
                 'success' => false,
-                'error' => 'User not found in Firebase',
-                'error_code' => 'USER_NOT_FOUND'
+                'error' => $errorMessage
             ];
-        } catch (FirebaseException $e) {
+        } catch (\Exception $e) {
             Log::error('Firebase authentication error', [
                 'email' => $email,
                 'error' => $e->getMessage(),
-                'code' => $e->getCode()
+                'trace' => $e->getTraceAsString()
             ]);
 
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return ['success' => false, 'error' => 'Authentication service error'];
         }
     }
 
@@ -766,28 +808,171 @@ class FirebaseAuthService
             ];
         }
     }
-    /**
-     * Send password reset email
-     */
-    public function sendPasswordResetEmail(string $email): array
+    public function generatePasswordResetLink(string $email): array
     {
         try {
-            $this->auth->sendPasswordResetLink($email);
+            // Verify user exists first
+            $user = $this->auth->getUserByEmail($email);
+
+            // Generate password reset link
+            $resetLink = $this->auth->generatePasswordResetLink($email);
+
+            Log::info('Password reset link generated', [
+                'email' => $email,
+                'firebase_uid' => $user->uid
+            ]);
 
             return [
                 'success' => true,
-                'message' => 'Password reset email sent'
+                'reset_link' => $resetLink,
+                'firebase_uid' => $user->uid
             ];
-        } catch (\Exception $e) {
+        } catch (UserNotFound $e) {
+            Log::warning('Password reset requested for non-existent user', [
+                'email' => $email
+            ]);
+
             return [
                 'success' => false,
+                'error' => 'User not found',
+                'error_code' => 'USER_NOT_FOUND'
+            ];
+        } catch (FirebaseException $e) {
+            Log::error('Failed to generate password reset link', [
+                'email' => $email,
+                'error' => $e->getMessage(),
+                'code' => $e->getCode()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'FIREBASE_ERROR'
+            ];
+        } catch (\Exception $e) {
+            Log::error('Unexpected error generating password reset link', [
+                'email' => $email,
                 'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'An unexpected error occurred',
+                'error_code' => 'UNKNOWN_ERROR'
             ];
         }
     }
 
     /**
-     * Confirm password reset with oob code
+     * Send password reset email via Firebase REST API
+     * This is the method that actually sends emails
+     */
+    public function sendPasswordResetEmail(string $email): array
+    {
+        try {
+            $apiKey = config('firebase.api_key');
+
+            if (!$apiKey) {
+                throw new \Exception('Firebase API key not configured');
+            }
+
+            $url = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={$apiKey}";
+
+            $data = [
+                'requestType' => 'PASSWORD_RESET',
+                'email' => $email
+            ];
+
+            $response = \Illuminate\Support\Facades\Http::timeout(30)->post($url, $data);
+
+            if ($response->successful()) {
+                Log::info('Password reset email sent successfully', [
+                    'email' => $email
+                ]);
+
+                return [
+                    'success' => true,
+                    'message' => 'Password reset email sent successfully'
+                ];
+            } else {
+                $errorData = $response->json();
+                $errorMessage = $errorData['error']['message'] ?? 'Failed to send password reset email';
+
+                Log::error('Firebase REST API error', [
+                    'email' => $email,
+                    'error' => $errorData,
+                    'status' => $response->status()
+                ]);
+
+                // Map Firebase error codes to user-friendly messages
+                $userMessage = $this->mapFirebaseErrorMessage($errorMessage);
+
+                return [
+                    'success' => false,
+                    'error' => $userMessage,
+                    'error_code' => $errorMessage
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Exception during password reset email', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Unable to send password reset email. Please try again later.',
+                'error_code' => 'SERVICE_ERROR'
+            ];
+        }
+    }
+
+    /**
+     * Map Firebase error messages to user-friendly messages
+     */
+    private function mapFirebaseErrorMessage(string $firebaseError): string
+    {
+        $errorMap = [
+            'EMAIL_NOT_FOUND' => 'No account found with this email address',
+            'INVALID_EMAIL' => 'Invalid email address format',
+            'TOO_MANY_ATTEMPTS_TRY_LATER' => 'Too many attempts. Please try again later',
+            'USER_DISABLED' => 'This account has been disabled',
+        ];
+
+        return $errorMap[$firebaseError] ?? 'Failed to send password reset email';
+    }
+
+    /**
+     * Verify password reset code
+     */
+    public function verifyPasswordResetCode(string $oobCode): array
+    {
+        try {
+            $email = $this->auth->verifyPasswordResetCode($oobCode);
+
+            return [
+                'success' => true,
+                'email' => $email
+            ];
+        } catch (FirebaseException $e) {
+            Log::error('Invalid password reset code', [
+                'code_preview' => substr($oobCode, 0, 10) . '...',
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Invalid or expired password reset code',
+                'error_code' => 'INVALID_OOB_CODE'
+            ];
+        }
+    }
+
+    /**
+     * Confirm password reset
+     */
+    /**
+     * Confirm password reset
      */
     public function confirmPasswordReset(string $oobCode, string $newPassword): array
     {
@@ -795,15 +980,24 @@ class FirebaseAuthService
             $email = $this->auth->verifyPasswordResetCode($oobCode);
             $this->auth->confirmPasswordReset($oobCode, $newPassword);
 
+            Log::info('Password reset completed successfully', [
+                'email' => $email
+            ]);
+
             return [
                 'success' => true,
                 'email' => $email,
-                'message' => 'Password reset confirmed'
+                'message' => 'Password reset completed successfully'
             ];
-        } catch (\Exception $e) {
+        } catch (FirebaseException $e) {
+            Log::error('Failed to confirm password reset', [
+                'error' => $e->getMessage()
+            ]);
+
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => 'Failed to reset password. The code may be invalid or expired.',
+                'error_code' => 'RESET_FAILED'
             ];
         }
     }
