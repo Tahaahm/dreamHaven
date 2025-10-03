@@ -1,0 +1,145 @@
+body {
+    font-family     : Arial, sans-serif;
+    background-image: linear-gradient(120deg, #999999 0%, #ffffff 100%);
+    margin          : 0;
+    display         : flex;
+    flex-direction  : column;
+    height          : 100vh;
+    align-items     : center;
+    /* Change this line to center */
+}
+
+
+.nav-container {
+    text-align      : center;
+    position        : fixed;
+    top             : 10px;
+    left            : 50px;
+    width           : 100%;
+    z-index         : 100;
+    background-color: transparent;
+    /* Remove background color */
+    display         : flex;
+    /* Add display flex */
+    align-items     : center;
+    /* Center items horizontally */
+    justify-content : space-between;
+    /* Add space between items */
+
+    /* Media query for smaller screens */
+    @media screen and (max-width: 768px) {
+        left           : 10px;
+        right          : 10px;
+        justify-content: center;
+    }
+}
+
+
+
+.container {
+    max-width       : 400px;
+    width           : 100%;
+    text-align      : center;
+    background-color: linear-gradient(120deg, #999999 0%, #ffffff 100%);
+    margin          : auto;
+}
+
+#login-section,
+#register-section {
+    padding       : 20px;
+    border-radius : 8px;
+    box-shadow    : 0 0 200px #303b97;
+    display       : flex;
+    flex-direction: column;
+    align-items   : center;
+    margin-top    : 20px;
+    transition    : 0.4s;
+}
+
+#login-section:hover,
+#register-section:hover {
+    background-image: linear-gradient(#ffffff 100%, 120deg, #8d8d8d 0%);
+    padding         : 20px;
+    border-radius   : 8px;
+    box-shadow      : 0 0 4500px #303b97;
+    display         : flex;
+    flex-direction  : column;
+    align-items     : center;
+    margin-top      : 20px;
+}
+
+form {
+    display       : flex;
+    flex-direction: column;
+    width         : 100%;
+}
+
+.input-field {
+    margin-bottom: 7px;
+    width        : 94%;
+}
+
+.input-field input {
+    padding      : 10px;
+    margin-top   : 5px;
+    border       : 1px solid #ccc;
+    border-radius: 5px;
+    width        : 100%;
+}
+
+.button-container {
+    text-align: center;
+}
+
+button {
+    background-color: #303b97;
+    color           : #fff;
+    padding         : 10px;
+    border          : none;
+    border-radius   : 5px;
+    cursor          : pointer;
+    transition      : 0.4s;
+}
+
+button:hover {
+    background-color: #303b97;
+}
+
+.text-danger {
+    font-size       : 15px;
+    color           : #ff0000;
+    margin-top      : 5px;
+    background-color: transparent;
+}
+
+.error-message {
+    color           : #ff0000;
+    margin-top      : 5px;
+    background-color: transparent;
+    padding         : 10px;
+}
+
+p {
+    text-align: center;
+    margin-top: 10px;
+}
+
+a {
+    color          : #1e88e5;
+    text-decoration: none;
+    cursor         : pointer;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Add styles for black-navbar class */
+.black-navbar #header #navbar a,
+.black-navbar #header #navbar a:focus {
+    color: #000;
+}
+
+.black-navbar #header {
+    background: #fff;
+}

@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../../regn/Regna/assets"
+		},
+		{
+			"path": "../../../../regn/Regna/forms"
+		},
+		{
+			"path": "../../../../regn/Regna/images"
+		}
+	],
+	"settings": {}
+}

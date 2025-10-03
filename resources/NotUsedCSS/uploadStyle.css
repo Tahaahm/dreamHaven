@@ -1,0 +1,83 @@
+body {
+    font-family     : 'Arial', sans-serif;
+    background-color: #f8f8f8;
+    margin          : 0;
+    padding         : 0;
+    display         : flex;
+    justify-content : center;
+    align-items     : center;
+    height          : 100vh;
+}
+
+.container {
+    max-width       : 400px;
+    width           : 100%;
+    background-color: #fff;
+    padding         : 20px;
+    box-shadow      : 0 0 10px rgba(0, 0, 0, 0.1);
+    border-radius   : 8px;
+    text-align      : center;
+}
+
+h1 {
+    color: #333;
+}
+
+form {
+    display       : flex;
+    flex-direction: column;
+    margin-top    : 20px;
+}
+
+label {
+    margin-bottom: 8px;
+    color        : #333;
+}
+
+input,
+textarea {
+    padding      : 10px;
+    margin-bottom: 15px;
+    width        : 100%;
+    box-sizing   : border-box;
+}
+
+button {
+    background-color: #4caf50;
+    color           : #fff;
+    padding         : 10px;
+    border          : none;
+    cursor          : pointer;
+    border-radius   : 4px;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+
+#listingDisplay {
+    margin-top: 20px;
+}
+
+.listing-item {
+    border       : 1px solid #ddd;
+    padding      : 10px;
+    margin-top   : 10px;
+    border-radius: 4px;
+    box-shadow   : 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.listing-item h2 {
+    color: #333;
+}
+
+.listing-item p {
+    color        : #666;
+    margin-bottom: 5px;
+}
+
+.listing-item img {
+    max-width    : 100%;
+    height       : auto;
+    border-radius: 4px;
+}

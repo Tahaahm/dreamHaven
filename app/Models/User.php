@@ -2,14 +2,20 @@
 
 namespace App\Models;
 
+<<<<<<< HEAD
 use App\Models\Support\UserFavoriteProperty;
 use App\Models\Support\UserNotificationReference;
 use App\Services\User\UserAppointmentService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+=======
+use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
+use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
+>>>>>>> myproject/main
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+<<<<<<< HEAD
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
@@ -46,12 +52,62 @@ class User extends Authenticatable implements MustVerifyEmail
         'email_verified_at',
         'is_active'
     ];
+=======
+use Illuminate\Support\Str;
+
+class User extends Authenticatable implements MustVerifyEmailContract
+{
+    use HasFactory, Notifiable, HasApiTokens, MustVerifyEmailTrait;
+
+    // Specify the primary key
+    protected $primaryKey = 'user_id';
+
+    // Indicate that the primary key is auto-incrementing
+    public $incrementing = true;
+
+    // Set the key type to int
+    protected $keyType = 'int';
+
+    // Field casts
+    protected $casts = [
+        'email_verified' => 'boolean',
+        'active' => 'boolean',
+        'preferences' => 'json',
+    ];
+
+    protected $fillable = [
+        'name',
+        'password',
+        'email',
+        'image',
+        'phone',
+        'address',
+        'city',
+        'state',
+        'zip_code',
+        'bio',
+        'website',
+        'facebook',
+        'twitter',
+        'instagram',
+        'linkedin',
+        'youtube',
+        'email_verified',
+        'email_verification_token',
+        'preferences',
+        'role',
+        'active',
+    ];
+    
+    
+>>>>>>> myproject/main
 
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
+<<<<<<< HEAD
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
@@ -216,3 +272,22 @@ class User extends Authenticatable implements MustVerifyEmail
         return $fcmTokens;
     }
 }
+=======
+    // Define relationship with properties
+    public function properties()
+    {
+        return $this->hasMany(Property::class);
+    }
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($user) {
+            if (empty($user->email_verification_token)) {
+                $user->email_verification_token = Str::random(60);
+            }
+        });
+    }
+}
+>>>>>>> myproject/main

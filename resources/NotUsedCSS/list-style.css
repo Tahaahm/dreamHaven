@@ -1,0 +1,195 @@
+/* the house lists
+--------------------------------*/
+
+
+
+.item-container {
+    list-style      : none;
+    margin-bottom   : 20px;
+    margin-left     : 1.85%;
+    position        : fixed;
+    border          : 1px solid #ccc;
+    border-radius   : 4px;
+    background-color: #f9f9f9;
+    padding         : 10px;
+    width           : 420px;
+    box-sizing      : border-box;
+    display         : flex;
+    flex-direction  : column;
+    justify-content : center;
+    align-items     : center;
+    text-align      : center;
+    color           : #666666;
+    text-decoration : none;
+    overflow        : hidden;
+
+    height             : 300px;
+    /* Set a fixed height for the container */
+    background-size    : cover;
+    background-repeat  : no-repeat;
+    background-position: center center;
+    transition         : all ease-in-out 0.3s;
+
+}
+
+
+.item-container:hover {
+    list-style      : none;
+    list-style      : none;
+    margin-bottom   : 20px;
+    margin-left     : 1.85%;
+    position        : fixed;
+    border          : 1px solid #ccc;
+    border-radius   : 4px;
+    background-color: #f9f9f9;
+    padding         : 10px;
+    width           : 420px;
+    box-sizing      : border-box;
+    display         : flex;
+    flex-direction  : column;
+    justify-content : center;
+    align-items     : center;
+    text-align      : center;
+    color           : #666666;
+    text-decoration : none;
+    overflow        : hidden;
+
+    height             : 300px;
+    /* Set a fixed height for the container */
+    background-size    : cover;
+    background-repeat  : no-repeat;
+    background-position: center center;
+    box-shadow         : 0 0 40px #2dc997;
+
+}
+
+.item-container a {
+    text-decoration: none;
+    color          : #555555;
+
+}
+
+
+.item-container .item-date {
+    text-decoration: none;
+    font-size      : 16px;
+
+}
+
+.item-container .location {
+    display        : flex;
+    flex-direction : row;
+    text-decoration: none;
+    font-size      : 20px;
+    white-space    : nowrap;
+    /* Add this line */
+}
+
+.item-container .item-price {
+    text-decoration: none;
+    font-size      : 22px;
+
+}
+
+.item-container li img {
+
+    object-fit: cover;
+    width     : 450px;
+    height    : 300px;
+    /* Cover the entire container while maintaining aspect ratio */
+    transition: transform 0.3s;
+}
+
+.item-container:hover img {
+    transform       : scale(1.1);
+    transform-origin: center center;
+    /* Add this line */
+}
+
+
+.detail-of-home {
+
+
+    position      : absolute;
+    margin-top    : 0px;
+    top           : 88%;
+    /* Adjust this value to center the text vertically */
+    left          : 50%;
+    padding-top   : 5%;
+    padding-bottom: 5%;
+    /* Adjust this value to center the text horizontally */
+    transform     : translate(-50%, -50%);
+    /* Center the text both vertically and horizontally */
+    z-index       : 1;
+    /* Ensure it's above the image */
+    background    : rgba(18, 48, 38, 0.7);
+
+    /* Background color with transparency */
+    color        : white;
+    padding-right: 50%;
+    padding-left : 50%;
+    border-radius: 4px;
+    transition   : all ease-in-out 0.3s;
+
+}
+
+
+
+
+
+
+.sort-buttons button {
+    border       : none;
+    cursor       : pointer;
+    display      : inline-block;
+    padding      : 12px 18px 14px 18px;
+    font-size    : 14px;
+    font-weight  : 500;
+    line-height  : 1;
+    color        : #666666;
+    margin       : 0 5px 10px 5px;
+    transition   : all ease-in-out 0.3s;
+    background   : white;
+    border-radius: 4px;
+}
+
+.sort-buttons {
+    margin-top   : 40px;
+    margin-left  : 40%;
+    border       : none;
+    align-items  : center;
+    align-content: center;
+
+
+    padding-top   : 0px;
+    padding-bottom: 0px;
+}
+
+.sort-buttons #sort-by-date-button {
+    align-items  : center;
+    align-content: center;
+    color        : #fff;
+    background   : #2dc997;
+    border       : none;
+}
+
+.sort-buttons #sort-by-date-button:hover {
+    color     : #fff;
+    background: #2dc997;
+    border    : none;
+}
+
+.sort-buttons #sort-by-price-button {
+    background-color: #ebebeb;
+    color           : rgb(82, 82, 82);
+    transition      : all ease-in-out 0.3s;
+}
+
+.sort-buttons #sort-by-price-button:hover {
+    color           : rgb(255, 255, 255);
+    background-color: #2dc997;
+}
+
+.item-container img:hover {
+    top: -30px;
+}

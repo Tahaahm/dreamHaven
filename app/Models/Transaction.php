@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+<<<<<<< HEAD
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -227,5 +228,29 @@ class Session extends Model
         if (str_contains($this->user_agent, 'Mobile')) return 'Mobile';
         if (str_contains($this->user_agent, 'Tablet')) return 'Tablet';
         return 'Desktop';
+=======
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Transaction extends Model
+{
+    use HasFactory;
+
+    protected $primaryKey = 'transaction_id';
+
+    protected $fillable = [
+        'user_id',
+        'subscription_id',
+        'amount',
+        'transaction_type',
+        'status',
+        'invoice_url'
+    ];
+
+    // Relationship with user or agent
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
+>>>>>>> myproject/main
     }
 }

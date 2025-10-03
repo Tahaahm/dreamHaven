@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+<<<<<<< HEAD
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,11 +11,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Appointment extends Model
 {
     use HasFactory, HasUuids;
+=======
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Appointment extends Model
+{
+    use HasFactory;
+
+    protected $primaryKey = 'appointment_id';
+>>>>>>> myproject/main
 
     protected $fillable = [
         'user_id',
         'agent_id',
         'office_id',
+<<<<<<< HEAD
         'property_id',
         'appointment_date',
         'appointment_time',
@@ -144,5 +156,29 @@ class Appointment extends Model
     public function getFormattedTimeAttribute()
     {
         return $this->appointment_time->format('h:i A');
+=======
+        'date',
+        'time',
+        'status',
+        'location'
+    ];
+
+    // Relationship with user
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    // Relationship with agent
+    public function agent()
+    {
+        return $this->belongsTo(Agent::class, 'agent_id', 'agent_id');
+    }
+
+    // Relationship with real estate office
+    public function office()
+    {
+        return $this->belongsTo(RealEstateOffice::class, 'office_id', 'office_id');
+>>>>>>> myproject/main
     }
 }

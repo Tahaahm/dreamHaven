@@ -1,0 +1,183 @@
+body {
+    font-family     : "Arial", sans-serif;
+    background-color: #cacaca;
+    margin          : 0;
+    padding         : 0;
+}
+
+.unique-header {
+    position  : fixed;
+    height    : 80px;
+    width     : 100%;
+    z-index   : 100;
+    padding   : 0 20px;
+    background: #303b97;
+    /* Ensure a background color if needed */
+}
+
+.container {
+    text-align: center;
+}
+
+/* Styles for the form */
+.property-form {
+    margin-top           : 50px;
+    max-width            : 1300px;
+    width                : 100%;
+    display              : grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap                  : 20px;
+    position             : relative;
+    margin               : auto;
+}
+
+.property-form div {
+    margin-bottom: 20px;
+}
+
+.property-form label {
+    display      : block;
+    margin-bottom: 5px;
+    text-shadow  : 17px 17px 26px #717171;
+}
+
+.property-form input,
+.property-form textarea,
+.property-form select {
+    border       : none;
+    border-radius: 68px;
+    background   : #e0e0e0;
+    box-shadow   : 7px 7px 26px #a6a6a6, -9px -9px 45px #ffffff;
+    width        : 100%;
+    padding      : 12px;
+    box-sizing   : border-box;
+}
+
+/* Styles for the drop zone */
+.drop-zone {
+    width          : 100%;
+    max-width      : 400px;
+    height         : 150px;
+    border         : none;
+    border-radius  : 34px;
+    background     : #e0e0e0;
+    box-shadow     : 29px 29px 45px #777777, -20px -20px 65px #ffffff;
+    display        : flex;
+    justify-content: center;
+    align-items    : center;
+    cursor         : pointer;
+    position       : relative;
+
+    color        : #797c7d;
+    font-size    : 16px;
+    margin-bottom: 20px;
+    transition   : 0.9s;
+}
+
+.drop-zone:hover {
+    box-shadow: 29px -8px 45px #777777, -20px 7px 65px #ffffff;
+
+    color    : #484848;
+    font-size: 17px;
+}
+
+.drop-zone.highlight {
+    border-color: #00ffcc;
+    color       : #16a2ac;
+    font-size   : 20px;
+}
+
+/* Styles for the preview */
+.preview {
+    display        : flex;
+    flex-wrap      : wrap;
+    justify-content: center;
+    margin-top     : 10px;
+}
+
+.preview-item {
+    position: relative;
+}
+
+.preview img {
+    max-width    : 100px;
+    max-height   : 100px;
+    margin       : 10px;
+    border-radius: 5px;
+}
+
+.remove-button {
+    position: absolute;
+    top     : -5px;
+    right   : -5px;
+
+    color      : #000000;
+    border     : none;
+    background : transparent;
+    cursor     : pointer;
+    padding    : 7px;
+    font-size  : 14px;
+    line-height: 1;
+    transition : 0.4s;
+}
+
+.remove-button:hover {
+    position: absolute;
+    top     : -5px;
+    right   : -5px;
+
+    color      : #ff0000;
+    border     : none;
+    background : transparent;
+    cursor     : pointer;
+    padding    : 7px;
+    font-size  : 16px;
+    line-height: 1;
+}
+
+/* Style for the file input button */
+#fileInputButton {
+    position: absolute;
+    top     : 0;
+    left    : 0;
+    width   : 100%;
+    height  : 100%;
+    opacity : 0;
+    cursor  : pointer;
+}
+
+/* Style for the submit button */
+#submitBtn {
+    background   : radial-gradient(circle, rgba(64, 170, 250, 1) 7%, rgba(19, 67, 113, 1) 84%);
+    color        : #ffffff;
+    padding      : 15px;
+    padding-left : 25px;
+    padding-right: 25px;
+    border       : none;
+    border-radius: 5px;
+    cursor       : pointer;
+    position     : absolute;
+    bottom       : -60px;
+    left         : 50%;
+    transform    : translateX(-50%);
+    box-shadow   : 7px 7px 45px #777777, -2px -2px 65px #ffffff;
+    transition   : 0.9s;
+}
+
+#submitBtn:hover {
+    background: radial-gradient(circle, rgba(64, 170, 250, 1) 7%, rgba(19, 67, 113, 1) 84%);
+    color     : #ffffff;
+    font-size : 14px;
+}
+
+/* Add styles for black-navbar class */
+.black-navbar #header #navbar a,
+.black-navbar #header #navbar a:focus {
+    color: #000;
+    /* Set the desired text color */
+}
+
+.black-navbar #header {
+    background: #fff;
+    /* Set the desired background color */
+}
