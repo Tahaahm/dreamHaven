@@ -39,4 +39,14 @@ class ResponseDetails
     {
         return 'Validation failed';
     }
+
+public static function serverErrorMessage($message = "Server Error")
+{
+    return response()->json([
+        'success' => false,
+        'message' => $message,
+    ], 500);
+}
+
+
 }
