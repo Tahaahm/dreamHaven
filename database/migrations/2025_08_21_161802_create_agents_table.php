@@ -13,7 +13,7 @@ return new class extends Migration
     {
         // Main agents table
         Schema::create('agents', function (Blueprint $table) {
-            $table->uuid('id')->primary();
+           $table->char('id', 36)->primary();
 
             // Basic agent information
             $table->string('agent_name');
@@ -49,7 +49,7 @@ return new class extends Migration
             $table->string('license_number')->nullable();
 
             // Company affiliation
-            $table->uuid('company_id')->nullable();
+            $table->char('company_id', 36)->nullable();
             $table->string('company_name')->nullable();
             $table->enum('employment_status', ['employee', 'independent', 'partner'])->nullable();
 
@@ -80,8 +80,8 @@ return new class extends Migration
 
             // Foreign key to subscriptions table
             $table->foreign(columns: 'subscription_id')->references('id')->on('subscriptions')->onDelete('set null');
-            $table->foreign('company_id')->references('id')->on('real_estate_offices')->onDelete('set null');
-        });
+           $table->foreign('company_id')->references('id')->on('real_estate_offices')->onDelete('set null');
+ });
 
         // Agent specializations table
         Schema::create('agent_specializations', function (Blueprint $table) {

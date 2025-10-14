@@ -258,7 +258,8 @@
 
             <!-- Login Form -->
             <div class="form login_form">
-                <form action="{{ route('custom-login') }}" method="POST">
+       <form action="{{ route('loginUser') }}" method="POST">
+
                     @csrf
                     <h2>Login</h2>
                     <div class="input_box">
@@ -297,7 +298,8 @@
 
             <!-- Signup Form -->
             <div class="form signup_form">
-                <form action="{{ route('user-create') }}" method="POST" enctype="multipart/form-data">
+                <form action="{{ route('user.store') }}" method="POST" enctype="multipart/form-data">
+
                     @csrf
 
                     @if(session('error'))
@@ -310,8 +312,9 @@
                     <h2>Signup</h2>
                     <div class="input_box">
                         <i class="uil uil-user"></i>
-                        <input type="text" name="name" value="{{ old('name') }}" placeholder="Enter your username" required />
-                        @error('name')
+           <input type="text" name="username" value="{{ old('username') }}" placeholder="Enter your username" required />
+
+                        @error('username')
                             <span class="text-danger">{{ $message }}</span>
                         @enderror
                     </div>
@@ -330,6 +333,8 @@
                             <span class="text-danger">{{ $message }}</span>
                         @enderror
                     </div>
+                    <input type="hidden" name="role" value="user">
+
                     <div class="input_box">
                         <i class="uil uil-lock password"></i>
                         <input type="password" name="password_confirmation" placeholder="Confirm your password" required />

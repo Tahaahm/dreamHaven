@@ -39,7 +39,7 @@ class AuthController extends Controller
     Log::info('User Validation');
 
     $validator = Validator::make($request->all(), [
-        'name' => 'required|string|max:255',
+        'username' => 'required|string|max:255|unique:users',
         'email' => 'required|string|email|max:255|unique:users',
         'password' => 'required|string|min:8',
         'role' => 'required|in:user,agent,admin',  // Changed this
@@ -57,7 +57,7 @@ class AuthController extends Controller
 
     try {
         $user = User::create([
-            'name' => $request->name,
+              'username' => $request->username,
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'role' => $request->role,
@@ -65,21 +65,15 @@ class AuthController extends Controller
             'is_verified' => false
         ]);
 
-        Log::info('User Created: ', $user->toArray());
+       // Optionally, log the user in
+        Auth::login($user);
 
-        return response()->json([
-            'status' => true,
-            'message' => 'User created successfully',
-            'data' => $user
-        ], 201);
+        // Redirect to the homepage route
+        return redirect()->route('newindex')->with('success', 'User created successfully');
 
     } catch (\Exception $e) {
-        Log::error('User creation failed: ' . $e->getMessage());
-        return response()->json([
-            'status' => false,
-            'message' => 'User creation failed',
-            'error' => $e->getMessage()
-        ], 500);
+        // Handle errors
+        return back()->with('error', 'User creation failed: ' . $e->getMessage())->withInput();
     }
 }
 
@@ -189,6 +183,75 @@ class AuthController extends Controller
         }
     }
 
-    // Login for regular Users
+
+
+
+
+
+
+
+
+
+
+    // zana's function ------------------------------------------------------------------------------------
+ // Login for regular users
+    public function loginUser(Request $request)
+    {
+        // Validate input
+        $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string'
+        ]);
+
+        $credentials = $request->only('email', 'password');
+
+        // Attempt to log the user in
+        if (Auth::attempt($credentials)) {
+            // Authentication passed, regenerate session
+            $request->session()->regenerate();
+
+            // Redirect to homepage
+            return redirect()->route('newindex')->with('success', 'Logged in successfully');
+        }
+
+        // Authentication failed
+        return back()->with('error', 'Invalid credentials')->withInput();
+    }
+
+    // Logout function (optional)
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect('/')->with('success', 'Logged out successfully');
+    }
+
+
+
+    // Show the reviews page
+     public function showReviews()
+     {
+         return view('agent.reviews');
+     }
+ 
+     // Edit user method
+     public function editUser($id)
+     {
+         $user = User::findOrFail($id);
+         return view('agent.edit-agent-admin', compact('user'));
+     }
+
+
+
+
+     public function adminDashboard()
+     {
+         return view('agent.admin-dashboard');
+     }
 
 }
+
+
+

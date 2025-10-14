@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RealEstateOfficeController;
 use App\Http\Controllers\AgentController;
 use App\Http\Controllers\PropertyController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\BannerAdController;
@@ -352,6 +353,20 @@ Route::prefix('v1/api/banner-ads')->group(function () {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+// Zana's Routes ----------------------------------------------------------------------------------------------------------------
+
+
 // Properties list
 Route::get('/list', [PropertyController::class, 'index'])->name('list');
 
@@ -372,3 +387,62 @@ Route::get('/login-page', function () {
 Route::get('/properties/search', [PropertyController::class, 'search'])->name('properties.search');
 
 
+Route::post('/user/store', [AuthController::class, 'store'])->name('user.store');
+
+// Regular user login
+Route::post('/auth/login', [AuthController::class, 'loginUser'])->name('loginUser');
+
+// Logout
+Route::post('/auth/logout', [AuthController::class, 'logout'])->name('logout');
+
+Route::get('/agent/admin-dashboard', [AuthController::class, 'adminDashboard'])->name('agent.admin-dashboard');
+
+// Show upload form
+Route::get('/property/upload', [PropertyController::class, 'create'])->name('upload');
+
+// Handle the POST submission
+Route::post('/property/upload', [PropertyController::class, 'store'])->name('property.upload');
+
+
+Route::get('/admin/property-list', [PropertyController::class, 'adminPropertyList'])->name('admin.property-list');
+Route::get('/admin/property-list', [PropertyController::class, 'showUserProperties'])->name('admin.property-list');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/review', [AuthController::class, 'showReviews'])->name('agent.review');
+});
+
+Route::get('/profile', [AuthController::class, 'showProfile'])->middleware('auth')->name('admin.profile');
+
+
+Route::get('/notifications', [NotificationController::class, 'showNotifications'])->name('notifications.show');
+Route::get('/notifications/read/{id}', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+Route::get('/notifications/delete/{id}', [NotificationController::class, 'destroy'])->name('notifications.delete');
+// Retrieve all notifications for an office or agent (real estate office is required)
+Route::get('/notifications', [NotificationController::class, 'index']);
+// Create a new notification for an office or agent
+Route::middleware('auth:sanctum')->post('/notifications', [NotificationController::class, 'store']);
+// Mark a notification as read
+Route::middleware('auth:sanctum')->post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+// Delete a notification
+Route::middleware('auth:sanctum')->delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+Route::get('/notifications', [NotificationController::class, 'showNotifications']);
+Route::get('/notifications', [NotificationController::class, 'showNotifications'])->name('notifications');
+
+
+Route::get('/schedule', [AppointmentController::class, 'showSchedule'])->name('schedule');
+
+Route::get('/appointments/schedule-list', [AppointmentController::class, 'showScheduleList'])->name('appointments.scheduleList');
+
+// Retrieve all projects or filter by office
+Route::get('/projects', [ProjectController::class, 'index']);
+// Retrieve a specific project
+Route::get('/projects/{id}', [ProjectController::class, 'show']);
+// Create a new project (protected by authentication)
+Route::middleware('auth:sanctum')->post('/projects', [ProjectController::class, 'store']);
+
+
+Route::get('/projects', [ProjectController::class, 'showProjects'])->name('projects');
+
+
+Route::post('/projects/store', [ProjectController::class, 'store'])->name('projects.store');

@@ -148,10 +148,11 @@ return new class extends Migration
                   ->on('real_estate_offices')
                   ->onDelete('cascade');
 
-            $table->foreign('agent_id')
-                  ->references('id')
-                  ->on('agents')
-                  ->onDelete('cascade');
+            // COMMENTED OUT TEMPORARILY TO AVOID MIGRATION ERROR
+     $table->foreign('agent_id')
+          ->references('id')
+           ->on('agents')
+           ->onDelete('cascade');
 
             $table->index('office_id');
             $table->index('agent_id');
@@ -223,7 +224,7 @@ return new class extends Migration
                   ->onDelete('cascade');
 
             $table->index('office_id');
-            $table->index(['office_id', 'notification_status']);
+          $table->index(['office_id', 'notification_status'], 'office_notif_officeid_status_idx');
             $table->index('notification_id');
             $table->index('notification_date');
         });
