@@ -446,3 +446,10 @@ Route::get('/projects', [ProjectController::class, 'showProjects'])->name('proje
 
 
 Route::post('/projects/store', [ProjectController::class, 'store'])->name('projects.store');
+
+
+Route::get('/property/upload', [PropertyController::class, 'create'])->name('property.upload');
+
+Route::post('/upload-images', [PropertyController::class, 'uploadImages']);
+
+Route::post('/v1/api/properties/store', [PropertyController::class, 'store']);

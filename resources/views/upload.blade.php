@@ -1,385 +1,435 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Property Listing Form</title>
-    <link rel="stylesheet" type="text/css" href="{{ asset('../css/uploadStyle.css') }}">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Property Listing</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #f4f4f9;
-            color: #333;
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #eef2f3, #d9e4f5);
             margin: 0;
-            padding: 0;
-            line-height: 1.6;
+            padding: 40px 0;
         }
 
-    .unique-header {
-    position  : fixed;
-    height    : 80px;
-    width     : 100%;
-    z-index   : 100;
-    padding   : 0 20px;
-    background: #303b97;
-    /* Ensure a background color if needed */
-}
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 100px 20px 20px;
-            text-align: center;
+        form {
+            display: flex;
+            justify-content: center;
         }
 
-        .property-form {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
+        .form-container {
             background: #fff;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            margin-top: 20px;
+            padding: 30px 40px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 650px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            animation: fadeIn 0.5s ease-in-out;
         }
 
-        .property-form div {
-            margin-bottom: 20px;
-        }
-
-        .property-form label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #555;
-        }
-
-        .property-form input,
-        .property-form textarea,
-        .property-form select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-            transition: border-color 0.3s ease;
-        }
-
-        .property-form input:focus,
-        .property-form textarea:focus,
-        .property-form select:focus {
-            border-color: #1a1a2e;
-            outline: none;
-        }
-
-        .drop-zone {
-            grid-column: span 2;
-            padding: 30px;
-            border: 2px dashed #ddd;
-            border-radius: 10px;
-            background: #fafafa;
+        h2 {
             text-align: center;
-            color: #888;
-            font-size: 16px;
-            transition: background-color 0.3s ease;
-            position: relative;
+            color: #303b97;
+            margin-bottom: 15px;
+            font-size: 24px;
         }
 
-        .drop-zone:hover {
-            background-color: #f4f4f9;
+        .progress {
+            height: 8px;
+            background: #eee;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 25px;
         }
 
-        .drop-zone.highlight {
-            background-color: #e3f2fd;
-            border-color: #1a1a2e;
+        .progress-bar {
+            height: 100%;
+            background: #303b97;
+            width: 25%;
+            transition: width 0.4s ease-in-out;
         }
 
-        .preview {
+        fieldset {
+            border: none;
+            margin-bottom: 20px;
+            background-color: #f8f9ff;
+            padding: 15px 20px;
+            border-radius: 10px;
+        }
+
+        legend {
+            font-weight: bold;
+            color: #303b97;
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: block;
+            margin: 8px 0 4px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+            font-size: 14px;
+            background: #fff;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .file-upload {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #303b97;
+            border-radius: 10px;
+            padding: 25px;
+            text-align: center;
+            cursor: pointer;
+            color: #303b97;
+            background: #f4f6ff;
+            transition: background 0.3s;
+        }
+
+        .file-upload:hover {
+            background: #e9edff;
+        }
+
+        .image-preview {
             display: flex;
             flex-wrap: wrap;
-            justify-content: center;
+            gap: 10px;
             margin-top: 10px;
         }
 
-        .preview-item {
-            position: relative;
-            margin: 10px;
+        .image-preview img {
+            width: 90px;
+            height: 90px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 2px solid #303b97;
         }
 
-        .preview img {
-            max-width: 100px;
-            max-height: 100px;
-            border-radius: 5px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        .remove-button {
-            position: absolute;
-            top: -5px;
-            right: -5px;
-            background: #ff5a5f;
-            color: #fff;
-            border: none;
-            border-radius: 50%;
-            cursor: pointer;
-            width: 20px;
-            height: 20px;
-            font-size: 12px;
+        .button-group {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.3s ease;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 20px;
         }
 
-        .remove-button:hover {
-            background: #e60000;
-        }
-
-        #submitBtn {
-            grid-column: span 2;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        button {
+            background: #303b97;
             color: #fff;
-            padding: 15px;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
+            padding: 12px 18px;
+            font-size: 15px;
             cursor: pointer;
-            font-size: 16px;
+            flex: 1;
             transition: background 0.3s ease;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-            margin-top: 20px;
         }
 
-        #submitBtn:hover {
-            background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+        button:hover {
+            background: #232a6b;
         }
 
-        /* Alert messages */
-        .alert {
-            padding: 15px;
-            margin-top: 20px;
-            border-radius: 5px;
-            text-align: left;
-            font-weight: bold;
+        .back-btn {
+            background: #e0e3f7;
+            color: #303b97;
         }
 
-        .alert-success {
-            background-color: #d4edda;
-            color: #155724;
-            border-left: 5px solid #28a745;
+        .back-btn:hover {
+            background: #d0d5f0;
         }
 
-        .alert-danger {
-            background-color: #f8d7da;
-            color: #721c24;
-            border-left: 5px solid #dc3545;
+        .hidden {
+            display: none;
         }
 
-        .alert ul {
-            margin: 0;
-            padding-left: 20px;
+        @keyframes fadeIn {
+            from {opacity: 0; transform: translateY(10px);}
+            to {opacity: 1; transform: translateY(0);}
         }
 
+        @media (max-width: 600px) {
+            .form-container {
+                padding: 20px;
+            }
+            h2 {
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
-<body class="black-navbar">
-@include('layouts.sidebar')
+<body>
 
-    <div class="container">
+<form id="propertyForm">
+  @csrf
+  <div class="form-container">
+
+    <!-- Page 1 -->
+    <div id="page1">
+      <fieldset>
+        <legend>Owner Information</legend>
        
-        <div id="error-messages"></div>
-        <form action="{{ route('property.upload') }}" method="post" class="property-form" id="propertyForm" enctype="multipart/form-data">
-            @csrf
+     
+      </fieldset>
 
-            <div>
-                <label for="title">Title:</label>
-                <input type="text" id="title" name="title" required />
-            </div>
+      <fieldset>
+        <legend>Property Type</legend>
+        <label>Category</label>
+        <input type="text" id="category" name="type_category" required minlength="2" />
+      </fieldset>
 
-
-            <div>
-    <label for="address">Address:</label>
-    <input type="text" id="address" name="address"  required />
-</div>
-
-
-            <div>
-    <label for="location">Location:</label>
-    <input type="text" id="location" name="location" placeholder="36°07'27.3\"N 44°01'15.8\"E" required />
-</div>
-
-
-
-            <div>
-                <label for="property_type">property type:</label>
-                <select id="property_type" name="property_type" required>
-                    <option value="house">House</option>
-                    <option value="property">Property</option>
-                    <option value="apartment">Apartment</option>
-                </select>
-            </div>
-
-            <div>
-                <label for="listing_type">Type of Rent:</label>
-                <select id="listing_type" name="listing_type" required>
-                    <option value="sell">Sell</option>
-                    <option value="rent">Rent</option>
-                </select>
-            </div>
-
-            <div>
-                <label for="bedrooms">Bedrooms:</label>
-                <input type="number" id="bedrooms" name="bedrooms" required />
-            </div>
-
-            <div>
-                <label for="bathrooms">Bathrooms:</label>
-                <input type="number" id="bathrooms" name="bathrooms" required />
-            </div>
-
-            <div>
-                <label for="area">Square Footage:</label>
-                <input type="number" id="area" name="area" required />
-            </div>
-
-        
-
-            <div>
-                <label for="flooring">Flooring:</label>
-                <input type="text" id="flooring" name="flooring" required />
-            </div>
-
-            <div>
-                <label for="price">Price:</label>
-                <input type="number" id="price" name="price" required />
-            </div>
-
-            <div>
-                <label for="additional_information">Additional Information:</label>
-                <textarea id="additional_information" name="description"></textarea>
-            </div>
-
-            <div id="preview" class="preview"></div>
-            <div id="drop-zone" class="drop-zone">
-                Drag and drop photos here
-                <input type="file" id="fileInputButton" name="images[]" multiple />
-            </div>
-
-            <button type="submit" id="submitBtn">Submit</button>
-            <input type="hidden" name="user_id" value="{{ auth()->id() }}">
-        </form>
-        
-        @if(session('success'))
-            <div class="alert alert-success">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        @if($errors->any())
-            <div class="alert alert-danger">
-                <ul>
-                    @foreach($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
-            </div>
-        @endif
+      <div class="button-group">
+        <button type="button" onclick="nextPage(2)">Next</button>
+      </div>
     </div>
 
-    <script>
-        const dropZone = document.getElementById("drop-zone");
-        const preview = document.getElementById("preview");
-        const fileInputButton = document.getElementById("fileInputButton");
-        const errorMessages = document.getElementById("error-messages");
+    <!-- Page 2 -->
+    <div id="page2" class="hidden">
+      <fieldset>
+        <legend>Name</legend>
+        <label>Name (English)</label>
+        <input type="text" id="name_en" />
+        <label>Name (Arabic)</label>
+        <input type="text" id="name_ar" />
+        <label>Name (Kurdish)</label>
+        <input type="text" id="name_ku" />
+      </fieldset>
 
-        let totalFileSize = 0;
+      <fieldset>
+        <legend>Description</legend>
+        <label>Description (English)</label>
+        <textarea id="description_en"></textarea>
+        <label>Description (Arabic)</label>
+        <textarea id="description_ar"></textarea>
+        <label>Description (Kurdish)</label>
+        <textarea id="description_ku"></textarea>
+      </fieldset>
 
-        dropZone.addEventListener("dragover", handleDragOver, false);
-        dropZone.addEventListener("dragleave", handleDragLeave, false);
-        dropZone.addEventListener("drop", handleDrop, false);
-        fileInputButton.addEventListener("change", handleFiles, false);
+      <div class="button-group">
+        <button type="button" onclick="prevPage(1)">Back</button>
+        <button type="button" onclick="nextPage(3)">Next</button>
+      </div>
+    </div>
 
-        function handleDragOver(event) {
-            event.preventDefault();
-            dropZone.classList.add("highlight");
+    <!-- Page 3 -->
+    <div id="page3" class="hidden">
+      <fieldset>
+        <legend>Price & Listing</legend>
+        <label>Price (IQD)</label>
+        <input type="number" id="price_iqd" min="1" />
+        <label>Price (USD)</label>
+        <input type="number" id="price_usd" min="1" />
+        <label>Listing Type</label>
+        <select id="listing_type">
+          <option value="rent">Rent</option>
+          <option value="sell">Sell</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Rooms</legend>
+        <label>Bedrooms</label>
+        <input type="number" id="bedroom_count" min="0" />
+        <label>Bathrooms</label>
+        <input type="number" id="bathroom_count" min="0" />
+      </fieldset>
+
+<!-- Property details -->
+<label>Area (m²)</label>
+<input type="number" id="area" min="1" required />
+
+<label>Furnished?</label>
+<select id="furnished">
+  <option value="1">Yes</option>
+  <option value="0">No</option>
+</select>
+
+<label>Rental Period</label>
+<select id="rental_period">
+  <option value="">Select (only for rent)</option>
+  <option value="monthly">Monthly</option>
+  <option value="yearly">Yearly</option>
+</select>
+
+
+      <div class="button-group">
+        <button type="button" onclick="prevPage(2)">Back</button>
+        <button type="button" onclick="nextPage(4)">Next</button>
+      </div>
+    </div>
+
+    <!-- Page 4 -->
+    <div id="page4" class="hidden">
+      <fieldset>
+        <legend>Location & Features</legend>
+        <label>Latitude</label>
+        <input type="number" id="lat" step="any" />
+        <label>Longitude</label>
+        <input type="number" id="lng" step="any" />
+        <label>City</label>
+        <input type="text" id="city_en" />
+        <label>Features (comma separated)</label>
+        <input type="text" id="features" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Images</legend>
+        <input type="file" id="imageInput" multiple />
+        <div id="imagePreview"></div>
+      </fieldset>
+
+      <div class="button-group">
+        <button type="button" onclick="prevPage(3)">Back</button>
+        <button type="button" onclick="submitProperty()">Submit Property</button>
+      </div>
+    </div>
+
+  </div>
+</form>
+
+
+
+<script>
+const csrfToken = "{{ csrf_token() }}";
+
+function nextPage(n) {
+    document.querySelectorAll('.form-container > div').forEach(d => d.classList.add('hidden'));
+    document.getElementById('page' + n).classList.remove('hidden');
+}
+
+function prevPage(n) {
+    nextPage(n);
+}
+
+// Image preview
+document.getElementById('imageInput').addEventListener('change', function() {
+    const preview = document.getElementById('imagePreview');
+    preview.innerHTML = '';
+    for (const file of this.files) {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.style.width = '100px';
+        img.style.margin = '5px';
+        preview.appendChild(img);
+    }
+});
+
+// Upload images
+async function uploadImages(files) {
+    const formData = new FormData();
+    for (const file of files) formData.append('images[]', file);
+
+    const res = await fetch('/upload-images', {
+        method: 'POST',
+        body: formData,
+        headers: { 'X-CSRF-TOKEN': csrfToken }
+    });
+
+    const data = await res.json();
+    return Array.isArray(data.urls) ? data.urls : [];
+}
+
+// Submit property
+async function submitProperty() {
+    try {
+        const files = document.getElementById('imageInput').files;
+        const imageUrls = await uploadImages(files);
+
+        // Required numeric/boolean fields with defaults
+        const area = parseFloat(document.getElementById('area').value) || 1;
+        const furnished = document.getElementById('furnished').value === '1';
+        const listingType = document.getElementById('listing_type').value;
+        const rentalPeriod = listingType === 'rent' 
+            ? document.getElementById('rental_period').value || 'monthly' 
+            : null;
+
+        // Ensure arrays/objects are correct
+        const data = {
+            owner_id: @json(auth()->id()),
+            owner_type: "User",
+            name: {
+                en: document.getElementById('name_en').value || '',
+                ar: document.getElementById('name_ar').value || '',
+                ku: document.getElementById('name_ku').value || ''
+            },
+            description: {
+                en: document.getElementById('description_en').value || '',
+                ar: document.getElementById('description_ar').value || '',
+                ku: document.getElementById('description_ku').value || ''
+            },
+            type: { category: document.getElementById('category').value || '' },
+            price: {
+                iqd: parseInt(document.getElementById('price_iqd').value) || 1,
+                usd: parseInt(document.getElementById('price_usd').value) || 1
+            },
+            listing_type: listingType,
+            rental_period: rentalPeriod,
+            area: area,
+            furnished: furnished,
+            rooms: {
+                bedroom: { count: parseInt(document.getElementById('bedroom_count').value) || 0 },
+                bathroom: { count: parseInt(document.getElementById('bathroom_count').value) || 0 }
+            },
+            locations: [{
+                lat: parseFloat(document.getElementById('lat').value) || 0,
+                lng: parseFloat(document.getElementById('lng').value) || 0,
+                type: "default"
+            }],
+            address_details: { city: { en: document.getElementById('city_en').value || '' } },
+            features: (document.getElementById('features').value || '')
+                        .split(',')
+                        .map(f => f.trim())
+                        .filter(f => f.length > 0),
+            images: imageUrls
+        };
+
+        const res = await fetch('/v1/api/properties/store', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            },
+            body: JSON.stringify(data)
+        });
+
+        let result;
+        try {
+            result = await res.json();
+        } catch {
+            const text = await res.text();
+            console.error('Server returned non-JSON:', text);
+            alert('Server error, check console.');
+            return;
         }
 
-        function handleDragLeave(event) {
-            event.preventDefault();
-            dropZone.classList.remove("highlight");
+        if (res.ok && result.status) {
+            alert('Property uploaded successfully!');
+        } else {
+            alert('Error: ' + JSON.stringify(result.data || result));
         }
 
-        function handleDrop(event) {
-            event.preventDefault();
-            dropZone.classList.remove("highlight");
+    } catch (err) {
+        console.error(err);
+        alert('Something went wrong: ' + err.message);
+    }
+}
+</script>
 
-            const files = Array.from(event.dataTransfer.files);
 
-            files.forEach(function (file) {
-                if (checkTotalFileSize(file.size)) {
-                    totalFileSize += file.size;
-                    previewFile(file);
-                } else {
-                    displayErrorMessage("File size exceeds the limit (20 MB). Please choose smaller files.");
-                }
-            });
-        }
 
-        function handleFiles(event) {
-            const files = Array.from(event.target.files);
-
-            files.forEach(function (file) {
-                if (checkTotalFileSize(file.size)) {
-                    totalFileSize += file.size;
-                    previewFile(file);
-                } else {
-                    displayErrorMessage("File size exceeds the limit (20 MB). Please choose smaller files.");
-                }
-            });
-        }
-
-        function checkTotalFileSize(fileSize) {
-            const maxSize = 20 * 1024 * 1024; // 20 MB
-            return totalFileSize + fileSize <= maxSize;
-        }
-
-        function removeFile(fileSize) {
-            totalFileSize -= fileSize;
-        }
-
-        function previewFile(file) {
-            const reader = new FileReader();
-
-            reader.onload = function (e) {
-                const imgContainer = document.createElement("div");
-                imgContainer.classList.add("preview-item");
-
-                const img = document.createElement("img");
-                img.src = e.target.result;
-
-                const removeButton = document.createElement("button");
-                removeButton.innerHTML = "x";
-                removeButton.classList.add("remove-button");
-                removeButton.addEventListener("click", function () {
-                    preview.removeChild(imgContainer);
-                    removeFile(file.size);
-                });
-
-                imgContainer.appendChild(img);
-                imgContainer.appendChild(removeButton);
-                preview.appendChild(imgContainer);
-            };
-
-            reader.readAsDataURL(file);
-        }
-
-        function displayErrorMessage(message) {
-            const errorMessageElement = document.createElement("div");
-            errorMessageElement.textContent = message;
-            errorMessageElement.style.whiteSpace = "pre"; // Preserve whitespace
-            errorMessageElement.style.color = "red";
-            errorMessageElement.style.display = "inline-block"; // Display the message in a single line
-            errorMessages.appendChild(errorMessageElement);
-        }
-    </script>
 </body>
 </html>

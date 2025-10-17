@@ -204,7 +204,22 @@ public function newindex()
             );
         }
     }
+public function create()
+{
+    return view('upload');
+}
 
+public function uploadImages(Request $request)
+{
+    $urls = [];
+    if($request->hasFile('images')){
+        foreach($request->file('images') as $file){
+            $path = $file->store('property_images', 'public');
+            $urls[] = asset('storage/'.$path);
+        }
+    }
+    return response()->json(['urls' => $urls]);
+}
 
     public function store(Request $request)
     {

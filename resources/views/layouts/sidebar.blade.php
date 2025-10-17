@@ -58,7 +58,7 @@
     <a href="{{ route('admin.property-list') }}" class="{{ request()->routeIs('admin.property-list') ? 'active' : '' }}">
         <i class="fas fa-home"></i> Properties
 
-        <a href="{{ route('upload') }}" class="{{ request()->routeIs('admin.property-list') ? 'active' : '' }}">
+        <a href="{{ route('property.upload') }}" class="{{ request()->routeIs('admin.property-list') ? 'active' : '' }}">
         <i class="fas fa-plus-circle"></i> Add Properties
 
     </a>
