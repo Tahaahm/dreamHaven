@@ -42,6 +42,8 @@ Route::prefix('v1/api/agents')->group(function () {
     Route::get('/nearby', [AgentController::class, 'getNearbyAgents']);
     Route::get('/company/{companyId}', [AgentController::class, 'getAgentsByCompany']);
     Route::get('/{id}', [AgentController::class, 'show']);
+    Route::post('/users/{user_id}/convert-to-agent', [AgentController::class, 'createFromUser']);
+
 
     // ===== AUTHENTICATED ROUTES =====
     Route::middleware(['auth:sanctum'])->group(function () {
