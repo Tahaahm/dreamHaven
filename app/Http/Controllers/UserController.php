@@ -9,7 +9,7 @@ use App\Models\Appointment;
 use App\Services\FirebaseAuthService;
 use App\Services\FirebaseService;
 use App\Services\FirebaseFirestoreService;
-
+use App\Services\GoogleOAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
@@ -2654,5 +2654,314 @@ class UserController extends Controller
 
             return ApiResponse::error('Failed to get device tokens', $e->getMessage(), 500);
         }
+    }
+    //new of AuthGoogle
+
+    public function googleSignIn(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'id_token' => 'required_without:access_token|string',
+                'access_token' => 'required_without:id_token|string',
+                'device_name' => 'nullable|string|max:255',
+                'device_token' => 'nullable|string|max:500',
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            $googleService = app(GoogleOAuthService::class);
+
+            // Verify Google token and get user data
+            if ($request->has('id_token')) {
+                $googleResult = $googleService->verifyIdToken($request->id_token);
+            } else {
+                $googleResult = $googleService->getUserInfoFromAccessToken($request->access_token);
+            }
+
+            if (!$googleResult['success']) {
+                return ApiResponse::error(
+                    'Google authentication failed',
+                    $googleResult['error'],
+                    401
+                );
+            }
+
+            $googleUserData = $googleResult['user_data'];
+
+            // Validate we have required data
+            if (empty($googleUserData['email']) || empty($googleUserData['google_id'])) {
+                return ApiResponse::error(
+                    'Invalid Google user data',
+                    'Email or Google ID missing',
+                    400
+                );
+            }
+
+            DB::beginTransaction();
+
+            // Check if user exists with this email
+            $user = User::where('email', $googleUserData['email'])->first();
+
+            if ($user) {
+                // User exists - perform login
+                Log::info('Existing user signing in with Google', [
+                    'user_id' => $user->id,
+                    'email' => $user->email
+                ]);
+
+                // Update user's Google ID if not set
+                if (empty($user->google_id)) {
+                    $user->update(['google_id' => $googleUserData['google_id']]);
+                }
+
+                // Update photo if not set and Google provides one
+                if (empty($user->photo_image) && !empty($googleUserData['picture'])) {
+                    $user->update(['photo_image' => $googleUserData['picture']]);
+                }
+            } else {
+                // New user - perform registration
+                Log::info('New user registering with Google', [
+                    'email' => $googleUserData['email'],
+                    'google_id' => $googleUserData['google_id']
+                ]);
+
+                // Create username from email or name
+                $username = $this->generateUsernameFromGoogle($googleUserData);
+
+                // Generate a secure random password (user won't need it)
+                $securePassword = $googleService->generateSecurePassword();
+
+                $userData = [
+                    'id' => (string) Str::uuid(),
+                    'username' => $username,
+                    'email' => $googleUserData['email'],
+                    'google_id' => $googleUserData['google_id'],
+                    'password' => Hash::make($securePassword),
+                    'photo_image' => $googleUserData['picture'] ?? null,
+                    'email_verified_at' => $googleUserData['email_verified'] ? now() : null,
+                    'language' => $request->get('language', 'en'),
+                    'search_preferences' => json_encode($this->getDefaultSearchPreferences()),
+                    'device_tokens' => json_encode([]),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+
+                // Create Firebase Auth user if available
+                $firebaseResult = null;
+                if ($this->firebaseAuth) {
+                    Log::info('Creating Firebase Auth user for Google sign-in', [
+                        'email' => $userData['email']
+                    ]);
+
+                    $firebaseResult = $this->firebaseAuth->createUser(
+                        $userData['email'],
+                        $securePassword,
+                        $userData
+                    );
+
+                    if (!$firebaseResult['success']) {
+                        // Log warning but continue - Firebase is optional
+                        Log::warning('Firebase user creation failed during Google sign-in', [
+                            'email' => $userData['email'],
+                            'error' => $firebaseResult['error']
+                        ]);
+                    }
+                }
+
+                // Create Laravel user
+                DB::table('users')->insert($userData);
+                $user = User::find($userData['id']);
+
+                // Create Firestore document (if available)
+                if ($this->firebaseFirestore && $firebaseResult && $firebaseResult['success']) {
+                    $firestoreResult = $this->firebaseFirestore->createUserDocument($user);
+
+                    if ($firestoreResult['success']) {
+                        // Create user sub-collections
+                        $this->firebaseFirestore->createUserSubCollections($user);
+                    }
+                }
+
+                // Send welcome notification
+                if (class_exists('App\Http\Controllers\NotificationController')) {
+                    app(NotificationController::class)->sendWelcomeNotification($user->id);
+                }
+            }
+
+            // Handle device token
+            $deviceName = $request->get('device_name', 'Unknown Device');
+            $deviceToken = $request->get('device_token');
+
+            if ($deviceToken && $deviceName) {
+                $this->updateUserDeviceToken($user, $deviceName, $deviceToken);
+            }
+
+            // Update last login
+            $user->update(['last_login_at' => now()]);
+
+            // Create authentication token
+            $token = $user->createToken('auth-token - ' . $deviceName)->plainTextToken;
+
+            DB::commit();
+
+            // Prepare response
+            $responseData = [
+                'user' => $this->transformUserData($user->fresh()),
+                'token' => $token,
+                'is_new_user' => !isset($user->id) || $user->wasRecentlyCreated
+            ];
+
+            // Add Firebase token if available
+            if (isset($firebaseResult) && $firebaseResult && $firebaseResult['success']) {
+                $responseData['firebase_token'] = $firebaseResult['custom_token'];
+            }
+
+            Log::info('Google sign-in completed successfully', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'is_new_user' => $responseData['is_new_user']
+            ]);
+
+            return ApiResponse::success(
+                $responseData['is_new_user'] ? 'User registered successfully with Google' : 'User signed in successfully with Google',
+                $responseData,
+                $responseData['is_new_user'] ? 201 : 200
+            );
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Google sign-in error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ApiResponse::error('Google sign-in failed', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Link Google account to existing user
+     * Requires authentication
+     */
+    public function linkGoogleAccount(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'id_token' => 'required_without:access_token|string',
+                'access_token' => 'required_without:id_token|string',
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            $user = $request->user();
+            $googleService = app(GoogleOAuthService::class);
+
+            // Verify Google token
+            if ($request->has('id_token')) {
+                $googleResult = $googleService->verifyIdToken($request->id_token);
+            } else {
+                $googleResult = $googleService->getUserInfoFromAccessToken($request->access_token);
+            }
+
+            if (!$googleResult['success']) {
+                return ApiResponse::error(
+                    'Google authentication failed',
+                    $googleResult['error'],
+                    401
+                );
+            }
+
+            $googleUserData = $googleResult['user_data'];
+
+            // Check if Google account is already linked to another user
+            $existingUser = User::where('google_id', $googleUserData['google_id'])
+                ->where('id', '!=', $user->id)
+                ->first();
+
+            if ($existingUser) {
+                return ApiResponse::error(
+                    'Google account already linked',
+                    'This Google account is already linked to another user',
+                    400
+                );
+            }
+
+            // Check if emails match
+            if ($user->email !== $googleUserData['email']) {
+                return ApiResponse::error(
+                    'Email mismatch',
+                    'The email address of your Google account does not match your account email',
+                    400
+                );
+            }
+
+            DB::beginTransaction();
+
+            // Link Google account
+            $user->update([
+                'google_id' => $googleUserData['google_id'],
+                'email_verified_at' => $googleUserData['email_verified'] ? now() : $user->email_verified_at,
+            ]);
+
+            // Update photo if not set
+            if (empty($user->photo_image) && !empty($googleUserData['picture'])) {
+                $user->update(['photo_image' => $googleUserData['picture']]);
+            }
+
+            DB::commit();
+
+            Log::info('Google account linked successfully', [
+                'user_id' => $user->id,
+                'google_id' => $googleUserData['google_id']
+            ]);
+
+            return ApiResponse::success(
+                'Google account linked successfully',
+                ['user' => $this->transformUserData($user->fresh())],
+                200
+            );
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Link Google account error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ApiResponse::error('Failed to link Google account', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Generate a unique username from Google user data
+     */
+    private function generateUsernameFromGoogle(array $googleUserData): string
+    {
+        // Try to use name first
+        if (!empty($googleUserData['given_name'])) {
+            $baseUsername = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $googleUserData['given_name']));
+        } elseif (!empty($googleUserData['name'])) {
+            $baseUsername = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $googleUserData['name']));
+        } else {
+            // Fallback to email prefix
+            $baseUsername = strtolower(explode('@', $googleUserData['email'])[0]);
+            $baseUsername = preg_replace('/[^a-zA-Z0-9]/', '', $baseUsername);
+        }
+
+        // Ensure minimum length
+        if (strlen($baseUsername) < 3) {
+            $baseUsername = 'user' . $baseUsername;
+        }
+
+        // Check if username exists
+        $username = $baseUsername;
+        $counter = 1;
+
+        while (User::where('username', $username)->exists()) {
+            $username = $baseUsername . $counter;
+            $counter++;
+        }
+
+        return $username;
     }
 }

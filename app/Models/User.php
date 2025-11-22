@@ -18,21 +18,20 @@ class User extends Authenticatable implements MustVerifyEmail
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
+     * The primary key type
+     */
+    protected $keyType = 'string';
+    public $incrementing = false;
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
      */
-
-
-    // Explicitly define the primary key (usually not needed if it's 'id')
-    // Explicitly define the primary key (usually not needed if it's 'id')
-    protected $keyType = 'string';
-    public $incrementing = false;
-
     protected $fillable = [
-        // Remove 'id' from fillable - UUIDs are auto-generated
         'username',
         'email',
+        'google_id',           // ← Added for Google OAuth
         'password',
         'phone',
         'place',
@@ -44,24 +43,36 @@ class User extends Authenticatable implements MustVerifyEmail
         'search_preferences',
         'device_tokens',
         'email_verified_at',
+        'last_login_at',       // ← Added for tracking last login
         'is_active'
     ];
 
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var array<int, string>
+     */
     protected $hidden = [
         'password',
         'remember_token',
     ];
 
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array<string, string>
+     */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'last_login_at' => 'datetime',     // ← Added cast
         'password' => 'hashed',
         'search_preferences' => 'array',
         'is_active' => 'boolean',
         'lat' => 'decimal:6',
         'lng' => 'decimal:6',
-        'device_tokens' => 'array', // Add this line
-
+        'device_tokens' => 'array',
     ];
+
     /**
      * The attributes that should be treated as dates.
      *
@@ -70,7 +81,7 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $dates = [
         'deleted_at',
         'email_verified_at',
-        'last_login_at',
+        'last_login_at',       // ← Added to dates
     ];
 
     // ===== RELATIONSHIPS =====
@@ -101,7 +112,6 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Get properties owned by this user
-     * Assuming Property has owner_id and owner_type columns for polymorphic relationship
      */
     public function ownedProperties(): MorphMany
     {
@@ -109,17 +119,7 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Alternative if Property has a direct user_id relationship
-     * Uncomment this if your Property model has user_id instead of polymorphic relationship
-     */
-    // public function ownedProperties(): HasMany
-    // {
-    //     return $this->hasMany(Property::class, 'user_id');
-    // }
-
-    /**
      * Get user's sessions
-     * Note: This assumes you have a sessions table with user_id
      */
     public function sessions(): HasMany
     {
@@ -179,11 +179,11 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Get the route key for the model (useful for route model binding)
+     * Get the route key for the model
      */
     public function getRouteKeyName(): string
     {
-        return 'id'; // or 'username' if you prefer
+        return 'id';
     }
 
     /**
@@ -194,7 +194,6 @@ class User extends Authenticatable implements MustVerifyEmail
         return $query->whereNotNull('email_verified_at');
     }
 
-
     /**
      * Get user's full name or username
      */
@@ -202,6 +201,10 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->username;
     }
+
+    /**
+     * Get all FCM tokens for this user
+     */
     public function getFCMTokens(): array
     {
         $deviceTokens = $this->device_tokens ?? [];
@@ -214,5 +217,51 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return $fcmTokens;
+    }
+
+    // ===== GOOGLE OAUTH HELPER METHODS =====
+
+    /**
+     * Check if user has linked Google account
+     */
+    public function hasGoogleAccount(): bool
+    {
+        return !empty($this->google_id);
+    }
+
+    /**
+     * Scope to get users with Google accounts
+     */
+    public function scopeWithGoogleAccount($query)
+    {
+        return $query->whereNotNull('google_id');
+    }
+
+    /**
+     * Scope to get users without Google accounts
+     */
+    public function scopeWithoutGoogleAccount($query)
+    {
+        return $query->whereNull('google_id');
+    }
+
+    /**
+     * Update last login timestamp
+     */
+    public function updateLastLogin()
+    {
+        $this->update(['last_login_at' => now()]);
+    }
+
+    /**
+     * Check if user logged in recently (within last 24 hours)
+     */
+    public function hasRecentLogin(): bool
+    {
+        if (!$this->last_login_at) {
+            return false;
+        }
+
+        return $this->last_login_at->diffInHours(now()) < 24;
     }
 }

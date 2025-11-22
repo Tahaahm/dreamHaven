@@ -189,6 +189,8 @@ Route::prefix('api/v1')->group(function () {
         Route::post('/register', [UserController::class, 'register']);
         Route::post('/forgot-password', [UserController::class, 'forgotPassword']);
         Route::post('/confirm-password-reset', [UserController::class, 'confirmPasswordReset']);
+
+        Route::post('/google/signin', [UserController::class, 'googleSignIn']);
     });
 
     // ===== AUTHENTICATED USER ROUTES =====
@@ -199,6 +201,8 @@ Route::prefix('api/v1')->group(function () {
             Route::post('/logout', [UserController::class, 'logout']);
             Route::post('/refresh', [UserController::class, 'refresh']);
             Route::patch('/change-password', [UserController::class, 'changePassword']);
+
+            Route::post('/google/link', [UserController::class, 'linkGoogleAccount']);
         });
 
         // User Profile Management - MOVED INSIDE AUTH GROUP
