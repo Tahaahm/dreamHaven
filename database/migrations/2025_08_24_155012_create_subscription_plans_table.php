@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('subscription_plans', function (Blueprint $table) {
+        Schema::create('Subscription_plans', function (Blueprint $table) {
             // Primary identifier
             $table->string('id')->primary(); // Using string ID like "starter_plan"
 
@@ -57,6 +57,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('subscription_plans');
+        Schema::dropIfExists('Subscription_plans');
     }
 };

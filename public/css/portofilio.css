@@ -156,9 +156,10 @@ body {
     margin-right  : -30px;
     margin-top    : 0;
     width         : 250px;
-    height        : 420px;
+    height        : 320px;
     padding       : 10px;
-    box-shadow    : 0 0 10px rgba(0, 0, 0, 0.1);
+    border        : 1px solid #c9c9c9;
+    border-radius : 8px;
     display       : flex;
     flex-direction: column;
     align-items   : center;

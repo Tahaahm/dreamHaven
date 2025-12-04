@@ -5,9 +5,16 @@
 namespace App\Http;
 
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
-
+use Illuminate\Support\Facades\Log;
 class Kernel extends HttpKernel
 {
+
+    public function __construct(\Illuminate\Contracts\Foundation\Application $app, \Illuminate\Routing\Router $router)
+{
+    parent::__construct($app, $router);
+    Log::info('🌟 Http Kernel loaded successfully');
+}
+
     /**
      * The application's global HTTP middleware stack.
      *
@@ -55,6 +62,7 @@ class Kernel extends HttpKernel
      * @var array<string, class-string|string>
      */
     protected $middlewareAliases = [
+        'agent.only' => \App\Http\Middleware\AgentOnly::class,
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
@@ -66,6 +74,9 @@ class Kernel extends HttpKernel
         'signed' => \App\Http\Middleware\ValidateSignature::class,
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
-        'admin' => \App\Http\Middleware\AdminMiddleware::class, // Add this line
+
+        'admin' => \App\Http\Middleware\AdminMiddleware::class,
+        'agent.or.admin' => \App\Http\Middleware\AgentOrAdmin::class,
+        'ensure.verified' => \App\Http\Middleware\EnsureUserIsVerified::class,
     ];
 }

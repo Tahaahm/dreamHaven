@@ -141,25 +141,48 @@
                     <th>Actions</th>
                 </tr>
                 </thead>
-                <tbody>
-                @foreach($notifications as $notification)
-                    <tr>
-                        <td><input type="checkbox" name="select"></td>
-                        <td class="notification">
-                            <div class="details">
-                                <span>{{ $notification->title }}</span>
-                                <small>{{ $notification->message }}</small>
-                            </div>
-                        </td>
-                        <td class="timestamp">{{ $notification->sent_at->format('Y-m-d h:i A') }}</td>
-                        <td class="actions">
-                            <!-- Actions like "Mark as Read", "Delete" etc. -->
-                            <a href="{{ route('notifications.markAsRead', $notification->id) }}">Mark as Read</a>
-                            <a href="{{ route('notifications.delete', $notification->id) }}">Delete</a>
-                        </td>
-                    </tr>
-                @endforeach
-                </tbody>
+         <tbody>
+@foreach($notifications as $notification)
+
+    @php
+        // Handle multilingual or array-based title
+        $title = is_array($notification->title)
+            ? ($notification->title['en'] ?? reset($notification->title))
+            : $notification->title;
+
+        // Handle multilingual or array-based message
+        $message = is_array($notification->message)
+            ? ($notification->message['en'] ?? reset($notification->message))
+            : $notification->message;
+
+        // Format date safely
+        $date = $notification->sent_at
+            ? \Carbon\Carbon::parse($notification->sent_at)->format('Y-m-d h:i A')
+            : '—';
+
+    @endphp
+
+    <tr>
+        <td><input type="checkbox" name="select"></td>
+
+        <td class="notification">
+            <div class="details">
+                <span>{{ $title }}</span>
+                <small>{{ $message }}</small>
+            </div>
+        </td>
+
+        <td class="timestamp">{{ $date }}</td>
+
+        <td class="actions">
+            <a href="{{ route('notifications.markAsRead', $notification->id) }}">Mark as Read</a>
+            <a href="{{ route('notifications.delete', $notification->id) }}">Delete</a>
+        </td>
+    </tr>
+
+@endforeach
+</tbody>
+
             </table>
         </div>
     </div>

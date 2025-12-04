@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-   
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.imagesloaded/4.1.4/imagesloaded.pkgd.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
@@ -72,33 +72,78 @@
         <button class="search-button" id="search-button">SEARCH</button>
     </div>
    
-    <div class="container">
-    <div id="no-products-message">No products found</div>
+  <div class="container">
+    @if($properties->isEmpty())
+        <div id="no-products-message">No properties found</div>
+    @endif
+
     <ul>
         @foreach($properties as $property)
+        
             <li>
+
+
+
                 <div class="item-container">
-                <a href="{{ route('property.PropertyDetail', ['property_id' => $property->property_id]) }}">
-                    <div class="background-image-container">
-                        @foreach($property->images as $index => $photo)
-                            <div class="background-image{{ $index == 0 ? ' active' : '' }}" style="background-image: url('{{ asset($photo) }}');"></div>
-                        @endforeach
-                        </a>
-                        <div class="arrow prev"><i class="fas fa-chevron-left"></i></div>
-                        <div class="arrow next"><i class="fas fa-chevron-right"></i></div>
-                        <div class="item-date"><i class="fas fa-calendar-alt"></i> {{ $property->created_at->format('d/m/Y') }}</div>
-                    </div>
-                    <div class="item-home-type">{{ $property->property_type }}</div>
-                    <div class="item-type-of-home">{{ $property->listing_type }}</div>
-                    <a href="{{ route('property.PropertyDetail', ['property_id' => $property->property_id]) }}" class="details-link" title="More Details">
-                        <div class="detail-of-home">
-                            <div class="item-price">${{ number_format($property->price) }}</div>
-                            <div class="title">{{ $property->title }}</div>
-                            <div class="item-location"><i class="fas fa-map-marker-alt"></i> {{ $property->address }}</div>
+                    {{-- Link wrapper --}}
+                    <a href="{{ route('property.PropertyDetail', ['property_id' => $property->id]) }}">
+                        {{-- Image carousel --}}
+                        <div class="background-image-container">
+                            
+<div class="background-image-container">
+<div class="background-image-container">
+    @foreach($property->images as $index => $photo)
+        <div class="background-image{{ $index == 0 ? ' active' : '' }}" 
+             style="background-image: url('{{ $photo }}');">
+        </div>
+    @endforeach
+</div>
+
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                            <div class="arrow prev"><i class="fas fa-chevron-left"></i></div>
+                            <div class="arrow next"><i class="fas fa-chevron-right"></i></div>
+                            <div class="item-date">
+                                <i class="fas fa-calendar-alt"></i> {{ $property->created_at->format('d/m/Y') }}
+                            </div>
+                        </div>
+                    </a>
+
+                    {{-- Property type & listing type --}}
+                    <div class="item-home-type">{{ $property->type['category'] ?? 'N/A' }}</div>
+                    <div class="item-type-of-home">{{ ucfirst($property->listing_type) }}</div>
+
+                    {{-- Details section --}}
+<a href="{{ route('property.PropertyDetail', ['property_id' => $property->id]) }}">
+                            <div class="detail-of-home">
+                            <div class="item-price">
+                                ${{ number_format($property->price['usd'] ?? 0) }}
+                            </div>
+
+                            <div class="title">
+                                {{ $property->name['en'] ?? 'Unnamed Property' }}
+                            </div>
+
+                            <div class="item-location">
+                                <i class="fas fa-map-marker-alt"></i> {{ $property->address ?? 'N/A' }}
+                            </div>
+
                             <div class="item-info">
-                                <span><i class="fas fa-bed"></i>  {{ $property->bedrooms }} Bed</span>
-                                <span><i class="fas fa-bath"></i>  {{ $property->bathrooms }} Bath</span>
-                                <span><i class="fas fa-ruler-combined"></i>  {{ $property->square_footage }} m²</span>
+                                <span><i class="fas fa-bed"></i> {{ $property->rooms['bedroom']['count'] ?? 0 }} Bed</span>
+                                <span><i class="fas fa-bath"></i> {{ $property->rooms['bathroom']['count'] ?? 0 }} Bath</span>
+                                <span><i class="fas fa-ruler-combined"></i> {{ $property->area ?? 'N/A' }} m²</span>
                             </div>
                         </div>
                     </a>
@@ -106,7 +151,13 @@
             </li>
         @endforeach
     </ul>
+
+    {{-- Pagination links --}}
+    <div class="mt-6">
+        {{ $properties->links() }}
+    </div>
 </div>
+
 
 
     <script>

@@ -101,23 +101,35 @@
             <ul class="unique-nav-items">
                 <li class="unique-nav-item">
                     <a class="unique-nav-link {{ request()->routeIs('newindex') ? ' active' : '' }}" href="{{ route('newindex') }}">Home</a>
-                    <a class="unique-nav-link" href="{{ route('list') }}">Properties</a>
+                    <a class="unique-nav-link" href="{{ route('property.list') }}">Properties</a>
                     <a class="unique-nav-link" href="{{ route('about-us') }}">About Us</a>
                     <a class="unique-nav-link" href="{{ route('contact-us') }}">Contact</a>
                 </li>
             </ul>
 
-            @auth
-              <a href="{{ route('agent.admin-dashboard') }}" class="btn-get-started">
-                <div class="user-initial-circle">
-                  {{ strtoupper(substr(auth()->user()->name, 0, 1)) }}
-                </div>
-              </a>
-            @else
-              <a href="{{ route('login-page') }}">
-                <button class="unique-button">Login</button>
-              </a>
-            @endauth
+@php
+    $user = Auth::user();
+    $agent = Auth::guard('agent')->user();
+@endphp
+
+@if($user || $agent)
+    @php
+        $displayName = $user ? $user->name : $agent->agent_name;
+        $redirectRoute = $user ? route('admin.dashboard') : route('agent.admin-dashboard');
+    @endphp
+
+    <a href="{{ $redirectRoute }}" class="btn-get-started">
+        <div class="user-initial-circle">
+            {{ strtoupper(substr($displayName, 0, 1)) }}
+        </div>
+    </a>
+@else
+    <a href="{{ route('login-page') }}">
+        <button class="unique-button">Login</button>
+    </a>
+@endif
+
+
         </nav>
     </header>
 

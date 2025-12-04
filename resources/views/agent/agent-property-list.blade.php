@@ -57,12 +57,11 @@
             flex-wrap: wrap;
         }
 
-        .item-container {
+     .item-container {
     position                  : relative;
     overflow                  : hidden;
     margin-bottom             : 20px;
     margin-right              : 10px;
-    margin-top: 13px;
     margin-left               : 5px;
     border                    : none;
     border-top-right-radius   : 15px;
@@ -70,7 +69,7 @@
     border-bottom-left-radius : 15px;
     border-bottom-right-radius: 15px;
     background-color          : #fff;
-    width                     : calc(26% - 50px);
+    width                     : calc(27% - 50px);
     display                   : flex;
     flex-direction            : column;
     justify-content           : flex-start;
@@ -80,27 +79,42 @@
 }
 
 .background-image-container {
-    position   : relative;
-    width      : 100%;
-    padding-top: 75%;
-    overflow   : hidden;
+    position: relative;
+    width   : 100%;
+    height  : 400px;
+    /* fixed height for testing, adjust as needed */
+    overflow: hidden;
 }
 
-.background-image {
+.background-image-container .background-image {
     position           : absolute;
     top                : 0;
     left               : 0;
+    right              : 0;
+    /* ensure it stretches fully */
+    bottom             : 0;
+    /* ensure it stretches fully */
     width              : 100%;
-    height             : 87%;
+    height             : 100%;
     background-size    : cover;
+    /* covers the container */
     background-position: center;
+    /* center the image */
+    background-repeat  : no-repeat;
+    /* prevent tiling */
     transition         : transform 0.3s, opacity 0.3s;
     opacity            : 0;
 }
 
-        .background-image.active {
-            opacity: 1;
-        }
+.background-image-container .background-image.active {
+    opacity: 1;
+}
+
+.item-container:hover .background-image {
+    transform: scale(1.05);
+    /* small zoom on hover */
+}
+
 
         .arrow {
             position: absolute;
@@ -342,12 +356,6 @@
         }
 
         /* Edit button styles */
-        .background-image-container {
-    position: relative; /* Ensure this container is relative for absolute positioning inside it */
-    width: 100%;
-    padding-top: 75%;
-    overflow: hidden;
-}
 
 .edit-button {
     position: absolute;
@@ -371,6 +379,69 @@
 }
 
 
+
+.menu-container {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
+.menu-btn {
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    color: white;
+    padding: 6px 8px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.menu-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.menu-dropdown {
+    display: none;
+    position: absolute;
+    top: 35px;
+    right: 0;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+    z-index: 10;
+}
+
+.menu-item {
+    display: block;
+    padding: 10px 15px;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+    border-bottom: 1px solid #eee;
+}
+
+.menu-item:hover {
+    background: #f4f4f4;
+}
+
+.delete-btn {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 10px 15px;
+    color: #d9534f;
+    cursor: pointer;
+}
+
+.delete-btn:hover {
+    background: #fceaea;
+}
+
+.menu-container.active .menu-dropdown {
+    display: block;
+}
+
     </style>
 </head>
 <body class="custom-navbar-color">
@@ -380,44 +451,98 @@
         <div class="container">
             <ul id="product-list">
                 @forelse ($properties as $property)
-                    <a href="{{ route('property.PropertyDetail', ['property_id' => $property->property_id]) }}">
-                        <li class="item-container" data-type="{{ $property->type }}" data-category="{{ $property->category }}">
-                            <div class="background-image-container">
-                            @php
-    // Decode the JSON string to an array if it's not already an array
-    $images = is_array($property->images) ? $property->images : json_decode($property->images, true);
-@endphp
+                    @php
+                        // Safely decode JSON or use arrays
+                        $images = is_array($property->images)
+                            ? $property->images
+                            : (json_decode($property->images, true) ?? []);
+                        $price = is_array($property->price)
+                            ? $property->price
+                            : (json_decode($property->price, true) ?? [$property->price]);
+                    @endphp
 
-@foreach($images as $index => $photo)
-    <div class="background-image{{ $index == 0 ? ' active' : '' }}" style="background-image: url('{{ asset($photo) }}');"></div>
-@endforeach
+                    <li class="item-container"
+                        data-type="{{ is_array($property->type) ? implode(', ', $property->type) : $property->type }}"
+                        data-category="{{ is_array($property->category) ? implode(', ', $property->category) : $property->category }}">
 
-                                <a href="{{ route('property.edit', ['property_id' => $property->property_id]) }}" class="edit-button">Edit</a>
-                            </div>
-                            <div class="detail-of-home">
-                                <div class="title">{{ $property->title }}</div>
-                                <div class="item-location"><i class="fas fa-map-marker-alt"></i> {{ $property->address }}</div>
-                                <div class="item-price">${{ $property->price }}</div>
-                                <div class="item-info">
-                                    <span><i class="fas fa-bed"></i> {{ $property->bedrooms }} Bed</span>
-                                    <span><i class="fas fa-bath"></i> {{ $property->bathrooms }} Bath</span>
-                                    <span><i class="fas fa-ruler-combined"></i> {{ $property->area }} m²</span>
+                        <div class="background-image-container">
+                            @if(!empty($images))
+                                @foreach($images as $index => $photo)
+                                    <div class="background-image{{ $index == 0 ? ' active' : '' }}"
+                                        style="background-image: url('{{ asset($photo) }}');"></div>
+                                @endforeach
+                            @else
+                                <div class="background-image active" style="background-image: url('{{ asset('property_images/default.jpg') }}');"></div>
+                            @endif
+
+                            <!-- Menu Button -->
+                            <div class="menu-container">
+                                <button class="menu-btn"><i class="fas fa-ellipsis-v"></i></button>
+                                <div class="menu-dropdown">
+                                    <a href="{{ route('property.edit', ['property_id' => $property->id]) }}" class="menu-item">Edit</a>
+
+                                    <form action="{{ route('property.delete', ['property_id' => $property->id]) }}"
+                                        method="POST"
+                                        onsubmit="return confirm('Are you sure you want to delete this property?');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="menu-item delete-btn">Delete</button>
+                                    </form>
                                 </div>
                             </div>
-                        </li>
-                    </a>
+                        </div>
+
+                        <!-- Make only this area clickable -->
+                        <a href="{{ route('property.PropertyDetail', ['property_id' => $property->id]) }}"
+                            class="details-link" title="More Details">
+                            <div class="detail-of-home">
+                                <div class="title">{{ $property->title ?? 'Untitled Property' }}</div>
+                                <div class="item-location">
+                                    <i class="fas fa-map-marker-alt"></i> {{ $property->address ?? 'No address' }}
+                                </div>
+
+                                <div class="item-price">
+                                    @if(is_array($price))
+                                        ${{ implode(' - $', array_filter($price)) }}
+                                    @else
+                                        ${{ $price ?? 'N/A' }}
+                                    @endif
+                                </div>
+
+                                <div class="item-info">
+                                    <span><i class="fas fa-bed"></i> {{ $property->bedrooms ?? 0 }} Bed</span>
+                                    <span><i class="fas fa-bath"></i> {{ $property->bathrooms ?? 0 }} Bath</span>
+                                    <span><i class="fas fa-ruler-combined"></i> {{ $property->area ?? 0 }} m²</span>
+                                </div>
+                            </div>
+                        </a>
+                    </li>
                 @empty
-                    <p id="no-products-message">No products found.</p>
+                    <p id="no-products-message">No properties found.</p>
                 @endforelse
             </ul>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.4.6/dist/fuse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/isotope.pkgd/3.0.6/isotope.pkgd.min.js"></script>
+
     <script>
-        // Your JavaScript here if needed
+        document.addEventListener('click', function(e) {
+            // Close all dropdowns
+            document.querySelectorAll('.menu-container').forEach(el => {
+                if (!el.contains(e.target)) el.classList.remove('active');
+            });
+
+            // Toggle clicked one
+            if (e.target.closest('.menu-btn')) {
+                const menu = e.target.closest('.menu-container');
+                menu.classList.toggle('active');
+            }
+        });
     </script>
 </body>
+
 
 </html>

@@ -156,27 +156,52 @@
                 <th>Actions</th>
             </tr>
             </thead>
-            <tbody>
-            @foreach($projects as $project)
-            <tr>
-                <td><input type="checkbox" name="select"></td>
-                <td class="project-name">
-                    <img src="{{ $project->image_url }}" alt="project">
-                    <div class="details">
-                        <span>{{ $project->name }}</span>
-                        <small>{{ $project->type }}</small>
-                    </div>
-                </td>
-                <td>{{ $project->location }}</td>
-                <td>{{ $project->contact }}<br><a href="mailto:{{ $project->email }}">{{ $project->email }}</a></td>
-                <td><span class="status">{{ $project->status }}</span></td>
-                <td class="actions">
-                    <button class="edit">Edit</button>
-                    <button class="delete">Delete</button>
-                </td>
-            </tr>
-            @endforeach
-            </tbody>
+       <tbody>
+@foreach($projects as $project)
+    @php
+        // Handle multilingual fields (name, type, location)
+        $name = is_array($project->name) ? ($project->name['en'] ?? reset($project->name)) : $project->name;
+        $type = is_array($project->type) ? ($project->type['en'] ?? reset($project->type)) : $project->type;
+        $location = is_array($project->location) ? ($project->location['en'] ?? reset($project->location)) : $project->location;
+        
+        // Contact fields
+        $contact = is_array($project->contact) ? ($project->contact['phone'] ?? reset($project->contact)) : $project->contact;
+        $email = is_array($project->email) ? ($project->email['main'] ?? reset($project->email)) : $project->email;
+
+        // Image url
+        $imageUrl = is_array($project->image_url)
+            ? ($project->image_url['main'] ?? reset($project->image_url))
+            : $project->image_url;
+    @endphp
+
+    <tr>
+        <td><input type="checkbox" name="select"></td>
+
+        <td class="project-name">
+            <img src="{{ $imageUrl }}" alt="project">
+            <div class="details">
+                <span>{{ $name }}</span>
+                <small>{{ $type }}</small>
+            </div>
+        </td>
+
+        <td>{{ $location }}</td>
+
+        <td>
+            {{ $contact }}<br>
+            <a href="mailto:{{ $email }}">{{ $email }}</a>
+        </td>
+
+        <td><span class="status">{{ $project->status }}</span></td>
+
+        <td class="actions">
+            <button class="edit">Edit</button>
+            <button class="delete">Delete</button>
+        </td>
+    </tr>
+@endforeach
+</tbody>
+
         </table>
     </div>
 </div>

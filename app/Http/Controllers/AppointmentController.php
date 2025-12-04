@@ -386,4 +386,17 @@ class AppointmentController extends Controller
             );
         }
     }
+
+
+
+
+
+    // zana's code ----------------------------------------------------------------------------------
+
+     public function showSchedule()
+{
+    $appointments = Appointment::all();
+    return view('agent.scheduleList', compact('appointments'));
+}
+
 }

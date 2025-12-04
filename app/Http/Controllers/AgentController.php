@@ -1,13 +1,16 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Helper\ApiResponse;
 use App\Helper\ResponseDetails;
 use App\Models\Agent;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use App\Models\RealEstateOffice;
 class AgentController extends Controller
 {
     public function index()
@@ -121,66 +124,70 @@ class AgentController extends Controller
         );
     }
 
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'agent_name' => 'required|string|max:255',
-            'primary_email' => 'required|email|unique:agents',
-            'primary_phone' => 'required|string|max:20',
-            'type' => 'required|string',
-            'city' => 'required|string',
-        ]);
+   public function store(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'agent_name' => 'required|string|max:255',
+        'primary_email' => 'required|email|unique:agents',
+        'primary_phone' => 'required|string|max:20',
+        'type' => 'required|string',
+        'city' => 'required|string',
+        'company_id' => 'nullable|string|exists:real_estate_offices,id',
+    ]);
 
-        if ($validator->fails()) {
-            return ApiResponse::error(
-                ResponseDetails::validationErrorMessage(),
-                $validator->errors(),
-                ResponseDetails::CODE_VALIDATION_ERROR
-            );
-        }
-
-        $agent = Agent::create($request->all());
-
-        return ApiResponse::success(
-            ResponseDetails::successMessage('Agent created successfully'),
-            $agent,
-            ResponseDetails::CODE_SUCCESS
+    if ($validator->fails()) {
+        return ApiResponse::error(
+            ResponseDetails::validationErrorMessage(),
+            $validator->errors(),
+            ResponseDetails::CODE_VALIDATION_ERROR
         );
     }
 
-    public function update(Request $request, $id)
-    {
-        $agent = Agent::find($id);
-        if (!$agent) {
-            return ApiResponse::error(
-                ResponseDetails::notFoundMessage('Agent not found'),
-                null,
-                ResponseDetails::CODE_NOT_FOUND
-            );
-        }
+    // Ensure company_id is included in fillable data
+    $data = $request->only([
+        'agent_name',
+        'primary_email',
+        'primary_phone',
+        'type',
+        'city',
+        'company_id'
+    ]);
 
-        $validator = Validator::make($request->all(), [
-            'agent_name' => 'string|max:255',
-            'primary_email' => 'email|unique:agents,primary_email,' . $id,
-            'primary_phone' => 'string|max:20',
-        ]);
+    $agent = Agent::create($data);
 
-        if ($validator->fails()) {
-            return ApiResponse::error(
-                ResponseDetails::validationErrorMessage(),
-                $validator->errors(),
-                ResponseDetails::CODE_VALIDATION_ERROR
-            );
-        }
+    return ApiResponse::success(
+        ResponseDetails::successMessage('Agent created successfully'),
+        $agent,
+        ResponseDetails::CODE_SUCCESS
+    );
+}
 
-        $agent->update($request->all());
 
-        return ApiResponse::success(
-            ResponseDetails::successMessage('Agent updated successfully'),
-            $agent,
-            ResponseDetails::CODE_SUCCESS
-        );
+public function updateAgentProfile(Request $request, $id)
+{
+    $agent = Agent::findOrFail($id);
+
+    $request->validate([
+        'agent_name' => 'required|string|max:255',
+        'primary_email' => 'required|email|unique:agents,primary_email,' . $id,
+        'primary_phone' => 'required|string|max:20',
+        'type' => 'nullable|string|max:255',
+        'city' => 'nullable|string|max:255',
+        'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:6048',
+    ]);
+
+    $agent->update($request->only(['agent_name', 'primary_email', 'primary_phone', 'type', 'city']));
+
+    if ($request->hasFile('profile_image')) {
+        $path = $request->file('profile_image')->store('profile_images', 'public');
+        $agent->profile_image = $path;
+        $agent->save();
     }
+
+    return redirect()->route('agent.edit', $agent->id)
+                     ->with('success', 'Agent updated successfully!');
+}
+
 
     public function destroy($id)
     {
@@ -243,4 +250,153 @@ class AgentController extends Controller
             ResponseDetails::CODE_SUCCESS
         );
     }
+
+public function createFromUser(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'user_id' => 'required|uuid|exists:users,id',
+        'priority' => 'sometimes|in:user,request',
+        'agent_name' => 'sometimes|string|max:255',
+        'agent_bio' => 'nullable|string',
+        'profile_image' => 'sometimes|url',
+        'type' => 'sometimes|string',
+        'primary_email' => 'sometimes|email',
+        'primary_phone' => 'required|string|max:20',
+        'company_id' => 'sometimes|uuid|exists:real_estate_offices,id',
+        'company_name' => 'sometimes|string|max:255',
+        'transfer_data' => 'sometimes|boolean',
+    ]);
+
+    if ($validator->fails()) {
+        return back()->withErrors($validator)->withInput();
+    }
+
+    DB::beginTransaction();
+
+    try {
+        $user = \App\Models\User::findOrFail($request->user_id);
+
+        if (Agent::where('subscriber_id', $user->id)->exists()) {
+            return back()->withErrors(['user_id' => 'An agent already exists for this user.']);
+        }
+
+        $priority = $request->input('priority', 'user');
+        $transferData = $request->input('transfer_data', false);
+
+        // Map user data to agent
+        $userMappedData = [
+            'agent_name' => $user->username,
+            'agent_bio' => $user->about_me ?? null,
+            'profile_image' => $user->photo_image ?? null,
+            'primary_email' => $user->email,
+            'primary_phone' => $user->phone ?? null,
+            'subscriber_id' => $user->id,
+            'password' => $user->password, // preserve hashed password
+        ];
+
+        $requestData = $request->except(['user_id', 'priority', 'transfer_data']);
+
+        $agentData = $priority === 'user'
+            ? array_merge($requestData, array_filter($userMappedData, fn($v) => !is_null($v)))
+            : array_merge(array_filter($userMappedData, fn($v) => !is_null($v)), $requestData);
+
+        // Set defaults
+        $agentData['type'] = $agentData['type'] ?? 'real_estate_official';
+        $agentData['is_verified'] = false;
+        $agentData['overall_rating'] = 0.00;
+        $agentData['properties_uploaded_this_month'] = 0;
+        $agentData['remaining_property_uploads'] = 0;
+        $agentData['properties_sold'] = 0;
+
+        $agent = Agent::create($agentData);
+
+        if ($transferData) {
+            $this->transferUserDataToAgent($user, $agent);
+        }
+
+        $user->tokens()->delete();
+        $userId = $user->id;
+        $user->delete();
+
+        DB::commit();
+
+        // ✅ Log in the new agent immediately
+        Auth::guard('agent')->login($agent);
+        $request->session()->regenerate();
+
+        Log::info('User converted to agent and logged in', [
+            'user_id' => $userId,
+            'agent_id' => $agent->id
+        ]);
+
+        // Redirect to profile page
+        return redirect()->route('agent.office.profile', $agent->company_id)
+            ->with('success', 'Your account has been converted to an agent and you are now logged in!');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Failed to convert user to agent', [
+            'user_id' => $request->user_id,
+            'error' => $e->getMessage(),
+        ]);
+
+        return back()->withErrors(['error' => 'Failed to become an agent: ' . $e->getMessage()])->withInput();
+    }
+}
+
+
+
+
+  //  zanas Pcode
+
+// Option A: find by id (if route uses {id})
+// In AgentController
+public function edit($id)
+{
+    $agent = Agent::findOrFail($id);
+    return view('agent.edit-agent-admin', compact('agent'));
+}
+
+
+
+
+  public function showCreateFromUserForm($user_id)
+    {
+        $user = User::findOrFail($user_id);
+
+        // You can pass $user to a Blade view
+        return view('agent.become', [
+            'user' => $user
+        ]);
+    }
+
+
+
+  public function showOfficeProfile()
+{
+    // Get logged-in agent ID from session
+    $agentId = session('agent_id');
+
+    $agent = Agent::find($agentId);
+
+    if (!$agent) {
+        abort(404, 'Agent not found');
+    }
+
+    if (!$agent->company_id) {
+        return redirect()->route('agent.real-estate-office')
+            ->with('error', 'You must register an office first.');
+    }
+
+    // Load the office
+    $office = RealEstateOffice::find($agent->company_id);
+
+    if (!$office) {
+        abort(404, 'Office not found');
+    }
+
+    return view('agent.real-estate-office-profile', compact('office'));
+}
+
+
 }

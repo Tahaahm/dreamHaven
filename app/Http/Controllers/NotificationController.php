@@ -2131,4 +2131,21 @@ class NotificationController extends Controller
             return false;
         }
     }
+
+
+
+
+
+  //  zana's code --------------------------------------------------------------------------------------------
+
+      public function showNotifications()
+    {
+        // Retrieve notifications (add any necessary logic here, e.g., filtering by user)
+        $notifications = Notification::all();
+    
+        // Pass notifications data to the view in the 'agent' folder
+        return view('agent.notification', compact('notifications'));
+    }
+    
+
 }

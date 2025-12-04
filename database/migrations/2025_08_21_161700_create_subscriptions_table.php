@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('subscriptions', function (Blueprint $table) {
+        Schema::create('Subscriptions', function (Blueprint $table) {
             // Primary identifier
             $table->uuid('id')->primary();
 
@@ -72,6 +72,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('subscriptions');
+        Schema::dropIfExists('Subscriptions');
     }
 };

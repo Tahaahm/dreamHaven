@@ -26,7 +26,7 @@ class RealEstateOffice extends Model
         'company_bio_image',
         'profile_image',
         'account_type',
-        'subscription_id',
+        'Subscription_id',
         'current_plan',
         'is_verified',
         'average_rating',
@@ -62,9 +62,9 @@ class RealEstateOffice extends Model
     }
 
     // Relationships
-    public function subscription(): BelongsTo
+    public function Subscription(): BelongsTo
     {
-        return $this->belongsTo(Subscription::class, 'subscription_id');
+        return $this->belongsTo(Subscription::class, 'Subscription_id');
     }
 
     public function propertyTypes(): HasMany

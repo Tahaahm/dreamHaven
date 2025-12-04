@@ -31,8 +31,7 @@
           id="propertyCarousel"
           class="carousel slide"
           data-bs-ride="carousel"
-          data-bs-interval="5000"
-        >
+          data-bs-interval="5000">
           <div class="carousel-inner">
             @foreach($property->images as $index => $photo)
             <div class="carousel-item{{ $index === 0 ? ' active' : '' }}">
@@ -78,91 +77,163 @@
         </div>
       </div>
       
-      <div class="property-details">
-        <div class="title-title-container">
-          <div class="property-title">{{ $property->title }}</div>
-          <div class="property-address">
-            {{ $property->address }}
-            <i class="fas fa-map-marker-alt" style="margin-right: 5px"></i>
-          </div>
-        </div>
-        <div class="price-tag">${{ number_format($property->price) }}</div>
+      <!-- 🏠 Property Details -->
+        <div class="property-details">
+            <div class="title-title-container">
+                <div class="property-title">{{ $property->name['en'] ?? $property->name ?? 'Untitled Property' }}</div>
+                <div class="property-address">
+                    <i class="fas fa-map-marker-alt"></i>
+                    {{ $property->address_details['city']['en'] ?? $property->address ?? 'Unknown Address' }}
+                </div>
+            </div>
 
-        <div class="other-property-info">
-          <div class="property-detail-item">
-            <span class="light-text">Property Tyoe</span>
-            <span
-              >{{ ucfirst($property->property_type) }} <i class="fas fa-home"></i
-            ></span>
-          </div>
-          <div class="property-detail-item">
-            <span class="light-text">listing Type</span>
-            <span
-              >{{ ucfirst($property->listing_type) }}
-              <i class="fas fa-calendar-alt"></i
-            ></span>
-          </div>
-          <div class="property-detail-item">
-            <span class="light-text">Bedrooms</span>
-            <span>{{ $property->bedrooms }} <i class="fas fa-bed"></i></span>
-          </div>
-          <div class="property-detail-item">
-            <span class="light-text">Bathrooms</span>
-            <span>{{ $property->bathrooms }} <i class="fas fa-bath"></i></span>
-          </div>
-          <div class="property-detail-item">
-            <span class="light-text">Area</span>
-            <span
-              >{{ $property->square_footage }} ft²
-              <i class="fas fa-ruler-combined"></i
-            ></span>
-          </div>
-          <div class="property-detail-item">
-            <span class="light-text">Flooring</span>
-            <span
-              >{{ $property->flooring }} <i class="fas fa-th-large"></i
-            ></span>
-          </div>
-        </div>
+            <!-- 💰 Price -->
+            <div class="price-tag">
+                ${{ number_format($property->price['usd'] ?? 0) }}
+                <span class="text-muted"> / {{ $property->listing_type ?? '' }}</span>
+            </div>
 
-        <div class="property-description">
-          <h5>Description</h5>
-          <p>{{ $property->description }}</p>
+            <!-- 📋 Basic Info -->
+            <div class="other-property-info">
+                <div class="property-detail-item">
+                    <span class="light-text">Property Type</span>
+                    <span>{{ ucfirst($property->type['category'] ?? $property->property_type ?? 'N/A') }} <i class="fas fa-home"></i></span>
+                </div>
+
+                <div class="property-detail-item">
+                    <span class="light-text">Listing Type</span>
+                    <span>{{ ucfirst($property->listing_type ?? 'N/A') }} <i class="fas fa-calendar-alt"></i></span>
+                </div>
+
+                <div class="property-detail-item">
+                    <span class="light-text">Bedrooms</span>
+                    <span>{{ $property->rooms['bedroom']['count'] ?? 0 }} <i class="fas fa-bed"></i></span>
+                </div>
+
+                <div class="property-detail-item">
+                    <span class="light-text">Bathrooms</span>
+                    <span>{{ $property->rooms['bathroom']['count'] ?? 0 }} <i class="fas fa-bath"></i></span>
+                </div>
+
+                <div class="property-detail-item">
+                    <span class="light-text">Area</span>
+                    <span>{{ $property->area ?? $property->square_footage ?? 'N/A' }} m² <i class="fas fa-ruler-combined"></i></span>
+                </div>
+
+                <div class="property-detail-item">
+                    <span class="light-text">Floor Number</span>
+                    <span>{{ $property->floor_number ?? 'N/A' }} <i class="fas fa-layer-group"></i></span>
+                </div>
+
+                <div class="property-detail-item">
+                    <span class="light-text">Furnished</span>
+                    <span>{{ $property->furnished ? 'Yes' : 'No' }} <i class="fas fa-couch"></i></span>
+                </div>
+
+                <div class="property-detail-item">
+                    <span class="light-text">Year Built</span>
+                    <span>{{ $property->year_built ?? 'N/A' }} <i class="fas fa-calendar-check"></i></span>
+                </div>
+            </div>
+
+            <!-- 📝 Description -->
+            <div class="property-description">
+                <h5>Description</h5>
+                <p>{{ $property->description['en'] ?? 'No description provided.' }}</p>
+            </div>
+
+            <!-- 🧱 Features & Amenities -->
+            @if(!empty($property->features))
+                <div class="property-features">
+                    <h5>Features</h5>
+                    <ul>
+                        @foreach($property->features as $feature)
+                            <li>{{ ucfirst($feature) }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            @if(!empty($property->amenities))
+                <div class="property-amenities">
+                    <h5>Amenities</h5>
+                    <ul>
+                        @foreach($property->amenities as $amenity)
+                            <li>{{ ucfirst($amenity) }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
+            <!-- ⚡ Utilities -->
+            <div class="property-utilities">
+                <h5>Utilities</h5>
+                <ul>
+                    <li>Electricity: {{ $property->electricity ? 'Available' : 'Not Available' }}</li>
+                    <li>Water: {{ $property->water ? 'Available' : 'Not Available' }}</li>
+                    <li>Internet: {{ $property->internet ? 'Available' : 'Not Available' }}</li>
+                </ul>
+            </div>
         </div>
-      </div>
 
          <!-- Agent Info Section -->
-         <div class="agent-info">
-        <div class="agent-name">Real Estate Agent</div>
-        <img
-          src="{{ asset('property_images/IMG_0697.JPG') }}"
-          alt="Agent Photo"
-          class="agent-photo"
-        />
-        <div class="agent-details">
-          <div class="agent-name">Suhaib Ayad</div>
-          <div class="agent-reviews">
-            <i class="fas fa-star" style="color: gold"></i
-            ><strong> 4.9/5</strong>
-            <div class="agent-reviews-num">(123 Reviews)</div>
-          </div>
-          <div class="agent-properties">24 Properties</div>
-          <div class="agent-cont">
-           
-            <div class="agent-phone"><strong>075*****-567</strong></div>
-            <div class="contact-agent">
-              <button class="show-num">Show Number</button>
-            </div>
-          </div>
-          <div class="show-agent-properties">
-            <button>Show Agent Properties</button>
-          </div>
-          <div class="show-agents">
-            <i class="fas fa-search" style="margin-right: 5px"></i> find other
-            agents
-          </div>
+<!-- Agent Info Section -->
+@php
+    $owner = $property->owner;
+
+    // Get owner phone number dynamically
+    $phone = $owner->primary_phone ?? $owner->phone_number ?? $owner->phone ?? null;
+
+    // Prepare property name and link
+    $propertyName = $property->name['en'] ?? $property->name ?? 'this property';
+    $propertyUrl = url()->current();
+
+    // Prepare WhatsApp message
+    $message = "I am interested in {$propertyName}. {$propertyUrl}";
+    $encodedMessage = urlencode($message);
+@endphp
+
+@if($owner && $phone)
+<div class="agent-info">
+    <div class="agent-name">Listed By</div>
+
+   <img 
+    src="{{ $owner->profile_image 
+            ? asset('storage/' . ltrim($owner->profile_image, '/')) 
+            : asset('property_images/IMG_0697.JPG') }}"
+    alt="Agent Photo"
+    class="agent-photo"
+/>
+
+    <div class="agent-details">
+        <div class="agent-name">
+            {{ $owner->username ?? $owner->agent_name ?? $owner->company_name ?? 'Property Owner' }}
         </div>
-      </div>
+
+        <div class="company-name">
+            {{ $owner->city ?? $owner->role ?? '' }}
+        </div>
+
+        <div class="show-agent-properties">
+           <a 
+    href="{{ 'https://api.whatsapp.com/send?phone=' . preg_replace('/\D/', '', $phone) . '&text=' . $encodedMessage }}" 
+    target="_blank"
+>
+    <button>Contact via WhatsApp</button>
+</a>
+
+        </div>
+    </div>
+</div>
+@else
+    <p>Agent contact information not available.</p>
+@endif
+
+
+
+
+
+
     </div>
 
    <!-- Property Info -->
@@ -223,26 +294,29 @@
     </div>
    <!-- JavaScript for carousel and active thumbnail border -->
    <script>
-    function initMap() {
+   <script>
+function initMap() {
+    @if(!empty($property->location) && isset($property->location['lat'], $property->location['lng']))
         var propertyLocation = {
             lat: {{ $property->location['lat'] }},
             lng: {{ $property->location['lng'] }}
         };
+    @else
+        var propertyLocation = { lat: 0, lng: 0 }; // fallback location
+    @endif
 
-        var map = new google.maps.Map(document.getElementById('map'), {
-            zoom: 15,
-            center: propertyLocation,
-            mapTypeId: google.maps.MapTypeId.SATELLITE // Set to satellite view
-        });
+    var map = new google.maps.Map(document.getElementById("map"), {
+        zoom: 14,
+        center: propertyLocation
+    });
 
-        var marker = new google.maps.Marker({
-            position: propertyLocation,
-            map: map,
-            title: 'Property Location'
-        });
-    }
+    new google.maps.Marker({
+        position: propertyLocation,
+        map: map
+    });
+}
+</script>
 
-    window.onload = initMap;
 </script>
 
 

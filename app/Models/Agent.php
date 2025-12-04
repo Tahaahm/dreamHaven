@@ -14,9 +14,16 @@ use App\Models\Support\AgentSocialPlatform;
 use App\Models\Support\AgentSpecialization;
 use App\Models\Support\AgentUploadedProperty;
 
-class Agent extends Model
+use Illuminate\Foundation\Auth\User as Authenticatable; // <-- important for Auth
+use Illuminate\Notifications\Notifiable;
+
+class Agent extends Authenticatable
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, Notifiable;
+
+    protected $table = 'agents';
+    public $incrementing = false;      // UUIDs are not auto-incrementing
+    protected $keyType = 'string';
 
     protected $fillable = [
         'agent_name',
@@ -24,10 +31,11 @@ class Agent extends Model
         'bio_image',
         'profile_image',
         'type',
+               'password',
         'subscriber_id',
         'is_verified',
         'overall_rating',
-        'subscription_id',
+        'Subscription_id',
         'current_plan',
         'properties_uploaded_this_month',
         'remaining_property_uploads',
@@ -70,9 +78,9 @@ class Agent extends Model
     }
 
     // Relationships
-    public function subscription(): BelongsTo
+    public function Subscription(): BelongsTo
     {
-        return $this->belongsTo(Subscription::class, 'subscription_id');
+        return $this->belongsTo(Subscription::class, 'Subscription_id');
     }
 
     public function company(): BelongsTo

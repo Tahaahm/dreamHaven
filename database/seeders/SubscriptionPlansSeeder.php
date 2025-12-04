@@ -126,6 +126,6 @@ class SubscriptionPlansSeeder extends Seeder
             ],
         ];
 
-        DB::table('subscription_plans')->insert($plans);
+        DB::table('Subscription_plans')->insert($plans);
     }
 }

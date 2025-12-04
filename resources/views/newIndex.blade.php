@@ -540,7 +540,7 @@
             <h3 class="service-title">Buy a Property</h3>
             <p class="service-text">Finding the perfect home can be daunting. Our search tool streamlines the process, allowing users to filter properties by location, price, and more.</p>
             <div class="buttons-container">
-                <a href="{{ route('list') }}" class="button">Search</a>
+                <a href="{{ route('property.list') }}" class="button">Search</a>
             </div>
         </div>
     </div>
@@ -550,11 +550,17 @@
             <h3 class="service-title">Sell a Property</h3>
             <p class="service-text">Unlock the charm of your property. Upload it here and embark on a journey to find the perfect buyer who will appreciate it as much as you do.</p>
             <div class="buttons-container">
-            @auth
-        <a href="{{ route('upload') }}" class="button">Register Your Home</a>
-    @else
-        <a href="{{ route('login-page') }}" class="button">Register Your Home</a>
-    @endauth
+    @php
+    $user = Auth::user();
+    $agentId = session('agent_id'); // agent session
+@endphp
+
+@if($user || $agentId)
+    <a href="{{ route('property.upload') }}" class="button">Register Your Home</a>
+@else
+    <a href="{{ route('login-page') }}" class="button">Register Your Home</a>
+@endif
+
             </div>
         </div>
     </div>
@@ -564,7 +570,7 @@
             <h3 class="service-title">Rent a Property</h3>
             <p class="service-text">We're simplifying the rental process - from browsing to payment. Discover your perfect space effortlessly, tailored to your needs and budget.</p>
             <div class="buttons-container">
-            <a href="{{ route('list', ['type' => 'rent']) }}" class="button find-rental-button">Find Rental</a>
+            <a href="{{ route('property.list', ['type' => 'rent']) }}" class="button find-rental-button">Find Rental</a>
 
 
 </div>

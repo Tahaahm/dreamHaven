@@ -10,647 +10,693 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
 body {
-    
-    font-family     : Arial, Helvetica, sans-serif;
-    margin          : 0;
-    padding         : 0;
-    background:#F5F7F8;
-    width     : 100%;
-    height:300vh;
+    font-family: Arial, Helvetica, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #F5F7F8;
+    width: 100%;
+    min-height: 100vh;
 }
 
 .unique-header {
-    position  : fixed;
-    height    : 80px;
-    width     : 100%;
-    z-index   : 100;
-    padding   : 0 20px;
+    position: fixed;
+    height: 80px;
+    width: 100%;
+    z-index: 100;
+    padding: 0 20px;
     background: #303b97;
-    /* Ensure a background color if needed */
 }
 
 .allin {
-    padding-top: 10px;
-    /* Adjust padding-top to account for the height of the fixed navbar */
+    padding-top: 100px;
 }
 
-.unique-nav-item {
-        margin-top: 20px;
-        column-gap: 20px;
-      }
+.content {
+    border-radius: 15px;
+    margin-left: 270px;
+    padding: 20px;
+    border: none;
+}
 
+.header {
+    background: #f9fcff;
+    padding: 20px;
+    box-shadow: 0px 2px 15px rgba(133, 133, 133, 0.1);
+    margin-bottom: 30px;
+    border-radius: 15px;
+    border: none;
+}
 
-      
-        .content {
-            border-radius: 15px;
-            margin-left: 270px;
-            padding: 20px;
-            border: none;
-        }
-        .header {
-            background: #f9fcff;
-            padding: 15px;
-            box-shadow: 0px 0px 10px rgba(133, 133, 133, 0.1);
-            margin-bottom: 20px;
-            border: none;
-        }
-        .card {
-            background: #f9fcff;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            border: none;
-            box-shadow: 0px 0px 10px rgba(133, 133, 133, 0.1);
-        }
-        .referral-card {
-            background: #f9fcff;
-            border-radius: 15px;
-            padding: 15px;
-            text-align: center;
-            margin-bottom: 20px;
-            border: none;
-            box-shadow: 1px 1px 10px rgba(0, 0, 0, 0.2);
-        }
-        .referral-body h6 {
-            font-size: 14px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #333;
-        }
-        .referral-body p {
-            font-size: 18px;
-            margin-bottom: 5px;
-            color: #333;
-        }
-        .referral-body canvas {
-            background: #f9fcff;
+.header h2 {
+    margin: 0;
+    color: #333;
+    font-weight: 600;
+}
 
-            border-radius: 15px;
-            margin-top: 10px;
-            border: none;
-            box-shadow: 0px 0px 10px rgba(133, 133, 133, 0.1);
-        }
-        .card-body {
-            background: #f9fcff;
-            border-radius: 15px;
-            padding: 20px;
-            border: none;
-            box-shadow: 0px 0px 10px rgba(133, 133, 133, 0.1);
-        }
-        .card-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 20px;
-            color: #333;
-        }
-        .referral-body .card-price {
-       
-            color: #12be07;
-        }
-        .card-price {
-            font-size: 22px;
-            color: #12be07;
-        }
-        #market-cap-chart,
-        #total-volume-chart,
-        #total-supply-chart {
-            background: #f9fcff;
-            border-radius: 15px;
-            height: 400px;
-            width: 100%;
-        }
-        .row {
-    align-items: center; /* Vertically center the content */
-    justify-content: center; /* Horizontally center the content */
-    display: -webkit-box;
-    display: -ms-flexbox;
+.section-header {
+    margin: 30px 0 20px 0;
+    padding: 15px 0;
+    border-bottom: 2px solid #303b97;
+}
+
+.section-header h4 {
+    color: #303b97;
+    font-weight: 600;
+    margin: 0;
+}
+
+.stat-card {
+    background: #f9fcff;
+    border-radius: 15px;
+    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0px 2px 15px rgba(133, 133, 133, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0px 5px 25px rgba(133, 133, 133, 0.2);
+}
+
+.stat-card .card-body {
+    padding: 25px;
+}
+
+.stat-card .card-icon {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    color: #303b97;
+}
+
+.stat-card .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+
+.stat-card .card-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.stat-card .card-subtitle {
+    font-size: 12px;
+    color: #999;
+}
+
+.chart-card {
+    background: #f9fcff;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0px 2px 15px rgba(133, 133, 133, 0.1);
+}
+
+.chart-card .chart-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.mini-chart-card {
+    background: #f9fcff;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0px 2px 10px rgba(133, 133, 133, 0.1);
+    height: 100%;
+}
+
+.mini-chart-card h6 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.mini-chart-card .value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #12be07;
+    margin-bottom: 5px;
+}
+
+.mini-chart-card .change {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 15px;
+}
+
+.mini-chart-card canvas {
+    height: 100px !important;
+}
+
+.top-items-card {
+    background: #f9fcff;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 20px;
+    border: none;
+    box-shadow: 0px 2px 15px rgba(133, 133, 133, 0.1);
+}
+
+.top-items-card .list-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #333;
+}
+
+.top-item {
     display: flex;
-    -ms-flex-wrap: wrap;
-    flex-wrap: wrap;
-    margin-right: -15px;
-    margin-left: -15px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    background: #fff;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    box-shadow: 0px 1px 5px rgba(0, 0, 0, 0.05);
 }
 
+.top-item .rank {
+    width: 30px;
+    height: 30px;
+    background: #303b97;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.top-item .item-info {
+    flex: 1;
+    margin-left: 15px;
+}
+
+.top-item .item-name {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 3px;
+}
+
+.top-item .item-detail {
+    font-size: 12px;
+    color: #999;
+}
+
+.top-item .item-value {
+    font-size: 18px;
+    font-weight: bold;
+    color: #12be07;
+}
+
+.percentage-bar {
+    width: 100%;
+    height: 8px;
+    background: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+
+.percentage-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #303b97, #5a67d8);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .content {
+        margin-left: 0;
+    }
+}
     </style>
 </head>
-<body >
+<body>
 
 @include('layouts.sidebar')
 
-
 <div class="allin">
-   
     <div class="content">
         <div class="header">
-            <h2>Dashboard</h2>
+            <h2><i class="fas fa-chart-line"></i> Analytics Dashboard</h2>
+            <small>Last updated: {{ date('F d, Y') }}</small>
         </div>
+
         <div class="container-fluid">
-            <!-- Cards Section -->
+            
+            <!-- OVERVIEW SECTION -->
+            <div class="section-header">
+                <h4><i class="fas fa-tachometer-alt"></i> Overview</h4>
+            </div>
             <div class="row">
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="fas fa-home"></i> Properties for Sale</h5>
-                            <p class="card-text">684</p>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon"><i class="fas fa-users"></i></div>
+                            <h6 class="card-title">Total Users</h6>
+                            <p class="card-value">{{ number_format($analytics->total_users ?? $totals['users'] ?? 0) }}</p>
+                            <p class="card-subtitle">Registered Users</p>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="fas fa-building"></i> Properties for Rent</h5>
-                            <p class="card-text">550</p>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon"><i class="fas fa-user-tie"></i></div>
+                            <h6 class="card-title">Total Agents</h6>
+                            <p class="card-value">{{ number_format($analytics->total_agents ?? $totals['agents'] ?? 0) }}</p>
+                            <p class="card-subtitle">Active: {{ number_format($analytics->active_agents ?? 0) }}</p>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="fas fa-users"></i> Total Customers</h5>
-                            <p class="card-text">5684</p>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon"><i class="fas fa-building"></i></div>
+                            <h6 class="card-title">Total Offices</h6>
+                            <p class="card-value">{{ number_format($analytics->total_offices ?? $totals['offices'] ?? 0) }}</p>
+                            <p class="card-subtitle">With Listings: {{ number_format($analytics->offices_with_listings ?? 0) }}</p>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="fas fa-city"></i> Properties for Cities</h5>
-                            <p class="card-text">555</p>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon"><i class="fas fa-home"></i></div>
+                            <h6 class="card-title">Total Properties</h6>
+                            <p class="card-value">{{ number_format($analytics->total_properties ?? $totals['properties'] ?? 0) }}</p>
+                            <p class="card-subtitle">All Listings</p>
                         </div>
                     </div>
                 </div>
             </div>
-            <!-- Total Revenue Section -->
+
+            <!-- PROPERTY INVENTORY SECTION -->
+            <div class="section-header">
+                <h4><i class="fas fa-warehouse"></i> Property Inventory</h4>
+            </div>
             <div class="row">
-                <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="fas fa-dollar-sign"></i> Total Revenue</h5>
-                            <p class="card-price">$236,535</p>
-                            <p class="card-text">0.8% Than Last Month</p>
-                            <canvas id="revenue-chart"></canvas>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #28a745;"><i class="fas fa-store"></i></div>
+                            <h6 class="card-title">For Sale</h6>
+                            <p class="card-value">{{ number_format($analytics->properties_for_sale ?? 0) }}</p>
                         </div>
                     </div>
                 </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #17a2b8;"><i class="fas fa-key"></i></div>
+                            <h6 class="card-title">For Rent</h6>
+                            <p class="card-value">{{ number_format($analytics->properties_for_rent ?? 0) }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #ffc107;"><i class="fas fa-handshake"></i></div>
+                            <h6 class="card-title">Properties Sold</h6>
+                            <p class="card-value">{{ number_format($analytics->properties_sold ?? 0) }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-sm-6">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #6f42c1;"><i class="fas fa-file-contract"></i></div>
+                            <h6 class="card-title">Properties Rented</h6>
+                            <p class="card-value">{{ number_format($analytics->properties_rented ?? 0) }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
+            <!-- PROPERTY PERFORMANCE SECTION -->
+            <div class="section-header">
+                <h4><i class="fas fa-chart-bar"></i> Property Performance</h4>
+            </div>
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="chart-card">
+                        <h5 class="chart-title"><i class="fas fa-eye"></i> Views Analytics</h5>
+                        <canvas id="views-chart"></canvas>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="stat-card">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Total Views</h6>
+                                    <p class="card-value">{{ number_format($analytics->total_views ?? 0) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="stat-card">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Unique Views</h6>
+                                    <p class="card-value">{{ number_format($analytics->unique_views ?? 0) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="stat-card">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">Returning Views</h6>
+                                    <p class="card-value">{{ number_format($analytics->returning_views ?? 0) }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #ff6384;"><i class="fas fa-clock"></i></div>
+                            <h6 class="card-title">Avg Time on Listing</h6>
+                            <p class="card-value">{{ $analytics && $analytics->average_time_on_listing ? gmdate("i:s", $analytics->average_time_on_listing) : '0:00' }}</p>
+                            <p class="card-subtitle">Minutes:Seconds</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #36a2eb;"><i class="fas fa-percent"></i></div>
+                            <h6 class="card-title">Bounce Rate</h6>
+                            <p class="card-value">{{ $analytics ? number_format($analytics->bounce_rate, 1) : '0.0' }}%</p>
+                            <div class="percentage-bar">
+                                <div class="percentage-bar-fill" style="width: {{ $analytics ? $analytics->bounce_rate : 0 }}%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #ff9f40;"><i class="fas fa-heart"></i></div>
+                            <h6 class="card-title">Total Favorites</h6>
+                            <p class="card-value">{{ number_format($analytics->favorites_count ?? 0) }}</p>
+                            <p class="card-subtitle">User Favorites</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AGENT PERFORMANCE SECTION -->
+            <div class="section-header">
+                <h4><i class="fas fa-user-check"></i> Agent Performance</h4>
+            </div>
+            <div class="row">
                 <div class="col-md-6">
-                    <div class="card">
-                        <div class="card-body">
-                            <h5 class="card-title"><i class="fas fa-chart-line"></i> Property Referrals</h5>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="referral-card">
-                                        <div class="referral-body">
-                                            <h6><i class="fas fa-chart-pie"></i> Market Cap</h6>
-                                            <p class="card-price">$3,00</p>
-                                            <p>30% Last Week</p>
-                                            <canvas id="market-cap-chart"></canvas>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="referral-card">
-                                        <div class="referral-body">
-                                            <h6><i class="fas fa-chart-bar"></i> Total Volume</h6>
-                                            <p class="card-price">$1,00</p>
-                                            <p>30% Last Week</p>
-                                            <canvas id="total-volume-chart"></canvas>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-4">
-                                    <div class="referral-card">
-                                        <div class="referral-body">
-                                            <h6><i class="fas fa-cubes"></i> Total Supply</h6>
-                                            <p class="card-price">$3,00</p>
-                                            <p>30% Last Week</p>
-                                            <canvas id="total-supply-chart"></canvas>
-                                        </div>
-                                    </div>
-                                </div>
-                                
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #28a745;"><i class="fas fa-user-check"></i></div>
+                            <h6 class="card-title">Active Agents</h6>
+                            <p class="card-value">{{ number_format($analytics->active_agents ?? 0) }}</p>
+                            <p class="card-subtitle">Currently Active</p>
+                            <div class="percentage-bar">
+                                @php
+                                    $totalAgents = $analytics->total_agents ?? $totals['agents'] ?? 1;
+                                    $activeAgents = $analytics->active_agents ?? 0;
+                                    $percentage = $totalAgents > 0 ? ($activeAgents / $totalAgents) * 100 : 0;
+                                @endphp
+                                <div class="percentage-bar-fill" style="width: {{ $percentage }}%;"></div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="col-md-6">
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title"><i class="fas fa-chart-line"></i> sales analytics</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-pie"></i> sales this month</h6>
-                            <p class="card-price">$3,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="sales-this-month-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-bar"></i> sales last month</h6>
-                            <p class="card-price">$1,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="sales-last-month-chart"></canvas>
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #17a2b8;"><i class="fas fa-clipboard-list"></i></div>
+                            <h6 class="card-title">Agents with Properties</h6>
+                            <p class="card-value">{{ number_format($analytics->agents_with_properties ?? 0) }}</p>
+                            <p class="card-subtitle">Have Active Listings</p>
+                            <div class="percentage-bar">
+                                @php
+                                    $totalAgents2 = $analytics->total_agents ?? $totals['agents'] ?? 1;
+                                    $agentsWithProps = $analytics->agents_with_properties ?? 0;
+                                    $percentage2 = $totalAgents2 > 0 ? ($agentsWithProps / $totalAgents2) * 100 : 0;
+                                @endphp
+                                <div class="percentage-bar-fill" style="width: {{ $percentage2 }}%;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            <!-- BANNER ANALYTICS SECTION -->
+            <div class="section-header">
+                <h4><i class="fas fa-ad"></i> Banner Analytics</h4>
+            </div>
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #fd7e14;"><i class="fas fa-flag"></i></div>
+                            <h6 class="card-title">Active Banners</h6>
+                            <p class="card-value">{{ number_format($analytics->active_banners ?? $totals['activeBanners'] ?? 0) }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #20c997;"><i class="fas fa-mouse-pointer"></i></div>
+                            <h6 class="card-title">Banner Clicks</h6>
+                            <p class="card-value">{{ number_format($analytics->banners_clicked ?? 0) }}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="card-body text-center">
+                            <div class="card-icon" style="color: #e83e8c;"><i class="fas fa-eye"></i></div>
+                            <h6 class="card-title">Banner Impressions</h6>
+                            <p class="card-value">{{ number_format($analytics->banners_impressions ?? 0) }}</p>
+                            @php
+                                $clicks = $analytics->banners_clicked ?? 0;
+                                $impressions = $analytics->banners_impressions ?? 1;
+                                $ctr = $impressions > 0 ? ($clicks / $impressions) * 100 : 0;
+                            @endphp
+                            <p class="card-subtitle">CTR: {{ number_format($ctr, 2) }}%</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TOP PERFORMERS SECTION -->
+            <div class="section-header">
+                <h4><i class="fas fa-trophy"></i> Top Performers</h4>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="top-items-card">
+                        <h5 class="list-title"><i class="fas fa-home"></i> Top Properties</h5>
+                        @php
+                            $topProperties = $analytics && $analytics->top_properties ? $analytics->top_properties : [];
+                        @endphp
+                        @if(count($topProperties) > 0)
+                            @foreach($topProperties as $index => $property)
+                            <div class="top-item">
+                                <div class="rank">{{ $index + 1 }}</div>
+                                <div class="item-info">
+                                    <div class="item-name">{{ $property['name'] ?? 'Property ' . ($index + 1) }}</div>
+                                    <div class="item-detail">{{ $property['metric'] ?? 'Total Views' }}</div>
+                                </div>
+                                <div class="item-value">{{ number_format($property['value'] ?? $property['views'] ?? 0) }}</div>
+                            </div>
+                            @endforeach
+                        @else
+                            <p class="text-center text-muted">No data available</p>
+                        @endif
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="top-items-card">
+                        <h5 class="list-title"><i class="fas fa-user-tie"></i> Top Agents</h5>
+                        @php
+                            $topAgents = $analytics && $analytics->top_agents ? $analytics->top_agents : [];
+                        @endphp
+                        @if(count($topAgents) > 0)
+                            @foreach($topAgents as $index => $agent)
+                            <div class="top-item">
+                                <div class="rank">{{ $index + 1 }}</div>
+                                <div class="item-info">
+                                    <div class="item-name">{{ $agent['name'] ?? 'Agent ' . ($index + 1) }}</div>
+                                    <div class="item-detail">{{ $agent['metric'] ?? 'Properties Sold' }}</div>
+                                </div>
+                                <div class="item-value">{{ number_format($agent['value'] ?? $agent['sales'] ?? 0) }}</div>
+                            </div>
+                            @endforeach
+                        @else
+                            <p class="text-center text-muted">No data available</p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="top-items-card">
+                        <h5 class="list-title"><i class="fas fa-building"></i> Top Offices</h5>
+                        @php
+                            $topOffices = $analytics && $analytics->top_offices ? $analytics->top_offices : [];
+                        @endphp
+                        @if(count($topOffices) > 0)
+                            @foreach($topOffices as $index => $office)
+                            <div class="top-item">
+                                <div class="rank">{{ $index + 1 }}</div>
+                                <div class="item-info">
+                                    <div class="item-name">{{ $office['name'] ?? 'Office ' . ($index + 1) }}</div>
+                                    <div class="item-detail">{{ $office['metric'] ?? 'Active Listings' }}</div>
+                                </div>
+                                <div class="item-value">{{ number_format($office['value'] ?? $office['listings'] ?? 0) }}</div>
+                            </div>
+                            @endforeach
+                        @else
+                            <p class="text-center text-muted">No data available</p>
+                        @endif
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="top-items-card">
+                        <h5 class="list-title"><i class="fas fa-ad"></i> Top Banners</h5>
+                        @php
+                            $topBanners = $analytics && $analytics->top_banners ? $analytics->top_banners : [];
+                        @endphp
+                        @if(count($topBanners) > 0)
+                            @foreach($topBanners as $index => $banner)
+                            <div class="top-item">
+                                <div class="rank">{{ $index + 1 }}</div>
+                                <div class="item-info">
+                                    <div class="item-name">{{ $banner['name'] ?? 'Banner ' . ($index + 1) }}</div>
+                                    <div class="item-detail">{{ $banner['metric'] ?? 'Total Clicks' }}</div>
+                                </div>
+                                <div class="item-value">{{ number_format($banner['value'] ?? $banner['clicks'] ?? 0) }}</div>
+                            </div>
+                            @endforeach
+                        @else
+                            <p class="text-center text-muted">No data available</p>
+                        @endif
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
 
-<div class="col-md-6">
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title"><i class="fas fa-chart-line"></i> rental analytics</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-pie"></i> rental this month</h6>
-                            <p class="card-price">$3,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="rental-this-month-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-bar"></i> rental last month</h6>
-                            <p class="card-price">$1,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="rental-last-month-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="col-md-6">
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title"><i class="fas fa-chart-line"></i> user engaement</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-pie"></i> new sing-ups</h6>
-                            <p class="card-price">$3,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="new-sign-ups-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-bar"></i> active users</h6>
-                            <p class="card-price">$1,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="active-users-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="col-md-6">
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title"><i class="fas fa-chart-line"></i> expense analytics</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-pie"></i> monthly expenses</h6>
-                            <p class="card-price">$3,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="monthly-expenses-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-bar"></i> annual expenses</h6>
-                            <p class="card-price">$1,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="annual-expenses-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="col-md-6">
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title"><i class="fas fa-chart-line"></i> revenue breakdown</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-pie"></i> product sales</h6>
-                            <p class="card-price">$3,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="product-sales-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-bar"></i> service income</h6>
-                            <p class="card-price">$1,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="service-income-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="col-md-6">
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title"><i class="fas fa-chart-line"></i> geographical analytics</h5>
-            <div class="row">
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-pie"></i> top region: </h6>
-                            <p class="card-price">$3,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="top-region-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="referral-card">
-                        <div class="referral-body">
-                            <h6><i class="fas fa-chart-bar"></i> top city: </h6>
-                            <p class="card-price">$1,00</p>
-                            <p>30% Last Week</p>
-                            <canvas id="top-city-chart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-            </div>
-        </div>
-    </div>
-    </div>
+<script>
+@php
+    // Fetch last 12 months of analytics data for the chart
+    $monthlyData = \App\Models\AdminAnalytics::orderBy('date', 'asc')
+        ->take(12)
+        ->get();
     
-    <script>
-    // Function to create the total revenue chart
-    function createRevenueChart() {
-        var revenueData = [50, 250, 150, 200, 150, 100, 200, 250, 200, 350, 400, 450];
-        var ctx = document.getElementById('revenue-chart').getContext('2d');
-        var gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(54, 162, 235, 0.5)');
-        gradient.addColorStop(1, 'rgba(54, 162, 235, 0)');
+    $chartLabels = [];
+    $totalViewsData = [];
+    $uniqueViewsData = [];
+    $returningViewsData = [];
+    
+    foreach($monthlyData as $data) {
+        $chartLabels[] = $data->date ? date('M', strtotime($data->date)) : 'N/A';
+        $totalViewsData[] = $data->total_views ?? 0;
+        $uniqueViewsData[] = $data->unique_views ?? 0;
+        $returningViewsData[] = $data->returning_views ?? 0;
+    }
+    
+    // If no data, show empty chart
+    if(count($chartLabels) == 0) {
+        $chartLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        $totalViewsData = array_fill(0, 12, 0);
+        $uniqueViewsData = array_fill(0, 12, 0);
+        $returningViewsData = array_fill(0, 12, 0);
+    }
+@endphp
 
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-                datasets: [{
-                    label: 'Revenue',
-                    data: revenueData,
-                    backgroundColor: gradient,
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 2,
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 0,
-                    pointHoverRadius: 0
-                }]
+// Views Analytics Chart
+const viewsCtx = document.getElementById('views-chart').getContext('2d');
+new Chart(viewsCtx, {
+    type: 'line',
+    data: {
+        labels: {!! json_encode($chartLabels) !!},
+        datasets: [
+            {
+                label: 'Total Views',
+                data: {!! json_encode($totalViewsData) !!},
+                borderColor: '#303b97',
+                backgroundColor: 'rgba(48, 59, 151, 0.1)',
+                tension: 0.4,
+                fill: true
             },
-            options: {
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 500,
-                        grid: {
-                            display: false
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
-                        }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        enabled: true,
-                        mode: 'nearest',
-                        intersect: false,
-                        callbacks: {
-                            label: function(context) {
-                                return '$' + context.parsed.y + 'M';
-                            }
-                        }
-                    }
-                },
-                interaction: {
-                    mode: 'nearest',
-                    intersect: false
-                },
-                hover: {
-                    mode: 'nearest',
-                    intersect: false
+            {
+                label: 'Unique Views',
+                data: {!! json_encode($uniqueViewsData) !!},
+                borderColor: '#12be07',
+                backgroundColor: 'rgba(18, 190, 7, 0.1)',
+                tension: 0.4,
+                fill: true
+            },
+            {
+                label: 'Returning Views',
+                data: {!! json_encode($returningViewsData) !!},
+                borderColor: '#ffc107',
+                backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                tension: 0.4,
+                fill: true
+            }
+        ]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top'
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.05)'
+                }
+            },
+            x: {
+                grid: {
+                    display: false
                 }
             }
-        });
+        }
     }
-
-    // Function to create the other charts
-    function createOtherCharts() {
-        var createChartWithShadow = function(chartId, data, color) {
-            var maxDataValue = Math.max(...data);
-            var ctx = document.getElementById(chartId).getContext('2d');
-
-            var gradient = ctx.createLinearGradient(0, 0, 0, 400);
-            gradient.addColorStop(0, 'rgba(54, 162, 235, 0.5)');
-            gradient.addColorStop(1, 'rgba(54, 162, 235, 0)');
-
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: ['J', 'F', 'M', 'A', 'M', 'J'],
-                    datasets: [{
-                        label: 'Data',
-                        data: data,
-                        backgroundColor: gradient,
-                        borderColor: color,
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 0,
-                    }]
-                },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            display: true,
-                            grid: {
-                                display: false
-                            },
-                            ticks: {
-                                callback: function(value) { return value; },
-                                max: maxDataValue * 1.2
-                            }
-                        },
-                        x: {
-                            display: true,
-                            grid: {
-                                display: false
-                            },
-                            ticks: {
-                                autoSkip: false,
-                                maxRotation: 45, // Rotate labels to 45 degrees
-                                minRotation: 45, // Minimum rotation angle
-                                padding: 5, // Add padding
-                                font: {
-                                    size: 10 // Reduce font size
-                                }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            enabled: true,
-                            mode: 'nearest',
-                            intersect: false,
-                            callbacks: {
-                                label: function(context) {
-                                    return context.raw;
-                                }
-                            }
-                        }
-                    },
-                    interaction: {
-                        mode: 'nearest',
-                        intersect: false
-                    },
-                    hover: {
-                        mode: 'nearest',
-                        intersect: false,
-                        onHover: function(event, chartElement) {
-                            if (chartElement.length) {
-                                var firstPoint = chartElement[0];
-                                var label = myChart.data.labels[firstPoint.index];
-                                var value = myChart.data.datasets[firstPoint.datasetIndex].data[firstPoint.index];
-                                console.log(label, value);
-                            }
-                        }
-                    }
-                },
-                plugins: [{
-                    id: 'shadowPlugin',
-                    beforeDraw: function(chart) {
-                        var ctx = chart.ctx;
-                        chart.data.datasets.forEach(function(dataset, i) {
-                            var meta = chart.getDatasetMeta(i);
-                            ctx.save();
-                            ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-                            ctx.shadowBlur = 15;
-                            ctx.shadowOffsetX = 6;
-                            ctx.shadowOffsetY = 6;
-                            ctx.lineWidth = dataset.borderWidth;
-
-                            ctx.beginPath();
-                            meta.data.forEach(function(point, index) {
-                                if (index === 0) {
-                                    ctx.moveTo(point.x, point.y);
-                                } else {
-                                    ctx.lineTo(point.x, point.y);
-                                }
-                            });
-                            ctx.strokeStyle = 'transparent';
-                            ctx.stroke();
-
-                            ctx.restore();
-                        });
-                    }
-                }]
-            });
-        };
-
-        var marketCapData = [0, 1, 3, 2, 5, 7, 5];
-        var totalVolumeData = [0, 3, 1, 3, 1, 5, 2];
-        var totalSupplyData = [2, 4, 2, 3, 2, 2, 1];
-
-        // Creating other charts with shadow effect and adjusted x-axis labels
-        createChartWithShadow('market-cap-chart', marketCapData, 'rgba(54, 162, 235, 1)');
-        createChartWithShadow('total-volume-chart', totalVolumeData, 'rgba(75, 192, 192, 1)');
-        createChartWithShadow('total-supply-chart', totalSupplyData, 'rgba(153, 102, 255, 1)');
-        
-        // Additional Charts
-        var salesThisMonthData = [3, 2, 1, 6, 5, 8];
-        var salesLastMonthData = [2, 2, 1, 5, 4, 7];
-        var rentalThisMonthData = [3, 2, 1, 6, 5, 8];
-        var rentalLastMonthData = [2, 1, 4, 5, 4, 7];
-        var newSignUpsData = [1, 1, 5, 6, 4, 8];
-        var activeUsersData = [1, 2, 4, 1, 5, 6];
-        var monthlyExpensesData = [1, 1, 5, 6, 4, 8];
-        var annualExpensesData = [1, 3, 4, 1, 2, 7];
-        var productSalesData = [1, 2, 5, 2, 4, 8];
-        var serviceIncomeData = [1, 2, 1, 5, 3, 7];
-        var topRegionData = [1, 1, 5, 3, 7, 8];
-        var topCityData = [1, 1, 4, 5, 3, 7];
-
-        createChartWithShadow('sales-this-month-chart', salesThisMonthData, 'rgba(54, 162, 235, 1)');
-        createChartWithShadow('sales-last-month-chart', salesLastMonthData, 'rgba(75, 192, 192, 1)');
-        createChartWithShadow('rental-this-month-chart', rentalThisMonthData, 'rgba(54, 162, 235, 1)');
-        createChartWithShadow('rental-last-month-chart', rentalLastMonthData, 'rgba(75, 192, 192, 1)');
-        createChartWithShadow('new-sign-ups-chart', newSignUpsData, 'rgba(54, 162, 235, 1)');
-        createChartWithShadow('active-users-chart', activeUsersData, 'rgba(75, 192, 192, 1)');
-        createChartWithShadow('monthly-expenses-chart', monthlyExpensesData, 'rgba(54, 162, 235, 1)');
-        createChartWithShadow('annual-expenses-chart', annualExpensesData, 'rgba(75, 192, 192, 1)');
-        createChartWithShadow('product-sales-chart', productSalesData, 'rgba(54, 162, 235, 1)');
-        createChartWithShadow('service-income-chart', serviceIncomeData, 'rgba(75, 192, 192, 1)');
-        createChartWithShadow('top-region-chart', topRegionData, 'rgba(54, 162, 235, 1)');
-        createChartWithShadow('top-city-chart', topCityData, 'rgba(75, 192, 192, 1)');
-    }
-
-    // Call the functions to create the charts
-    createRevenueChart();
-    createOtherCharts();
+});
 </script>
-
-
-
-
-
-
-
 
 </body>
 </html>

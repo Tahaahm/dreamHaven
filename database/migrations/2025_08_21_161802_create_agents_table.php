@@ -26,7 +26,7 @@ return new class extends Migration
             $table->decimal('overall_rating', 3, 2)->default(0.00);
 
             // Subscription information
-            $table->uuid('subscription_id')->nullable();
+            $table->uuid('Subscription_id')->nullable();
             $table->enum('current_plan', ['starter', 'professional', 'enterprise'])->nullable();
             $table->integer('properties_uploaded_this_month')->default(0);
             $table->integer('remaining_property_uploads')->default(0);
@@ -69,7 +69,7 @@ return new class extends Migration
             // Indexes - Fixed spatial index issue
             $table->index('agent_name');
             $table->index('is_verified');
-            $table->index('subscription_id');
+            $table->index('Subscription_id');
             $table->index('current_plan');
             $table->index(['city', 'district']);
             $table->index('overall_rating');
@@ -78,8 +78,8 @@ return new class extends Migration
             $table->index('longitude');
             $table->index(['latitude', 'longitude']); // Composite index instead of spatial
 
-            // Foreign key to subscriptions table
-            $table->foreign(columns: 'subscription_id')->references('id')->on('subscriptions')->onDelete('set null');
+            // Foreign key to Subscriptions table
+            $table->foreign(columns: 'Subscription_id')->references('id')->on('Subscriptions')->onDelete('set null');
            $table->foreign('company_id')->references('id')->on('real_estate_offices')->onDelete('set null');
  });
 

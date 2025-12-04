@@ -1,340 +1,564 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent Profile</title>
-    <style>
-        /* Reset some default browser styles */
-        body {
-            background-color: #fff;
-            font-family: 'Poppins', sans-serif;
-            margin: 0;
-            padding: 0;
-          
-        }
-        .unique-header {
-    position  : fixed;
-    height    : 80px;
-    width     : 100%;
-    z-index   : 100;
-    padding   : 0 20px;
-    background: #303b97;
-    /* Ensure a background color if needed */
-}
-        .allin {
-            
-            margin-top: 10px;
-            margin-left: 225px;
-        }
-        /* Container for the entire profile page */
-        .profile-page {
-            width: 90%;
-            max-width: 1700px;
-            margin: auto;
-            background-color: none;
-            border-radius: 8px;
-            overflow: hidden;
-            
-        }
-
-        /* Header section styling */
-        .header {
-            position: relative;
-        }
-
-        .background-img {
-            width: 100%;
-            height: 250px;
-            background-size: cover;
-            background-position: center;
-        }
-
-        .profile-info {
-            position: absolute;
-            top: 170px;
-            left: 20px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .profile-photo-container {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            overflow: hidden;
-            border: 5px solid white;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-            margin-bottom: 90px;
-        }
-
-        .profile-photo {
-    width: 100px; /* Adjust based on the desired size */
-    height: 100px; /* Adjust based on the desired size */
-    object-fit: cover;
-    image-rendering: -webkit-optimize-contrast; /* Improve rendering on Webkit-based browsers */
-    image-rendering: crisp-edges; /* Try different rendering modes */
-}
-
-
-      /* Container for profile information */
-.profile-info {
-    margin-top: 40px;
-}
-
-/* Fixed width for the username container */
-.username {
-    width: 200px; /* Set a fixed width */
-    white-space: nowrap; /* Prevent text wrapping */
-    overflow: hidden; /* Hide overflow if the text is too long */
-    text-overflow: ellipsis; /* Add ellipsis (...) if text overflows */
-    font-size: 24px;
-    margin-bottom: 85px;
-    margin-left: -10px;
-}
-
-/* Role styling */
-.role {
-    margin-left: -220px;
-    margin-top: 10px;
-    font-size: 16px;
-    color: gray;
-}
-
-/* Edit button styling */
-.edit-btn {
-    display: inline-flex; /* Align icon and text horizontally */
-    align-items: center; /* Center items vertically */
-    text-decoration: underline; /* Underline the text */
-    text-underline-offset: 3px; /* Adjust distance between underline and text */
-    margin-left: 1285px;
-    margin-bottom: 86px; 
-    background: none;
-    padding-left: 8px;
-    color: #0056b3;
-    height: 25px;
-    border: none;
-    border-radius: 15px;
-    cursor: pointer;
-    transition: 0.4s;
-    width: 55px;
-}
-
-/* Icon inside the edit button */
-.edit-btn i {
-    margin-top: 1px;
-    margin-right: 0px;
-    /* Space between icon and text */
-}
-
-/* Hover effect for the edit button */
-.edit-btn:hover {
-    border-radius: 15px;
-    width: 65px;
-}
-
-
-        /* Social icons styling */
-        .social-icons {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            padding: 20px 0;
-        }
-
-        .social-icons a img {
-            width: 40px;
-            height: 40px;
-        }
-
-        .info-section {
-            padding: 20px;
-        }
-
-        .info-card {
-            background-color: none;
-            border-radius: 8px;
-           
-            padding: 20px;
-        }
-
-        .info-card h2 {
-            font-size: 18px;
-            margin-bottom: 20px;
-        }
-
-        .info-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px; /* Reduced gap */
-}
-
-
-        .info-item {
-            flex: 1 1 calc(33.333% - 20px); /* 3 columns with gap */
-            box-sizing: border-box;
-        }
-
-        .info-item label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-       
-    .info-item span {
-        padding-left: 5px;
-        width: 290px;
-        display: flex;          /* Use flexbox layout */
-        align-items: center;    /* Center content vertically */
-        text-align: left;       /* Align text to the left */
-        color: #333;
-        height: 45px;
-        box-shadow: 0px 0px 3px rgba(133, 133, 133, 0.4);
-        border-radius: 7px;
-    }
-
-
-
-        @media (max-width: 768px) {
-            .info-item {
-                flex: 1 1 calc(50% - 20px); /* 2 columns on smaller screens */
-            }
-        }
-
-        @media (max-width: 480px) {
-            .info-item {
-                flex: 1 1 100%; /* 1 column on very small screens */
-            }
-        }
-    </style>
-</head>
-<body>
-
 @include('layouts.sidebar')
 
-<div class="allin">
-    <div class="profile-page">
-        <div class="header">
-        <div class="background-img" style="background-image: url('{{ asset($backgroundImage ?? 'images/AdobeStock_565645717.jpeg') }}');"></div>
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
 
-            <div class="profile-info">
-                <div class="profile-photo-container">
-                <img src="{{ asset($user->image ? $user->image : 'property_images/IMG_0697.JPG') }}" 
-     srcset="{{ asset($user->image) }} 1x, {{ asset($user->image) }} 2x" 
-     alt="Profile Photo" 
-     class="profile-photo">
+    .profile-container {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 2rem;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 
+    .profile-wrapper {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    /* Hero Section */
+    .profile-hero {
+        position: relative;
+        background: white;
+        border-radius: 24px;
+        overflow: hidden;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+    }
+
+    .hero-background {
+        height: 320px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .hero-background::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-image: url('{{ asset($backgroundImage ?? 'images/AdobeStock_565645717.jpeg') }}');
+        background-size: cover;
+        background-position: center;
+        opacity: 0.3;
+    }
+
+    .hero-content {
+        position: relative;
+        padding: 2rem 3rem;
+        margin-top: -120px;
+    }
+
+    .profile-main-info {
+        display: flex;
+        align-items: flex-end;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .profile-avatar {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .avatar-image {
+        width: 180px;
+        height: 180px;
+        border-radius: 24px;
+        object-fit: cover;
+        border: 6px solid white;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        transition: transform 0.3s ease;
+    }
+
+    .avatar-image:hover {
+        transform: scale(1.05);
+    }
+
+    .profile-header-info {
+        flex-grow: 1;
+        padding-bottom: 1rem;
+    }
+
+    .profile-name {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1a202c;
+        margin-bottom: 0.5rem;
+    }
+
+    .profile-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 0.5rem 1.25rem;
+        border-radius: 50px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+
+    .edit-profile-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.875rem 2rem;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+
+    .edit-profile-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    /* Quick Stats */
+    .quick-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        padding: 2rem 3rem;
+        background: #f8f9fa;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        text-align: center;
+        padding: 1rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        color: #64748b;
+        font-weight: 500;
+    }
+
+    /* Main Content Grid */
+    .content-grid {
+        display: grid;
+        grid-template-columns: 1fr 400px;
+        gap: 2rem;
+    }
+
+    /* Contact Information Card */
+    .info-card {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+
+    .card-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1a202c;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .card-title i {
+        color: #667eea;
+    }
+
+    .info-row {
+        display: flex;
+        align-items: flex-start;
+        padding: 1rem 0;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        font-weight: 600;
+        color: #64748b;
+        min-width: 140px;
+        font-size: 0.9rem;
+    }
+
+    .info-value {
+        color: #1a202c;
+        flex-grow: 1;
+        word-break: break-word;
+    }
+
+    /* Bio Section */
+    .bio-section {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+
+    .bio-text {
+        color: #475569;
+        line-height: 1.8;
+        font-size: 1rem;
+    }
+
+    /* Social Links */
+    .social-links-card {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+
+    .social-links {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .social-link {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+    }
+
+    .social-link:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .social-link img {
+        width: 28px;
+        height: 28px;
+        filter: brightness(0) invert(1);
+    }
+
+    /* Account Status */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 50px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .status-active {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .status-inactive {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .profile-container {
+            padding: 1rem;
+        }
+
+        .profile-main-info {
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .profile-name {
+            font-size: 2rem;
+        }
+
+        .hero-content {
+            padding: 2rem 1.5rem;
+        }
+
+        .quick-stats {
+            padding: 1.5rem;
+        }
+
+        .info-row {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .info-label {
+            min-width: auto;
+        }
+    }
+</style>
+
+@php
+$currentUser = Auth::guard('agent')->check()
+    ? Auth::guard('agent')->user()
+    : auth()->user();
+
+$isAgent = Auth::guard('agent')->check();
+@endphp
+
+<div class="profile-container">
+    <div class="profile-wrapper">
+        @if($currentUser)
+            <!-- Hero Section -->
+            <div class="profile-hero">
+                <div class="hero-background"></div>
+                
+                <div class="hero-content">
+                    <div class="profile-main-info">
+                        <div class="profile-avatar">
+                            <img 
+                                src="{{ $currentUser && $currentUser->profile_image 
+                                    ? asset('storage/' . ltrim($currentUser->profile_image, '/')) 
+                                    : asset('property_images/IMG_0697.JPG') }}"
+                                alt="Profile Photo" 
+                                class="avatar-image"
+                            >
+                        </div>
+                        
+                        <div class="profile-header-info">
+                            <h1 class="profile-name">{{ $currentUser->agent_name ?? $currentUser->username }}</h1>
+                            <div class="profile-badge">
+                                <i class="fas fa-star"></i>
+                                {{ $isAgent ? 'Real Estate Agent' : 'Member' }}
+                            </div>
+                            <div>
+                                <button class="edit-profile-btn"
+                                    onclick="window.location.href='{{ Auth::guard('agent')->check()
+                                        ? route('agent.edit', ['id' => $currentUser->id])
+                                        : route('profile.edit', ['id' => $currentUser->id])
+                                    }}'">
+                                    <i class="fas fa-edit"></i> Edit Profile
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    @if($isAgent)
+                    <div class="quick-stats">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ $currentUser->properties_sold ?? 0 }}</div>
+                            <div class="stat-label">Properties Sold</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">{{ number_format($currentUser->overall_rating ?? 0, 1) }}</div>
+                            <div class="stat-label">Rating</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">{{ $currentUser->properties_uploaded_this_month ?? 0 }}</div>
+                            <div class="stat-label">Listings This Month</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">{{ $currentUser->remaining_property_uploads ?? 0 }}</div>
+                            <div class="stat-label">Remaining Uploads</div>
+                        </div>
+                    </div>
+                    @endif
+                </div>
+            </div>
+
+            <!-- Main Content Grid -->
+            <div class="content-grid">
+                <!-- Left Column -->
+                <div>
+                    <!-- Bio Section -->
+                    @if(!empty($currentUser->bio) || !empty($currentUser->agent_bio))
+                    <div class="bio-section">
+                        <h2 class="card-title">
+                            <i class="fas fa-user"></i>
+                            About Me
+                        </h2>
+                        <p class="bio-text">{{ $currentUser->agent_bio ?? $currentUser->bio }}</p>
+                    </div>
+                    @endif
+
+                    <!-- Contact Information -->
+                    <div class="info-card">
+                        <h2 class="card-title">
+                            <i class="fas fa-address-card"></i>
+                            Contact Information
+                        </h2>
+                        
+                        <div class="info-row">
+                            <span class="info-label">Email:</span>
+                            <span class="info-value">{{ $currentUser->primary_email ?? $currentUser->email ?? 'N/A' }}</span>
+                        </div>
+                        
+                        <div class="info-row">
+                            <span class="info-label">Phone:</span>
+                            <span class="info-value">{{ $currentUser->primary_phone ?? $currentUser->phone ?? 'N/A' }}</span>
+                        </div>
+                        
+                        @if(!empty($currentUser->address) || !empty($currentUser->office_address))
+                        <div class="info-row">
+                            <span class="info-label">Address:</span>
+                            <span class="info-value">{{ $currentUser->office_address ?? $currentUser->address }}</span>
+                        </div>
+                        @endif
+                        
+                        @if(!empty($currentUser->city))
+                        <div class="info-row">
+                            <span class="info-label">City:</span>
+                            <span class="info-value">{{ $currentUser->city }}</span>
+                        </div>
+                        @endif
+                        
+                        @if(!empty($currentUser->state))
+                        <div class="info-row">
+                            <span class="info-label">State:</span>
+                            <span class="info-value">{{ $currentUser->state }}</span>
+                        </div>
+                        @endif
+                        
+                        @if(!empty($currentUser->zip_code))
+                        <div class="info-row">
+                            <span class="info-label">Zip Code:</span>
+                            <span class="info-value">{{ $currentUser->zip_code }}</span>
+                        </div>
+                        @endif
+
+                        @if(!empty($currentUser->company_name))
+                        <div class="info-row">
+                            <span class="info-label">Company:</span>
+                            <span class="info-value">{{ $currentUser->company_name }}</span>
+                        </div>
+                        @endif
+                    </div>
                 </div>
 
+                <!-- Right Column -->
+                <div>
+                    <!-- Social Links -->
+                    @if(!empty($currentUser->facebook) || !empty($currentUser->twitter) || !empty($currentUser->instagram) || !empty($currentUser->website))
+                    <div class="social-links-card">
+                        <h2 class="card-title">
+                            <i class="fas fa-share-alt"></i>
+                            Connect With Me
+                        </h2>
+                        <div class="social-links">
+                            @if(!empty($currentUser->facebook))
+                                <a href="{{ $currentUser->facebook }}" target="_blank" class="social-link">
+                                    <img src="{{ asset('icons/facebook.png') }}" alt="Facebook">
+                                </a>
+                            @endif
 
-                <h1 class="username">{{ $user->name }}</h1>
-<p class="role">{{ $user->role }}</p>
+                            @if(!empty($currentUser->twitter))
+                                <a href="{{ $currentUser->twitter }}" target="_blank" class="social-link">
+                                    <img src="{{ asset('icons/twitter.png') }}" alt="Twitter">
+                                </a>
+                            @endif
 
+                            @if(!empty($currentUser->instagram))
+                                <a href="{{ $currentUser->instagram }}" target="_blank" class="social-link">
+                                    <img src="{{ asset('icons/instagram.png') }}" alt="Instagram">
+                                </a>
+                            @endif
 
+                            @if(!empty($currentUser->website))
+                                <a href="{{ $currentUser->website }}" target="_blank" class="social-link">
+                                    <img src="{{ asset('icons/website.png') }}" alt="Website">
+                                </a>
+                            @endif
+                        </div>
+                    </div>
+                    @endif
 
+                    <!-- Account Details -->
+                    <div class="info-card" style="margin-top: 2rem;">
+                        <h2 class="card-title">
+                            <i class="fas fa-cog"></i>
+                            Account Details
+                        </h2>
+                        
+                        <div class="info-row">
+                            <span class="info-label">Account Type:</span>
+                            <span class="info-value">{{ $isAgent ? 'Agent Account' : 'User Account' }}</span>
+                        </div>
+                        
+                        <div class="info-row">
+                            <span class="info-label">Status:</span>
+                            <span class="info-value">
+                                <span class="status-badge status-active">
+                                    <i class="fas fa-check-circle"></i>
+                                    Active
+                                </span>
+                            </span>
+                        </div>
 
-<button class="edit-btn" onclick="window.location.href='{{ route('profile.edit', ['id' => $user->user_id]) }}'">
-    <i class="fas fa-edit"></i> Edit
-</button>
-
-
-
-
-
-
-
-
-
-
-
-
+                        @if($isAgent && !empty($currentUser->is_verified))
+                        <div class="info-row">
+                            <span class="info-label">Verification:</span>
+                            <span class="info-value">
+                                @if($currentUser->is_verified)
+                                    <span class="status-badge status-active">
+                                        <i class="fas fa-badge-check"></i>
+                                        Verified
+                                    </span>
+                                @else
+                                    <span class="status-badge status-inactive">
+                                        <i class="fas fa-clock"></i>
+                                        Pending
+                                    </span>
+                                @endif
+                            </span>
+                        </div>
+                        @endif
+                        
+                        <div class="info-row">
+                            <span class="info-label">2FA:</span>
+                            <span class="info-value">
+                                <span class="status-badge status-inactive">
+                                    <i class="fas fa-times-circle"></i>
+                                    Not Set
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-        <div class="social-icons">
-            @if($user->facebook)
-                <a href="{{ $user->facebook }}" target="_blank"><img src="{{ asset('icons/facebook.png') }}" alt="Facebook"></a>
-            @endif
-            @if($user->twitter)
-                <a href="{{ $user->twitter }}" target="_blank"><img src="{{ asset('icons/twitter.png') }}" alt="Twitter"></a>
-            @endif
-            @if($user->instagram)
-                <a href="{{ $user->instagram }}" target="_blank"><img src="{{ asset('icons/instagram.png') }}" alt="Instagram"></a>
-            @endif
-            @if($user->website)
-                <a href="{{ $user->website }}" target="_blank"><img src="{{ asset('icons/website.png') }}" alt="Website"></a>
-            @endif
-        </div>
-        <div class="info-section">
+        @else
             <div class="info-card">
-                <h2>Staff Member Information</h2>
-                <div class="info-grid">
-                    <div class="info-item">
-                        <label>Email:</label>
-                        <span>{{ $user->email }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Phone:</label>
-                        <span>{{ $user->phone }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>City:</label>
-                        <span>{{ $user->city }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>State:</label>
-                        <span>{{ $user->state }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Zip Code:</label>
-                        <span>{{ $user->zip_code }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Address:</label>
-                        <span>{{ $user->address }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Bio:</label>
-                        <span>{{ $user->bio }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>User Type:</label>
-                        <span>{{ $user->role }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>Account Status:</label>
-                        <span>Account Granted</span> <!-- Update this dynamically if needed -->
-                    </div>
-                    <div class="info-item">
-                        <label>Two Factor Authentication:</label>
-                        <span>Not Set</span> <!-- Update this dynamically if needed -->
-                    </div>
-                    <div class="info-item">
-                        <label>website:</label>
-                        <span>{{ $user->website }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>facebook:</label>
-                        <span>{{ $user->facebook }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>twitter:</label>
-                        <span>{{ $user->twitter }}</span>
-                    </div>
-                    <div class="info-item">
-                        <label>instagram:</label>
-                        <span>{{ $user->instagram }}</span>
-                    </div>
-                      <div class="info-item">
-                        <label>instagram:</label>
-                        <span>{{ $user->instagram }}</span>
-                    </div>
-                </div>
+                <p style="color: #dc2626; text-align: center; padding: 2rem;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    No user is logged in.
+                </p>
             </div>
-        </div>
+        @endif
     </div>
 </div>
-
-</body>
-</html>

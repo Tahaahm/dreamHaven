@@ -11,27 +11,46 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
-
-        $middleware->validateCsrfTokens($except = [
+        $middleware->validateCsrfTokens(except: [
+            // Users routes
             'users',
-            '/users/*',
+            'users/*',
+
+            // Real Estate Offices routes
             'real-estate-offices',
             'real-estate-offices/*',
+            'real-estate-office/login',
+
+            // Agents routes
             'agents',
             'agents/*',
+            'agents/users',
+
+            // Properties routes
             'properties',
             'properties/*',
+
+            // Projects routes
             'projects',
             'projects/*',
+
+            // Appointments routes
             'appointments',
             'appointments/*',
-            "real-estate-office/login",
-            "api/*",
-            "v1/api/properties/map",
-            "/v1/api/properties",
-            "/v1/api/properties/*"
 
+            // API routes (v1)
+            'api/*',
+            'v1/api/*', // Add this line
+
+            // Specific property routes
+            'v1/api/properties',
+            'v1/api/properties/*',
+            'v1/api/properties/map',
+
+            // Specific agent routes - ADD THESE LINES
+            'v1/api/agents/*',
+            'v1/api/agents/users/*',
+            'v1/api/agents/users/*/convert-to-agent',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

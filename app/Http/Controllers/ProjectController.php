@@ -636,4 +636,20 @@ class ProjectController extends Controller
 
         return Validator::make($request->all(), $rules);
     }
+
+
+
+
+
+
+
+
+    // zana's code -------------------------------------------------------------------------
+
+       public function showProjects()
+    {
+        $projects = Project::all();
+        return view('agent.ProjectList', compact('projects'));
+    }
+
 }

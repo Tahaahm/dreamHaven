@@ -212,351 +212,175 @@ public function create()
 public function uploadImages(Request $request)
 {
     $urls = [];
-    if($request->hasFile('images')){
-        foreach($request->file('images') as $file){
+
+    if ($request->hasFile('images')) {
+        foreach ($request->file('images') as $file) {
             $path = $file->store('property_images', 'public');
-            $urls[] = asset('storage/'.$path);
+            $urls[] = asset('storage/' . $path);
         }
     }
+
     return response()->json(['urls' => $urls]);
 }
 
-    public function store(Request $request)
-    {
-        try {
-            Log::info('Property creation request', [
-                'data' => $request->all(),
-                'headers' => $request->headers->all()
+
+public function store(Request $request)
+{
+    try {
+        Log::info('Property creation request', [
+            'data' => $request->all(),
+            'headers' => $request->headers->all()
+        ]);
+
+        // Automatically assign logged-in agent as owner
+        if (Auth::guard('agent')->check()) {
+            $request->merge([
+                'owner_type' => 'Agent',
+                'owner_id' => Auth::guard('agent')->id()
             ]);
-
-            // Enhanced validation for all fields
-            $validator = Validator::make($request->all(), [
-                // Polymorphic owner
-                'owner_id' => 'required|string',
-                'owner_type' => 'required|in:User,Agent,RealEstateOffice',
-
-                // Multi-language fields
-                'name' => 'required|array',
-                'name.en' => 'required|string|max:255',
-                'name.ar' => 'nullable|string|max:255',
-                'name.ku' => 'nullable|string|max:255',
-
-                'description' => 'required|array',
-                'description.en' => 'required|string|min:10',
-                'description.ar' => 'nullable|string',
-                'description.ku' => 'nullable|string',
-
-                // Media
-                'images' => 'required|array|min:1',
-                'images.*' => 'required|url',
-                'virtual_tour_url' => 'nullable|url',
-                'floor_plan_url' => 'nullable|url',
-
-                // Property details
-                'type' => 'required|array',
-                'type.category' => 'required|string|min:2',
-                'area' => 'required|numeric|min:1',
-                'furnished' => 'required|boolean',
-
-                // Price and listing type
-                'price' => 'required|array',
-                'price.iqd' => 'required|numeric|min:1',
-                'price.usd' => 'required|numeric|min:1',
-                'listing_type' => 'required|in:rent,sell',
-                'rental_period' => 'required_if:listing_type,rent|nullable|in:monthly,yearly',
-
-                // Rooms
-                'rooms' => 'required|array',
-                'rooms.bedroom' => 'required|array',
-                'rooms.bedroom.count' => 'required|integer|min:0|max:50',
-                'rooms.bathroom' => 'required|array',
-                'rooms.bathroom.count' => 'required|integer|min:0|max:50',
-
-                // Features and amenities
-                'features' => 'nullable|array',
-                'features.*' => 'string',
-                'amenities' => 'nullable|array',
-                'amenities.*' => 'string',
-
-                // Location
-                'locations' => 'required|array|min:1',
-                'locations.*.lat' => 'required|numeric|between:-90,90',
-                'locations.*.lng' => 'required|numeric|between:-180,180',
-                'locations.*.type' => 'required|string',
-
-                'address_details' => 'required|array',
-                'address_details.city' => 'required|array',
-                'address_details.city.en' => 'required|string|min:2',
-                'address' => 'nullable|string|max:500',
-
-                // Utilities
-                'electricity' => 'sometimes|boolean',
-                'water' => 'sometimes|boolean',
-                'internet' => 'sometimes|boolean',
-
-                // Status fields
-                'published' => 'sometimes|boolean',
-                'status' => 'sometimes|in:available,sold,rented,pending',
-
-                // Optional fields
-                'floor_number' => 'nullable|integer|min:0|max:200',
-                'year_built' => 'nullable|integer|min:1900|max:' . (date('Y') + 5),
-                'energy_rating' => 'nullable|string|max:10',
-                'furnishing_details' => 'nullable|array',
-                'legal_information' => 'nullable|array',
-                'nearby_amenities' => 'nullable|array',
-                'construction_details' => 'nullable|array',
-                'energy_details' => 'nullable|array',
-                'floor_details' => 'nullable|array',
-                'virtual_tour_details' => 'nullable|array',
-                'additional_media' => 'nullable|array',
-                'investment_analysis' => 'nullable|array',
-                'seo_metadata' => 'nullable|array',
-
-                // Promotion fields
-                'is_boosted' => 'sometimes|boolean',
-                'boost_start_date' => 'nullable|date|after_or_equal:today',
-                'boost_end_date' => 'nullable|date|after:boost_start_date',
-            ]);
-
-            // Custom validation for owner existence
-            $validator->after(function ($validator) use ($request) {
-                $ownerType = $request->owner_type;
-                $ownerId = $request->owner_id;
-
-                if ($ownerType && $ownerId) {
-                    $fullOwnerType = $this->getFullOwnerType($ownerType);
-                    if (class_exists($fullOwnerType)) {
-                        $exists = $fullOwnerType::where('id', $ownerId)->exists();
-                        if (!$exists) {
-                            $validator->errors()->add('owner_id', 'The selected owner does not exist.');
-                        }
-                    }
-                }
-            });
-
-            if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Property validation failed',
-                    $validator->errors(),
-                    400
-                );
-            }
-
-            DB::beginTransaction();
-
-            // Generate unique property ID
-            $propertyId = $this->generateUniquePropertyId();
-
-            $propertyData = $request->all();
-            $propertyData['id'] = $propertyId;
-            $propertyData['owner_type'] = $this->getFullOwnerType($request->owner_type);
-
-            // Set defaults for new fields
-            $propertyData['availability'] = $propertyData['availability'] ?? [
-                'status' => 'available',
-                'labels' => [
-                    'en' => 'Available',
-                    'ar' => 'متوفر',
-                    'ku' => 'بەردەست'
-                ]
-            ];
-
-            // Set default values
-            $propertyData['verified'] = $propertyData['verified'] ?? false;
-            $propertyData['is_active'] = $propertyData['is_active'] ?? true;
-            $propertyData['published'] = $propertyData['published'] ?? false;
-            $propertyData['status'] = $propertyData['status'] ?? 'available';
-            $propertyData['views'] = 0;
-            $propertyData['favorites_count'] = 0;
-            $propertyData['rating'] = 0;
-
-            // Utilities defaults
-            $propertyData['electricity'] = $propertyData['electricity'] ?? true;
-            $propertyData['water'] = $propertyData['water'] ?? true;
-            $propertyData['internet'] = $propertyData['internet'] ?? false;
-
-            // Promotion defaults
-            $propertyData['is_boosted'] = $propertyData['is_boosted'] ?? false;
-
-            // Analytics defaults
-            $propertyData['view_analytics'] = [
-                'unique_views' => 0,
-                'returning_views' => 0,
-                'average_time_on_listing' => 0,
-                'bounce_rate' => 0,
-            ];
-
-            $propertyData['favorites_analytics'] = [
-                'last_30_days' => 0,
-                'user_demographics' => [],
-            ];
-
-            $property = Property::create($propertyData);
-
-            // Send notifications to interested users
-            if (class_exists('App\Http\Controllers\NotificationController')) {
-                app(NotificationController::class)->sendNewPropertyNotifications($property->id);
-            }
-
-            DB::commit();
-
-            $owner = $this->loadOwner($property);
-            $responseData = $this->transformPropertyData($property);
-            $responseData['owner'] = $this->getOwnerInfo($owner);
-
-            return ApiResponse::success(
-                'Property created successfully',
-                $responseData,
-                201
-            );
-        } catch (\Exception $e) {
-            DB::rollback();
-            Log::error('Error creating property', [
-                'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ]);
-
-            return ApiResponse::error(
-                'Failed to create property',
-                $e->getMessage(),
-                500
-            );
         }
-    }
 
+        // Validation
+        $validator = Validator::make($request->all(), [
+            'owner_id' => 'required|exists:agents,id',
+            'owner_type' => 'required|in:Agent,User,RealEstateOffice',
+            'name' => 'required|array',
+            'name.en' => 'required|string|max:255',
+            'name.ar' => 'nullable|string|max:255',
+            'name.ku' => 'nullable|string|max:255',
+            'description' => 'required|array',
+            'description.en' => 'required|string|min:10',
+            'description.ar' => 'nullable|string',
+            'description.ku' => 'nullable|string',
+            'images' => 'required|array|min:1',
+            'images.*' => 'required|url',
+            'virtual_tour_url' => 'nullable|url',
+            'floor_plan_url' => 'nullable|url',
+            'type' => 'required|array',
+            'type.category' => 'required|string|min:2',
+            'area' => 'required|numeric|min:1',
+            'furnished' => 'required|boolean',
+            'price' => 'required|array',
+            'price.iqd' => 'required|numeric|min:1',
+            'price.usd' => 'required|numeric|min:1',
+            'listing_type' => 'required|in:rent,sell',
+            'rental_period' => 'required_if:listing_type,rent|nullable|in:monthly,yearly',
+            'rooms' => 'required|array',
+            'rooms.bedroom.count' => 'required|integer|min:0|max:50',
+            'rooms.bathroom.count' => 'required|integer|min:0|max:50',
+            'locations' => 'required|array|min:1',
+            'locations.*.lat' => 'required|numeric|between:-90,90',
+            'locations.*.lng' => 'required|numeric|between:-180,180',
+            'locations.*.type' => 'required|string',
+            'address_details' => 'required|array',
+            'address_details.city' => 'required|array',
+            'address_details.city.en' => 'required|string|min:2',
+        ]);
 
-    public function update(Request $request, $id)
-    {
-        try {
-            $property = Property::find($id);
-
-            if (!$property) {
-                return ApiResponse::error(
-                    'Property not found',
-                    ['id' => $id],
-                    404
-                );
-            }
-
-            $validator = Validator::make($request->all(), [
-                // Multi-language fields
-                'name' => 'sometimes|array',
-                'name.en' => 'sometimes|string|max:255',
-                'name.ar' => 'sometimes|string|max:255',
-                'name.ku' => 'sometimes|string|max:255',
-
-                'description' => 'sometimes|array',
-                'description.en' => 'sometimes|string|min:10',
-                'description.ar' => 'sometimes|string',
-                'description.ku' => 'sometimes|string',
-
-                // Media
-                'images' => 'sometimes|array',
-                'images.*' => 'url',
-                'virtual_tour_url' => 'sometimes|nullable|url',
-                'floor_plan_url' => 'sometimes|nullable|url',
-
-                // Property details
-                'type' => 'sometimes|array',
-                'area' => 'sometimes|numeric|min:1',
-                'furnished' => 'sometimes|boolean',
-
-                // Price and listing
-                'price' => 'sometimes|array',
-                'listing_type' => 'sometimes|in:rent,sell',
-                'rental_period' => 'sometimes|nullable|in:monthly,yearly',
-
-                // Structure
-                'rooms' => 'sometimes|array',
-                'features' => 'sometimes|array',
-                'amenities' => 'sometimes|array',
-
-                // Location
-                'locations' => 'sometimes|array',
-                'address_details' => 'sometimes|array',
-                'address' => 'sometimes|string|max:500',
-
-                // Utilities
-                'electricity' => 'sometimes|boolean',
-                'water' => 'sometimes|boolean',
-                'internet' => 'sometimes|boolean',
-
-                // Status
-                'published' => 'sometimes|boolean',
-                'status' => 'sometimes|in:available,sold,rented,pending',
-                'verified' => 'sometimes|boolean',
-                'is_active' => 'sometimes|boolean',
-
-                // Building details
-                'floor_number' => 'sometimes|nullable|integer|min:0|max:200',
-                'year_built' => 'sometimes|nullable|integer|min:1900|max:' . (date('Y') + 5),
-                'energy_rating' => 'sometimes|nullable|string|max:10',
-
-                // Promotion
-                'is_boosted' => 'sometimes|boolean',
-                'boost_start_date' => 'sometimes|nullable|date',
-                'boost_end_date' => 'sometimes|nullable|date|after:boost_start_date',
-
-                // Optional complex fields
-                'furnishing_details' => 'sometimes|array',
-                'legal_information' => 'sometimes|array',
-                'nearby_amenities' => 'sometimes|array',
-                'construction_details' => 'sometimes|array',
-                'energy_details' => 'sometimes|array',
-                'floor_details' => 'sometimes|array',
-                'virtual_tour_details' => 'sometimes|array',
-                'additional_media' => 'sometimes|array',
-                'investment_analysis' => 'sometimes|array',
-                'seo_metadata' => 'sometimes|array',
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Validation failed',
-                    $validator->errors(),
-                    400
-                );
-            }
-
-            // Check for price drops and notify
-            if (
-                isset($request->price['usd']) && isset($property->price['usd']) &&
-                $request->price['usd'] < $property->price['usd']
-            ) {
-
-                if (class_exists('App\Http\Controllers\NotificationController')) {
-                    app(NotificationController::class)->sendPriceDropNotification(
-                        $property->id,
-                        $property->price['usd'],
-                        $request->price['usd']
-                    );
-                }
-            }
-
-            $property->update($request->all());
-
-            return ApiResponse::success(
-                'Property updated successfully',
-                $this->transformPropertyData($property->fresh()),
-                200
-            );
-        } catch (\Exception $e) {
-            Log::error('Property update error', [
-                'message' => $e->getMessage(),
-                'property_id' => $id,
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-
-            return ApiResponse::error(
-                'Failed to update property',
-                $e->getMessage(),
-                500
-            );
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Validation failed',
+                'data' => $validator->errors()
+            ], 400);
         }
+
+        DB::beginTransaction();
+
+        $propertyData = $request->all();
+        $propertyData['id'] = $this->generateUniquePropertyId();
+        $propertyData['owner_type'] = $this->getFullOwnerType($request->owner_type);
+
+        // Default values
+        $propertyData['availability'] = $propertyData['availability'] ?? [
+            'status' => 'available',
+            'labels' => ['en'=>'Available','ar'=>'متوفر','ku'=>'بەردەست']
+        ];
+        $propertyData['verified'] = $propertyData['verified'] ?? false;
+        $propertyData['is_active'] = $propertyData['is_active'] ?? true;
+        $propertyData['published'] = $propertyData['published'] ?? false;
+        $propertyData['status'] = $propertyData['status'] ?? 'available';
+        $propertyData['views'] = 0;
+        $propertyData['favorites_count'] = 0;
+        $propertyData['rating'] = 0;
+        $propertyData['electricity'] = $propertyData['electricity'] ?? true;
+        $propertyData['water'] = $propertyData['water'] ?? true;
+        $propertyData['internet'] = $propertyData['internet'] ?? false;
+        $propertyData['is_boosted'] = $propertyData['is_boosted'] ?? false;
+        $propertyData['view_analytics'] = ['unique_views'=>0,'returning_views'=>0,'average_time_on_listing'=>0,'bounce_rate'=>0];
+        $propertyData['favorites_analytics'] = ['last_30_days'=>0,'user_demographics'=>[]];
+
+        $property = Property::create($propertyData);
+
+        if (class_exists('App\Http\Controllers\NotificationController')) {
+            app(NotificationController::class)->sendNewPropertyNotifications($property->id);
+        }
+
+        DB::commit();
+
+        // ✅ Return JSON with redirect URL for AJAX
+        return response()->json([
+            'status' => true,
+            'message' => 'Property created successfully',
+            'redirect' => route('agent.property.list') // <-- your blade page route
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollback();
+        Log::error('Error creating property', [
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+        ]);
+
+        return response()->json([
+            'status' => false,
+            'message' => 'Failed to create property',
+            'data' => $e->getMessage()
+        ], 500);
     }
+}
+
+
+
+
+
+
+
+
+
+
+
+public function update(Request $request, $id)
+{
+    $property = Property::findOrFail($id);
+
+    // Only update fields that exist in the form
+    $updates = $request->only([
+        'title',
+        'description',
+        'price',
+        'location',
+        'type',
+        'photos', // or any other field your form sends
+    ]);
+
+    // Merge and preserve important fields
+    $property->fill($updates);
+
+    // Keep these always as they were (never overwrite)
+    $property->owner_id = $property->owner_id ?? Auth::id();
+    $property->published = $property->published ?? 1;
+    $property->is_active = $property->is_active ?? 1;
+
+    // Save back
+    $property->save();
+
+  return redirect()->route('agent.property.list')->with('success', 'Property updated successfully!');
+
+}
+
+
     /**
      * Delete property
      */
@@ -3306,4 +3130,120 @@ public function uploadImages(Request $request)
             })->count(),
         ];
     }
+
+
+    // ZANA'S CODE FROM HERE ---------------------------------------------------------------------------------------------------------------------------------------------
+
+
+public function showList(Request $request)
+{
+    $perPage = $request->get('per_page', 20);
+
+    $properties = \App\Models\Property::where(function ($query) {
+            $query->whereNotIn('status', ['cancelled', 'pending'])
+                  ->orWhere('owner_type', 'Agent'); // ✅ include agent posts
+        })
+        ->paginate($perPage);
+
+    return view('list', [
+        'properties' => $properties
+    ]);
+}
+
+
+    // Edit user method
+     public function editUser($id)
+     {
+         $user = User::findOrFail($id);
+         return view('agent.edit-agent-admin', compact('user'));
+     }
+
+
+public function showUserProperties()
+{
+    // 1️⃣ Check for logged-in user
+    if (auth()->check()) {
+        $owner = auth()->user();
+    }
+    // 2️⃣ Check for logged-in agent (session-based)
+    elseif (session('agent_logged_in')) {
+        $owner = \App\Models\Agent::find(session('agent_id'));
+    } else {
+        // Not logged in
+        return redirect()->route('login-page');
+    }
+
+    // Fetch properties posted by this owner (user or agent)
+    $properties = \App\Models\Property::where('owner_id', $owner->id)
+                                      ->where('owner_type', get_class($owner))
+                                      ->orderBy('created_at', 'desc')
+                                      ->get();
+
+    return view('agent.agent-property-list', compact('properties'));
+}
+
+
+
+
+
+
+
+public function showPortfolio($property_id)
+{
+    $property = Property::find($property_id);
+
+    if (!$property) {
+        return redirect()->back()->with('error', 'Property not found.');
+    }
+
+    // Decode JSON fields
+    $property->images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
+    $property->location = is_string($property->location) ? json_decode($property->location, true) : $property->location;
+
+    // Return the Blade view
+    return view('PropertyDetail', compact('property'));
+}
+
+
+
+public function edit($property_id)
+{
+    $property = Property::findOrFail($property_id);
+    return view('agent.edit-property', compact('property'));
+}
+
+
+
+    
+public function removeImage(Request $request, $property_id)
+{
+    $property = Property::find($property_id);
+    if (!$property) {
+        return redirect()->back()->withErrors('Property not found');
+    }
+
+    $photoPath = $request->input('photo_path');
+    if (!$photoPath) {
+        return redirect()->back()->withErrors('No photo specified');
+    }
+
+    // Remove the photo from the property images array
+    $images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
+
+    if (($key = array_search($photoPath, $images)) !== false) {
+        unset($images[$key]);
+        $images = array_values($images); // reindex
+        $property->images = json_encode($images);
+        $property->save();
+
+        // Optionally delete the file from storage
+        if (file_exists(public_path($photoPath))) {
+            @unlink(public_path($photoPath));
+        }
+    }
+
+    return redirect()->back()->with('success', 'Image removed successfully');
+}
+
+
 }

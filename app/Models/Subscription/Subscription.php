@@ -1,12 +1,15 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Subscription;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Subscription\ServiceProviderPlan;
+
+use App\Models\Subscription\SubscriptionPlan;
 
 class Subscription extends Model
 {
@@ -70,12 +73,12 @@ class Subscription extends Model
 
     public function agents(): HasMany
     {
-        return $this->hasMany(Agent::class, 'subscription_id');
+        return $this->hasMany(Agent::class, 'Subscription_id');
     }
 
     public function offices(): HasMany
     {
-        return $this->hasMany(RealEstateOffice::class, 'subscription_id');
+        return $this->hasMany(RealEstateOffice::class, 'Subscription_id');
     }
 
     public function scopeActive($query)

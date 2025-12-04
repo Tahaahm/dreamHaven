@@ -1,12 +1,15 @@
 <?php
 
-namespace App\Models;
+namespace App\Models\Subscription;
+
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\Subscription\ServiceProviderPlan;
+
 
 // Subscription Plan Model
 class SubscriptionPlan extends Model
@@ -50,7 +53,7 @@ class SubscriptionPlan extends Model
         ];
     }
 
-    public function subscriptions(): HasMany
+    public function Subscriptions(): HasMany
     {
         return $this->hasMany(Subscription::class, 'current_plan_id');
     }

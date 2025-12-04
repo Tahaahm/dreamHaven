@@ -35,6 +35,11 @@ return [
     |
     */
 
+
+
+
+    
+
     'guards' => [
         'web' => [
             'driver' => 'session',
@@ -45,6 +50,12 @@ return [
             'provider' => 'users',
             'hash' => false,
         ],
+
+        'agent' => [
+    'driver' => 'session',
+    'provider' => 'agents',
+],
+
     ],
 
 
@@ -75,6 +86,12 @@ return [
             'driver' => 'eloquent',
             'model' => App\Models\RealEstateOffice::class,  // If you're using RealEstateOffice model for authentication
         ],
+
+        'agents' => [
+    'driver' => 'eloquent',
+    'model' => App\Models\Agent::class,
+],
+
     ],
 
 

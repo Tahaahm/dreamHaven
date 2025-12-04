@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('company_bio_image')->nullable();
             $table->string('profile_image')->nullable();
             $table->string('account_type')->default('real_estate_official');
-            $table->uuid('subscription_id')->nullable();
+            $table->uuid('Subscription_id')->nullable();
             $table->enum('current_plan', ['starter', 'professional', 'enterprise'])->nullable();
             $table->boolean('is_verified')->default(false);
             $table->decimal('average_rating', 3, 2)->default(0.00);
@@ -52,7 +52,7 @@ return new class extends Migration
             // Indexes - Fixed spatial index issue
             $table->index('company_name');
             $table->index('is_verified');
-            $table->index('subscription_id');
+            $table->index('Subscription_id');
             $table->index('current_plan');
             $table->index(['city', 'district']);
             $table->index('average_rating');
@@ -60,8 +60,8 @@ return new class extends Migration
             $table->index('longitude');
             $table->index(['latitude', 'longitude']); // Composite index instead of spatial
 
-            // Foreign key to subscriptions table
-            $table->foreign(columns: 'subscription_id')->references('id')->on('subscriptions')->onDelete('set null');
+            // Foreign key to Subscriptions table
+            $table->foreign(columns: 'Subscription_id')->references('id')->on('Subscriptions')->onDelete('set null');
         });
 
         // Office property types table
