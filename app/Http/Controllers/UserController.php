@@ -2839,10 +2839,6 @@ class UserController extends Controller
         }
     }
 
-    /**
-     * Link Google account to existing user
-     * Requires authentication
-     */
     public function linkGoogleAccount(Request $request)
     {
         try {
@@ -2932,9 +2928,7 @@ class UserController extends Controller
         }
     }
 
-    /**
-     * Generate a unique username from Google user data
-     */
+
     private function generateUsernameFromGoogle(array $googleUserData): string
     {
         // Try to use name first
