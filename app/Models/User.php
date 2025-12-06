@@ -22,26 +22,26 @@ class User extends Authenticatable implements MustVerifyEmail
     protected $keyType = 'string';
     public $incrementing = false;
 
-protected $fillable = [
-    'username',
-    'email',
-    'password',
-    'phone',
-    'place',
-    'lat',
-    'lng',
-    'about_me',
-    'photo_image',
-    'language',
-    'search_preferences',
-    'device_tokens',
-    'email_verified_at',
-    'is_active',
+    protected $fillable = [
+        'username',
+        'email',
+        'password',
+        'phone',
+        'place',
+        'lat',
+        'lng',
+        'about_me',
+        'photo_image',
+        'language',
+        'search_preferences',
+        'device_tokens',
+        'email_verified_at',
+        'is_active',
 
-    'role',
-    'verification_code',
-    'is_verified',
-];
+        'role',
+        'verification_code',
+        'is_verified',
+    ];
 
 
 
@@ -58,7 +58,7 @@ protected $fillable = [
         'lat' => 'decimal:6',
         'lng' => 'decimal:6',
         'device_tokens' => 'array',
-           'verification_code' => 'string',
+        'verification_code' => 'string',
     ];
 
     protected $dates = [
