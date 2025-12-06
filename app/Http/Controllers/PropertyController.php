@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+
 class PropertyController extends Controller
 {
     public function index(Request $request)
@@ -32,7 +33,25 @@ class PropertyController extends Controller
                 );
             }
 
+            $query = Property::active()->published();
+
+
+
             $perPage = $request->get('per_page', 20);
+
+            $properties = $query->paginate($perPage);
+
+            // Debug the SQL query
+            Log::info('Property query SQL: ' . $query->toSql());
+            Log::info('Property query bindings: ', $query->getBindings());
+
+
+            // Also log counts
+            Log::info('Total properties in DB: ' . Property::count());
+            Log::info('Active properties: ' . Property::active()->count());
+            Log::info('Published properties: ' . Property::published()->count());
+            Log::info('Active + Published: ' . Property::active()->published()->count());
+
             $properties = Property::active()
                 ->published()
                 ->whereNotIn('status', ['cancelled', 'pending'])  // Exclude cancelled and pending
@@ -65,20 +84,18 @@ class PropertyController extends Controller
                 $e->getMessage(),
                 500
             );
-            
         }
-        
     }
 
 
-  // in PropertyController.php
-public function newindex()
-{
-    // Optional: fetch some data for homepage
-    $properties = Property::latest()->take(10)->get();
+    // in PropertyController.php
+    public function newindex()
+    {
+        // Optional: fetch some data for homepage
+        $properties = Property::latest()->take(10)->get();
 
-    return view('newIndex', compact('properties'));
-}
+        return view('newIndex', compact('properties'));
+    }
 
 
 
@@ -204,181 +221,179 @@ public function newindex()
             );
         }
     }
-public function create()
-{
-    return view('upload');
-}
-
-public function uploadImages(Request $request)
-{
-    $urls = [];
-
-    if ($request->hasFile('images')) {
-        foreach ($request->file('images') as $file) {
-            $path = $file->store('property_images', 'public');
-            $urls[] = asset('storage/' . $path);
-        }
+    public function create()
+    {
+        return view('upload');
     }
 
-    return response()->json(['urls' => $urls]);
-}
+    public function uploadImages(Request $request)
+    {
+        $urls = [];
 
-
-public function store(Request $request)
-{
-    try {
-        Log::info('Property creation request', [
-            'data' => $request->all(),
-            'headers' => $request->headers->all()
-        ]);
-
-        // Automatically assign logged-in agent as owner
-        if (Auth::guard('agent')->check()) {
-            $request->merge([
-                'owner_type' => 'Agent',
-                'owner_id' => Auth::guard('agent')->id()
-            ]);
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $file) {
+                $path = $file->store('property_images', 'public');
+                $urls[] = asset('storage/' . $path);
+            }
         }
 
-        // Validation
-        $validator = Validator::make($request->all(), [
-            'owner_id' => 'required|exists:agents,id',
-            'owner_type' => 'required|in:Agent,User,RealEstateOffice',
-            'name' => 'required|array',
-            'name.en' => 'required|string|max:255',
-            'name.ar' => 'nullable|string|max:255',
-            'name.ku' => 'nullable|string|max:255',
-            'description' => 'required|array',
-            'description.en' => 'required|string|min:10',
-            'description.ar' => 'nullable|string',
-            'description.ku' => 'nullable|string',
-            'images' => 'required|array|min:1',
-            'images.*' => 'required|url',
-            'virtual_tour_url' => 'nullable|url',
-            'floor_plan_url' => 'nullable|url',
-            'type' => 'required|array',
-            'type.category' => 'required|string|min:2',
-            'area' => 'required|numeric|min:1',
-            'furnished' => 'required|boolean',
-            'price' => 'required|array',
-            'price.iqd' => 'required|numeric|min:1',
-            'price.usd' => 'required|numeric|min:1',
-            'listing_type' => 'required|in:rent,sell',
-            'rental_period' => 'required_if:listing_type,rent|nullable|in:monthly,yearly',
-            'rooms' => 'required|array',
-            'rooms.bedroom.count' => 'required|integer|min:0|max:50',
-            'rooms.bathroom.count' => 'required|integer|min:0|max:50',
-            'locations' => 'required|array|min:1',
-            'locations.*.lat' => 'required|numeric|between:-90,90',
-            'locations.*.lng' => 'required|numeric|between:-180,180',
-            'locations.*.type' => 'required|string',
-            'address_details' => 'required|array',
-            'address_details.city' => 'required|array',
-            'address_details.city.en' => 'required|string|min:2',
-        ]);
+        return response()->json(['urls' => $urls]);
+    }
 
-        if ($validator->fails()) {
+
+    public function store(Request $request)
+    {
+        try {
+            Log::info('Property creation request', [
+                'data' => $request->all(),
+                'headers' => $request->headers->all()
+            ]);
+
+            // Automatically assign logged-in agent as owner
+            if (Auth::guard('agent')->check()) {
+                $request->merge([
+                    'owner_type' => 'Agent',
+                    'owner_id' => Auth::guard('agent')->id()
+                ]);
+            }
+
+            // Validation
+            $validator = Validator::make($request->all(), [
+                'owner_id' => 'required|exists:agents,id',
+                'owner_type' => 'required|in:Agent,User,RealEstateOffice',
+                'name' => 'required|array',
+                'name.en' => 'required|string|max:255',
+                'name.ar' => 'nullable|string|max:255',
+                'name.ku' => 'nullable|string|max:255',
+                'description' => 'required|array',
+                'description.en' => 'required|string|min:10',
+                'description.ar' => 'nullable|string',
+                'description.ku' => 'nullable|string',
+                'images' => 'required|array|min:1',
+                'images.*' => 'required|url',
+                'virtual_tour_url' => 'nullable|url',
+                'floor_plan_url' => 'nullable|url',
+                'type' => 'required|array',
+                'type.category' => 'required|string|min:2',
+                'area' => 'required|numeric|min:1',
+                'furnished' => 'required|boolean',
+                'price' => 'required|array',
+                'price.iqd' => 'required|numeric|min:1',
+                'price.usd' => 'required|numeric|min:1',
+                'listing_type' => 'required|in:rent,sell',
+                'rental_period' => 'required_if:listing_type,rent|nullable|in:monthly,yearly',
+                'rooms' => 'required|array',
+                'rooms.bedroom.count' => 'required|integer|min:0|max:50',
+                'rooms.bathroom.count' => 'required|integer|min:0|max:50',
+                'locations' => 'required|array|min:1',
+                'locations.*.lat' => 'required|numeric|between:-90,90',
+                'locations.*.lng' => 'required|numeric|between:-180,180',
+                'locations.*.type' => 'required|string',
+                'address_details' => 'required|array',
+                'address_details.city' => 'required|array',
+                'address_details.city.en' => 'required|string|min:2',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'data' => $validator->errors()
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            $propertyData = $request->all();
+            $propertyData['id'] = $this->generateUniquePropertyId();
+            $propertyData['owner_type'] = $this->getFullOwnerType($request->owner_type);
+
+            // Default values
+            $propertyData['availability'] = $propertyData['availability'] ?? [
+                'status' => 'available',
+                'labels' => ['en' => 'Available', 'ar' => 'متوفر', 'ku' => 'بەردەست']
+            ];
+            $propertyData['verified'] = $propertyData['verified'] ?? false;
+            $propertyData['is_active'] = $propertyData['is_active'] ?? true;
+            $propertyData['published'] = $propertyData['published'] ?? false;
+            $propertyData['status'] = $propertyData['status'] ?? 'available';
+            $propertyData['views'] = 0;
+            $propertyData['favorites_count'] = 0;
+            $propertyData['rating'] = 0;
+            $propertyData['electricity'] = $propertyData['electricity'] ?? true;
+            $propertyData['water'] = $propertyData['water'] ?? true;
+            $propertyData['internet'] = $propertyData['internet'] ?? false;
+            $propertyData['is_boosted'] = $propertyData['is_boosted'] ?? false;
+            $propertyData['view_analytics'] = ['unique_views' => 0, 'returning_views' => 0, 'average_time_on_listing' => 0, 'bounce_rate' => 0];
+            $propertyData['favorites_analytics'] = ['last_30_days' => 0, 'user_demographics' => []];
+
+            $property = Property::create($propertyData);
+
+            if (class_exists('App\Http\Controllers\NotificationController')) {
+                app(NotificationController::class)->sendNewPropertyNotifications($property->id);
+            }
+
+            DB::commit();
+
+            // ✅ Return JSON with redirect URL for AJAX
+            return response()->json([
+                'status' => true,
+                'message' => 'Property created successfully',
+                'redirect' => route('agent.property.list') // <-- your blade page route
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error creating property', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
             return response()->json([
                 'status' => false,
-                'message' => 'Validation failed',
-                'data' => $validator->errors()
-            ], 400);
+                'message' => 'Failed to create property',
+                'data' => $e->getMessage()
+            ], 500);
         }
+    }
 
-        DB::beginTransaction();
 
-        $propertyData = $request->all();
-        $propertyData['id'] = $this->generateUniquePropertyId();
-        $propertyData['owner_type'] = $this->getFullOwnerType($request->owner_type);
 
-        // Default values
-        $propertyData['availability'] = $propertyData['availability'] ?? [
-            'status' => 'available',
-            'labels' => ['en'=>'Available','ar'=>'متوفر','ku'=>'بەردەست']
-        ];
-        $propertyData['verified'] = $propertyData['verified'] ?? false;
-        $propertyData['is_active'] = $propertyData['is_active'] ?? true;
-        $propertyData['published'] = $propertyData['published'] ?? false;
-        $propertyData['status'] = $propertyData['status'] ?? 'available';
-        $propertyData['views'] = 0;
-        $propertyData['favorites_count'] = 0;
-        $propertyData['rating'] = 0;
-        $propertyData['electricity'] = $propertyData['electricity'] ?? true;
-        $propertyData['water'] = $propertyData['water'] ?? true;
-        $propertyData['internet'] = $propertyData['internet'] ?? false;
-        $propertyData['is_boosted'] = $propertyData['is_boosted'] ?? false;
-        $propertyData['view_analytics'] = ['unique_views'=>0,'returning_views'=>0,'average_time_on_listing'=>0,'bounce_rate'=>0];
-        $propertyData['favorites_analytics'] = ['last_30_days'=>0,'user_demographics'=>[]];
 
-        $property = Property::create($propertyData);
 
-        if (class_exists('App\Http\Controllers\NotificationController')) {
-            app(NotificationController::class)->sendNewPropertyNotifications($property->id);
-        }
 
-        DB::commit();
 
-        // ✅ Return JSON with redirect URL for AJAX
-        return response()->json([
-            'status' => true,
-            'message' => 'Property created successfully',
-            'redirect' => route('agent.property.list') // <-- your blade page route
-        ], 201);
 
-    } catch (\Exception $e) {
-        DB::rollback();
-        Log::error('Error creating property', [
-            'error' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
+
+
+
+    public function update(Request $request, $id)
+    {
+        $property = Property::findOrFail($id);
+
+        // Only update fields that exist in the form
+        $updates = $request->only([
+            'title',
+            'description',
+            'price',
+            'location',
+            'type',
+            'photos', // or any other field your form sends
         ]);
 
-        return response()->json([
-            'status' => false,
-            'message' => 'Failed to create property',
-            'data' => $e->getMessage()
-        ], 500);
+        // Merge and preserve important fields
+        $property->fill($updates);
+
+        // Keep these always as they were (never overwrite)
+        $property->owner_id = $property->owner_id ?? Auth::id();
+        $property->published = $property->published ?? 1;
+        $property->is_active = $property->is_active ?? 1;
+
+        // Save back
+        $property->save();
+
+        return redirect()->route('agent.property.list')->with('success', 'Property updated successfully!');
     }
-}
-
-
-
-
-
-
-
-
-
-
-
-public function update(Request $request, $id)
-{
-    $property = Property::findOrFail($id);
-
-    // Only update fields that exist in the form
-    $updates = $request->only([
-        'title',
-        'description',
-        'price',
-        'location',
-        'type',
-        'photos', // or any other field your form sends
-    ]);
-
-    // Merge and preserve important fields
-    $property->fill($updates);
-
-    // Keep these always as they were (never overwrite)
-    $property->owner_id = $property->owner_id ?? Auth::id();
-    $property->published = $property->published ?? 1;
-    $property->is_active = $property->is_active ?? 1;
-
-    // Save back
-    $property->save();
-
-  return redirect()->route('agent.property.list')->with('success', 'Property updated successfully!');
-
-}
 
 
     /**
@@ -1048,11 +1063,15 @@ public function update(Request $request, $id)
 
             $featured = $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
 
+            // ✅ Use transformPropertyData instead of transformPropertyForSearch to get FULL data like index
             $transformedData = $featured->map(function ($property) use ($language) {
-                $propertyData = $this->transformPropertyForSearch($property, $language);
-                // Add featured reason for transparency
+                // Use the SAME transformation as index method - this includes ALL fields
+                $propertyData = $this->transformPropertyData($property);
+
+                // Add featured-specific fields
                 $propertyData['featured_reason'] = $this->getFeaturedReason($property);
                 $propertyData['featured_score'] = $this->calculateFeaturedScore($property);
+
                 return $propertyData;
             });
 
@@ -1079,6 +1098,8 @@ public function update(Request $request, $id)
             );
         }
     }
+
+
 
     /**
      * Get featured properties based on different strategies
@@ -1541,9 +1562,6 @@ public function update(Request $request, $id)
             );
         }
     }
-    /**
-     * Get properties by owner
-     */
     public function getByOwner(Request $request, $ownerType, $ownerId)
     {
         try {
@@ -1576,8 +1594,9 @@ public function update(Request $request, $id)
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
 
-            $transformedData = collect($properties->items())->map(function ($property) use ($language) {
-                return $this->transformPropertyForSearch($property, $language);
+            // ✅ Use transformPropertyData instead of transformPropertyForSearch to get FULL data like index
+            $transformedData = collect($properties->items())->map(function ($property) {
+                return $this->transformPropertyData($property);
             });
 
             return ApiResponse::success(
@@ -1985,7 +2004,7 @@ public function update(Request $request, $id)
     {
         try {
             $user = Auth::user();
-           
+
             $language = $request->get('language', 'en');
 
             $drafts = Property::where('owner_id', $user->id)
@@ -3080,7 +3099,7 @@ public function update(Request $request, $id)
 
 
 
-    
+
     private function generateMapStatistics($mapData)
     {
         if ($mapData->isEmpty()) {
@@ -3135,115 +3154,113 @@ public function update(Request $request, $id)
     // ZANA'S CODE FROM HERE ---------------------------------------------------------------------------------------------------------------------------------------------
 
 
-public function showList(Request $request)
-{
-    $perPage = $request->get('per_page', 20);
+    public function showList(Request $request)
+    {
+        $perPage = $request->get('per_page', 20);
 
-    $properties = \App\Models\Property::where(function ($query) {
+        $properties = \App\Models\Property::where(function ($query) {
             $query->whereNotIn('status', ['cancelled', 'pending'])
-                  ->orWhere('owner_type', 'Agent'); // ✅ include agent posts
+                ->orWhere('owner_type', 'Agent'); // ✅ include agent posts
         })
-        ->paginate($perPage);
+            ->paginate($perPage);
 
-    return view('list', [
-        'properties' => $properties
-    ]);
-}
+        return view('list', [
+            'properties' => $properties
+        ]);
+    }
 
 
     // Edit user method
-     public function editUser($id)
-     {
-         $user = User::findOrFail($id);
-         return view('agent.edit-agent-admin', compact('user'));
-     }
-
-
-public function showUserProperties()
-{
-    // 1️⃣ Check for logged-in user
-    if (auth()->check()) {
-        $owner = auth()->user();
-    }
-    // 2️⃣ Check for logged-in agent (session-based)
-    elseif (session('agent_logged_in')) {
-        $owner = \App\Models\Agent::find(session('agent_id'));
-    } else {
-        // Not logged in
-        return redirect()->route('login-page');
+    public function editUser($id)
+    {
+        $user = User::findOrFail($id);
+        return view('agent.edit-agent-admin', compact('user'));
     }
 
-    // Fetch properties posted by this owner (user or agent)
-    $properties = \App\Models\Property::where('owner_id', $owner->id)
-                                      ->where('owner_type', get_class($owner))
-                                      ->orderBy('created_at', 'desc')
-                                      ->get();
 
-    return view('agent.agent-property-list', compact('properties'));
-}
-
-
-
-
-
-
-
-public function showPortfolio($property_id)
-{
-    $property = Property::find($property_id);
-
-    if (!$property) {
-        return redirect()->back()->with('error', 'Property not found.');
-    }
-
-    // Decode JSON fields
-    $property->images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
-    $property->location = is_string($property->location) ? json_decode($property->location, true) : $property->location;
-
-    // Return the Blade view
-    return view('PropertyDetail', compact('property'));
-}
-
-
-
-public function edit($property_id)
-{
-    $property = Property::findOrFail($property_id);
-    return view('agent.edit-property', compact('property'));
-}
-
-
-
-    
-public function removeImage(Request $request, $property_id)
-{
-    $property = Property::find($property_id);
-    if (!$property) {
-        return redirect()->back()->withErrors('Property not found');
-    }
-
-    $photoPath = $request->input('photo_path');
-    if (!$photoPath) {
-        return redirect()->back()->withErrors('No photo specified');
-    }
-
-    // Remove the photo from the property images array
-    $images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
-
-    if (($key = array_search($photoPath, $images)) !== false) {
-        unset($images[$key]);
-        $images = array_values($images); // reindex
-        $property->images = json_encode($images);
-        $property->save();
-
-        // Optionally delete the file from storage
-        if (file_exists(public_path($photoPath))) {
-            @unlink(public_path($photoPath));
+    public function showUserProperties()
+    {
+        // 1️⃣ Check for logged-in user
+        if (auth()->check()) {
+            $owner = auth()->user();
         }
+        // 2️⃣ Check for logged-in agent (session-based)
+        elseif (session('agent_logged_in')) {
+            $owner = \App\Models\Agent::find(session('agent_id'));
+        } else {
+            // Not logged in
+            return redirect()->route('login-page');
+        }
+
+        // Fetch properties posted by this owner (user or agent)
+        $properties = \App\Models\Property::where('owner_id', $owner->id)
+            ->where('owner_type', get_class($owner))
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('agent.agent-property-list', compact('properties'));
     }
 
-    return redirect()->back()->with('success', 'Image removed successfully');
-}
 
 
+
+
+
+
+    public function showPortfolio($property_id)
+    {
+        $property = Property::find($property_id);
+
+        if (!$property) {
+            return redirect()->back()->with('error', 'Property not found.');
+        }
+
+        // Decode JSON fields
+        $property->images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
+        $property->location = is_string($property->location) ? json_decode($property->location, true) : $property->location;
+
+        // Return the Blade view
+        return view('PropertyDetail', compact('property'));
+    }
+
+
+
+    public function edit($property_id)
+    {
+        $property = Property::findOrFail($property_id);
+        return view('agent.edit-property', compact('property'));
+    }
+
+
+
+
+    public function removeImage(Request $request, $property_id)
+    {
+        $property = Property::find($property_id);
+        if (!$property) {
+            return redirect()->back()->withErrors('Property not found');
+        }
+
+        $photoPath = $request->input('photo_path');
+        if (!$photoPath) {
+            return redirect()->back()->withErrors('No photo specified');
+        }
+
+        // Remove the photo from the property images array
+        $images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
+
+        if (($key = array_search($photoPath, $images)) !== false) {
+            unset($images[$key]);
+            $images = array_values($images); // reindex
+            $property->images = json_encode($images);
+            $property->save();
+
+            // Optionally delete the file from storage
+            if (file_exists(public_path($photoPath))) {
+                @unlink(public_path($photoPath));
+            }
+        }
+
+        return redirect()->back()->with('success', 'Image removed successfully');
+    }
 }

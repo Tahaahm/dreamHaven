@@ -18,6 +18,14 @@ class FirebaseAuthService
         try {
             $serviceAccountPath = config('firebase.service_account_path');
 
+            $serviceAccountPath = config('firebase.service_account_path');
+            Log::info('Checking Firebase service account file', [
+                'path' => $serviceAccountPath,
+                'exists' => file_exists($serviceAccountPath),
+                'real_path' => realpath($serviceAccountPath)
+            ]);
+
+
             if (!file_exists($serviceAccountPath)) {
                 throw new \Exception("Firebase service account file not found: {$serviceAccountPath}");
             }
@@ -968,6 +976,9 @@ class FirebaseAuthService
         }
     }
 
+    /**
+     * Confirm password reset
+     */
     /**
      * Confirm password reset
      */

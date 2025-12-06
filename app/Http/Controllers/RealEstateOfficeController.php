@@ -12,13 +12,14 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\Agent;
 use App\Models\Property;
 use Illuminate\Support\Facades\Auth;
+
 class RealEstateOfficeController extends Controller
 {
 
-public function __construct()
-{
-    $this->middleware('auth:agent');
-}
+    // public function __construct()
+    // {
+    //     $this->middleware('auth:agent');
+    // }
 
 
     /**
@@ -34,31 +35,31 @@ public function __construct()
         );
     }
 
-public function store(Request $request)
-{
-    // This is safe because the route uses 'auth:agent'
-    $agent = Auth::guard('agent')->user();
+    public function store(Request $request)
+    {
+        // This is safe because the route uses 'auth:agent'
+        $agent = Auth::guard('agent')->user();
 
-    if (!$agent) {
-        return redirect()->route('agent.login')->with('error', 'Unauthorized access');
+        if (!$agent) {
+            return redirect()->route('agent.login')->with('error', 'Unauthorized access');
+        }
+
+        // Now create the office
+        $office = RealEstateOffice::create([
+            'company_name' => $request->company_name,
+            'city' => $request->city,
+            'district' => $request->district,
+            // ...other fields...
+        ]);
+
+        // Set agent's company_id
+        $agent->company_id = $office->id;
+        $agent->save();
+
+        // Redirect to the profile page
+        return redirect()->route('agent.office.profile', ['id' => $office->id])
+            ->with('success', 'Office created successfully!');
     }
-
-    // Now create the office
-    $office = RealEstateOffice::create([
-        'company_name' => $request->company_name,
-        'city' => $request->city,
-        'district' => $request->district,
-        // ...other fields...
-    ]);
-
-    // Set agent's company_id
-    $agent->company_id = $office->id;
-    $agent->save();
-
-    // Redirect to the profile page
-    return redirect()->route('agent.office.profile', ['id' => $office->id])
-                     ->with('success', 'Office created successfully!');
-}
 
 
     /**
@@ -285,7 +286,7 @@ public function store(Request $request)
 
 
 
-  public function showRealEstateOfficePage()
+    public function showRealEstateOfficePage()
     {
         $user = auth()->user();
 
@@ -304,12 +305,12 @@ public function store(Request $request)
 
 
 
-     /**
+    /**
      * Display the real estate office dashboard
      */
     public function dashboard($id)
     {
-        $office = RealEstateOffice::with(['agents' => function($query) {
+        $office = RealEstateOffice::with(['agents' => function ($query) {
             $query->take(6); // Get first 6 agents for initial display
         }])->findOrFail($id);
 
@@ -318,7 +319,7 @@ public function store(Request $request)
 
         // Get properties through agents
         $agentIds = Agent::where('company_id', $id)->pluck('id');
-        
+
         $properties = Property::where('owner_type', 'App\Models\Agent')
             ->whereIn('owner_id', $agentIds)
             ->with('owner')
@@ -350,51 +351,51 @@ public function store(Request $request)
     /**
      * Display the real estate office profile page
      */
- public function profile($id)
-{
-    // Debug guard
-    Log::info('--- Agent Debug Start ---');
-    Log::info('Auth check:', [
-        'guard_check' => Auth::guard('agent')->check(),
-        'guard_user' => Auth::guard('agent')->user(),
-    ]);
+    public function profile($id)
+    {
+        // Debug guard
+        Log::info('--- Agent Debug Start ---');
+        Log::info('Auth check:', [
+            'guard_check' => Auth::guard('agent')->check(),
+            'guard_user' => Auth::guard('agent')->user(),
+        ]);
 
-    // Debug default auth
-    Log::info('Default Auth:', [
-        'default_check' => Auth::check(),
-        'default_user' => Auth::user(),
-    ]);
+        // Debug default auth
+        Log::info('Default Auth:', [
+            'default_check' => Auth::check(),
+            'default_user' => Auth::user(),
+        ]);
 
-    // Debug session
-    Log::info('Session Keys:', session()->all());
+        // Debug session
+        Log::info('Session Keys:', session()->all());
 
-    // Debug cookies
-    Log::info('Cookies:', request()->cookies->all());
+        // Debug cookies
+        Log::info('Cookies:', request()->cookies->all());
 
-    // Proceed with existing code
-    $office = RealEstateOffice::with(['agents' => function($query) {
-        $query->take(6);
-    }])->findOrFail($id);
+        // Proceed with existing code
+        $office = RealEstateOffice::with(['agents' => function ($query) {
+            $query->take(6);
+        }])->findOrFail($id);
 
-    $totalAgents = Agent::where('company_id', $id)->count();
+        $totalAgents = Agent::where('company_id', $id)->count();
 
-    $agentIds = Agent::where('company_id', $id)->pluck('id')->toArray();
-    
-    $properties = Property::where('owner_type', 'App\Models\Agent')
-        ->whereIn('owner_id', $agentIds)
-        ->with(['owner'])
-        ->latest()
-        ->take(9)
-        ->get();
+        $agentIds = Agent::where('company_id', $id)->pluck('id')->toArray();
 
-    $totalProperties = Property::where('owner_type', 'App\Models\Agent')
-        ->whereIn('owner_id', $agentIds)
-        ->count();
+        $properties = Property::where('owner_type', 'App\Models\Agent')
+            ->whereIn('owner_id', $agentIds)
+            ->with(['owner'])
+            ->latest()
+            ->take(9)
+            ->get();
 
-    Log::info('--- Agent Debug End ---');
+        $totalProperties = Property::where('owner_type', 'App\Models\Agent')
+            ->whereIn('owner_id', $agentIds)
+            ->count();
 
-    return view('agent.real-estate-office-profile', compact('office', 'properties', 'totalAgents', 'totalProperties'));
-}
+        Log::info('--- Agent Debug End ---');
+
+        return view('agent.real-estate-office-profile', compact('office', 'properties', 'totalAgents', 'totalProperties'));
+    }
 
 
     /**
@@ -418,7 +419,7 @@ public function store(Request $request)
     public function loadMoreAgents(Request $request, $id)
     {
         $offset = $request->get('offset', 0);
-        
+
         $agents = Agent::where('company_id', $id)
             ->skip($offset)
             ->take(6)
@@ -437,19 +438,19 @@ public function store(Request $request)
     public function loadMoreProperties(Request $request, $id)
     {
         $offset = $request->get('offset', 0);
-        
+
         $agentIds = Agent::where('company_id', $id)->pluck('id')->toArray();
-        
+
         $properties = Property::where('owner_type', 'App\Models\Agent')
             ->whereIn('owner_id', $agentIds)
-            ->with(['owner' => function($query) {
+            ->with(['owner' => function ($query) {
                 // Eager load owner
             }])
             ->latest()
             ->skip($offset)
             ->take(9)
             ->get()
-            ->map(function($property) {
+            ->map(function ($property) {
                 // Ensure all data is properly formatted for JSON
                 return [
                     'id' => $property->id,
@@ -479,9 +480,8 @@ public function store(Request $request)
     }
 
 
-public function create()
-{
-    return view('agent.real-estate-office');
-}
-
+    public function create()
+    {
+        return view('agent.real-estate-office');
+    }
 }

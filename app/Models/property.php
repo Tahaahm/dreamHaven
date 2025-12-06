@@ -15,16 +15,55 @@ class Property extends Model
     protected $keyType = 'string'; // UUID is a string
 
     protected $fillable = [
-        'id', 'owner_id', 'owner_type', 'name', 'description', 'images',
-        'availability', 'type', 'area', 'furnished', 'price', 'listing_type',
-        'rental_period', 'rooms', 'features', 'amenities', 'locations',
-        'address_details', 'address', 'floor_number', 'floor_details', 'year_built',
-        'construction_details', 'energy_rating', 'energy_details', 'electricity',
-        'water', 'internet', 'virtual_tour_url', 'virtual_tour_details',
-        'floor_plan_url', 'additional_media', 'verified', 'is_active', 'published',
-        'status', 'views', 'view_analytics', 'favorites_count', 'favorites_analytics',
-        'rating', 'is_boosted', 'boost_start_date', 'boost_end_date', 'legal_information',
-        'investment_analysis', 'furnishing_details', 'seo_metadata', 'nearby_amenities',
+        'id',
+        'owner_id',
+        'owner_type',
+        'name',
+        'description',
+        'images',
+        'availability',
+        'type',
+        'area',
+        'furnished',
+        'price',
+        'listing_type',
+        'rental_period',
+        'rooms',
+        'features',
+        'amenities',
+        'locations',
+        'address_details',
+        'address',
+        'floor_number',
+        'floor_details',
+        'year_built',
+        'construction_details',
+        'energy_rating',
+        'energy_details',
+        'electricity',
+        'water',
+        'internet',
+        'virtual_tour_url',
+        'virtual_tour_details',
+        'floor_plan_url',
+        'additional_media',
+        'verified',
+        'is_active',
+        'published',
+        'status',
+        'views',
+        'view_analytics',
+        'favorites_count',
+        'favorites_analytics',
+        'rating',
+        'is_boosted',
+        'boost_start_date',
+        'boost_end_date',
+        'legal_information',
+        'investment_analysis',
+        'furnishing_details',
+        'seo_metadata',
+        'nearby_amenities',
     ];
 
     protected $casts = [
@@ -67,17 +106,18 @@ class Property extends Model
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['active', 'approved']);
+        return $query->whereIn('status', ['available', 'approved']);
     }
 
     public function scopePublished($query)
     {
-        return $query->where('status', 'approved')
-                     ->where('published', true);
+        return $query->where('status', 'available')
+            ->where('published', true);
     }
 
 
-
-
-
+    public function isBoosted()
+    {
+        return $this->is_boosted;
+    }
 }

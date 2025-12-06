@@ -66,6 +66,7 @@ Route::prefix('v1/api/agents')->group(function () {
 
 // Property Routes - Cleaned and Organized
 Route::prefix('v1/api/properties')->group(function () {
+    Route::post('/', [PropertyController::class, 'store']);              // Create new property
 
     // ===== PUBLIC ROUTES (No Authentication Required) =====
 
@@ -90,7 +91,6 @@ Route::prefix('v1/api/properties')->group(function () {
     Route::middleware(['auth:sanctum'])->group(function () {
 
         // Property CRUD Operations
-        Route::post('/', [PropertyController::class, 'store']);              // Create new property
         Route::post('/store', [PropertyController::class, 'store']);         // Alternative create endpoint (keeping for frontend compatibility)
         Route::put('/{id}', [PropertyController::class, 'update']);          // Full update
         Route::patch('/{id}', [PropertyController::class, 'update']);        // Partial update
@@ -472,7 +472,7 @@ Route::get('/admin/property-list', [PropertyController::class, 'adminPropertyLis
 Route::get('/admin/property-list', [PropertyController::class, 'showUserProperties'])->name('admin.property-list');
 
 
-    Route::get('/review', [AuthController::class, 'showReviews'])->name('agent.review');
+Route::get('/review', [AuthController::class, 'showReviews'])->name('agent.review');
 
 // Show “become agent” prompt page
 Route::get('/become-agent', function () {
@@ -491,7 +491,7 @@ Route::post('/become-agent', [AgentController::class, 'createFromUser'])
     ->name('agent.create.from.user.submit');
 
 
-    Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
+Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
 Route::get('/login-page', [AuthController::class, 'showLoginForm'])->name('login.page');
 Route::get('/login-page', [AuthController::class, 'showLoginForm'])->name('login-page');
@@ -551,7 +551,7 @@ Route::post('/email/verification-notification', function (Request $request) {
 
 
 
-    
+
 
 // About Us page
 Route::get('/about-us', function () {
@@ -603,203 +603,202 @@ Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(functi
 
 
 
-// Contact page
+    // Contact page
 
 
 
 
 
 
-Route::post('/user/store', [AuthController::class, 'store'])->name('user.store');
+    Route::post('/user/store', [AuthController::class, 'store'])->name('user.store');
 
 
 
-// Regular user and agent login
-
-
-
-
-
-Route::get('/agent/admin-dashboard', [AuthController::class, 'adminDashboard'])->name('agent.admin-dashboard');
-
-// Show upload form
-
-
-// Handle the POST submission
+    // Regular user and agent login
 
 
 
 
+
+    Route::get('/agent/admin-dashboard', [AuthController::class, 'adminDashboard'])->name('agent.admin-dashboard');
+
+    // Show upload form
+
+
+    // Handle the POST submission
 
 
 
 
 
 
-Route::get('/notifications', [NotificationController::class, 'showNotifications'])->name('notifications.show');
-Route::get('/notifications/read/{id}', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
-Route::get('/notifications/delete/{id}', [NotificationController::class, 'destroy'])->name('notifications.delete');
-// Retrieve all notifications for an office or agent (real estate office is required)
-Route::get('/notifications', [NotificationController::class, 'index']);
-// Create a new notification for an office or agent
-Route::middleware('auth:sanctum')->post('/notifications', [NotificationController::class, 'store']);
-// Mark a notification as read
-Route::middleware('auth:sanctum')->post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-// Delete a notification
-Route::middleware('auth:sanctum')->delete('/notifications/{id}', [NotificationController::class, 'destroy']);
-
-Route::get('/notifications', [NotificationController::class, 'showNotifications']);
-Route::get('/notifications', [NotificationController::class, 'showNotifications'])->name('notifications');
-
-
-Route::get('/schedule', [AppointmentController::class, 'showSchedule'])->name('schedule');
-
-Route::get('/appointments/schedule-list', [AppointmentController::class, 'showScheduleList'])->name('appointments.scheduleList');
-
-// Retrieve all projects or filter by office
-Route::get('/projects', [ProjectController::class, 'index']);
-// Retrieve a specific project
-Route::get('/projects/{id}', [ProjectController::class, 'show']);
-// Create a new project (protected by authentication)
-Route::middleware('auth:sanctum')->post('/projects', [ProjectController::class, 'store']);
-
-
-Route::get('/projects', [ProjectController::class, 'showProjects'])->name('projects');
-
-
-Route::post('/projects/store', [ProjectController::class, 'store'])->name('projects.store');
-
-
-// GET upload page
-
-
-// POST images
-Route::post('/upload-images', [PropertyController::class, 'uploadImages'])->name('property.uploadImages');
-
-// POST store property
 
 
 
-Route::post('/v1/api/properties/store', [PropertyController::class, 'store']);
+
+    Route::get('/notifications', [NotificationController::class, 'showNotifications'])->name('notifications.show');
+    Route::get('/notifications/read/{id}', [NotificationController::class, 'markAsRead'])->name('notifications.markAsRead');
+    Route::get('/notifications/delete/{id}', [NotificationController::class, 'destroy'])->name('notifications.delete');
+    // Retrieve all notifications for an office or agent (real estate office is required)
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    // Create a new notification for an office or agent
+    Route::middleware('auth:sanctum')->post('/notifications', [NotificationController::class, 'store']);
+    // Mark a notification as read
+    Route::middleware('auth:sanctum')->post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    // Delete a notification
+    Route::middleware('auth:sanctum')->delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    Route::get('/notifications', [NotificationController::class, 'showNotifications']);
+    Route::get('/notifications', [NotificationController::class, 'showNotifications'])->name('notifications');
+
+
+    Route::get('/schedule', [AppointmentController::class, 'showSchedule'])->name('schedule');
+
+    Route::get('/appointments/schedule-list', [AppointmentController::class, 'showScheduleList'])->name('appointments.scheduleList');
+
+    // Retrieve all projects or filter by office
+    Route::get('/projects', [ProjectController::class, 'index']);
+    // Retrieve a specific project
+    Route::get('/projects/{id}', [ProjectController::class, 'show']);
+    // Create a new project (protected by authentication)
+    Route::middleware('auth:sanctum')->post('/projects', [ProjectController::class, 'store']);
+
+
+    Route::get('/projects', [ProjectController::class, 'showProjects'])->name('projects');
+
+
+    Route::post('/projects/store', [ProjectController::class, 'store'])->name('projects.store');
+
+
+    // GET upload page
+
+
+    // POST images
+    Route::post('/upload-images', [PropertyController::class, 'uploadImages'])->name('property.uploadImages');
+
+    // POST store property
 
 
 
-Route::get('/properties/{property_id}/edit', [PropertyController::class, 'editProperty'])->name('property.edit');
-Route::post('/report', [ReportController::class, 'store'])->name('report.store');
+    Route::post('/v1/api/properties/store', [PropertyController::class, 'store']);
 
-Route::middleware(['auth', 'admin'])->group(function () {
+
+
+    Route::get('/properties/{property_id}/edit', [PropertyController::class, 'editProperty'])->name('property.edit');
+    Route::post('/report', [ReportController::class, 'store'])->name('report.store');
+
+    Route::middleware(['auth', 'admin'])->group(function () {
+        Route::get('/admin/users', [AuthController::class, 'usersList'])->name('admin.users');
+    });
+
+
+
+    Route::middleware(['auth'])->group(function () {
+        // List all users
+        Route::get('/admin/users', [AuthController::class, 'usersList'])->name('admin.users');
+
+        // Show single user details
+        Route::get('/admin/users/{id}', [AuthController::class, 'userDetail'])->name('admin.users.show');
+
+        // Suspend/unsuspend user
+        Route::post('/admin/users/{id}/suspend', [AuthController::class, 'suspendUser'])->name('admin.users.suspend');
+
+        // Delete user
+        Route::delete('/admin/users/{id}', [AuthController::class, 'deleteUser'])->name('admin.users.delete');
+    });
+
+
+    Route::put('/profile/update/{id}', [AuthController::class, 'updateProfile'])->name('profile.update');
+
+
+    Route::get('/agent/edit/{id}', [AgentController::class, 'edit'])->name('agent.edit');
+    Route::put('/agent/update-profile/{id}', [AgentController::class, 'updateAgentProfile'])->name('agent.updateProfile');
+    Route::get('/profile/{id}/edit', [PropertyController::class, 'editUser'])->name('profile.edit');
+
+
+
+
+    Route::get('/admin/dashboard', [AuthController::class, 'adminDashboard'])->name('admin.dashboard');
+
+
+
+
+    Route::get('/admin/agents/{id}', [AuthController::class, 'agentDetail'])->name('admin.agents.show');
     Route::get('/admin/users', [AuthController::class, 'usersList'])->name('admin.users');
-});
+    Route::get('/admin/user-detail/{type}/{id}', [AuthController::class, 'userDetail'])->name('admin.user.detail');
+
+    Route::get('/admin/entity-detail/{type}/{id}', [AuthController::class, 'entityDetail'])->name('admin.entity.detail');
+    Route::post('/admin/entity-suspend/{type}/{id}', [AuthController::class, 'suspendEntity'])->name('admin.entity.suspend');
+    Route::delete('/admin/entity-delete/{type}/{id}', [AuthController::class, 'deleteEntity'])->name('admin.entity.delete');
+    Route::get('/admin/entity-detail/{type}/{id}', [AuthController::class, 'entityDetail'])->name('admin.entity.detail');
+
+
+    // Users & Agents list
+    Route::get('/admin/entities', [AdminController::class, 'entitiesList'])->name('admin.users');
+
+    // View user detail
+    Route::get('/admin/user/{id}', [AdminController::class, 'userDetail'])->name('admin.users.show');
+
+    // View agent detail
+    Route::get('/admin/agent/{id}', [AdminController::class, 'agentDetail'])->name('admin.agents.show');
+
+    // Suspend / Activate user or agent
+    Route::post('/admin/entity/suspend/{id}', [AdminController::class, 'suspendEntity'])->name('admin.entity.suspend');
+
+    // Delete user or agent
+    Route::delete('/admin/entity/delete/{id}', [AdminController::class, 'deleteEntity'])->name('admin.entity.delete');
+
+    Route::get('/admin/entities', [AdminController::class, 'entitiesList'])->name('admin.entities.list');
+
+
+    Route::post('/admin/users/{id}/suspend', [App\Http\Controllers\AdminController::class, 'suspendUser'])
+        ->name('admin.users.suspend');
 
 
 
-Route::middleware(['auth'])->group(function () {
-    // List all users
-    Route::get('/admin/users', [AuthController::class, 'usersList'])->name('admin.users');
-
-    // Show single user details
-    Route::get('/admin/users/{id}', [AuthController::class, 'userDetail'])->name('admin.users.show');
-
-    // Suspend/unsuspend user
-    Route::post('/admin/users/{id}/suspend', [AuthController::class, 'suspendUser'])->name('admin.users.suspend');
-
-    // Delete user
-    Route::delete('/admin/users/{id}', [AuthController::class, 'deleteUser'])->name('admin.users.delete');
-});
+    Route::prefix('property')->group(function () {
+        Route::get('upload', [PropertyController::class, 'create'])->name('property.upload');
+        Route::post('store', [PropertyController::class, 'store'])->name('property.store');
+        Route::get('{id}', [PropertyController::class, 'show'])->name('property.show');
+    });
 
 
-Route::put('/profile/update/{id}', [AuthController::class, 'updateProfile'])->name('profile.update');
+    Route::delete('/property/{property_id}', [PropertyController::class, 'destroy'])->name('property.delete');
 
-
-Route::get('/agent/edit/{id}', [AgentController::class, 'edit'])->name('agent.edit');
-Route::put('/agent/update-profile/{id}', [AgentController::class, 'updateAgentProfile'])->name('agent.updateProfile');
-Route::get('/profile/{id}/edit', [PropertyController::class, 'editUser'])->name('profile.edit');
-
-
-
-
-Route::get('/admin/dashboard', [AuthController::class, 'adminDashboard'])->name('admin.dashboard');
-
-
-
-
-Route::get('/admin/agents/{id}', [AuthController::class, 'agentDetail'])->name('admin.agents.show');
-Route::get('/admin/users', [AuthController::class, 'usersList'])->name('admin.users');
-Route::get('/admin/user-detail/{type}/{id}', [AuthController::class, 'userDetail'])->name('admin.user.detail');
-
-Route::get('/admin/entity-detail/{type}/{id}', [AuthController::class, 'entityDetail'])->name('admin.entity.detail');
-Route::post('/admin/entity-suspend/{type}/{id}', [AuthController::class, 'suspendEntity'])->name('admin.entity.suspend');
-Route::delete('/admin/entity-delete/{type}/{id}', [AuthController::class, 'deleteEntity'])->name('admin.entity.delete');
-Route::get('/admin/entity-detail/{type}/{id}', [AuthController::class, 'entityDetail'])->name('admin.entity.detail');
-
-
-// Users & Agents list
-Route::get('/admin/entities', [AdminController::class, 'entitiesList'])->name('admin.users');
-
-// View user detail
-Route::get('/admin/user/{id}', [AdminController::class, 'userDetail'])->name('admin.users.show');
-
-// View agent detail
-Route::get('/admin/agent/{id}', [AdminController::class, 'agentDetail'])->name('admin.agents.show');
-
-// Suspend / Activate user or agent
-Route::post('/admin/entity/suspend/{id}', [AdminController::class, 'suspendEntity'])->name('admin.entity.suspend');
-
-// Delete user or agent
-Route::delete('/admin/entity/delete/{id}', [AdminController::class, 'deleteEntity'])->name('admin.entity.delete');
-
-Route::get('/admin/entities', [AdminController::class, 'entitiesList'])->name('admin.entities.list');
-
-
-Route::post('/admin/users/{id}/suspend', [App\Http\Controllers\AdminController::class, 'suspendUser'])
-    ->name('admin.users.suspend');
-
-
-
-Route::prefix('property')->group(function () {
-    Route::get('upload', [PropertyController::class, 'create'])->name('property.upload');
-    Route::post('store', [PropertyController::class, 'store'])->name('property.store');
-    Route::get('{id}', [PropertyController::class, 'show'])->name('property.show');
-});
-
-
-Route::delete('/property/{property_id}', [PropertyController::class, 'destroy'])->name('property.delete');
-
-Route::get('/property/{property_id}/edit', [PropertyController::class, 'edit'])
-    ->name('property.edit');
+    Route::get('/property/{property_id}/edit', [PropertyController::class, 'edit'])
+        ->name('property.edit');
 
     Route::put('/property/{id}', [PropertyController::class, 'update'])->name('property.update');
 
-    
-Route::post('/property/{property_id}/remove-image', [PropertyController::class, 'removeImage'])
-    ->name('property.removeImage');
+
+    Route::post('/property/{property_id}/remove-image', [PropertyController::class, 'removeImage'])
+        ->name('property.removeImage');
 
     Route::get('/agent/properties', [PropertyController::class, 'showUserProperties'])
-    ->name('agent.property.list');
+        ->name('agent.property.list');
 
 
-Route::group(['prefix' => 'admin'], function () {
+    Route::group(['prefix' => 'admin'], function () {
 
 
-    // Protect all admin routes manually .. below is property display for admin
-    Route::middleware('auth')->group(function () {
+        // Protect all admin routes manually .. below is property display for admin
+        Route::middleware('auth')->group(function () {
 
-        Route::get('/properties', function () {
-            if (!Auth::user() || Auth::user()->role !== 'admin') {
-                abort(403, 'Unauthorized');
-            }
-            return app(AdminController::class)->adminProperties(request());
-        })->name('admin.properties');
+            Route::get('/properties', function () {
+                if (!Auth::user() || Auth::user()->role !== 'admin') {
+                    abort(403, 'Unauthorized');
+                }
+                return app(AdminController::class)->adminProperties(request());
+            })->name('admin.properties');
 
-        Route::delete('/properties/{id}', function ($id) {
-            if (!Auth::user() || Auth::user()->role !== 'admin') {
-                abort(403, 'Unauthorized');
-            }
-            return app(AdminController::class)->deleteProperty($id);
-        })->name('admin.properties.delete');
-
+            Route::delete('/properties/{id}', function ($id) {
+                if (!Auth::user() || Auth::user()->role !== 'admin') {
+                    abort(403, 'Unauthorized');
+                }
+                return app(AdminController::class)->deleteProperty($id);
+            })->name('admin.properties.delete');
+        });
     });
-});
 
 
 
@@ -809,61 +808,56 @@ Route::group(['prefix' => 'admin'], function () {
 
 
 
-Route::get('/office/{id}/dashboard', [RealEstateOfficeController::class, 'dashboard'])
-    ->name('office.dashboard');
+    Route::get('/office/{id}/dashboard', [RealEstateOfficeController::class, 'dashboard'])
+        ->name('office.dashboard');
 
-Route::get('/office/{id}/profile', [RealEstateOfficeController::class, 'profile'])
-    ->name('office.profile');
+    Route::get('/office/{id}/profile', [RealEstateOfficeController::class, 'profile'])
+        ->name('office.profile');
 
-Route::get('/office/{id}/agents/load-more', [RealEstateOfficeController::class, 'loadMoreAgents'])
-    ->name('office.agents.load-more');
+    Route::get('/office/{id}/agents/load-more', [RealEstateOfficeController::class, 'loadMoreAgents'])
+        ->name('office.agents.load-more');
 
-Route::get('/office/{id}/properties/load-more', [RealEstateOfficeController::class, 'loadMoreProperties'])
-    ->name('office.properties.load-more');
+    Route::get('/office/{id}/properties/load-more', [RealEstateOfficeController::class, 'loadMoreProperties'])
+        ->name('office.properties.load-more');
 
 
     // agent with company
 
 
-// agent without company
-Route::get('/profile', [AuthController::class, 'showProfile'])
-    ->middleware(\App\Http\Middleware\AgentOrAdmin::class)
-    ->name('admin.profile');
+    // agent without company
+    Route::get('/profile', [AuthController::class, 'showProfile'])
+        ->middleware(\App\Http\Middleware\AgentOrAdmin::class)
+        ->name('admin.profile');
 
 
-Route::get('/test-middleware', function () {
-    return "Middleware alias works!";
-})->middleware('agent.or.admin');
+    Route::get('/test-middleware', function () {
+        return "Middleware alias works!";
+    })->middleware('agent.or.admin');
 
-// Agent or Admin can access (controller checks logic)
-
-
-
-// Keep profile route as is
-Route::middleware(['auth:agent'])->group(function () {
-    Route::get('/agent/real-estate-office', [RealEstateOfficeController::class, 'create'])
-        ->name('agent.real-estate-office');
-
-    Route::post('/agent/real-estate-office', [RealEstateOfficeController::class, 'store'])
-        ->name('agent.real-estate-office.store');
+    // Agent or Admin can access (controller checks logic)
 
 
 
-});
-Route::middleware(['web', 'auth:agent'])->group(function () {
+    // Keep profile route as is
+    Route::middleware(['auth:agent'])->group(function () {
+        Route::get('/agent/real-estate-office', [RealEstateOfficeController::class, 'create'])
+            ->name('agent.real-estate-office');
 
-    Route::get('/agent/real-estate-office-profile/{id}', [RealEstateOfficeController::class, 'profile'])
-        ->name('agent.office.profile');
+        Route::post('/agent/real-estate-office', [RealEstateOfficeController::class, 'store'])
+            ->name('agent.real-estate-office.store');
+    });
+    Route::middleware(['web', 'auth:agent'])->group(function () {
 
-    // Add other agent-only routes here
-});
+        Route::get('/agent/real-estate-office-profile/{id}', [RealEstateOfficeController::class, 'profile'])
+            ->name('agent.office.profile');
+    });
 
 
 
 
 
 
-// Show verification notice
+    // Show verification notice
 
 
 
