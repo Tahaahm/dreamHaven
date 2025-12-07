@@ -890,5 +890,3 @@ Route::get('/properties', [PropertyController::class, 'showList'])
     ->name('property.list');
 
 
-
-

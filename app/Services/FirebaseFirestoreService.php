@@ -15,33 +15,49 @@ class FirebaseFirestoreService
 
     public function __construct()
     {
-        try {
-            // Check if Firestore client is available
-            if (!class_exists('Google\Cloud\Firestore\FirestoreClient')) {
-                Log::warning('Google Cloud Firestore client not installed. Firestore operations will be disabled.', [
-                    'suggestion' => 'Run: composer require google/cloud-firestore'
-                ]);
-                $this->firestore = null;
-                return;
-            }
+        // TEMPORARY: Disable Firestore to prevent server hangs
+        // Remove this block when ready to use Firestore
+        Log::warning('Firestore temporarily disabled to prevent server hangs', [
+            'reason' => 'Firestore operations causing timeout during user registration',
+            'solution' => 'Enable Firestore database in Firebase Console first'
+        ]);
+        $this->firestore = null;
+        return;
 
-            $serviceAccountPath = config('firebase.service_account_path');
+        /* ============================================
+       COMMENTED OUT - Original Firestore initialization
+       Uncomment this section after enabling Firestore in Firebase Console
+       ============================================
 
-            if (!file_exists($serviceAccountPath)) {
-                throw new \Exception("Firebase service account file not found: {$serviceAccountPath}");
-            }
-
-            $factory = (new Factory)->withServiceAccount($serviceAccountPath);
-            $this->firestore = $factory->createFirestore();
-
-            Log::info('Firebase Firestore initialized successfully');
-        } catch (\Exception $e) {
-            Log::error('Firebase Firestore initialization failed', [
-                'error' => $e->getMessage(),
-                'service_account_path' => $serviceAccountPath ?? 'not found'
+    try {
+        // Check if Firestore client is available
+        if (!class_exists('Google\Cloud\Firestore\FirestoreClient')) {
+            Log::warning('Google Cloud Firestore client not installed. Firestore operations will be disabled.', [
+                'suggestion' => 'Run: composer require google/cloud-firestore'
             ]);
-            $this->firestore = null; // Set to null instead of throwing
+            $this->firestore = null;
+            return;
         }
+
+        $serviceAccountPath = config('firebase.service_account_path');
+
+        if (!file_exists($serviceAccountPath)) {
+            throw new \Exception("Firebase service account file not found: {$serviceAccountPath}");
+        }
+
+        $factory = (new Factory)->withServiceAccount($serviceAccountPath);
+        $this->firestore = $factory->createFirestore();
+
+        Log::info('Firebase Firestore initialized successfully');
+    } catch (\Exception $e) {
+        Log::error('Firebase Firestore initialization failed', [
+            'error' => $e->getMessage(),
+            'service_account_path' => $serviceAccountPath ?? 'not found'
+        ]);
+        $this->firestore = null; // Set to null instead of throwing
+    }
+
+    ============================================ */
     }
 
     /**
