@@ -1,0 +1,123 @@
+[1mdiff --git a/app/Models/Property.php b/app/Models/Property.php[m
+[1mindex 4a76f45..c4e1f35 100644[m
+[1m--- a/app/Models/Property.php[m
+[1m+++ b/app/Models/Property.php[m
+[36m@@ -9,63 +9,75 @@[m [mclass Property extends Model[m
+ {[m
+     use HasFactory;[m
+ [m
+[31m-    protected $table = 'properties'; // Ensure this matches your table name[m
+[31m-    protected $primaryKey = 'property_id'; // Specify the primary key if it's not 'id'[m
+[31m-    public $incrementing = true; // If the primary key is an auto-incrementing integer[m
+[32m+[m[32m    protected $table = 'properties';[m
+[32m+[m[32m    protected $primaryKey = 'id'; // Correct primary key[m
+[32m+[m[32m    public $incrementing = false; // UUID, not auto-incrementing[m
+[32m+[m[32m    protected $keyType = 'string'; // UUID is a string[m
+ [m
+     protected $fillable = [[m
+[31m-        'user_id',[m
+[31m-        'title',[m
+[31m-        'description',[m
+[31m-        'location',[m
+[31m-        'lat',[m
+[31m-        'lng',[m
+[31m-        'property_type',[m
+[31m-        'bedrooms',[m
+[31m-        'bathrooms',[m
+[31m-        'parking_spaces',[m
+[31m-        'area',[m
+[31m-        'furnishing',[m
+[31m-        'flooring',[m
+[31m-        'water_supply',[m
+[31m-        'amenities',[m
+[31m-        'price',[m
+[31m-        'currency',[m
+[31m-        'payment_frequency',[m
+[31m-        'images',[m
+[31m-        'videos',[m
+[31m-        'virtual_tour',[m
+[31m-        'additional_information',[m
+[31m-        'status',[m
+[31m-        'featured',[m
+[31m-        'highlighted',[m
+[31m-        'views',[m
+[31m-        'likes',[m
+[31m-        'dislikes',[m
+[31m-        'address',[m
+[31m-        'comments',[m
+[32m+[m[32m        'id', 'owner_id', 'owner_type', 'name', 'description', 'images',[m
+[32m+[m[32m        'availability', 'type', 'area', 'furnished', 'price', 'listing_type',[m
+[32m+[m[32m        'rental_period', 'rooms', 'features', 'amenities', 'locations',[m
+[32m+[m[32m        'address_details', 'address', 'floor_number', 'floor_details', 'year_built',[m
+[32m+[m[32m        'construction_details', 'energy_rating', 'energy_details', 'electricity',[m
+[32m+[m[32m        'water', 'internet', 'virtual_tour_url', 'virtual_tour_details',[m
+[32m+[m[32m        'floor_plan_url', 'additional_media', 'verified', 'is_active', 'published',[m
+[32m+[m[32m        'status', 'views', 'view_analytics', 'favorites_count', 'favorites_analytics',[m
+[32m+[m[32m        'rating', 'is_boosted', 'boost_start_date', 'boost_end_date', 'legal_information',[m
+[32m+[m[32m        'investment_analysis', 'furnishing_details', 'seo_metadata', 'nearby_amenities',[m
+     ];[m
+ [m
+     protected $casts = [[m
+[32m+[m[32m        'id' => 'string',[m
+[32m+[m[32m        'name' => 'array',[m
+[32m+[m[32m        'description' => 'array',[m
+         'images' => 'array',[m
+[31m-        'videos' => 'json',[m
+[31m-        'comments' => 'json',[m
+[31m-        'featured' => 'boolean',[m
+[31m-        'highlighted' => 'boolean',[m
+[32m+[m[32m        'availability' => 'array',[m
+[32m+[m[32m        'type' => 'array',[m
+[32m+[m[32m        'price' => 'array',[m
+[32m+[m[32m        'rooms' => 'array',[m
+[32m+[m[32m        'features' => 'array',[m
+[32m+[m[32m        'amenities' => 'array',[m
+[32m+[m[32m        'locations' => 'array',[m
+[32m+[m[32m        'address_details' => 'array',[m
+[32m+[m[32m        'floor_details' => 'array',[m
+[32m+[m[32m        'construction_details' => 'array',[m
+[32m+[m[32m        'energy_details' => 'array',[m
+[32m+[m[32m        'virtual_tour_details' => 'array',[m
+[32m+[m[32m        'additional_media' => 'array',[m
+[32m+[m[32m        'view_analytics' => 'array',[m
+[32m+[m[32m        'favorites_analytics' => 'array',[m
+[32m+[m[32m        'furnished' => 'boolean',[m
+[32m+[m[32m        'electricity' => 'boolean',[m
+[32m+[m[32m        'water' => 'boolean',[m
+[32m+[m[32m        'internet' => 'boolean',[m
+[32m+[m[32m        'verified' => 'boolean',[m
+[32m+[m[32m        'is_active' => 'boolean',[m
+[32m+[m[32m        'published' => 'boolean',[m
+[32m+[m[32m        'is_boosted' => 'boolean',[m
+[32m+[m[32m        'views' => 'integer',[m
+[32m+[m[32m        'favorites_count' => 'integer',[m
+[32m+[m[32m        'rating' => 'decimal:2',[m
+     ];[m
+ [m
+[31m-    public function user()[m
+[32m+[m[32m    public function owner()[m
+     {[m
+[31m-        return $this->belongsTo(User::class);[m
+[32m+[m[32m        return $this->morphTo();[m
+     }[m
+ [m
+[31m-    public function reports()[m
+[32m+[m[32m    public function scopeActive($query)[m
+     {[m
+[31m-        return $this->hasMany(Report::class);[m
+[32m+[m[32m        return $query->whereIn('status', ['active', 'approved']);[m
+     }[m
+ [m
+[31m-    public function owner()[m
+[32m+[m[32m    public function scopePublished($query)[m
+     {[m
+[31m-        return $this->belongsTo(User::class, 'user_id');[m
+[32m+[m[32m        return $query->where('status', 'approved')[m
+[32m+[m[32m                     ->where('published', true);[m
+     }[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m
+ }[m

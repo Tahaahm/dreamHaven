@@ -20,6 +20,8 @@
 </head>
 
 <body>
+    @php $navbarStyle = 'navbar-light'; @endphp
+
 @include('navbar')
 
 

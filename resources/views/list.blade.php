@@ -17,6 +17,8 @@
     <link rel="stylesheet" type="text/css" href="{{ asset('../css/list-style.css') }}">
 </head>
 <body class="black-navbar">
+    @php $navbarStyle = 'navbar-light'; @endphp
+
     @include('navbar')
     <div class="allin">
     <div class="search-sort-container">

@@ -19,6 +19,12 @@ use App\Http\Middleware\AgentOrAdmin;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Middleware\EnsureUserIsVerified;
+// Public or logged-in (either user or agent)
+
+Route::get('/test-no-middleware', function () {
+    return "NO MIDDLEWARE REACHED";
+});
+
 
 Route::get('/', [PropertyController::class, 'newindex']);
 Route::get('/', [PropertyController::class, 'newindex'])->name('newindex');
@@ -444,12 +450,15 @@ Route::prefix('api/v1')->group(function () {
 
 
 
+// Public / both user & agent
 
 
 
-Route::get('/login-page', function () {
-    return view('login-page');
-})->name('login-page');
+    Route::get('/agent/properties', [PropertyController::class, 'showUserProperties'])
+    ->name('agent.property.list');
+
+
+
 
 Route::get('/contact-us', function () {
     return view('contact-us');
@@ -468,16 +477,24 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
 
-Route::get('/admin/property-list', [PropertyController::class, 'adminPropertyList'])->name('admin.property-list');
-Route::get('/admin/property-list', [PropertyController::class, 'showUserProperties'])->name('admin.property-list');
+Route::middleware(['auth:web,agent'])->group(function () {
+    Route::get('/admin/property-list', [PropertyController::class, 'showUserProperties'])
+        ->name('admin.property-list');
+});
+
+
 
 
     Route::get('/review', [AuthController::class, 'showReviews'])->name('agent.review');
 
 // Show “become agent” prompt page
 Route::get('/become-agent', function () {
-    return view('agent.become');
-})->name('become.agent.prompt');
+    $user = Auth::guard('web')->user(); // get the logged-in user
+    if (!$user) {
+        return redirect()->route('login-page')->with('error', 'Please log in first.');
+    }
+    return view('agent.become', compact('user'));
+})->middleware('auth:web')->name('become.agent.prompt');
 
 // Handle agent request via POST
 Route::post('/agent/request', [AgentController::class, 'createFromUser'])->name('agent.request');
@@ -487,8 +504,9 @@ Route::get('/become-agent/{user_id}', [AgentController::class, 'showCreateFromUs
     ->name('agent.create.from.user');
 
 // Submit create-from-user form
-Route::post('/become-agent', [AgentController::class, 'createFromUser'])
-    ->name('agent.create.from.user.submit');
+Route::get('/become-agent/{user_id}', [AgentController::class, 'showCreateFromUserForm'])
+    ->name('agent.create.from.user');
+
 
 
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
@@ -558,14 +576,6 @@ Route::get('/about-us', function () {
     return view('about-us');
 })->name('about-us');
 Route::get('profile/{id}/edit', [AuthController::class, 'edit'])->name('profile.edit');
-
-
-Route::get('/list', [PropertyController::class, 'showList']);
-Route::get('/list', [PropertyController::class, 'showList'])->name('property.list');
-
-Route::get('/PropertyDetail/{property_id}', [PropertyController::class, 'showPortfolio'])->name('property.PropertyDetail');
-
-Route::get('/admin/property-list', [PropertyController::class, 'showUserProperties'])->name('admin.property-list');
 
 
 
@@ -774,8 +784,7 @@ Route::get('/property/{property_id}/edit', [PropertyController::class, 'edit'])
 Route::post('/property/{property_id}/remove-image', [PropertyController::class, 'removeImage'])
     ->name('property.removeImage');
 
-    Route::get('/agent/properties', [PropertyController::class, 'showUserProperties'])
-    ->name('agent.property.list');
+
 
 
 Route::group(['prefix' => 'admin'], function () {
@@ -870,3 +879,16 @@ Route::middleware(['web', 'auth:agent'])->group(function () {
 });
 
 Route::post('/auth/google', [AuthController::class, 'googleLogin'])->name('auth.google');
+
+
+
+Route::get('/PropertyDetail/{property_id}', [PropertyController::class, 'showPortfolio'])
+    ->name('property.PropertyDetail');
+
+    
+Route::get('/properties', [PropertyController::class, 'showList'])
+    ->name('property.list');
+
+
+
+

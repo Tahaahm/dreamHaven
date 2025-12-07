@@ -78,5 +78,7 @@ class Kernel extends HttpKernel
         'admin' => \App\Http\Middleware\AdminMiddleware::class,
         'agent.or.admin' => \App\Http\Middleware\AgentOrAdmin::class,
         'ensure.verified' => \App\Http\Middleware\EnsureUserIsVerified::class,
+        'auth.any' => \App\Http\Middleware\AuthAnyGuard::class,
+
     ];
 }

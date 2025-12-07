@@ -15,10 +15,6 @@ use Illuminate\Support\Facades\Auth;
 class RealEstateOfficeController extends Controller
 {
 
-public function __construct()
-{
-    $this->middleware('auth:agent');
-}
 
 
     /**

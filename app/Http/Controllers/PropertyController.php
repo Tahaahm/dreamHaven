@@ -3190,19 +3190,24 @@ public function showUserProperties()
 
 public function showPortfolio($property_id)
 {
+    Log::info('🔹 PropertyDetail accessed', [
+        'web_user' => Auth::user(),
+        'agent_user' => Auth::guard('agent')->user(),
+        'session_all' => session()->all()
+    ]);
+
     $property = Property::find($property_id);
 
     if (!$property) {
         return redirect()->back()->with('error', 'Property not found.');
     }
 
-    // Decode JSON fields
     $property->images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
     $property->location = is_string($property->location) ? json_decode($property->location, true) : $property->location;
 
-    // Return the Blade view
     return view('PropertyDetail', compact('property'));
 }
+
 
 
 

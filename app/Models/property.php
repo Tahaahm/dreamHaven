@@ -67,12 +67,12 @@ class Property extends Model
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['active', 'approved']);
+        return $query->whereIn('status', ['available', 'approved']);
     }
 
     public function scopePublished($query)
     {
-        return $query->where('status', 'approved')
+        return $query->where('status', 'available')
                      ->where('published', true);
     }
 

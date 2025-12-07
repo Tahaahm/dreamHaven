@@ -25,14 +25,31 @@ class AdminController extends Controller
     /** -----------------------
      * List all users and agents
      * ----------------------- */
-public function entitiesList()
+public function entitiesList(Request $request)
 {
-    // Simple pagination
-    $users = User::paginate(5);
-    $agents = Agent::paginate(5);
+    // Optional filter
+    $filter = $request->get('filter');
 
-    return view('Admin.users-list', compact('users', 'agents'));
+    if ($filter === 'User') {
+        $entities = User::paginate(5);
+    } elseif ($filter === 'Agent') {
+        $entities = Agent::paginate(5);
+    } else {
+        // Combine users and agents
+        $entities = collect(User::paginate(5)->items())
+                    ->merge(collect(Agent::paginate(5)->items()));
+        $entities = new \Illuminate\Pagination\LengthAwarePaginator(
+            $entities,
+            User::count() + Agent::count(),
+            5,
+            request()->get('page', 1),
+            ['path' => request()->url()]
+        );
+    }
+
+    return view('Admin.users-list', compact('entities', 'filter'));
 }
+
 
     /** -----------------------
      * View User Detail
