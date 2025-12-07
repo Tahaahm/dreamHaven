@@ -702,11 +702,11 @@
       array (
         'transport' => 'smtp',
         'url' => NULL,
-        'host' => 'smtp.contabo.host',
+        'host' => 'smtp.gmail.com',
         'port' => '587',
         'encryption' => 'tls',
-        'username' => 'your-email@yourdomain.com',
-        'password' => 'your-contabo-mail-password',
+        'username' => 'tahaahmad837@gmail.com',
+        'password' => 'ccdugwjjgwmeafrw',
         'timeout' => NULL,
         'local_domain' => 'localhost',
       ),
@@ -757,7 +757,7 @@
     ),
     'from' => 
     array (
-      'address' => 'noreply@yourdomain.com',
+      'address' => 'tahaahmad837@gmail.com',
       'name' => 'Dream Haven',
     ),
     'markdown' => 
