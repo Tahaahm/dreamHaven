@@ -3,108 +3,395 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About Us</title>
+    <title>About Us - Dream Haven</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        /* Global styles */
-        body {
-            font-family: Arial, sans-serif;
+        * {
             margin: 0;
             padding: 0;
-           
-  background-size: cover;
-  background-position: center center;
-  background-repeat: repeat;
-  background-image: url("data:image/svg+xml;utf8,%3Csvg viewBox=%220 0 2000 1000%22 xmlns=%22http:%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cmask id=%22b%22 x=%220%22 y=%220%22 width=%222000%22 height=%221000%22%3E%3Cpath fill=%22url(%23a)%22 d=%22M0 0h2000v1000H0z%22%2F%3E%3C%2Fmask%3E%3Cpath fill=%22%23012c37%22 d=%22M0 0h2000v1000H0z%22%2F%3E%3Cg style=%22transform-origin:center center%22 stroke=%22%235da6af%22 stroke-width=%222%22 mask=%22url(%23b)%22%3E%3Cpath fill=%22none%22 d=%22M0 0h100v100H0zM100 0h100v100H100zM200 0h100v100H200z%22%2F%3E%3Cpath fill=%22%235da6aff1%22 d=%22M300 0h100v100H300z%22%2F%3E%3Cpath fill=%22none%22 d=%22M500 0h100v100H500zM700 0h100v100H700zM800 0h100v100H800zM900 0h100v100H900zM1000 0h100v100h-100zM1100 0h100v100h-100zM1200 0h100v100h-100zM1300 0h100v100h-100zM1400 0h100v100h-100zM1500 0h100v100h-100zM1600 0h100v100h-100zM1700 0h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af30%22 d=%22M1800 0h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af3b%22 d=%22M1900 0h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M0 100h100v100H0zM100 100h100v100H100zM200 100h100v100H200zM300 100h100v100H300zM400 100h100v100H400zM500 100h100v100H500zM600 100h100v100H600zM700 100h100v100H700zM900 100h100v100H900zM1000 100h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af10%22 d=%22M1100 100h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1200 100h100v100h-100zM1300 100h100v100h-100zM1400 100h100v100h-100zM1500 100h100v100h-100zM1600 100h100v100h-100zM1700 100h100v100h-100zM1800 100h100v100h-100zM0 200h100v100H0zM100 200h100v100H100zM200 200h100v100H200zM300 200h100v100H300z%22%2F%3E%3Cpath fill=%22%235da6afc1%22 d=%22M400 200h100v100H400z%22%2F%3E%3Cpath fill=%22none%22 d=%22M500 200h100v100H500zM600 200h100v100H600zM700 200h100v100H700zM800 200h100v100H800zM900 200h100v100H900zM1000 200h100v100h-100zM1100 200h100v100h-100zM1200 200h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6aff9%22 d=%22M1300 200h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af39%22 d=%22M1400 200h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1500 200h100v100h-100zM1600 200h100v100h-100zM1700 200h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6aff1%22 d=%22M1800 200h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1900 200h100v100h-100zM0 300h100v100H0zM100 300h100v100H100zM200 300h100v100H200zM300 300h100v100H300z%22%2F%3E%3Cpath fill=%22%235da6af43%22 d=%22M400 300h100v100H400z%22%2F%3E%3Cpath fill=%22%235da6af18%22 d=%22M500 300h100v100H500z%22%2F%3E%3Cpath fill=%22none%22 d=%22M600 300h100v100H600zM700 300h100v100H700z%22%2F%3E%3Cpath fill=%22%235da6aff5%22 d=%22M800 300h100v100H800z%22%2F%3E%3Cpath fill=%22none%22 d=%22M900 300h100v100H900z%22%2F%3E%3Cpath fill=%22%235da6af40%22 d=%22M1000 300h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1100 300h100v100h-100zM1200 300h100v100h-100zM1300 300h100v100h-100zM1500 300h100v100h-100zM1700 300h100v100h-100zM1800 300h100v100h-100zM1900 300h100v100h-100zM0 400h100v100H0zM100 400h100v100H100zM200 400h100v100H200z%22%2F%3E%3Cpath fill=%22%235da6af5b%22 d=%22M300 400h100v100H300z%22%2F%3E%3Cpath fill=%22none%22 d=%22M400 400h100v100H400zM600 400h100v100H600zM700 400h100v100H700zM800 400h100v100H800zM900 400h100v100H900zM1000 400h100v100h-100zM1100 400h100v100h-100zM1200 400h100v100h-100zM1300 400h100v100h-100zM1400 400h100v100h-100zM1500 400h100v100h-100zM1600 400h100v100h-100zM1700 400h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af6c%22 d=%22M1800 400h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1900 400h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af51%22 d=%22M0 500h100v100H0z%22%2F%3E%3Cpath fill=%22none%22 d=%22M100 500h100v100H100zM200 500h100v100H200zM300 500h100v100H300zM400 500h100v100H400z%22%2F%3E%3Cpath fill=%22%235da6afd5%22 d=%22M500 500h100v100H500z%22%2F%3E%3Cpath fill=%22none%22 d=%22M600 500h100v100H600z%22%2F%3E%3Cpath fill=%22%235da6af3e%22 d=%22M700 500h100v100H700z%22%2F%3E%3Cpath fill=%22none%22 d=%22M800 500h100v100H800z%22%2F%3E%3Cpath fill=%22%235da6af17%22 d=%22M900 500h100v100H900z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1000 500h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af85%22 d=%22M1100 500h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1200 500h100v100h-100zM1300 500h100v100h-100zM1400 500h100v100h-100zM1500 500h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af18%22 d=%22M1600 500h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1800 500h100v100h-100zM1900 500h100v100h-100zM100 600h100v100H100zM200 600h100v100H200zM300 600h100v100H300zM400 600h100v100H400zM500 600h100v100H500zM600 600h100v100H600zM700 600h100v100H700z%22%2F%3E%3Cpath fill=%22%235da6af5d%22 d=%22M800 600h100v100H800z%22%2F%3E%3Cpath fill=%22none%22 d=%22M900 600h100v100H900zM1000 600h100v100h-100zM1100 600h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af55%22 d=%22M1200 600h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1300 600h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6afab%22 d=%22M1400 600h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1500 600h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af9d%22 d=%22M1600 600h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1700 600h100v100h-100zM1800 600h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af44%22 d=%22M1900 600h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M0 700h100v100H0zM200 700h100v100H200z%22%2F%3E%3Cpath fill=%22%235da6af5c%22 d=%22M300 700h100v100H300z%22%2F%3E%3Cpath fill=%22none%22 d=%22M400 700h100v100H400zM500 700h100v100H500zM600 700h100v100H600zM700 700h100v100H700zM800 700h100v100H800zM900 700h100v100H900zM1000 700h100v100h-100zM1100 700h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6afdf%22 d=%22M1200 700h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1300 700h100v100h-100zM1400 700h100v100h-100zM1500 700h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af10%22 d=%22M1600 700h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af0c%22 d=%22M1700 700h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1800 700h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af61%22 d=%22M1900 700h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af8a%22 d=%22M0 800h100v100H0z%22%2F%3E%3Cpath fill=%22none%22 d=%22M100 800h100v100H100zM200 800h100v100H200zM300 800h100v100H300zM400 800h100v100H400zM500 800h100v100H500zM600 800h100v100H600zM700 800h100v100H700zM800 800h100v100H800zM900 800h100v100H900zM1000 800h100v100h-100zM1100 800h100v100h-100zM1200 800h100v100h-100zM1300 800h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af5a%22 d=%22M1400 800h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1500 800h100v100h-100zM1600 800h100v100h-100zM1700 800h100v100h-100zM1800 800h100v100h-100zM0 900h100v100H0z%22%2F%3E%3Cpath fill=%22%235da6afa2%22 d=%22M100 900h100v100H100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M200 900h100v100H200z%22%2F%3E%3Cpath fill=%22%235da6afd2%22 d=%22M400 900h100v100H400z%22%2F%3E%3Cpath fill=%22%235da6af6f%22 d=%22M500 900h100v100H500z%22%2F%3E%3Cpath fill=%22none%22 d=%22M600 900h100v100H600z%22%2F%3E%3Cpath fill=%22%235da6afc6%22 d=%22M700 900h100v100H700z%22%2F%3E%3Cpath fill=%22%235da6af10%22 d=%22M800 900h100v100H800z%22%2F%3E%3Cpath fill=%22%235da6af4a%22 d=%22M900 900h100v100H900z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1000 900h100v100h-100zM1100 900h100v100h-100zM1300 900h100v100h-100z%22%2F%3E%3Cpath fill=%22%235da6af99%22 d=%22M1400 900h100v100h-100z%22%2F%3E%3Cpath fill=%22none%22 d=%22M1500 900h100v100h-100zM1600 900h100v100h-100zM1700 900h100v100h-100zM1800 900h100v100h-100zM1900 900h100v100h-100z%22%2F%3E%3C%2Fg%3E%3Cdefs%3E%3CradialGradient id=%22a%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22%2F%3E%3Cstop offset=%221%22 stop-color=%22%23fff%22 stop-opacity=%220%22%2F%3E%3C%2FradialGradient%3E%3C%2Fdefs%3E%3C%2Fsvg%3E");
-}
+            box-sizing: border-box;
+        }
 
-.unique-header {
-    position  : fixed;
-    height    : 80px;
-    width     : 100%;
-    z-index   : 100;
-    padding   : 0 20px;
-    background: #303b97;
-    /* Ensure a background color if needed */
-}
-        
-        .centered-content {
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        body {
+            font-family: 'Poppins', Arial, sans-serif;
+            overflow-x: hidden;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .unique-header {
+            position: fixed;
+            height: 80px;
             width: 100%;
-            height: 100vh;
+            z-index: 100;
+            padding: 0 20px;
+            background: #303b97;
         }
-        
-        .container {
-    max-width: 2000px; /* Increased maximum width */
-    padding: 40px; /* Increased padding */
-    background-color: rgba(255, 255, 255, 0.7); /* Set opacity to 70% */
-    border-radius: 12px; /* Increased border radius */
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2); /* Adjusted box shadow */
-}
 
+        /* Animated Background */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+        }
 
-        h1 {
+        .bg-animation span {
+            position: absolute;
+            display: block;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            animation: float 25s infinite;
+            bottom: -150px;
+        }
+
+        .bg-animation span:nth-child(1) { left: 25%; width: 80px; height: 80px; animation-delay: 0s; }
+        .bg-animation span:nth-child(2) { left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }
+        .bg-animation span:nth-child(3) { left: 70%; width: 20px; height: 20px; animation-delay: 4s; }
+        .bg-animation span:nth-child(4) { left: 40%; width: 60px; height: 60px; animation-delay: 0s; animation-duration: 18s; }
+        .bg-animation span:nth-child(5) { left: 65%; width: 20px; height: 20px; animation-delay: 0s; }
+        .bg-animation span:nth-child(6) { left: 75%; width: 110px; height: 110px; animation-delay: 3s; }
+        .bg-animation span:nth-child(7) { left: 35%; width: 150px; height: 150px; animation-delay: 7s; }
+        .bg-animation span:nth-child(8) { left: 50%; width: 25px; height: 25px; animation-delay: 15s; animation-duration: 45s; }
+        .bg-animation span:nth-child(9) { left: 20%; width: 15px; height: 15px; animation-delay: 2s; animation-duration: 35s; }
+        .bg-animation span:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-delay: 0s; animation-duration: 11s; }
+
+        @keyframes float {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 1;
+                border-radius: 0;
+            }
+            100% {
+                transform: translateY(-1000px) rotate(720deg);
+                opacity: 0;
+                border-radius: 50%;
+            }
+        }
+
+        .about-wrapper {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 120px 20px 40px;
+        }
+
+        .about-container {
+            max-width: 1200px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 60px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.8s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .about-header {
             text-align: center;
-            color: #333;
+            margin-bottom: 50px;
         }
 
-        .info {
-            max-width: 2000px; /* Increased maximum width */
-    padding: 40px; /* Increased padding */
-    background-color: rgba(255, 255, 255, 0.7); /* Set opacity to 70% */
-    border-radius: 12px; /* Increased border radius */
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.2); /* Adjusted box shadow */
+        .about-header h1 {
+            font-size: 56px;
+            color: #303b97;
+            margin-bottom: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #303b97, #667eea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .info p {
-            margin-bottom: 10px;
+        .about-header p {
+            font-size: 20px;
+            color: #666;
+            line-height: 1.8;
         }
 
-        .info p:last-child {
-            margin-bottom: 0;
+        .story-section {
+            margin-bottom: 50px;
         }
 
-        .info p strong {
+        .story-section p {
+            font-size: 18px;
             color: #555;
+            line-height: 1.8;
+            margin-bottom: 20px;
+            text-align: justify;
         }
 
-        .info p a {
-            color: #007bff;
-            text-decoration: none;
+        .team-section {
+            margin-top: 60px;
         }
 
-        .info p a:hover {
-            text-decoration: underline;
+        .team-section h2 {
+            font-size: 36px;
+            color: #303b97;
+            text-align: center;
+            margin-bottom: 40px;
+            font-weight: 700;
         }
-        .black-navbar #header #navbar a,
-      .black-navbar #header #navbar a:focus {
-        color: #000; /* Set the desired text color */
-      }
 
-     
+        .team-members {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .team-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .team-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.3);
+        }
+
+        .team-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 36px;
+            color: white;
+        }
+
+        .team-card h3 {
+            font-size: 22px;
+            color: #303b97;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .team-card p {
+            font-size: 16px;
+            color: #666;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 30px;
+            margin-top: 50px;
+        }
+
+        .info-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .info-card:hover {
+            transform: translateX(10px);
+            box-shadow: 0 10px 30px rgba(48, 59, 151, 0.2);
+        }
+
+        .info-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 20px;
+            font-size: 24px;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .info-content h3 {
+            font-size: 16px;
+            color: #303b97;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .info-content p {
+            font-size: 18px;
+            color: #333;
+            font-weight: 500;
+            margin: 0;
+        }
+
+        /* Mobile Responsive */
+        @media screen and (max-width: 768px) {
+            .about-container {
+                padding: 40px 30px;
+            }
+
+            .about-header h1 {
+                font-size: 36px;
+            }
+
+            .about-header p {
+                font-size: 16px;
+            }
+
+            .team-section h2 {
+                font-size: 28px;
+            }
+
+            .team-members {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .about-wrapper {
+                padding: 100px 15px 30px;
+            }
+
+            .story-section p {
+                font-size: 16px;
+                text-align: left;
+            }
+        }
+
+        @media screen and (max-width: 480px) {
+            .about-header h1 {
+                font-size: 28px;
+            }
+
+            .team-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 28px;
+            }
+
+            .team-card h3 {
+                font-size: 18px;
+            }
+
+            .info-icon {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
     </style>
-  </head>
-  <body class="black-navbar">
+</head>
+<body>
+    @include('navbar')
+    <!-- Animated Background -->
+    <div class="bg-animation">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
 
-      @include('navbar')
+    <div class="about-wrapper">
+        <div class="about-container">
+            <!-- Header Section -->
+            <div class="about-header">
+                <h1>About Us</h1>
+                <p>Welcome to Dream Haven - Where Real Estate Dreams Come True</p>
+            </div>
 
-<div class="centered-content">
-    <div class="container">
-        <h1>About Us</h1>
-        <div class="info">
-        <p>Welcome to our website!</p>
-            <p>We are a group of passionate students who came together to create something beautiful.</p>
-            <p>Our project started as a simple idea and grew into something much more. It's a testament to our dedication, creativity, and teamwork.</p>
-            <p>Through hard work and collaboration, we've built a platform that we're proud of. This project has been a journey of learning and growth for all of us.</p>
-            <p>Thank you for visiting and being a part of our story.</p>
-            <p>Created by Ahmad Nyaz,Taha Ahmed and Zana Goran.</p>
-            <p><strong>Address:</strong> Erbil, Kurdistan, Iraq</p>
-            <p><strong>Website Creation Date:</strong> April 3, 2024</p> 
-            
+            <!-- Story Section -->
+            <div class="story-section">
+                <p>We are a group of passionate students who came together to create something beautiful. Our project started as a simple idea and grew into something much more. It's a testament to our dedication, creativity, and teamwork.</p>
+                
+                <p>Through hard work and collaboration, we've built a platform that we're proud of. This project has been a journey of learning and growth for all of us. We believe in making real estate accessible, transparent, and exciting for everyone.</p>
+                
+                <p>Thank you for visiting and being a part of our story. We're committed to helping you find your dream property and making the process as smooth as possible.</p>
+            </div>
+
+            <!-- Team Section -->
+            <div class="team-section">
+                <h2>Meet Our Team</h2>
+                <div class="team-members">
+                    <div class="team-card">
+                        <div class="team-icon">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <h3>Ahmad Nyaz</h3>
+                        <p>Co-Founder </p>
+                    </div>
+
+                    <div class="team-card">
+                        <div class="team-icon">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <h3>Taha Ahmed</h3>
+                        <p>Co-Founder & Developer</p>
+                    </div>
+
+                    <div class="team-card">
+                        <div class="team-icon">
+                            <i class="fas fa-user-cog"></i>
+                        </div>
+                        <h3>Zana Goran</h3>
+                        <p>Co-Founder & Developer</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Grid -->
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="info-icon">
+                        <i class="fas fa-map-marker-alt"></i>
+                    </div>
+                    <div class="info-content">
+                        <h3>Location</h3>
+                        <p>Erbil, Kurdistan, Iraq</p>
+                    </div>
+                </div>
+
+                <div class="info-card">
+                    <div class="info-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div class="info-content">
+                        <h3>Established</h3>
+                        <p>April 3, 2024</p>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-</div>
-
 </body>
 </html>

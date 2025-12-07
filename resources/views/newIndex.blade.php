@@ -433,7 +433,7 @@
   }
 </style>
 
-
+    <!--searchBox
 <div id="search">
   <i class="gg-search search-icon" id="searchIcon"></i>
   <svg viewBox="0 0 420 60" xmlns="http://www.w3.org/2000/svg">
@@ -501,7 +501,7 @@
 </script>
 
 
-
+-->
 
 	
  

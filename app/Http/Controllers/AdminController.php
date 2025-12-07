@@ -51,6 +51,7 @@ public function entitiesList(Request $request)
 }
 
 
+
     /** -----------------------
      * View User Detail
      * ----------------------- */
