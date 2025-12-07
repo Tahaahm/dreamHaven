@@ -11,64 +11,83 @@ use Carbon\Carbon;
 
 class FirebaseFirestoreService
 {
-    private $firestore;
-
-    public function __construct()
+    private $firestore = null;
+    private $initialized = false;
+    private $initializationFailed = false;
+    private $serviceAccountPath = null;
+    /**
+     * Lazy initialization - only connect when actually needed
+     */
+    private function initializeFirestore()
     {
-        // TEMPORARY: Disable Firestore to prevent server hangs
-        // Remove this block when ready to use Firestore
-        Log::warning('Firestore temporarily disabled to prevent server hangs', [
-            'reason' => 'Firestore operations causing timeout during user registration',
-            'solution' => 'Enable Firestore database in Firebase Console first'
+        Log::info('🔵 [FIRESTORE] initializeFirestore() called', [
+            'initialized' => $this->initialized,
+            'initializationFailed' => $this->initializationFailed,
+            'firestore_is_null' => $this->firestore === null
         ]);
-        $this->firestore = null;
-        return;
 
-        /* ============================================
-       COMMENTED OUT - Original Firestore initialization
-       Uncomment this section after enabling Firestore in Firebase Console
-       ============================================
-
-    try {
-        // Check if Firestore client is available
-        if (!class_exists('Google\Cloud\Firestore\FirestoreClient')) {
-            Log::warning('Google Cloud Firestore client not installed. Firestore operations will be disabled.', [
-                'suggestion' => 'Run: composer require google/cloud-firestore'
+        // Already initialized (success or failure)
+        if ($this->initialized || $this->initializationFailed) {
+            Log::info('🟡 [FIRESTORE] Already initialized, returning cached state', [
+                'success' => $this->firestore !== null
             ]);
-            $this->firestore = null;
-            return;
+            return $this->firestore !== null;
         }
 
+        // Check if Firestore is enabled
+        $firestoreEnabled = config('firebase.firestore_enabled', false);
+        Log::info('🔵 [FIRESTORE] Checking if enabled', [
+            'firestore_enabled' => $firestoreEnabled
+        ]);
+
+        if (!$firestoreEnabled) {
+            Log::info('🟠 [FIRESTORE] Firestore disabled via configuration');
+            $this->initialized = true;
+            return false;
+        }
         $serviceAccountPath = config('firebase.service_account_path');
 
-        if (!file_exists($serviceAccountPath)) {
-            throw new \Exception("Firebase service account file not found: {$serviceAccountPath}");
+        try {
+            Log::info('🔵 [FIRESTORE] Creating Firestore with custom config...');
+
+            // Use Google Cloud Firestore directly with timeout settings
+            $this->firestore = new \Google\Cloud\Firestore\FirestoreClient([
+                'keyFilePath' => $serviceAccountPath,
+                'transport' => 'grpc', // Use gRPC for better performance
+                'transportConfig' => [
+                    'grpc' => [
+                        'stubOpts' => [
+                            'timeout' => 5000000, // 5 seconds in microseconds
+                        ]
+                    ]
+                ]
+            ]);
+
+            $this->initialized = true;
+            Log::info('✅ [FIRESTORE] Firestore initialized with timeout');
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('❌ [FIRESTORE] Initialization failed', [
+                'error' => $e->getMessage()
+            ]);
+
+            $this->initializationFailed = true;
+            $this->firestore = null;
+
+            return false;
         }
-
-        $factory = (new Factory)->withServiceAccount($serviceAccountPath);
-        $this->firestore = $factory->createFirestore();
-
-        Log::info('Firebase Firestore initialized successfully');
-    } catch (\Exception $e) {
-        Log::error('Firebase Firestore initialization failed', [
-            'error' => $e->getMessage(),
-            'service_account_path' => $serviceAccountPath ?? 'not found'
-        ]);
-        $this->firestore = null; // Set to null instead of throwing
     }
-
-    ============================================ */
-    }
-
     /**
      * Create user document in Firestore
      */
     public function createUserDocument(User $user, array $additionalData = [])
     {
-        if ($this->firestore === null) {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
             Log::warning('Firestore not available, skipping user document creation', [
                 'user_id' => $user->id,
-                'suggestion' => 'Install google/cloud-firestore package to enable Firestore'
+                'suggestion' => 'Enable Firestore in .env or install google/cloud-firestore package'
             ]);
             return [
                 'success' => false,
@@ -157,18 +176,20 @@ class FirebaseFirestoreService
      */
     public function updateUserDocument(User $user, array $updateData = [])
     {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
+            Log::warning('Firestore not available, skipping user document update', [
+                'user_id' => $user->id,
+                'suggestion' => 'Enable Firestore in .env'
+            ]);
+            return [
+                'success' => false,
+                'error' => 'Firestore client not available',
+                'skipped' => true
+            ];
+        }
+
         try {
-            if ($this->firestore === null) {
-                Log::warning('Firestore not available, skipping user document update', [
-                    'user_id' => $user->id,
-                    'suggestion' => 'Install google/cloud-firestore package to enable Firestore'
-                ]);
-                return [
-                    'success' => false,
-                    'error' => 'Firestore client not available',
-                    'skipped' => true
-                ];
-            }
             // Prepare update data
             $firestoreUpdateData = [];
 
@@ -261,6 +282,15 @@ class FirebaseFirestoreService
      */
     public function getUserDocument($userId)
     {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
+            return [
+                'success' => false,
+                'error' => 'Firestore not available',
+                'exists' => false
+            ];
+        }
+
         try {
             $docRef = $this->firestore
                 ->database()
@@ -307,6 +337,14 @@ class FirebaseFirestoreService
      */
     public function deleteUserDocument($userId)
     {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
+            return [
+                'success' => false,
+                'error' => 'Firestore not available'
+            ];
+        }
+
         try {
             $docRef = $this->firestore
                 ->database()
@@ -338,6 +376,11 @@ class FirebaseFirestoreService
      */
     public function userDocumentExists($userId)
     {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
+            return false;
+        }
+
         try {
             $docRef = $this->firestore
                 ->database()
@@ -360,7 +403,8 @@ class FirebaseFirestoreService
      */
     public function createUserSubCollections(User $user)
     {
-        if ($this->firestore === null) {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
             Log::warning('Firestore not available, skipping sub-collections creation', [
                 'user_id' => $user->id
             ]);
@@ -432,6 +476,14 @@ class FirebaseFirestoreService
      */
     public function batchWrite(array $operations)
     {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
+            return [
+                'success' => false,
+                'error' => 'Firestore not available'
+            ];
+        }
+
         try {
             $batch = $this->firestore->database()->batch();
 
@@ -479,6 +531,158 @@ class FirebaseFirestoreService
      */
     public function getFirestore()
     {
+        $this->initializeFirestore();
         return $this->firestore;
+    }
+
+    /**
+     * Get app version from Firestore
+     */
+    public function getAppVersion()
+    {
+        Log::info('🔵 [APP_VERSION] getAppVersion() called');
+
+        // Try to initialize (will return false if disabled or failed)
+        Log::info('🔵 [APP_VERSION] Calling initializeFirestore()...');
+        $initResult = $this->initializeFirestore();
+        Log::info('🔵 [APP_VERSION] initializeFirestore() returned', [
+            'result' => $initResult
+        ]);
+
+        if (!$initResult) {
+            Log::info('📦 [APP_VERSION] Firestore not available - returning mock data');
+
+            return [
+                'success' => true,
+                'exists' => true,
+                'data' => [
+                    'version' => '1.0.0',
+                    'buildNumber' => 1,
+                    'minSupportedVersion' => '1.0.0',
+                    'forceUpdate' => false,
+                    'updateMessage' => 'Please update to the latest version for the best experience.',
+                    'androidUrl' => 'https://play.google.com/store/apps/details?id=com.dreamhaven',
+                    'iosUrl' => 'https://apps.apple.com/app/dream-haven/id123456789',
+                    'releaseDate' => now()->toISOString(),
+                ]
+            ];
+        }
+
+        // Firestore is available - fetch real data
+        try {
+            Log::info('🔵 [APP_VERSION] Firestore available, about to fetch document...');
+            Log::info('⏰ [APP_VERSION] Before collection() call: ' . now()->format('Y-m-d H:i:s.u'));
+
+            // ✅ CORRECT: Google Cloud Firestore API - no database() method
+            $collection = $this->firestore->collection('app_config');
+            Log::info('⏰ [APP_VERSION] After collection() call: ' . now()->format('Y-m-d H:i:s.u'));
+
+            Log::info('🔵 [APP_VERSION] Getting document reference...');
+            $docRef = $collection->document('version');
+            Log::info('⏰ [APP_VERSION] After document() call: ' . now()->format('Y-m-d H:i:s.u'));
+
+            Log::info('🔵 [APP_VERSION] About to call snapshot() - THIS MAY HANG...');
+            $snapshot = $docRef->snapshot();
+            Log::info('⏰ [APP_VERSION] After snapshot() call: ' . now()->format('Y-m-d H:i:s.u'));
+
+            Log::info('🔵 [APP_VERSION] Snapshot retrieved successfully', [
+                'exists' => $snapshot->exists()
+            ]);
+
+            if (!$snapshot->exists()) {
+                Log::warning('🟠 [APP_VERSION] Document not found in Firestore');
+                return [
+                    'success' => false,
+                    'error' => 'App version document not found',
+                    'exists' => false
+                ];
+            }
+
+            Log::info('🔵 [APP_VERSION] Extracting data from snapshot...');
+            $versionData = $snapshot->data();
+
+            Log::info('✅ [APP_VERSION] Data retrieved successfully', [
+                'version' => $versionData['version'] ?? 'unknown',
+                'buildNumber' => $versionData['buildNumber'] ?? 'unknown'
+            ]);
+
+            return [
+                'success' => true,
+                'exists' => true,
+                'data' => $versionData
+            ];
+        } catch (\Exception $e) {
+            Log::error('🔴 [APP_VERSION] Exception during data fetch', [
+                'error' => $e->getMessage(),
+                'type' => get_class($e),
+                'code' => $e->getCode(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'exists' => false
+            ];
+        }
+    }
+    /**
+     * Update app version in Firestore (admin only)
+     */
+    public function updateAppVersion(array $versionData)
+    {
+        // ✅ Initialize Firestore first
+        if (!$this->initializeFirestore()) {
+            Log::warning('Firestore not available, cannot update app version');
+            return [
+                'success' => false,
+                'error' => 'Firestore client not available',
+                'skipped' => true
+            ];
+        }
+
+        try {
+            // Validate required fields
+            $requiredFields = ['version', 'buildNumber'];
+            foreach ($requiredFields as $field) {
+                if (!isset($versionData[$field])) {
+                    return [
+                        'success' => false,
+                        'error' => "Missing required field: {$field}"
+                    ];
+                }
+            }
+
+            // Prepare data with timestamp
+            $updateData = array_merge($versionData, [
+                'updated_at' => now()->toISOString()
+            ]);
+
+            $docRef = $this->firestore
+                ->database()
+                ->collection('app_config')
+                ->document('version');
+
+            $docRef->set($updateData, ['merge' => true]);
+
+            Log::info('App version updated in Firestore successfully', [
+                'version' => $versionData['version'],
+                'buildNumber' => $versionData['buildNumber']
+            ]);
+
+            return [
+                'success' => true,
+                'data' => $updateData
+            ];
+        } catch (\Exception $e) {
+            Log::error('Failed to update app version in Firestore', [
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
     }
 }

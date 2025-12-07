@@ -3060,47 +3060,53 @@ class UserController extends Controller
 
         return $username;
     }
+    /**
+     * Send OTP verification code via Contabo email
+     */
     public function sendVerificationCode(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
-                'email' => 'required|email',
-                'username' => 'nullable|string'
+                'email' => 'required|email|unique:users,email',
             ]);
 
             if ($validator->fails()) {
                 return ApiResponse::error('Validation failed', $validator->errors(), 400);
             }
 
-            // Use Firebase Auth Service to send OTP
+            // ✅ FIXED: Use sendOTPCode() instead of sendFirebaseVerificationEmail()
             if ($this->firebaseAuth) {
-                $result = $this->firebaseAuth->sendOTPCode(
-                    $request->email,
-                    $request->username
-                );
+                Log::info('Sending OTP verification code via Contabo', [
+                    'email' => $request->email
+                ]);
+
+                // This will use Laravel Mail (Contabo) to send 6-digit code
+                $result = $this->firebaseAuth->sendOTPCode($request->email);
 
                 if ($result['success']) {
                     return ApiResponse::success(
-                        $result['message'],
+                        'Verification code sent to your email',
                         [
                             'email' => $result['email'],
-                            'expires_in_minutes' => $result['expires_in_minutes']
+                            'expires_in_minutes' => $result['expires_in_minutes'],
+                            'message' => 'Please check your email for the 6-digit verification code'
                         ],
                         200
                     );
                 } else {
-                    $statusCode = $result['error_code'] === 'EMAIL_EXISTS' ? 400 : 500;
-
                     return ApiResponse::error(
                         $result['error'],
                         ['error_code' => $result['error_code']],
-                        $statusCode
+                        400
                     );
                 }
             }
 
-            // Fallback to local implementation if Firebase not available
-            return $this->sendVerificationCodeLocal($request);
+            return ApiResponse::error(
+                'Verification service unavailable',
+                null,
+                503
+            );
         } catch (\Exception $e) {
             Log::error('Send verification code error', [
                 'message' => $e->getMessage()
@@ -3113,6 +3119,7 @@ class UserController extends Controller
             );
         }
     }
+
 
     /**
      * Verify code before registration
@@ -3163,6 +3170,62 @@ class UserController extends Controller
 
             return ApiResponse::error(
                 'Failed to verify code',
+                ['error' => $e->getMessage()],
+                500
+            );
+        }
+    }
+    public function verifyEmailFromLink(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'oobCode' => 'required|string'
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            if ($this->firebaseAuth) {
+                $result = $this->firebaseAuth->verifyFirebaseEmail($request->oobCode);
+
+                if ($result['success']) {
+                    // Update temporary registration
+                    $tempReg = \App\Models\TemporaryRegistration::where('email', $result['email'])->first();
+
+                    if ($tempReg) {
+                        $tempReg->update(['verified' => true]);
+                    }
+
+                    return ApiResponse::success(
+                        'Email verified successfully',
+                        [
+                            'email' => $result['email'],
+                            'verified' => true
+                        ],
+                        200
+                    );
+                } else {
+                    return ApiResponse::error(
+                        $result['error'],
+                        ['error_code' => $result['error_code']],
+                        400
+                    );
+                }
+            }
+
+            return ApiResponse::error(
+                'Verification service unavailable',
+                null,
+                503
+            );
+        } catch (\Exception $e) {
+            Log::error('Verify email error', [
+                'message' => $e->getMessage()
+            ]);
+
+            return ApiResponse::error(
+                'Failed to verify email',
                 ['error' => $e->getMessage()],
                 500
             );

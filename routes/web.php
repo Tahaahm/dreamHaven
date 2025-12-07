@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AppVersionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RealEstateOfficeController;
 use App\Http\Controllers\AgentController;
@@ -476,4 +477,19 @@ Route::prefix('v1/api/banner-ads')->group(function () {
         Route::patch('/{id}/approve', [BannerAdController::class, 'approve']);
         Route::patch('/{id}/reject', [BannerAdController::class, 'reject']);
     });
+});
+
+
+Route::prefix('app')->group(function () {
+    // Get current app version
+    Route::get('/version', [AppVersionController::class, 'getCurrentVersion']);
+
+    // Check if app needs update
+    Route::post('/version/check', [AppVersionController::class, 'checkVersion']);
+});
+
+
+Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
+    // Update app version (Admin only)
+    Route::post('/version/update', [AppVersionController::class, 'updateVersion']);
 });

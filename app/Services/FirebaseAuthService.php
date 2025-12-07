@@ -12,6 +12,8 @@ use Kreait\Firebase\Exception\FirebaseException;
 class FirebaseAuthService
 {
     private $auth;
+    private $firestore;
+
 
     public function __construct()
     {
@@ -1100,65 +1102,330 @@ class FirebaseAuthService
         }
     }
 
-    /**
-     * Send verification email using Firebase REST API
-     */
-    private function sendFirebaseVerificationEmail(string $email): array
+    public function sendFirebaseVerificationEmail(string $email, string $password = null): array
     {
         try {
-            $apiKey = config('firebase.api_key');
-
-            if (!$apiKey) {
-                throw new \Exception('Firebase API key not configured');
+            // Generate a temporary password if not provided
+            if (!$password) {
+                $password = bin2hex(random_bytes(16));
             }
+
+            // 1. Create temporary Firebase user
+            $userProperties = [
+                'email' => $email,
+                'password' => $password,
+                'emailVerified' => false,
+                'disabled' => false,
+            ];
+
+            $createdUser = $this->auth->createUser($userProperties);
+            $firebaseUid = $createdUser->uid;
+
+            Log::info('Temporary Firebase user created', [
+                'email' => $email,
+                'firebase_uid' => $firebaseUid
+            ]);
+
+            // 2. Generate email verification link using Admin SDK
+            // This link will be used to send email via Firebase REST API
+            $actionCodeSettings = [
+                'url' => config('app.url') . '/verify-email-complete', // Your callback URL
+                'handleCodeInApp' => true,
+            ];
+
+            // Get verification link
+            $verificationLink = $this->auth->getEmailVerificationLink($email, $actionCodeSettings);
+
+            Log::info('Verification link generated', [
+                'email' => $email,
+                'link_preview' => substr($verificationLink, 0, 50) . '...'
+            ]);
+
+            // 3. Send email using Firebase REST API with idToken
+            $apiKey = config('firebase.api_key');
 
             // First, sign in to get idToken
             $signInUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={$apiKey}";
 
-            // We need to get the user's idToken to send verification email
-            // Alternative: use the email verification oobCode endpoint
+            $signInResponse = \Illuminate\Support\Facades\Http::timeout(30)->post($signInUrl, [
+                'email' => $email,
+                'password' => $password,
+                'returnSecureToken' => true
+            ]);
 
-            $url = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={$apiKey}";
+            if (!$signInResponse->successful()) {
+                throw new \Exception('Failed to authenticate temporary user');
+            }
 
-            $data = [
+            $idToken = $signInResponse->json()['idToken'];
+
+            // Now send verification email using the idToken
+            $sendEmailUrl = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={$apiKey}";
+
+            $emailResponse = \Illuminate\Support\Facades\Http::timeout(30)->post($sendEmailUrl, [
                 'requestType' => 'VERIFY_EMAIL',
-                'email' => $email
-            ];
+                'idToken' => $idToken
+            ]);
 
-            $response = \Illuminate\Support\Facades\Http::timeout(30)->post($url, $data);
-
-            if ($response->successful()) {
-                Log::info('Firebase verification email sent', [
-                    'email' => $email
+            if ($emailResponse->successful()) {
+                Log::info('Firebase verification email sent successfully', [
+                    'email' => $email,
+                    'firebase_uid' => $firebaseUid
                 ]);
 
                 return [
                     'success' => true,
-                    'email' => $email
+                    'email' => $email,
+                    'firebase_uid' => $firebaseUid,
+                    'temp_password' => $password, // Store this in your DB temporarily
+                    'message' => 'Verification email sent by Firebase'
                 ];
             } else {
-                $errorData = $response->json();
-                $errorMessage = $errorData['error']['message'] ?? 'Failed to send verification email';
+                // If sending fails, clean up the temporary user
+                $this->auth->deleteUser($firebaseUid);
 
-                Log::error('Firebase verification email failed', [
+                $errorData = $emailResponse->json();
+                $error = $errorData['error']['message'] ?? 'Failed to send verification email';
+
+                Log::error('Firebase failed to send verification email', [
                     'email' => $email,
                     'error' => $errorData
                 ]);
 
                 return [
                     'success' => false,
-                    'error' => $errorMessage
+                    'error' => $error,
+                    'error_code' => 'SEND_EMAIL_FAILED'
                 ];
             }
         } catch (\Exception $e) {
-            Log::error('Exception sending Firebase verification email', [
+            Log::error('Firebase email verification error', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+
+            // Clean up if user was created
+            if (isset($firebaseUid)) {
+                try {
+                    $this->auth->deleteUser($firebaseUid);
+                } catch (\Exception $cleanupError) {
+                    Log::error('Failed to cleanup temporary user', [
+                        'firebase_uid' => $firebaseUid
+                    ]);
+                }
+            }
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'UNKNOWN_ERROR'
+            ];
+        }
+    }
+
+    /**
+     * Verify email using the oobCode from Firebase email link
+     */
+    public function verifyFirebaseEmail(string $oobCode): array
+    {
+        try {
+            $apiKey = config('firebase.api_key');
+
+            // Apply the email verification code
+            $verifyUrl = "https://identitytoolkit.googleapis.com/v1/accounts:update?key={$apiKey}";
+
+            $response = \Illuminate\Support\Facades\Http::timeout(30)->post($verifyUrl, [
+                'oobCode' => $oobCode
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                $email = $data['email'];
+
+                // Get the Firebase user
+                $firebaseUser = $this->auth->getUserByEmail($email);
+
+                Log::info('Firebase email verified successfully', [
+                    'email' => $email,
+                    'firebase_uid' => $firebaseUser->uid
+                ]);
+
+                return [
+                    'success' => true,
+                    'email' => $email,
+                    'firebase_uid' => $firebaseUser->uid,
+                    'verified' => true,
+                    'firebase_user' => $firebaseUser
+                ];
+            } else {
+                $errorData = $response->json();
+                $error = $errorData['error']['message'] ?? 'Verification failed';
+
+                Log::error('Firebase email verification failed', [
+                    'error' => $errorData
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => $this->mapFirebaseErrorMessage($error),
+                    'error_code' => $error
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Verify Firebase email error', [
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'UNKNOWN_ERROR'
+            ];
+        }
+    }
+
+    /**
+     * Complete user registration after email verification
+     */
+    public function completeRegistrationAfterVerification(string $email, array $userData, string $newPassword = null): array
+    {
+        try {
+            // Get the Firebase user
+            $firebaseUser = $this->auth->getUserByEmail($email);
+
+            // Prepare update data
+            $updateProperties = [
+                'emailVerified' => true
+            ];
+
+            if (isset($userData['username'])) {
+                $updateProperties['displayName'] = $userData['username'];
+            }
+
+            if (isset($userData['phone'])) {
+                $formattedPhone = $this->formatPhoneNumber($userData['phone']);
+                if ($formattedPhone) {
+                    $updateProperties['phoneNumber'] = $formattedPhone;
+                }
+            }
+
+            if (isset($userData['photo_image'])) {
+                $updateProperties['photoUrl'] = $userData['photo_image'];
+            }
+
+            // Update password if new one is provided
+            if ($newPassword) {
+                $updateProperties['password'] = $newPassword;
+            }
+
+            // Update Firebase user
+            $updatedUser = $this->auth->updateUser($firebaseUser->uid, $updateProperties);
+
+            // Generate custom token for authentication
+            $customToken = $this->auth->createCustomToken($firebaseUser->uid);
+
+            Log::info('User registration completed after verification', [
+                'email' => $email,
+                'firebase_uid' => $firebaseUser->uid
+            ]);
+
+            return [
+                'success' => true,
+                'email' => $email,
+                'firebase_uid' => $firebaseUser->uid,
+                'custom_token' => $customToken->toString(),
+                'user' => $updatedUser
+            ];
+        } catch (\Exception $e) {
+            Log::error('Complete registration error', [
                 'email' => $email,
                 'error' => $e->getMessage()
             ]);
 
             return [
                 'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'REGISTRATION_FAILED'
+            ];
+        }
+    }
+
+    /**
+     * Resend verification email for existing unverified user
+     */
+    public function resendVerificationEmail(string $email, string $password): array
+    {
+        try {
+            // Check if user exists and is not verified
+            $firebaseUser = $this->auth->getUserByEmail($email);
+
+            if ($firebaseUser->emailVerified) {
+                return [
+                    'success' => false,
+                    'error' => 'Email already verified',
+                    'error_code' => 'ALREADY_VERIFIED'
+                ];
+            }
+
+            $apiKey = config('firebase.api_key');
+
+            // Sign in to get idToken
+            $signInUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={$apiKey}";
+
+            $signInResponse = \Illuminate\Support\Facades\Http::timeout(30)->post($signInUrl, [
+                'email' => $email,
+                'password' => $password,
+                'returnSecureToken' => true
+            ]);
+
+            if (!$signInResponse->successful()) {
+                return [
+                    'success' => false,
+                    'error' => 'Invalid credentials',
+                    'error_code' => 'INVALID_CREDENTIALS'
+                ];
+            }
+
+            $idToken = $signInResponse->json()['idToken'];
+
+            // Send verification email
+            $sendEmailUrl = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={$apiKey}";
+
+            $emailResponse = \Illuminate\Support\Facades\Http::timeout(30)->post($sendEmailUrl, [
+                'requestType' => 'VERIFY_EMAIL',
+                'idToken' => $idToken
+            ]);
+
+            if ($emailResponse->successful()) {
+                Log::info('Verification email resent successfully', [
+                    'email' => $email
+                ]);
+
+                return [
+                    'success' => true,
+                    'email' => $email,
+                    'message' => 'Verification email sent'
+                ];
+            } else {
+                $errorData = $emailResponse->json();
+                $error = $errorData['error']['message'] ?? 'Failed to send email';
+
+                return [
+                    'success' => false,
+                    'error' => $error,
+                    'error_code' => 'SEND_EMAIL_FAILED'
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Resend verification email error', [
+                'email' => $email,
                 'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'UNKNOWN_ERROR'
             ];
         }
     }
@@ -1219,6 +1486,9 @@ class FirebaseAuthService
     /**
      * Generate and send 6-digit OTP code via Firebase
      */
+    /**
+     * Generate and send 6-digit OTP code via email (uses Laravel Mail = Contabo)
+     */
     public function sendOTPCode(string $email, string $username = null): array
     {
         try {
@@ -1235,35 +1505,12 @@ class FirebaseAuthService
             // Generate 6-digit code
             $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
-            // Store code in Firestore (if available)
-            if (app()->bound('App\Services\FirebaseFirestoreService')) {
-                $firestore = app('App\Services\FirebaseFirestoreService')->getFirestore();
-
-                if ($firestore) {
-                    // Store in Firestore
-                    $firestore->database()
-                        ->collection('verification_codes')
-                        ->document(md5($email))
-                        ->set([
-                            'email' => $email,
-                            'code' => $code,
-                            'type' => 'email_verification',
-                            'is_used' => false,
-                            'created_at' => now()->toISOString(),
-                            'expires_at' => now()->addMinutes(10)->toISOString()
-                        ]);
-
-                    Log::info('Verification code stored in Firestore', [
-                        'email' => $email
-                    ]);
-                }
-            }
-
-            // Also store in local database as backup
+            // Delete old codes for this email
             \App\Models\VerificationCode::where('email', $email)
                 ->where('type', 'email_verification')
                 ->delete();
 
+            // Store code in database
             \App\Models\VerificationCode::create([
                 'email' => $email,
                 'code' => $code,
@@ -1271,7 +1518,7 @@ class FirebaseAuthService
                 'expires_at' => now()->addMinutes(10)
             ]);
 
-            // Send email
+            // ✅ This uses Laravel Mail (which will use Contabo from .env)
             $subject = 'Dream Haven - Email Verification Code';
             $message = "Your verification code is: {$code}\n\n";
             $message .= "This code will expire in 10 minutes.\n\n";
@@ -1283,9 +1530,9 @@ class FirebaseAuthService
                         ->subject($subject);
                 });
 
-                Log::info('OTP code sent successfully', [
+                Log::info('OTP code sent successfully via Contabo', [
                     'email' => $email,
-                    'code' => $code // Remove in production
+                    'code' => $code // ⚠️ Remove this line in production for security
                 ]);
 
                 return [
@@ -1295,14 +1542,14 @@ class FirebaseAuthService
                     'message' => 'Verification code sent to your email'
                 ];
             } catch (\Exception $e) {
-                Log::error('Failed to send OTP email', [
+                Log::error('Failed to send OTP email via Contabo', [
                     'email' => $email,
                     'error' => $e->getMessage()
                 ]);
 
                 return [
                     'success' => false,
-                    'error' => 'Failed to send email',
+                    'error' => 'Failed to send email. Please check your email configuration.',
                     'error_code' => 'EMAIL_SERVICE_ERROR'
                 ];
             }

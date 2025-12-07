@@ -8,4 +8,7 @@ return [
         : null,
 
     'api_key' => env('FIREBASE_API_KEY'),
+
+    // Add this line
+    'firestore_enabled' => env('FIRESTORE_ENABLED', false),
 ];
