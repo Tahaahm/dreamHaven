@@ -3060,4 +3060,112 @@ class UserController extends Controller
 
         return $username;
     }
+    public function sendVerificationCode(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email',
+                'username' => 'nullable|string'
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            // Use Firebase Auth Service to send OTP
+            if ($this->firebaseAuth) {
+                $result = $this->firebaseAuth->sendOTPCode(
+                    $request->email,
+                    $request->username
+                );
+
+                if ($result['success']) {
+                    return ApiResponse::success(
+                        $result['message'],
+                        [
+                            'email' => $result['email'],
+                            'expires_in_minutes' => $result['expires_in_minutes']
+                        ],
+                        200
+                    );
+                } else {
+                    $statusCode = $result['error_code'] === 'EMAIL_EXISTS' ? 400 : 500;
+
+                    return ApiResponse::error(
+                        $result['error'],
+                        ['error_code' => $result['error_code']],
+                        $statusCode
+                    );
+                }
+            }
+
+            // Fallback to local implementation if Firebase not available
+            return $this->sendVerificationCodeLocal($request);
+        } catch (\Exception $e) {
+            Log::error('Send verification code error', [
+                'message' => $e->getMessage()
+            ]);
+
+            return ApiResponse::error(
+                'Failed to send verification code',
+                ['error' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    /**
+     * Verify code before registration
+     */
+    public function verifyCodeBeforeRegister(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'email' => 'required|email',
+                'code' => 'required|string|size:6'
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            // Use Firebase Auth Service to verify OTP
+            if ($this->firebaseAuth) {
+                $result = $this->firebaseAuth->verifyOTPCode(
+                    $request->email,
+                    $request->code
+                );
+
+                if ($result['success']) {
+                    return ApiResponse::success(
+                        'Verification code is valid',
+                        [
+                            'email' => $result['email'],
+                            'verified' => true
+                        ],
+                        200
+                    );
+                } else {
+                    return ApiResponse::error(
+                        $result['error'],
+                        ['error_code' => $result['error_code']],
+                        400
+                    );
+                }
+            }
+
+            // Fallback to local implementation
+            return $this->verifyCodeLocal($request);
+        } catch (\Exception $e) {
+            Log::error('Verify code error', [
+                'message' => $e->getMessage()
+            ]);
+
+            return ApiResponse::error(
+                'Failed to verify code',
+                ['error' => $e->getMessage()],
+                500
+            );
+        }
+    }
 }

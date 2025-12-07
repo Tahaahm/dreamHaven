@@ -1012,4 +1012,421 @@ class FirebaseAuthService
             ];
         }
     }
+
+    public function sendVerificationEmail(string $email): array
+    {
+        try {
+            // Check if user already exists in Firebase
+            $existingUser = null;
+            try {
+                $existingUser = $this->auth->getUserByEmail($email);
+            } catch (UserNotFound $e) {
+                // User doesn't exist, which is good for registration
+            }
+
+            if ($existingUser) {
+                return [
+                    'success' => false,
+                    'error' => 'Email already registered',
+                    'error_code' => 'EMAIL_EXISTS'
+                ];
+            }
+
+            // Generate a temporary password
+            $tempPassword = bin2hex(random_bytes(16));
+
+            // Create temporary Firebase user
+            $userProperties = [
+                'email' => $email,
+                'password' => $tempPassword,
+                'emailVerified' => false,
+                'disabled' => false,
+            ];
+
+            $createdUser = $this->auth->createUser($userProperties);
+            $firebaseUid = $createdUser->uid;
+
+            Log::info('Temporary Firebase user created for verification', [
+                'email' => $email,
+                'firebase_uid' => $firebaseUid
+            ]);
+
+            // Generate email verification link
+            $verificationLink = $this->auth->getEmailVerificationLink($email);
+
+            // Send verification email using Firebase REST API
+            $result = $this->sendFirebaseVerificationEmail($email);
+
+            if ($result['success']) {
+                return [
+                    'success' => true,
+                    'email' => $email,
+                    'firebase_uid' => $firebaseUid,
+                    'temp_password' => $tempPassword, // Store this temporarily
+                    'message' => 'Verification email sent successfully'
+                ];
+            } else {
+                // Clean up - delete the temporary user
+                $this->auth->deleteUser($firebaseUid);
+
+                return [
+                    'success' => false,
+                    'error' => $result['error'],
+                    'error_code' => 'SEND_EMAIL_FAILED'
+                ];
+            }
+        } catch (FirebaseException $e) {
+            Log::error('Firebase send verification email failed', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'FIREBASE_ERROR'
+            ];
+        } catch (\Exception $e) {
+            Log::error('Unexpected error sending verification email', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'UNKNOWN_ERROR'
+            ];
+        }
+    }
+
+    /**
+     * Send verification email using Firebase REST API
+     */
+    private function sendFirebaseVerificationEmail(string $email): array
+    {
+        try {
+            $apiKey = config('firebase.api_key');
+
+            if (!$apiKey) {
+                throw new \Exception('Firebase API key not configured');
+            }
+
+            // First, sign in to get idToken
+            $signInUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={$apiKey}";
+
+            // We need to get the user's idToken to send verification email
+            // Alternative: use the email verification oobCode endpoint
+
+            $url = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={$apiKey}";
+
+            $data = [
+                'requestType' => 'VERIFY_EMAIL',
+                'email' => $email
+            ];
+
+            $response = \Illuminate\Support\Facades\Http::timeout(30)->post($url, $data);
+
+            if ($response->successful()) {
+                Log::info('Firebase verification email sent', [
+                    'email' => $email
+                ]);
+
+                return [
+                    'success' => true,
+                    'email' => $email
+                ];
+            } else {
+                $errorData = $response->json();
+                $errorMessage = $errorData['error']['message'] ?? 'Failed to send verification email';
+
+                Log::error('Firebase verification email failed', [
+                    'email' => $email,
+                    'error' => $errorData
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => $errorMessage
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Exception sending Firebase verification email', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Verify Firebase email verification code
+     */
+    public function verifyEmailCode(string $oobCode): array
+    {
+        try {
+            $apiKey = config('firebase.api_key');
+
+            if (!$apiKey) {
+                throw new \Exception('Firebase API key not configured');
+            }
+
+            $url = "https://identitytoolkit.googleapis.com/v1/accounts:update?key={$apiKey}";
+
+            $data = [
+                'oobCode' => $oobCode
+            ];
+
+            $response = \Illuminate\Support\Facades\Http::timeout(30)->post($url, $data);
+
+            if ($response->successful()) {
+                $responseData = $response->json();
+
+                Log::info('Firebase email verified successfully', [
+                    'email' => $responseData['email'] ?? 'unknown'
+                ]);
+
+                return [
+                    'success' => true,
+                    'email' => $responseData['email'] ?? null,
+                    'verified' => true
+                ];
+            } else {
+                $errorData = $response->json();
+                $errorMessage = $errorData['error']['message'] ?? 'Verification failed';
+
+                return [
+                    'success' => false,
+                    'error' => $errorMessage
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Firebase email verification error', [
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Generate and send 6-digit OTP code via Firebase
+     */
+    public function sendOTPCode(string $email, string $username = null): array
+    {
+        try {
+            // Check if user already exists in Laravel
+            $existingUser = \App\Models\User::where('email', $email)->first();
+            if ($existingUser) {
+                return [
+                    'success' => false,
+                    'error' => 'Email already registered',
+                    'error_code' => 'EMAIL_EXISTS'
+                ];
+            }
+
+            // Generate 6-digit code
+            $code = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            // Store code in Firestore (if available)
+            if (app()->bound('App\Services\FirebaseFirestoreService')) {
+                $firestore = app('App\Services\FirebaseFirestoreService')->getFirestore();
+
+                if ($firestore) {
+                    // Store in Firestore
+                    $firestore->database()
+                        ->collection('verification_codes')
+                        ->document(md5($email))
+                        ->set([
+                            'email' => $email,
+                            'code' => $code,
+                            'type' => 'email_verification',
+                            'is_used' => false,
+                            'created_at' => now()->toISOString(),
+                            'expires_at' => now()->addMinutes(10)->toISOString()
+                        ]);
+
+                    Log::info('Verification code stored in Firestore', [
+                        'email' => $email
+                    ]);
+                }
+            }
+
+            // Also store in local database as backup
+            \App\Models\VerificationCode::where('email', $email)
+                ->where('type', 'email_verification')
+                ->delete();
+
+            \App\Models\VerificationCode::create([
+                'email' => $email,
+                'code' => $code,
+                'type' => 'email_verification',
+                'expires_at' => now()->addMinutes(10)
+            ]);
+
+            // Send email
+            $subject = 'Dream Haven - Email Verification Code';
+            $message = "Your verification code is: {$code}\n\n";
+            $message .= "This code will expire in 10 minutes.\n\n";
+            $message .= "If you didn't request this code, please ignore this email.";
+
+            try {
+                \Illuminate\Support\Facades\Mail::raw($message, function ($mail) use ($email, $subject) {
+                    $mail->to($email)
+                        ->subject($subject);
+                });
+
+                Log::info('OTP code sent successfully', [
+                    'email' => $email,
+                    'code' => $code // Remove in production
+                ]);
+
+                return [
+                    'success' => true,
+                    'email' => $email,
+                    'expires_in_minutes' => 10,
+                    'message' => 'Verification code sent to your email'
+                ];
+            } catch (\Exception $e) {
+                Log::error('Failed to send OTP email', [
+                    'email' => $email,
+                    'error' => $e->getMessage()
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => 'Failed to send email',
+                    'error_code' => 'EMAIL_SERVICE_ERROR'
+                ];
+            }
+        } catch (\Exception $e) {
+            Log::error('Send OTP code error', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'UNKNOWN_ERROR'
+            ];
+        }
+    }
+
+    /**
+     * Verify OTP code
+     */
+    public function verifyOTPCode(string $email, string $code): array
+    {
+        try {
+            // Check Firestore first (if available)
+            if (app()->bound('App\Services\FirebaseFirestoreService')) {
+                $firestore = app('App\Services\FirebaseFirestoreService')->getFirestore();
+
+                if ($firestore) {
+                    $docRef = $firestore->database()
+                        ->collection('verification_codes')
+                        ->document(md5($email));
+
+                    $snapshot = $docRef->snapshot();
+
+                    if ($snapshot->exists()) {
+                        $data = $snapshot->data();
+
+                        if ($data['code'] === $code && !$data['is_used']) {
+                            $expiresAt = \Carbon\Carbon::parse($data['expires_at']);
+
+                            if (now()->isBefore($expiresAt)) {
+                                // Mark as used in Firestore
+                                $docRef->update([
+                                    ['path' => 'is_used', 'value' => true],
+                                    ['path' => 'verified_at', 'value' => now()->toISOString()]
+                                ]);
+
+                                Log::info('OTP verified from Firestore', [
+                                    'email' => $email
+                                ]);
+
+                                // Also mark local database as used
+                                $localCode = \App\Models\VerificationCode::where('email', $email)
+                                    ->where('code', $code)
+                                    ->where('type', 'email_verification')
+                                    ->where('is_used', false)
+                                    ->first();
+
+                                if ($localCode) {
+                                    $localCode->markAsUsed();
+                                }
+
+                                return [
+                                    'success' => true,
+                                    'email' => $email,
+                                    'verified' => true
+                                ];
+                            } else {
+                                return [
+                                    'success' => false,
+                                    'error' => 'Verification code expired',
+                                    'error_code' => 'CODE_EXPIRED'
+                                ];
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fallback to local database
+            $verificationCode = \App\Models\VerificationCode::where('email', $email)
+                ->where('code', $code)
+                ->where('type', 'email_verification')
+                ->where('is_used', false)
+                ->first();
+
+            if (!$verificationCode) {
+                return [
+                    'success' => false,
+                    'error' => 'Invalid verification code',
+                    'error_code' => 'INVALID_CODE'
+                ];
+            }
+
+            if ($verificationCode->isExpired()) {
+                return [
+                    'success' => false,
+                    'error' => 'Verification code expired',
+                    'error_code' => 'CODE_EXPIRED'
+                ];
+            }
+
+            $verificationCode->markAsUsed();
+
+            Log::info('OTP verified from local database', [
+                'email' => $email
+            ]);
+
+            return [
+                'success' => true,
+                'email' => $email,
+                'verified' => true
+            ];
+        } catch (\Exception $e) {
+            Log::error('Verify OTP code error', [
+                'email' => $email,
+                'error' => $e->getMessage()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_code' => 'UNKNOWN_ERROR'
+            ];
+        }
+    }
 }
