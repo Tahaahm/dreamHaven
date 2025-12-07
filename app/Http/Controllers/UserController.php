@@ -69,10 +69,60 @@ class UserController extends Controller
                 'device_name' => 'nullable|string|max:255',
                 'device_token' => 'nullable|string|max:500',
                 'search_preferences' => 'nullable|array',
+            ], [
+                // Custom error messages
+                'username.required' => 'Username is required',
+                'username.min' => 'Username must be at least 3 characters',
+                'username.max' => 'Username cannot exceed 50 characters',
+                'username.unique' => 'This username is already taken. Please choose another one',
+
+                'email.required' => 'Email address is required',
+                'email.email' => 'Please provide a valid email address',
+                'email.unique' => 'This email is already registered. Please use another email or login',
+
+                'password.required' => 'Password is required',
+                'password.confirmed' => 'Password confirmation does not match',
+                'password.min' => 'Password must be at least 8 characters',
+
+                'phone.min' => 'Phone number must be at least 10 digits',
+                'phone.max' => 'Phone number cannot exceed 15 digits',
+
+                'place.max' => 'Place name cannot exceed 100 characters',
+
+                'lat.numeric' => 'Latitude must be a valid number',
+                'lat.between' => 'Latitude must be between -90 and 90',
+
+                'lng.numeric' => 'Longitude must be a valid number',
+                'lng.between' => 'Longitude must be between -180 and 180',
+
+                'about_me.max' => 'About me section cannot exceed 1000 characters',
+
+                'photo_image.url' => 'Photo image must be a valid URL',
+
+                'language.in' => 'Language must be one of: English, Arabic, or Kurdish',
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::error('Registration validation failed', $validator->errors(), 400);
+                // Format errors for better readability
+                $errors = $validator->errors();
+
+                // Get the first error message for each field
+                $formattedErrors = [];
+                foreach ($errors->messages() as $field => $messages) {
+                    $formattedErrors[$field] = $messages[0]; // Get first error for each field
+                }
+
+                // Determine the main error message
+                $mainMessage = 'Registration validation failed';
+                if ($errors->has('username')) {
+                    $mainMessage = $errors->first('username');
+                } elseif ($errors->has('email')) {
+                    $mainMessage = $errors->first('email');
+                } elseif ($errors->has('password')) {
+                    $mainMessage = $errors->first('password');
+                }
+
+                return ApiResponse::error($mainMessage, $formattedErrors, 400);
             }
 
             DB::beginTransaction();
@@ -101,8 +151,8 @@ class UserController extends Controller
             $deviceTokens = [];
             if ($request->has('device_token') && $request->has('device_name')) {
                 $deviceTokens[] = [
-                    'device_name' => $request->device_name, // Fixed: use device_name consistently
-                    'fcm_token' => $request->device_token,  // Fixed: use fcm_token consistently
+                    'device_name' => $request->device_name,
+                    'fcm_token' => $request->device_token,
                     'created_at' => now()->toISOString(),
                     'last_used' => now()->toISOString()
                 ];
@@ -130,9 +180,19 @@ class UserController extends Controller
                         'error' => $firebaseResult['error']
                     ]);
 
+                    // Check if error is due to email already exists in Firebase
+                    $errorMessage = $firebaseResult['error'];
+                    if (stripos($errorMessage, 'email') !== false && stripos($errorMessage, 'exists') !== false) {
+                        return ApiResponse::error(
+                            'This email is already registered in our system',
+                            ['email' => 'Email address is already in use'],
+                            400
+                        );
+                    }
+
                     return ApiResponse::error(
-                        'Registration failed - Firebase Auth error',
-                        $firebaseResult['error'],
+                        'Registration failed - Authentication service error',
+                        ['firebase' => $errorMessage],
                         500
                     );
                 }
@@ -148,8 +208,35 @@ class UserController extends Controller
             $userData['created_at'] = now();
             $userData['updated_at'] = now();
 
-            DB::table('users')->insert($userData);
-            $user = User::find($userData['id']);
+            try {
+                DB::table('users')->insert($userData);
+                $user = User::find($userData['id']);
+            } catch (\Illuminate\Database\QueryException $e) {
+                DB::rollback();
+
+                // Check for duplicate key errors
+                if ($e->getCode() == 23000) {
+                    $errorMessage = $e->getMessage();
+
+                    if (stripos($errorMessage, 'username') !== false) {
+                        return ApiResponse::error(
+                            'This username is already taken',
+                            ['username' => 'Username already exists'],
+                            400
+                        );
+                    }
+
+                    if (stripos($errorMessage, 'email') !== false) {
+                        return ApiResponse::error(
+                            'This email is already registered',
+                            ['email' => 'Email address already exists'],
+                            400
+                        );
+                    }
+                }
+
+                throw $e; // Re-throw if not a duplicate error
+            }
 
             // Create Firestore document (if available)
             if ($this->firebaseFirestore && $firebaseResult && $firebaseResult['success']) {
@@ -195,7 +282,14 @@ class UserController extends Controller
 
             // Send welcome notification
             if (class_exists('App\Http\Controllers\NotificationController')) {
-                app(NotificationController::class)->sendWelcomeNotification($user->id);
+                try {
+                    app(NotificationController::class)->sendWelcomeNotification($user->id);
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send welcome notification', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
 
             $responseData = [
@@ -217,11 +311,18 @@ class UserController extends Controller
             return ApiResponse::success('User registered successfully', $responseData, 201);
         } catch (\Exception $e) {
             DB::rollback();
-            Log::error('User registration error', ['message' => $e->getMessage()]);
-            return ApiResponse::error('Registration failed', $e->getMessage(), 500);
+            Log::error('User registration error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return ApiResponse::error(
+                'Registration failed due to an unexpected error',
+                ['error' => $e->getMessage()],
+                500
+            );
         }
     }
-
     /**
      * Login with Firebase-first authentication strategy
      */

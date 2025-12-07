@@ -66,7 +66,6 @@ Route::prefix('v1/api/agents')->group(function () {
 
 // Property Routes - Cleaned and Organized
 Route::prefix('v1/api/properties')->group(function () {
-    Route::post('/', [PropertyController::class, 'store']);              // Create new property
 
     // ===== PUBLIC ROUTES (No Authentication Required) =====
 
@@ -91,6 +90,7 @@ Route::prefix('v1/api/properties')->group(function () {
     Route::middleware(['auth:sanctum'])->group(function () {
 
         // Property CRUD Operations
+        Route::post('/', [PropertyController::class, 'store']);              // Create new property
         Route::post('/store', [PropertyController::class, 'store']);         // Alternative create endpoint (keeping for frontend compatibility)
         Route::put('/{id}', [PropertyController::class, 'update']);          // Full update
         Route::patch('/{id}', [PropertyController::class, 'update']);        // Partial update
@@ -850,6 +850,8 @@ Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(functi
 
         Route::get('/agent/real-estate-office-profile/{id}', [RealEstateOfficeController::class, 'profile'])
             ->name('agent.office.profile');
+
+        // Add other agent-only routes here
     });
 
 

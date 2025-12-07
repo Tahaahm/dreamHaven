@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Subscription\Subscription;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -31,7 +32,7 @@ class Agent extends Authenticatable
         'bio_image',
         'profile_image',
         'type',
-               'password',
+        'password',
         'subscriber_id',
         'is_verified',
         'overall_rating',
