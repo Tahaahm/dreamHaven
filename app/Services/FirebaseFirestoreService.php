@@ -83,11 +83,10 @@ class FirebaseFirestoreService
      */
     public function createUserDocument(User $user, array $additionalData = [])
     {
-        // ✅ Initialize Firestore first
-        if (!$this->initializeFirestore()) {
+        if ($this->firestore === null) {
             Log::warning('Firestore not available, skipping user document creation', [
                 'user_id' => $user->id,
-                'suggestion' => 'Enable Firestore in .env or install google/cloud-firestore package'
+                'suggestion' => 'Install google/cloud-firestore package to enable Firestore'
             ]);
             return [
                 'success' => false,

@@ -495,7 +495,7 @@
     'project_id' => 'dream-haven-31029',
     'service_account_path' => 'E:\\laravel_dream_haven\\dream_haven\\real-estate.json',
     'api_key' => 'AIzaSyDZCXZ-ZvgUK_UWdJzRZPXUQybbLhxuMj8',
-    'firestore_enabled' => true,
+    'firestore_enabled' => false,
   ),
   'horizon' => 
   array (
