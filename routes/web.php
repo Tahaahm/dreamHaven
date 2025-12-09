@@ -18,6 +18,19 @@ use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Middleware\EnsureUserIsVerified;
 use App\Http\Middleware\AgentOrAdmin;
+use App\Http\Middleware\AgentOnly;
+
+// ============================================
+// TEST & DEBUG ROUTES (Remove in production)
+// ============================================
+
+Route::get('/test-no-middleware', function () {
+    return "NO MIDDLEWARE REACHED";
+});
+
+Route::get('/test-middleware', function () {
+    return "Middleware alias works!";
+})->middleware('agent.or.admin');
 
 // ============================================
 // PUBLIC WEB ROUTES
@@ -48,8 +61,13 @@ Route::get('/review', [AuthController::class, 'showReviews'])->name('agent.revie
 
 // Become Agent Routes
 Route::get('/become-agent', function () {
-    return view('agent.become');
-})->name('become.agent.prompt');
+    $user = auth('web')->user();
+    if (!$user) {
+        return redirect()->route('login-page')->with('error', 'Please log in first.');
+    }
+    return view('agent.become', compact('user'));
+})->middleware('auth:web')->name('become.agent.prompt');
+
 Route::get('/become-agent/{user_id}', [AgentController::class, 'showCreateFromUserForm'])->name('agent.create.from.user');
 Route::post('/become-agent', [AgentController::class, 'createFromUser'])->name('agent.create.from.user.submit');
 Route::post('/agent/request', [AgentController::class, 'createFromUser'])->name('agent.request');
@@ -94,6 +112,9 @@ Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(functi
     Route::get('/profile', [AuthController::class, 'showProfile'])
         ->middleware(AgentOrAdmin::class)
         ->name('admin.profile');
+
+    // Alternative profile edit route for compatibility
+    Route::get('/profile/{id}/edit', [PropertyController::class, 'editUser']);
 
     // Agent Profile
     Route::get('/agent/edit/{id}', [AgentController::class, 'edit'])->name('agent.edit');
@@ -197,7 +218,7 @@ Route::prefix('api/v1')->group(function () {
         Route::post('/confirm-password-reset', [UserController::class, 'confirmPasswordReset']);
         Route::post('/google/signin', [UserController::class, 'googleSignIn']);
 
-        // ✅ Email Verification Endpoints
+        // Email Verification Endpoints
         Route::post('/send-verification-code', [UserController::class, 'sendVerificationCode']);
         Route::post('/verify-code', [UserController::class, 'verifyCodeBeforeRegister']);
     });
@@ -320,7 +341,7 @@ Route::prefix('v1/api/properties')->group(function () {
     // Authenticated Routes
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/', [PropertyController::class, 'store']);
-        Route::post('/store', [PropertyController::class, 'store']);
+        Route::post('/store', [PropertyController::class, 'store']); // Alternative endpoint
         Route::put('/{id}', [PropertyController::class, 'update']);
         Route::patch('/{id}', [PropertyController::class, 'update']);
         Route::delete('/{id}', [PropertyController::class, 'destroy']);
@@ -406,17 +427,25 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
 });
 
+// Legacy notification routes (for backward compatibility)
+Route::get('/notifications', [NotificationController::class, 'index']);
+Route::middleware('auth:sanctum')->post('/notifications', [NotificationController::class, 'store']);
+Route::middleware('auth:sanctum')->post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+Route::middleware('auth:sanctum')->delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
 // ============================================
 // API ROUTES - Service Providers
 // ============================================
 
 Route::prefix('v1/api/service-providers')->group(function () {
-    // Public Routes
+    // Public Routes (specific routes first)
     Route::get('/search', [ServiceProviderController::class, 'getServiceProviders']);
     Route::get('/nearby', [ServiceProviderController::class, 'getProvidersByLocation']);
     Route::get('/statistics', [ServiceProviderController::class, 'getStatistics']);
     Route::get('/categories', [ServiceProviderController::class, 'getCategories']);
     Route::get('/', [ServiceProviderController::class, 'getServiceProviders']);
+
+    // Wildcard routes last
     Route::get('/{id}', [ServiceProviderController::class, 'getServiceProvider']);
     Route::get('/{id}/reviews', [ServiceProviderController::class, 'getReviews']);
 
@@ -479,6 +508,9 @@ Route::prefix('v1/api/banner-ads')->group(function () {
     });
 });
 
+// ============================================
+// API ROUTES - App Version
+// ============================================
 
 Route::prefix('app')->group(function () {
     // Get current app version
@@ -488,8 +520,16 @@ Route::prefix('app')->group(function () {
     Route::post('/version/check', [AppVersionController::class, 'checkVersion']);
 });
 
-
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
     // Update app version (Admin only)
     Route::post('/version/update', [AppVersionController::class, 'updateVersion']);
 });
+
+// ============================================
+// LEGACY ROUTES (For Backward Compatibility)
+// ============================================
+
+// Legacy projects routes
+Route::get('/projects', [ProjectController::class, 'index']);
+Route::get('/projects/{id}', [ProjectController::class, 'show']);
+Route::middleware('auth:sanctum')->post('/projects', [ProjectController::class, 'store']);

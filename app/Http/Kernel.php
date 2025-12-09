@@ -6,14 +6,15 @@ namespace App\Http;
 
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 use Illuminate\Support\Facades\Log;
+
 class Kernel extends HttpKernel
 {
 
     public function __construct(\Illuminate\Contracts\Foundation\Application $app, \Illuminate\Routing\Router $router)
-{
-    parent::__construct($app, $router);
-    Log::info('🌟 Http Kernel loaded successfully');
-}
+    {
+        parent::__construct($app, $router);
+        Log::info('🌟 Http Kernel loaded successfully');
+    }
 
     /**
      * The application's global HTTP middleware stack.
@@ -49,7 +50,7 @@ class Kernel extends HttpKernel
 
         'api' => [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
-            \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
+            \Illuminate\Routing\Middleware\ThrottleRequests::class . ':api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
     ];
@@ -78,5 +79,7 @@ class Kernel extends HttpKernel
         'admin' => \App\Http\Middleware\AdminMiddleware::class,
         'agent.or.admin' => \App\Http\Middleware\AgentOrAdmin::class,
         'ensure.verified' => \App\Http\Middleware\EnsureUserIsVerified::class,
+        'auth.any' => \App\Http\Middleware\AuthAnyGuard::class,
+
     ];
 }
