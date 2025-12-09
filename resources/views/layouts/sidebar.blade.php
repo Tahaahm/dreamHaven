@@ -50,6 +50,75 @@
         color: inherit;
     }
 </style>
+
+<style>
+
+/* Hide sidebar on small screens */
+@media (max-width: 900px) {
+    .sidebar-nav {
+        transform: translateX(-260px);
+        transition: transform 0.35s ease-in-out;
+        z-index: 9999;
+    }
+
+    .sidebar-nav.open {
+        transform: translateX(0);
+    }
+
+    /* Hamburger button */
+    .sidebar-toggle-btn {
+        position: fixed;
+        top: 15px;
+        left: 15px;
+        background: #000;
+        color: #fff;
+        border: none;
+        font-size: 22px;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 6px;
+        cursor: pointer;
+        z-index: 10000;
+    }
+
+    /* Dark background overlay */
+    .sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.45);
+        display: none;
+        z-index: 9998;
+    }
+
+    .sidebar-overlay.show {
+        display: block;
+    }
+}
+
+/* Desktop: hide toggle */
+@media (min-width: 901px) {
+    .sidebar-toggle-btn {
+        display: none;
+    }
+}
+
+</style>
+
+
+
+<button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+    <i class="fas fa-bars"></i>
+</button>
+
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+
 <div class="sidebar-nav">
     <h4><br> Dashboard</h4>
     <a href="{{ route('agent.admin-dashboard') }}" class="{{ request()->routeIs('agent.admin-dashboard') ? 'active' : '' }}">
@@ -85,12 +154,12 @@
        class="{{ request()->routeIs('admin.profile') ? 'active' : '' }}">
         <i class="fas fa-user"></i> My Profile
     </a>
-
+{{-- 
     <a href="{{ route('agents.list') }}"
        class="{{ request()->routeIs('agents.list') ? 'active' : '' }}">
         <i class="fas fa-users"></i> Agents
     </a>
-
+ --}}
 <a href="{{ route('projects') }}"
    class="{{ request()->routeIs('projects') ? 'active' : '' }}">
     <i class="fas fa-building"></i> Projects
@@ -114,10 +183,6 @@
 <a href="{{ route('projects') }}" class="{{ request()->routeIs('projects') ? 'active' : '' }}">
     <i class="fas fa-tasks"></i> Projects
 </a>
-
-<a class="unique-nav-link {{ request()->routeIs('newindex') ? ' active' : '' }}" href="{{ route('newindex') }}">
-    <i class="fas fa-external-link-alt"></i> Go To Website
-    </a>
 
 
 
@@ -169,6 +234,11 @@
 
 
 
+<a class="unique-nav-link {{ request()->routeIs('newindex') ? ' active' : '' }}" href="{{ route('newindex') }}">
+    <i class="fas fa-external-link-alt"></i> Go To Website
+    </a>
+
+
 
     <!-- Logout Form -->
     <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
@@ -179,3 +249,14 @@
         <i class="fas fa-sign-out-alt"></i> Logout
     </a>
 </div>
+
+
+<script>
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar-nav');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+}
+</script>
