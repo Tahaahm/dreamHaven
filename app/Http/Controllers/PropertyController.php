@@ -259,8 +259,8 @@ class PropertyController extends Controller
 
             // Validation
             $validator = Validator::make($request->all(), [
-                'owner_id' => 'required|exists:agents,id',
-                'owner_type' => 'required|in:Agent,User,RealEstateOffice',
+                // 'owner_id' => 'required|exists:agents,id',
+                // 'owner_type' => 'required|in:Agent,User,RealEstateOffice',
                 'name' => 'required|array',
                 'name.en' => 'required|string|max:255',
                 'name.ar' => 'nullable|string|max:255',
@@ -356,15 +356,6 @@ class PropertyController extends Controller
             ], 500);
         }
     }
-
-
-
-
-
-
-
-
-
 
 
     public function update(Request $request, $id)

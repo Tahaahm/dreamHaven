@@ -217,7 +217,7 @@ Route::prefix('api/v1')->group(function () {
         Route::post('/forgot-password', [UserController::class, 'forgotPassword']);
         Route::post('/confirm-password-reset', [UserController::class, 'confirmPasswordReset']);
         Route::post('/google/signin', [UserController::class, 'googleSignIn']);
-
+        Route::post('/check-availability', [UserController::class, 'checkAvailability']);
         // Email Verification Endpoints
         Route::post('/send-verification-code', [UserController::class, 'sendVerificationCode']);
         Route::post('/verify-code', [UserController::class, 'verifyCodeBeforeRegister']);
@@ -238,6 +238,7 @@ Route::prefix('api/v1')->group(function () {
         Route::prefix('user')->group(function () {
             Route::get('/profile', [UserController::class, 'getProfile']);
             Route::patch('/profile', [UserController::class, 'updateLocation']);
+            Route::delete('/profile', [UserController::class, 'deleteAccount']);
 
             // Device Token Management
             Route::patch('/device-token', [UserController::class, 'updateDeviceToken']);
@@ -337,11 +338,11 @@ Route::prefix('v1/api/properties')->group(function () {
         ->where(['ownerType' => 'User|Agent|RealEstateOffice']);
     Route::get('/', [PropertyController::class, 'index']);
     Route::get('/{id}', [PropertyController::class, 'show']);
+    Route::post('/store', [PropertyController::class, 'store']);
 
     // Authenticated Routes
     Route::middleware(['auth:sanctum'])->group(function () {
-        Route::post('/', [PropertyController::class, 'store']);
-        Route::post('/store', [PropertyController::class, 'store']); // Alternative endpoint
+        Route::post('/', action: [PropertyController::class, 'store']);
         Route::put('/{id}', [PropertyController::class, 'update']);
         Route::patch('/{id}', [PropertyController::class, 'update']);
         Route::delete('/{id}', [PropertyController::class, 'destroy']);

@@ -1731,6 +1731,91 @@ class UserController extends Controller
         }
     }
 
+    public function deleteAccount(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'password' => 'required|string',
+                'confirmation' => 'required|string|in:DELETE',
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            $user = $request->user();
+
+            if (!$user) {
+                return ApiResponse::error('User not found', null, 404);
+            }
+
+            if (!Hash::check($request->password, $user->password)) {
+                return ApiResponse::error(
+                    'Invalid password',
+                    ['password' => ['The provided password is incorrect.']],
+                    401
+                );
+            }
+
+            Log::info('User account deletion initiated', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'username' => $user->username,
+                'timestamp' => now(),
+            ]);
+
+            DB::beginTransaction();
+
+            // Delete user's device tokens
+            $user->update(['device_tokens' => []]);
+
+            // Cancel user's appointments - FIXED: Removed cancellation_reason
+            DB::table('appointments')
+                ->where('user_id', $user->id)
+                ->whereNull('cancelled_at')
+                ->update([
+                    'cancelled_at' => now(),
+                    'status' => 'cancelled', // Update status as well
+                ]);
+
+            // Delete user's notifications
+            DB::table('notifications')->where('user_id', $user->id)->delete();
+
+            // Revoke all user's tokens
+            $user->tokens()->delete();
+
+            // Delete the user account
+            $user->delete();
+
+            DB::commit();
+
+            Log::info('User account deleted successfully', [
+                'user_id' => $user->id,
+                'timestamp' => now(),
+            ]);
+
+            return ApiResponse::success(
+                'Account deleted successfully',
+                null,
+                200
+            );
+        } catch (\Exception $e) {
+            DB::rollback();
+
+            Log::error('Delete account error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return ApiResponse::error(
+                'Failed to delete account',
+                ['error' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
     /**
      * Clear all notifications for the authenticated user
      */
@@ -3226,6 +3311,120 @@ class UserController extends Controller
 
             return ApiResponse::error(
                 'Failed to verify email',
+                ['error' => $e->getMessage()],
+                500
+            );
+        }
+    }
+
+    public function checkAvailability(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'username' => 'nullable|string|min:3|max:50',
+                'email' => 'nullable|email',
+                'phone' => 'nullable|string|min:10|max:15',
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            // Check if at least one field is provided
+            if (!$request->has('username') && !$request->has('email') && !$request->has('phone')) {
+                return ApiResponse::error(
+                    'No fields to check',
+                    ['message' => 'Please provide at least one field to check (username, email, or phone)'],
+                    400
+                );
+            }
+
+            $results = [];
+            $allAvailable = true;
+            $checkedFields = [];
+
+            // Check username if provided
+            if ($request->has('username') && $request->username !== null && $request->username !== '') {
+                $usernameExists = User::where('username', $request->username)->exists();
+                $results['username'] = [
+                    'value' => $request->username,
+                    'available' => !$usernameExists,
+                    'message' => $usernameExists
+                        ? 'Username is already taken'
+                        : 'Username is available'
+                ];
+                $checkedFields[] = 'username';
+                if ($usernameExists) $allAvailable = false;
+            }
+
+            // Check email if provided
+            if ($request->has('email') && $request->email !== null && $request->email !== '') {
+                $emailExists = User::where('email', $request->email)->exists();
+                $results['email'] = [
+                    'value' => $request->email,
+                    'available' => !$emailExists,
+                    'message' => $emailExists
+                        ? 'Email is already registered'
+                        : 'Email is available'
+                ];
+                $checkedFields[] = 'email';
+                if ($emailExists) $allAvailable = false;
+            }
+
+            // Check phone if provided
+            if ($request->has('phone') && $request->phone !== null && $request->phone !== '') {
+                $phoneExists = User::where('phone', $request->phone)->exists();
+                $results['phone'] = [
+                    'value' => $request->phone,
+                    'available' => !$phoneExists,
+                    'message' => $phoneExists
+                        ? 'Phone number is already registered'
+                        : 'Phone number is available'
+                ];
+                $checkedFields[] = 'phone';
+                if ($phoneExists) $allAvailable = false;
+            }
+
+            Log::info('Availability check completed', [
+                'checked_fields' => $checkedFields,
+                'all_available' => $allAvailable,
+                'results' => $results
+            ]);
+
+            if ($allAvailable) {
+                return ApiResponse::success(
+                    count($checkedFields) === 1
+                        ? ucfirst($checkedFields[0]) . ' is available'
+                        : 'All fields are available',
+                    [
+                        'all_available' => true,
+                        'checked_fields' => $checkedFields,
+                        'fields' => $results
+                    ],
+                    200
+                );
+            } else {
+                return ApiResponse::error(
+                    count($checkedFields) === 1
+                        ? ucfirst($checkedFields[0]) . ' is already taken'
+                        : 'Some fields are already taken',
+                    [
+                        'all_available' => false,
+                        'checked_fields' => $checkedFields,
+                        'fields' => $results
+                    ],
+                    400
+                );
+            }
+        } catch (\Exception $e) {
+            Log::error('Check availability error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            return ApiResponse::error(
+                'Failed to check availability',
                 ['error' => $e->getMessage()],
                 500
             );
