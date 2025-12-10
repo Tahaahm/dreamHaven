@@ -13,26 +13,33 @@ body {
     z-index   : 100;
     padding   : 0 20px;
     background: #303b97;
-    /* Ensure a background color if needed */
 }
 
 .allin {
     padding-top: 200px;
-    /* Adjust padding-top to account for the height of the fixed navbar */
 }
 
 .container {
-    margin-left: 310px;
-    width      : 83%;
-    max-width  : 2500px;
+    margin-left   : 310px;
+    width         : 83%;
+    max-width     : 2500px;
+    display       : flex;
+    flex-direction: column;
+    /* Make items stack vertically */
+    align-items   : center;
+    padding       : 0 20px;
+    /* or 40px if needed */
+    /* Center children horizontally */
 }
 
 .container ul {
-    margin-left: 200px;
-    list-style : none;
-    padding    : 0;
-    display    : flex;
-    flex-wrap  : wrap;
+    list-style     : none;
+    padding        : 0;
+    margin         : 0;
+    display        : flex;
+    flex-wrap      : wrap;
+    justify-content: center;
+    /* Center the items grid */
 }
 
 .item-container {
@@ -60,7 +67,6 @@ body {
     position: relative;
     width   : 100%;
     height  : 400px;
-    /* fixed height for testing, adjust as needed */
     overflow: hidden;
 }
 
@@ -69,17 +75,12 @@ body {
     top                : 0;
     left               : 0;
     right              : 0;
-    /* ensure it stretches fully */
     bottom             : 0;
-    /* ensure it stretches fully */
     width              : 100%;
     height             : 100%;
     background-size    : cover;
-    /* covers the container */
     background-position: center;
-    /* center the image */
     background-repeat  : no-repeat;
-    /* prevent tiling */
     transition         : transform 0.3s, opacity 0.3s;
     opacity            : 0;
 }
@@ -90,9 +91,7 @@ body {
 
 .item-container:hover .background-image {
     transform: scale(1.05);
-    /* small zoom on hover */
 }
-
 
 .arrow {
     position       : absolute;
@@ -170,8 +169,6 @@ body {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-
-
 .item-container img {
     padding-bottom: 20px;
     width         : 100%;
@@ -198,7 +195,6 @@ body {
     transition: all ease-in-out 0.3s;
     box-sizing: border-box;
     position  : relative;
-
 }
 
 .detail-of-home .title {
@@ -223,22 +219,17 @@ body {
     margin-top   : 25px;
     display      : flex;
     margin-bottom: 5px;
-
 }
 
 .detail-of-home .item-info span {
     display     : flex;
     align-items : center;
     margin-right: 70px !important;
-    /* Remove margin completely */
 }
 
 .detail-of-home .item-info span i {
     margin-right: 9px;
-    /* Optional : small margin between icon and text */
 }
-
-
 
 .sort-buttons {
     margin-top     : 40px;
@@ -266,8 +257,6 @@ body {
     background: #303b97;
 }
 
-/* Switch Button Styles */
-/* Switch Button Styles */
 .switch-button-group {
     display        : flex;
     justify-content: center;
@@ -285,9 +274,8 @@ body {
 
 .toggle-switch {
     position: relative;
-
-    width : 60px;
-    height: 24px;
+    width   : 60px;
+    height  : 24px;
 }
 
 .toggle-switch input {
@@ -340,9 +328,6 @@ input:checked+.slider:before {
     transform: translateX(26px);
 }
 
-
-
-
 .search-sort-container {
     margin-left   : 15px;
     height        : auto;
@@ -355,11 +340,8 @@ input:checked+.slider:before {
     display       : flex;
     flex-direction: column;
     gap           : 20px;
-    /* Added gap between elements */
     box-shadow    : 0 0 10px rgba(0, 0, 0, 0.1);
-    /* Shadow for box */
     border-radius : 8px;
-    /* Rounded corners */
 }
 
 .search-sort-container h3 {
@@ -375,7 +357,6 @@ input:checked+.slider:before {
     flex-direction: column;
     align-items   : center;
     gap           : 10px;
-    /* Added gap between elements */
 }
 
 .filter-dropdown {
@@ -406,7 +387,6 @@ input:checked+.slider:before {
     display        : flex;
     justify-content: space-between;
     gap            : 10px;
-    /* Added gap between elements */
 }
 
 .input-group input {
@@ -454,7 +434,6 @@ input:checked+.slider:before {
 .black-navbar #header #navbar a,
 .black-navbar #header #navbar a:focus {
     color: #000066;
-    /* Set the desired text color */
 }
 
 .black-navbar #header:hover {
@@ -464,4 +443,164 @@ input:checked+.slider:before {
 .title {
     margin-left: 10px;
     margin-top : 10px;
+}
+
+/* Mobile Responsive Styles */
+@media screen and (max-width: 768px) {
+    .allin {
+        padding-top: 100px;
+    }
+
+    .search-sort-container {
+        position   : relative;
+        margin-left: 0;
+        margin-top : 0;
+        width      : calc(100% - 30px);
+        margin     : 0 15px 20px 15px;
+    }
+
+    .container {
+        margin-left: 0;
+        width      : 100%;
+        padding    : 0px;
+    }
+
+    .container ul {
+        margin-left    : 0;
+        justify-content: center;
+    }
+
+    .item-container {
+        width : calc(100% - 20px);
+        margin: 0 10px 20px 10px;
+    }
+
+    .background-image-container {
+        height: 250px;
+    }
+
+    .detail-of-home .item-info span {
+        margin-right: 20px !important;
+        font-size   : 0.9em;
+    }
+
+    #no-products-message {
+        margin-left: 0;
+        width      : calc(100% - 30px);
+        margin     : 20px 15px;
+    }
+}
+
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+    .container {
+        margin-left: 0;
+        width      : 100%;
+        padding    : 0 20px;
+    }
+
+    .search-sort-container {
+        position   : relative;
+        margin-left: 0;
+        width      : calc(100% - 40px);
+        margin     : 0 20px 30px 20px;
+    }
+
+    .container ul {
+        display        : flex;
+        /* make items line up in a row */
+        flex-wrap      : wrap;
+        /* allow multiple rows */
+        justify-content: center;
+        /* center items horizontally */
+        padding        : 0;
+        margin         : 0 auto;
+        list-style     : none;
+    }
+
+    .container ul li {
+        margin: 10px;
+        /* spacing between items */
+        width : 300px;
+        /* fixed width for each item */
+    }
+
+    .item-container {
+        width: calc(50% - 30px);
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .allin {
+        padding-top: 90px;
+    }
+
+    .search-sort-container {
+        padding: 10px;
+        gap    : 15px;
+    }
+
+    .search-sort-container h3 {
+        font-size: 16px;
+    }
+
+    .background-image-container {
+        height: 200px;
+    }
+
+    .item-price {
+        font-size: 17px;
+    }
+
+    .detail-of-home .title {
+        font-size: 0.95em;
+    }
+
+    .detail-of-home .item-info span {
+        margin-right: 15px !important;
+        font-size   : 0.85em;
+    }
+}
+
+
+
+.pagination-wrapper {
+    margin    : 30px 0;
+    /* More space from the grid */
+    width     : 100%;
+    text-align: center;
+}
+
+.pagination-wrapper ul {
+    display   : inline-flex;
+    list-style: none;
+    padding   : 0;
+    margin    : 0;
+}
+
+.pagination-wrapper ul li {
+    margin: 0 5px;
+}
+
+.pagination-wrapper ul li a,
+.pagination-wrapper ul li span {
+    display         : block;
+    padding         : 8px 12px;
+    border-radius   : 5px;
+    background-color: #303b97;
+    /* Your theme color */
+    color           : #fff;
+    text-decoration : none;
+    font-weight     : 500;
+    transition      : background-color 0.3s;
+}
+
+.pagination-wrapper ul li a:hover {
+    background-color: #1e2d7b;
+    /* Slightly darker hover */
+}
+
+.pagination-wrapper ul li.active span {
+    background-color: #1ea69a;
+    /* Active page color */
+    color           : #fff;
 }
