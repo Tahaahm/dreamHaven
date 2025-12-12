@@ -59,6 +59,8 @@ class UserController extends Controller
                 'username' => 'required|string|min:3|max:50|unique:users,username',
                 'email' => 'required|email|unique:users,email',
                 'password' => ['required', 'confirmed', PasswordRule::defaults()],
+                'is_verified' => 'boolean',
+
                 'phone' => 'nullable|string|min:10|max:15',
                 'place' => 'nullable|string|max:100',
                 'lat' => 'nullable|numeric|between:-90,90',
@@ -1766,16 +1768,42 @@ class UserController extends Controller
 
             DB::beginTransaction();
 
+            // ✅ DELETE FROM FIREBASE AUTH (if available)
+            if ($this->firebaseAuth) {
+                try {
+                    $firebaseUserExists = $this->firebaseAuth->userExists($user->email);
+                    if ($firebaseUserExists) {
+                        $firebaseUser = $this->firebaseAuth->getUserByEmail($user->email);
+                        if ($firebaseUser) {
+                            $this->firebaseAuth->deleteUser($firebaseUser->uid);
+                            Log::info('Firebase Auth user deleted', ['user_id' => $user->id]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Firebase Auth deletion failed (non-critical)', ['error' => $e->getMessage()]);
+                }
+            }
+
+            // ✅ DELETE FROM FIRESTORE (if available)
+            if ($this->firebaseFirestore) {
+                try {
+                    $this->firebaseFirestore->deleteUserDocument($user->id);
+                    Log::info('Firestore user deleted', ['user_id' => $user->id]);
+                } catch (\Exception $e) {
+                    Log::warning('Firestore deletion failed (non-critical)', ['error' => $e->getMessage()]);
+                }
+            }
+
             // Delete user's device tokens
             $user->update(['device_tokens' => []]);
 
-            // Cancel user's appointments - FIXED: Removed cancellation_reason
+            // Cancel user's appointments
             DB::table('appointments')
                 ->where('user_id', $user->id)
                 ->whereNull('cancelled_at')
                 ->update([
                     'cancelled_at' => now(),
-                    'status' => 'cancelled', // Update status as well
+                    'status' => 'cancelled',
                 ]);
 
             // Delete user's notifications

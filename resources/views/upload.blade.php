@@ -194,7 +194,7 @@
       <fieldset>
         <legend>Owner Information</legend>
 
-     
+
       </fieldset>
 
   <fieldset>
@@ -209,7 +209,7 @@
 </fieldset>
 
 
-  
+
  <fieldset>
         <legend>Price & Listing</legend>
         <label>Price (IQD)</label>
@@ -220,7 +220,7 @@
         <select id="listing_type">
               <option value="sell">Sell</option>
           <option value="rent">Rent</option>
-      
+
         </select>
       </fieldset>
 
@@ -272,7 +272,7 @@
 
     <!-- Page 3 -->
     <div id="page3" class="hidden">
-   
+
 
       <fieldset>
         <legend>Rooms</legend>
@@ -392,8 +392,6 @@ async function uploadImages(files) {
     return Array.isArray(data.urls) ? data.urls : [];
 }
 
-
-// Submit property
 async function submitProperty() {
     try {
         // Get logged-in user/agent data from Blade
@@ -411,7 +409,13 @@ async function submitProperty() {
 
         const files = document.getElementById('imageInput').files;
 
-        // Upload images
+        // ✅ CHECK: At least one image is required
+        if (files.length === 0) {
+            alert("Please select at least one image before submitting.");
+            return;
+        }
+
+        // ✅ Upload images FIRST to get URLs
         const formData = new FormData();
         for (const file of files) {
             formData.append('images[]', file);
@@ -426,15 +430,21 @@ async function submitProperty() {
         const uploadData = await uploadRes.json();
         const imageUrls = Array.isArray(uploadData.urls) ? uploadData.urls : [];
 
+        // ✅ CHECK: Verify images were uploaded successfully
+        if (imageUrls.length === 0) {
+            alert("Image upload failed. Please try again.");
+            return;
+        }
+
         // Numeric/boolean fields with defaults
         const area = parseFloat(document.getElementById('area').value) || 1;
         const furnished = document.getElementById('furnished').value === '1';
         const listingType = document.getElementById('listing_type').value;
-        const rentalPeriod = listingType === 'rent' 
-            ? document.getElementById('rental_period').value || 'monthly' 
+        const rentalPeriod = listingType === 'rent'
+            ? document.getElementById('rental_period').value || 'monthly'
             : null;
 
-        // Build data payload
+        // ✅ Build data payload with IMAGE URLs (not files)
         const data = {
             owner_id: ownerId,
             owner_type: ownerType,
@@ -471,9 +481,12 @@ async function submitProperty() {
                         .split(',')
                         .map(f => f.trim())
                         .filter(f => f.length > 0),
-            images: imageUrls
+            images: imageUrls // ✅ Send URLs array (already uploaded)
         };
 
+        console.log('📤 Sending data:', data);
+
+        // ✅ Send as JSON with URLs
         const res = await fetch('/v1/api/properties/store', {
             method: 'POST',
             headers: {
@@ -489,23 +502,28 @@ async function submitProperty() {
             result = await res.json();
         } catch {
             const text = await res.text();
-            console.error('Server returned non-JSON:', text);
+            console.error('❌ Server returned non-JSON:', text);
             alert('Server error, check console.');
             return;
         }
 
+        console.log('📥 Server response:', result);
+
         if (res.ok && result.status) {
+            alert('✅ Property created successfully!');
             // ✅ Redirect to agent property list page
             window.location.href = result.redirect || '/agent/properties';
         } else {
-            alert('Error: ' + JSON.stringify(result.data || result));
+            alert('❌ Error: ' + JSON.stringify(result.data || result));
         }
 
     } catch (err) {
-        console.error(err);
+        console.error('❌ Error:', err);
         alert('Something went wrong: ' + err.message);
     }
 }
+
+
 </script>
 <script>
 const listingType = document.getElementById('listing_type');

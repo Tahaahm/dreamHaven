@@ -684,4 +684,17 @@ class FirebaseFirestoreService
             ];
         }
     }
+    public function deleteUser(string $uid): bool
+    {
+        try {
+            if (!$this->auth) {
+                return false;
+            }
+            $this->auth->deleteUser($uid);
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Firebase user deletion failed', ['uid' => $uid, 'error' => $e->getMessage()]);
+            return false;
+        }
+    }
 }

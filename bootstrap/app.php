@@ -50,7 +50,8 @@ return Application::configure(basePath: dirname(__DIR__))
             // Specific agent routes - ADD THESE LINES
             'v1/api/agents/*',
             'v1/api/agents/users/*',
-            'v1/api/agents/users/*/convert-to-agent',
+            'v1/api/agents/users/*/convert-to-agent',,
+            "/upload-images"
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
