@@ -15,6 +15,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Middleware\AgentOnly;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AppVersionController;
+use App\Http\Controllers\LocationController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\AgentOrAdmin;
 use Illuminate\Http\Request;
@@ -219,6 +220,9 @@ Route::prefix('api/v1')->group(function () {
         Route::post('/confirm-password-reset', [UserController::class, 'confirmPasswordReset']);
         Route::post('/google/signin', [UserController::class, 'googleSignIn']);
         Route::post('/check-availability', [UserController::class, 'checkAvailability']);
+
+        Route::post('/agent/login', [AuthController::class, 'loginAgent']);
+        Route::post('/office/login', [AuthController::class, 'loginRealEstateOffice']);
         // Email Verification Endpoints
         Route::post('/send-verification-code', [UserController::class, 'sendVerificationCode']);
         Route::post('/verify-code', [UserController::class, 'verifyCodeBeforeRegister']);
@@ -321,6 +325,31 @@ Route::prefix('v1/api/agents')->group(function () {
         Route::patch('/{id}/verify', [AgentController::class, 'toggleVerification']);
         Route::patch('/{id}/remove-company', [AgentController::class, 'removeFromCompany']);
     });
+});
+
+
+Route::prefix('v1/api/location')->group(function () {
+
+    // ==================== BRANCH/CITY ROUTES ====================
+    Route::get('/branches', [LocationController::class, 'getBranches']);        // Get all branches with areas
+    Route::get('/cities', [LocationController::class, 'getCities']);            // Get cities only (NEW)
+    Route::get('/branches/{id}', [LocationController::class, 'getBranch']);    // Get single branch
+    Route::post('/branches', [LocationController::class, 'createBranch']);     // Create branch
+    Route::put('/branches/{id}', [LocationController::class, 'updateBranch']); // Update branch
+    Route::delete('/branches/{id}', [LocationController::class, 'deleteBranch']); // Delete branch
+
+    // ==================== AREA ROUTES ====================
+    Route::get('/branches/{branchId}/areas', [LocationController::class, 'getAreasByBranch']); // Areas by branch
+    Route::get('/areas/{id}', [LocationController::class, 'getArea']);                        // Get single area
+    Route::post('/areas', [LocationController::class, 'createArea']);                          // Create area
+    Route::put('/areas/{id}', [LocationController::class, 'updateArea']);                      // Update area
+    Route::delete('/areas/{id}', [LocationController::class, 'deleteArea']);                  // Delete area
+
+    // ==================== UTILITY ====================
+    Route::get('/search', [LocationController::class, 'searchLocations']); // Search branches & areas
+
+    // ==================== STATS ====================
+    Route::get('/stats', [LocationController::class, 'getLocationStats']); // Branch & Area stats
 });
 
 // ============================================
@@ -571,7 +600,8 @@ Route::get('/projects', [ProjectController::class, 'showProjects'])->name('proje
 
 
 Route::post('/projects/store', [ProjectController::class, 'store'])->name('projects.store');
-
+// In routes/web.php or routes/api.php
+Route::get('/api/v1/users/{id}', [UserController::class, 'getUserById']);
 
 // GET upload page
 

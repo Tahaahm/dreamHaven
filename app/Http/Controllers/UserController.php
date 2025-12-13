@@ -60,7 +60,6 @@ class UserController extends Controller
                 'email' => 'required|email|unique:users,email',
                 'password' => ['required', 'confirmed', PasswordRule::defaults()],
                 'is_verified' => 'boolean',
-
                 'phone' => 'nullable|string|min:10|max:15',
                 'place' => 'nullable|string|max:100',
                 'lat' => 'nullable|numeric|between:-90,90',
@@ -3456,6 +3455,68 @@ class UserController extends Controller
                 ['error' => $e->getMessage()],
                 500
             );
+        }
+    }
+    /**
+     * Get user by ID (public profile view)
+     */
+    /**
+     * Get user by ID with complete profile data
+     *
+     * @param Request $request
+     * @param string $userId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getUserById(Request $request, $userId)
+    {
+        try {
+            if (!$userId) {
+                return ApiResponse::error('User ID is required', null, 400);
+            }
+
+            // Find user by ID - no relationships for now
+            $user = User::find($userId);
+
+            if (!$user) {
+                return ApiResponse::error('User not found', null, 404);
+            }
+
+            // Build user data with only existing fields
+            $userData = [
+                'id' => $user->id,
+                'username' => $user->username,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'place' => $user->place,
+                'lat' => $user->lat,
+                'lng' => $user->lng,
+                'about_me' => $user->about_me,
+                'photo_image' => $user->photo_image,
+                'language' => $user->language,
+                'search_preferences' => $user->search_preferences,
+                'device_tokens' => $user->device_tokens,
+                'email_verified_at' => $user->email_verified_at,
+                'is_active' => (bool) $user->is_active, // ✅ Cast to boolean
+                'role' => $user->role,
+                'is_verified' => (bool) $user->is_verified, // ✅ Cast to boolean
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+            ];
+
+            Log::info('User profile retrieved successfully', [
+                'user_id' => $userId,
+            ]);
+
+            return ApiResponse::success('User retrieved successfully', [
+                'user' => $userData
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Get user by ID error', [
+                'message' => $e->getMessage(),
+                'user_id' => $userId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ApiResponse::error('Failed to get user', $e->getMessage(), 500);
         }
     }
 }
