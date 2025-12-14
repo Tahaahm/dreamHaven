@@ -16,6 +16,7 @@ use App\Http\Middleware\AgentOnly;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\SubscriptionPlanController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\AgentOrAdmin;
 use Illuminate\Http\Request;
@@ -803,3 +804,17 @@ Route::get('/PropertyDetail/{property_id}', [PropertyController::class, 'showPor
 
 Route::get('/properties', [PropertyController::class, 'showList'])
     ->name('property.list');
+
+
+Route::prefix('subscription-plans')->group(function () {
+    Route::get('/', [SubscriptionPlanController::class, 'index']);
+    Route::post('/', [SubscriptionPlanController::class, 'store']);
+    Route::get('/{id}', [SubscriptionPlanController::class, 'show']);
+    Route::put('/{id}', [SubscriptionPlanController::class, 'update']);
+    Route::patch('/{id}', [SubscriptionPlanController::class, 'update']);
+    Route::delete('/{id}', [SubscriptionPlanController::class, 'destroy']);
+
+    // Additional routes
+    Route::get('/type/{type}', [SubscriptionPlanController::class, 'getByType']);
+    Route::patch('/{id}/toggle-active', [SubscriptionPlanController::class, 'toggleActive']);
+});
