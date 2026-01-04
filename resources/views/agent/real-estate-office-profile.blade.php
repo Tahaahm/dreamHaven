@@ -1,765 +1,1022 @@
 <!DOCTYPE html>
 <html lang="en">
-    
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ $office->company_name }} - Profile</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>{{ $office->company_name ?? 'Office Profile' }} - Dream Haven</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
     <style>
         * {
-            scroll-behavior: smooth;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #f8f9fa;
+            color: #1a1a1a;
+            padding-top: 70px;
         }
-        
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        @keyframes slideInLeft {
-            from {
-                opacity: 0;
-                transform: translateX(-50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        @keyframes slideInRight {
-            from {
-                opacity: 0;
-                transform: translateX(50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        @keyframes floating {
-            0%, 100% { transform: translateY(0px); }
-            50% { transform: translateY(-20px); }
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        @keyframes shimmer {
-            0% { background-position: -1000px 0; }
-            100% { background-position: 1000px 0; }
-        }
-        
-        .animate-fade-in {
-            animation: fadeIn 0.8s ease-out;
-        }
-        
-        .animate-slide-up {
-            animation: slideUp 0.6s ease-out forwards;
-        }
-        
-        .animate-slide-left {
-            animation: slideInLeft 0.6s ease-out forwards;
-        }
-        
-        .animate-slide-right {
-            animation: slideInRight 0.6s ease-out forwards;
-        }
-        
-        .floating {
-            animation: floating 3s ease-in-out infinite;
-        }
-        
-        .hero-gradient {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+
+        /* Hero Banner */
+        .hero-banner {
+            height: 320px;
+            background: linear-gradient(135deg, #303b97 0%, #1e2660 100%);
             position: relative;
             overflow: hidden;
         }
-        
-        .hero-gradient::before {
-            content: '';
+
+        .hero-bg-image {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.3;
+        }
+
+        .hero-overlay {
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600"><g fill="white" opacity="0.05"><circle cx="100" cy="100" r="80"/><circle cx="400" cy="300" r="120"/><circle cx="900" cy="150" r="100"/><circle cx="1100" cy="400" r="90"/><circle cx="600" cy="500" r="70"/></g></svg>');
-            background-size: cover;
+            background: linear-gradient(to bottom, rgba(48, 59, 151, 0.8), rgba(30, 38, 96, 0.95));
         }
-        
-        .card-hover {
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 60px 24px 40px;
+            color: white;
         }
-        
-        .card-hover:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 25px 50px rgba(102, 126, 234, 0.3);
+
+        .hero-flex {
+            display: flex;
+            gap: 28px;
+            align-items: flex-start;
         }
-        
-        .tab-button {
+
+        .office-logo-large {
+            width: 110px;
+            height: 110px;
+            background: white;
+            border-radius: 16px;
+            padding: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            flex-shrink: 0;
+        }
+
+        .office-logo-large img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .office-logo-large i {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: #303b97;
+        }
+
+        .hero-text {
+            flex: 1;
+        }
+
+        .office-title {
+            font-size: 36px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .office-subtitle {
+            font-size: 16px;
+            opacity: 0.95;
+            margin-bottom: 20px;
+        }
+
+        .hero-badges {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .badge-hero {
+            padding: 7px 16px;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .badge-verified {
+            background: rgba(16, 185, 129, 0.3);
+        }
+
+        /* Stats Grid */
+        .stats-section {
+            background: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            margin: -40px auto 40px;
+            max-width: 1200px;
+            border-radius: 16px;
+            padding: 32px;
+            position: relative;
+            z-index: 3;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 24px;
+        }
+
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(48, 59, 151, 0.12);
+        }
+
+        .stat-icon {
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 12px;
+            background: linear-gradient(135deg, #303b97, #5865f2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 22px;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 800;
+            color: #303b97;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 4px;
+        }
+
+        /* Main Container */
+        .main-wrapper {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px 60px;
+        }
+
+        .content-grid {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 32px;
+        }
+
+        /* Card */
+        .info-card {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 24px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-bottom: 1px solid #e5e7eb;
+            padding: 18px 24px;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #111827;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title i {
+            color: #303b97;
+            font-size: 16px;
+        }
+
+        .card-body {
+            padding: 24px;
+        }
+
+        /* Contact */
+        .contact-item {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        .contact-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .contact-icon {
+            width: 38px;
+            height: 38px;
+            background: #303b97;
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .contact-text {
+            flex: 1;
+        }
+
+        .contact-label {
+            font-size: 11px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+
+        .contact-value {
+            font-size: 14px;
+            color: #111827;
+            font-weight: 600;
+        }
+
+        .contact-value a {
+            color: #303b97;
+            text-decoration: none;
+        }
+
+        .contact-value a:hover {
+            text-decoration: underline;
+        }
+
+        /* Quick Actions */
+        .quick-buttons {
+            display: grid;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .btn-quick {
+            padding: 13px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: #303b97;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1e2660;
+            color: white;
+        }
+
+        .btn-whatsapp {
+            background: #25D366;
+            color: white;
+        }
+
+        .btn-whatsapp:hover {
+            background: #20ba5a;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-secondary:hover {
+            background: #f9fafb;
+            color: #374151;
+        }
+
+        /* Working Hours */
+        .hours-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .hour-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: #f9fafb;
+            border-radius: 8px;
+        }
+
+        .hour-day {
+            font-size: 13px;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .hour-time {
+            font-size: 13px;
+            color: #6b7280;
+        }
+
+        /* Section Headers */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #111827;
+        }
+
+        .view-all {
+            font-size: 14px;
+            color: #303b97;
+            font-weight: 600;
+            text-decoration: none;
+        }
+
+        .view-all:hover {
+            text-decoration: underline;
+        }
+
+        /* About */
+        .about-text {
+            font-size: 15px;
+            line-height: 1.8;
+            color: #4b5563;
+        }
+
+        /* Agents Grid */
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .agent-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+        }
+
+        .agent-card:hover {
+            border-color: #303b97;
+            box-shadow: 0 8px 24px rgba(48, 59, 151, 0.12);
+            transform: translateY(-4px);
+        }
+
+        .agent-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 14px;
+            background: #f3f4f6;
             position: relative;
             overflow: hidden;
-            transition: all 0.3s ease;
         }
-        
-        .tab-button::after {
-            content: '';
+
+        .agent-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .agent-avatar i {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: #9ca3af;
+        }
+
+        .verified-badge {
             position: absolute;
             bottom: 0;
-            left: 50%;
-            width: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            transition: all 0.3s ease;
-            transform: translateX(-50%);
+            right: 0;
+            width: 22px;
+            height: 22px;
+            background: #10b981;
+            border-radius: 50%;
+            border: 3px solid white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        
-        .tab-button.active {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-            color: #667eea;
+
+        .verified-badge i {
+            color: white;
+            font-size: 9px;
         }
-        
-        .tab-button.active::after {
-            width: 100%;
+
+        .agent-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 4px;
         }
-        
-        .property-grid-item {
-            opacity: 0;
-            animation: slideUp 0.5s ease-out forwards;
+
+        .agent-role {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 12px;
         }
-        
-        .gradient-text {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+
+        .agent-stats {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            padding-top: 12px;
+            border-top: 1px solid #f3f4f6;
+            font-size: 12px;
+            color: #6b7280;
         }
-        
-        .info-badge {
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+
+        .agent-stats span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
-        
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+
+        /* Properties Grid */
+        .properties-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
         }
-        
-        .shimmer {
-            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
+
+        .property-card {
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            overflow: hidden;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
         }
-        
-        .image-overlay {
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-            opacity: 0;
-            transition: opacity 0.3s ease;
+
+        .property-card:hover {
+            border-color: #303b97;
+            box-shadow: 0 8px 24px rgba(48, 59, 151, 0.12);
+            transform: translateY(-4px);
         }
-        
-        .card-hover:hover .image-overlay {
-            opacity: 1;
-        }
-        
-        .stat-card {
-            background: linear-gradient(135deg, var(--tw-gradient-stops));
+
+        .property-image {
             position: relative;
+            height: 200px;
             overflow: hidden;
         }
-        
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-            animation: pulse 3s ease-in-out infinite;
+
+        .property-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s;
         }
-        
+
+        .property-card:hover .property-image img {
+            transform: scale(1.1);
+        }
+
+        .property-badge {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: rgba(48, 59, 151, 0.95);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .property-content {
+            padding: 16px;
+        }
+
+        .property-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 8px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .property-location {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .property-price {
+            font-size: 20px;
+            font-weight: 800;
+            color: #303b97;
+            margin-bottom: 12px;
+        }
+
+        .property-features {
+            display: flex;
+            justify-content: space-between;
+            padding-top: 12px;
+            border-top: 1px solid #f3f4f6;
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .property-features span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #9ca3af;
+        }
+
+        .empty-state i {
+            font-size: 56px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            font-size: 15px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .content-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-flex {
+                flex-direction: column;
+                align-items: center;
+                text-align: center;
+            }
+
+            .office-title {
+                font-size: 28px;
+            }
+
+            .agents-grid, .properties-grid {
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            }
+        }
+
         @media (max-width: 768px) {
-            .hero-gradient h1 {
-                font-size: 2rem;
+            body {
+                padding-top: 60px;
+            }
+
+            .hero-banner {
+                height: 280px;
+            }
+
+            .office-title {
+                font-size: 24px;
+            }
+
+            .stats-section {
+                margin: -30px 16px 30px;
+                padding: 24px 16px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 16px;
+            }
+
+            .agents-grid, .properties-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
-  
-<body class="bg-gradient-to-br from-gray-50 to-gray-100">
+<body>
+    @php $navbarStyle = 'navbar-light'; @endphp
+    @include('navbar')
 
-    <!-- Hero Section -->
-    <div class="hero-gradient relative">
-        <div class="absolute inset-0 bg-gradient-to-b from-transparent to-black/20"></div>
-        <div class="relative container mx-auto px-4 sm:px-6 py-16 sm:py-24 animate-fade-in">
-            <div class="flex flex-col lg:flex-row items-center justify-between gap-8">
-                <!-- Left Side: Office Info -->
-                <div class="flex flex-col sm:flex-row items-center sm:items-start gap-6 sm:gap-8 animate-slide-left">
-                    @if($office->profile_image)
-                        <img src="{{ asset('storage/public/' . $office->profile_image) }}" 
+    <!-- Hero Banner -->
+    <div class="hero-banner">
+        @php
+            // Handle background image - support both storage paths and external URLs
+            $bgImage = null;
+            if(!empty($office->company_bio_image)) {
+                if(filter_var($office->company_bio_image, FILTER_VALIDATE_URL)) {
+                    $bgImage = $office->company_bio_image;
+                } else {
+                    $bgImage = asset('storage/' . ltrim($office->company_bio_image, '/'));
+                }
+            }
+        @endphp
 
-                    
+        @if($bgImage)
+        <img src="{{ $bgImage }}" class="hero-bg-image" alt="Background" onerror="this.style.display='none'">
+        @endif
 
-                             alt="{{ $office->company_name }}" 
-                             class="w-32 h-32 sm:w-40 sm:h-40 rounded-3xl object-cover border-4 border-white shadow-2xl floating">
+        <div class="hero-overlay"></div>
+
+        <div class="hero-content">
+            <div class="hero-flex">
+                <div class="office-logo-large">
+                    @php
+                        // Handle logo - support both storage paths and external URLs
+                        $logoImage = null;
+                        if(!empty($office->profile_image)) {
+                            if(filter_var($office->profile_image, FILTER_VALIDATE_URL)) {
+                                $logoImage = $office->profile_image;
+                            } else {
+                                $logoImage = asset('storage/' . ltrim($office->profile_image, '/'));
+                            }
+                        }
+                    @endphp
+
+                    @if($logoImage)
+                        <img src="{{ $logoImage }}" alt="{{ $office->company_name }}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <i class="fas fa-building" style="display: none;"></i>
                     @else
-                        <div class="w-32 h-32 sm:w-40 sm:h-40 rounded-3xl bg-white/20 flex items-center justify-center border-4 border-white shadow-2xl floating">
-                            <i class="fas fa-building text-5xl sm:text-7xl text-white"></i>
-                        </div>
+                        <i class="fas fa-building"></i>
                     @endif
-                    <div class="text-white text-center sm:text-left">
-                        <h1 class="text-3xl sm:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4">{{ $office->company_name }}</h1>
-                        <p class="text-lg sm:text-xl text-white/90 mb-2 flex items-center justify-center sm:justify-start">
-                            <i class="fas fa-map-marker-alt mr-2"></i>
-                            {{ $office->city }}, {{ $office->district }}
-                        </p>
-                        @if($office->years_experience)
-                        <p class="text-base sm:text-lg text-white/80 flex items-center justify-center sm:justify-start">
-                            <i class="fas fa-award mr-2"></i>
-                            {{ $office->years_experience }} Years of Excellence
-                        </p>
+                </div>
+
+                <div class="hero-text">
+                    <h1 class="office-title">{{ $office->company_name ?? 'Real Estate Office' }}</h1>
+                    <p class="office-subtitle">{{ $office->company_bio ?? 'Your Trusted Real Estate Partner' }}</p>
+
+                    <div class="hero-badges">
+                        @if($office->is_verified)
+                        <span class="badge-hero badge-verified">
+                            <i class="fas fa-check-circle"></i> Verified Office
+                        </span>
+                        @endif
+                        <span class="badge-hero">
+                            <i class="fas fa-star"></i> {{ number_format($office->average_rating ?? 0, 1) }} Rating
+                        </span>
+                        <span class="badge-hero">
+                            <i class="fas fa-city"></i> {{ $office->city ?? 'Kurdistan' }}
+                        </span>
+                        <span class="badge-hero">
+                            <i class="fas fa-award"></i> {{ $office->years_experience ?? 0 }}+ Years
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Section -->
+    <div class="main-wrapper">
+        <div class="stats-section">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <span class="stat-number">{{ $office->agents ? $office->agents->count() : 0 }}</span>
+                    <span class="stat-label">Expert Agents</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <span class="stat-number">{{ isset($properties) ? $properties->count() : 0 }}</span>
+                    <span class="stat-label">Active Listings</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-handshake"></i>
+                    </div>
+                    <span class="stat-number">{{ $office->properties_sold ?? 0 }}</span>
+                    <span class="stat-label">Properties Sold</span>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <span class="stat-number">{{ $office->years_experience ?? 0 }}+</span>
+                    <span class="stat-label">Years Experience</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="content-grid">
+            <!-- Sidebar -->
+            <div>
+                <!-- Contact Card -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-address-card"></i>
+                            Contact Information
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if($office->phone_number)
+                        <div class="contact-item">
+                            <div class="contact-icon">
+                                <i class="fas fa-phone"></i>
+                            </div>
+                            <div class="contact-text">
+                                <div class="contact-label">Phone</div>
+                                <div class="contact-value">{{ $office->phone_number }}</div>
+                            </div>
+                        </div>
+                        @endif
+
+                        @if($office->email_address)
+                        <div class="contact-item">
+                            <div class="contact-icon">
+                                <i class="fas fa-envelope"></i>
+                            </div>
+                            <div class="contact-text">
+                                <div class="contact-label">Email</div>
+                                <div class="contact-value">
+                                    <a href="mailto:{{ $office->email_address }}">{{ $office->email_address }}</a>
+                                </div>
+                            </div>
+                        </div>
+                        @endif
+
+                        @if($office->office_address)
+                        <div class="contact-item">
+                            <div class="contact-icon">
+                                <i class="fas fa-map-marker-alt"></i>
+                            </div>
+                            <div class="contact-text">
+                                <div class="contact-label">Address</div>
+                                <div class="contact-value">{{ $office->office_address }}</div>
+                            </div>
+                        </div>
+                        @endif
+
+                        @if($office->city)
+                        <div class="contact-item">
+                            <div class="contact-icon">
+                                <i class="fas fa-city"></i>
+                            </div>
+                            <div class="contact-text">
+                                <div class="contact-label">Location</div>
+                                <div class="contact-value">
+                                    {{ $office->city }}@if($office->district), {{ $office->district }}@endif
+                                </div>
+                            </div>
+                        </div>
+                        @endif
+
+                        <div class="quick-buttons">
+                            @if($office->phone_number)
+                            <a href="tel:{{ $office->phone_number }}" class="btn-quick btn-primary">
+                                <i class="fas fa-phone"></i> Call Office
+                            </a>
+                            @endif
+
+                            <a href="https://api.whatsapp.com/send?phone={{ preg_replace('/\D/', '', $office->phone_number ?? '') }}"
+                               target="_blank"
+                               class="btn-quick btn-whatsapp">
+                                <i class="fab fa-whatsapp"></i> WhatsApp
+                            </a>
+
+                            @if($office->email_address)
+                            <a href="mailto:{{ $office->email_address }}" class="btn-quick btn-secondary">
+                                <i class="fas fa-envelope"></i> Email Us
+                            </a>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Working Hours -->
+                @if($office->availability_schedule)
+                <div class="info-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-clock"></i>
+                            Working Hours
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="hours-grid">
+                            @foreach($office->availability_schedule as $day => $hours)
+                            <div class="hour-row">
+                                <span class="hour-day">{{ ucfirst($day) }}</span>
+                                <span class="hour-time">{{ $hours }}</span>
+                            </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+                @endif
+            </div>
+
+            <!-- Main Content -->
+            <div>
+                <!-- About -->
+                @if($office->about_company)
+                <div class="info-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-info-circle"></i>
+                            About Us
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="about-text">{{ $office->about_company }}</p>
+                    </div>
+                </div>
+                @endif
+
+                <!-- Our Team -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <div class="section-header">
+                            <div class="card-title">
+                                <i class="fas fa-users"></i>
+                                Our Professional Team
+                            </div>
+                            @if($office->agents && $office->agents->count() > 8)
+                            <a href="#" class="view-all">View All</a>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        @if($office->agents && $office->agents->count() > 0)
+                        <div class="agents-grid">
+                            @foreach($office->agents->take(8) as $agent)
+                            <a href="{{ route('agent.profile', $agent->id) }}" class="agent-card">
+                                <div class="agent-avatar">
+                                    @if($agent->profile_image)
+                                        <img src="{{ filter_var($agent->profile_image, FILTER_VALIDATE_URL) ? $agent->profile_image : asset('storage/' . ltrim($agent->profile_image, '/')) }}"
+                                             alt="{{ $agent->agent_name }}"
+                                             onerror="this.style.display='none'; this.parentElement.innerHTML='<i class=\'fas fa-user\'></i>';">
+                                    @else
+                                        <i class="fas fa-user"></i>
+                                    @endif
+
+                                    @if($agent->is_verified)
+                                    <div class="verified-badge">
+                                        <i class="fas fa-check"></i>
+                                    </div>
+                                    @endif
+                                </div>
+                                <div class="agent-name">{{ $agent->agent_name ?? 'Agent' }}</div>
+                                <div class="agent-role">{{ $agent->type ?? 'Real Estate Agent' }}</div>
+                                <div class="agent-stats">
+                                    <span><i class="fas fa-star"></i> {{ number_format($agent->overall_rating ?? 0, 1) }}</span>
+                                    <span><i class="fas fa-home"></i> {{ $agent->ownedProperties ? $agent->ownedProperties->count() : 0 }}</span>
+                                </div>
+                            </a>
+                            @endforeach
+                        </div>
+                        @else
+                        <div class="empty-state">
+                            <i class="fas fa-users"></i>
+                            <p>No agents available</p>
+                        </div>
                         @endif
                     </div>
                 </div>
-                
-                <!-- Right Side: Contact Info -->
-                <div class="flex flex-col gap-4 w-full sm:w-auto animate-slide-right">
-                    <a href="mailto:{{ $office->email_address }}" 
-                       class="info-badge px-6 sm:px-8 py-4 rounded-2xl text-center hover:scale-105 transition shadow-xl">
-                        <i class="fas fa-envelope text-purple-600 mr-2"></i>
-                        <span class="font-semibold text-gray-800 text-sm sm:text-base">{{ $office->email_address }}</span>
-                    </a>
-                    <a href="tel:{{ $office->phone_number }}" 
-                       class="info-badge px-6 sm:px-8 py-4 rounded-2xl text-center hover:scale-105 transition shadow-xl">
-                        <i class="fas fa-phone text-purple-600 mr-2"></i>
-                        <span class="font-semibold text-gray-800 text-sm sm:text-base">{{ $office->phone_number }}</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <div class="container mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        
-        <!-- About Section -->
-        @if($office->about_company || $office->company_bio)
-        <div class="glass-card rounded-3xl shadow-2xl p-6 sm:p-10 mb-8 sm:mb-12 card-hover animate-slide-up" style="animation-delay: 0.1s">
-            <h2 class="text-3xl sm:text-4xl font-bold gradient-text mb-6 flex items-center">
-                <i class="fas fa-info-circle mr-3"></i>About Us
-            </h2>
-            @if($office->about_company)
-            <p class="text-gray-700 text-base sm:text-lg leading-relaxed mb-6">{{ $office->about_company }}</p>
-            @endif
-            @if($office->company_bio)
-            <p class="text-gray-600 text-sm sm:text-base leading-relaxed">{{ $office->company_bio }}</p>
-            @endif
-            
-            @if($office->current_plan)
-            <div class="mt-8 flex items-center justify-center sm:justify-start">
-                <div class="inline-block bg-gradient-to-r from-purple-600 to-purple-700 text-white px-6 py-3 rounded-full shadow-lg">
-                    <i class="fas fa-star mr-2"></i>
-                    <span class="font-bold">{{ ucfirst($office->current_plan) }} Plan</span>
-                </div>
-            </div>
-            @endif
-        </div>
-        @endif
-
-        <!-- Stats Section -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-8 sm:mb-12">
-            <div class="stat-card from-blue-500 to-blue-600 rounded-3xl p-6 sm:p-8 text-white shadow-2xl card-hover animate-slide-up" style="animation-delay: 0.2s">
-                <div class="flex items-center justify-between relative z-10">
-                    <i class="fas fa-users text-4xl sm:text-5xl opacity-80"></i>
-                    <div class="text-right">
-                        <h3 class="text-4xl sm:text-5xl font-bold">{{ $totalAgents }}</h3>
-                        <p class="text-blue-100 text-sm sm:text-lg">Professional Agents</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="stat-card from-green-500 to-green-600 rounded-3xl p-6 sm:p-8 text-white shadow-2xl card-hover animate-slide-up" style="animation-delay: 0.3s">
-                <div class="flex items-center justify-between relative z-10">
-                    <i class="fas fa-home text-4xl sm:text-5xl opacity-80"></i>
-                    <div class="text-right">
-                        <h3 class="text-4xl sm:text-5xl font-bold">{{ $totalProperties }}</h3>
-                        <p class="text-green-100 text-sm sm:text-lg">Property Listings</p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="stat-card from-purple-500 to-purple-600 rounded-3xl p-6 sm:p-8 text-white shadow-2xl card-hover animate-slide-up sm:col-span-2 lg:col-span-1" style="animation-delay: 0.4s">
-                <div class="flex items-center justify-between relative z-10">
-                    <i class="fas fa-map-marked-alt text-4xl sm:text-5xl opacity-80"></i>
-                    <div class="text-right">
-                        <h3 class="text-4xl sm:text-5xl font-bold">{{ $office->city }}</h3>
-                        <p class="text-purple-100 text-sm sm:text-lg">Service Area</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tabs Navigation -->
-        <div class="glass-card rounded-2xl shadow-xl p-2 mb-8 animate-slide-up" style="animation-delay: 0.5s">
-            <div class="flex flex-wrap gap-2">
-                <button class="tab-button active flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition text-sm sm:text-base" 
-                        onclick="switchTab('agents')">
-                    <i class="fas fa-users mr-2"></i><span class="hidden sm:inline">Our Team </span>({{ $totalAgents }})
-                </button>
-                <button class="tab-button flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition text-sm sm:text-base" 
-                        onclick="switchTab('properties')">
-                    <i class="fas fa-home mr-2"></i><span class="hidden sm:inline">Properties </span>({{ $totalProperties }})
-                </button>
-                @if($office->office_address || ($office->latitude && $office->longitude))
-                <button class="tab-button flex-1 sm:flex-none px-4 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition text-sm sm:text-base" 
-                        onclick="switchTab('location')">
-                    <i class="fas fa-map-marker-alt mr-2"></i><span class="hidden sm:inline">Location</span>
-                </button>
-                @endif
-            </div>
-        </div>
-
-        <!-- Agents Tab -->
-        <div id="agents-tab" class="tab-content">
-            <div class="glass-card rounded-3xl shadow-2xl p-6 sm:p-10 animate-slide-up" style="animation-delay: 0.6s">
-                <h2 class="text-3xl sm:text-4xl font-bold gradient-text mb-6 sm:mb-8 flex items-center">
-                    <i class="fas fa-users mr-3"></i>Meet Our Expert Team
-                </h2>
-                
-                <div id="agents-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                    @foreach($office->agents as $index => $agent)
-                    <div class="card-hover glass-card rounded-2xl p-6 border border-gray-200 property-grid-item" 
-                         style="animation-delay: {{ 0.1 * $index }}s">
-
-
-           @php
-    // Detect if stored value is a full URL or just a filename
-    $image = null;
-
-    if (!empty($agent->profile_image)) {
-        if (filter_var($agent->profile_image, FILTER_VALIDATE_URL)) {
-            // Full URL stored
-            $image = $agent->profile_image;
-        } else {
-            // Local file stored inside /public/profile_images
-            $image = asset('profile_images/' . $agent->profile_image);
-        }
-    }
-@endphp
-          <div class="flex items-center gap-4 sm:gap-5 mb-5">
-  @if($agent->profile_image && file_exists(storage_path('app/public/'.$agent->profile_image)))
-    <img 
-        src="{{ asset('storage/'.$agent->profile_image) }}" 
-        alt="{{ $agent->agent_name }}"
-        class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-lg flex-shrink-0"
-    >
-@else
-    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600 flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg flex-shrink-0">
-        {{ substr($agent->agent_name, 0, 1) }}
-    </div>
-@endif
-
-       
-
-    <div class="min-w-0">
-        <h3 class="font-bold text-lg sm:text-xl text-gray-800 truncate">{{ $agent->agent_name }}</h3>
-        <p class="text-purple-600 font-medium text-sm sm:text-base">{{ $agent->type }}</p>
-    </div>
-</div>
-
-
-
-
-                        <div class="space-y-3">
-                            <a href="mailto:{{ $agent->primary_email }}" 
-                               class="flex items-center text-gray-600 hover:text-purple-600 transition group">
-                                <i class="fas fa-envelope text-purple-500 mr-3 w-5 group-hover:scale-110 transition"></i>
-                                <span class="text-xs sm:text-sm truncate">{{ $agent->primary_email }}</span>
-                            </a>
-                            <a href="tel:{{ $agent->primary_phone }}" 
-                               class="flex items-center text-gray-600 hover:text-purple-600 transition group">
-                                <i class="fas fa-phone text-purple-500 mr-3 w-5 group-hover:scale-110 transition"></i>
-                                <span class="text-xs sm:text-sm">{{ $agent->primary_phone }}</span>
-                            </a>
-                            <p class="flex items-center text-gray-600">
-                                <i class="fas fa-map-marker-alt text-purple-500 mr-3 w-5"></i>
-                                <span class="text-xs sm:text-sm">{{ $agent->city }}</span>
-                            </p>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
-
-                @if($totalAgents > 6)
-                <div class="text-center mt-8 sm:mt-10">
-                    <button id="load-more-agents" 
-                            data-offset="6" 
-                            data-office-id="{{ $office->id }}"
-                            class="bg-gradient-to-r from-purple-600 via-purple-700 to-purple-800 text-white px-8 sm:px-10 py-3 sm:py-4 rounded-xl hover:shadow-2xl transition-all transform hover:scale-105 font-semibold text-base sm:text-lg">
-                        <i class="fas fa-chevron-down mr-2"></i>Show More Agents
-                    </button>
-                </div>
-                @endif
-            </div>
-        </div>
-
-        <!-- Properties Tab -->
-        <div id="properties-tab" class="tab-content hidden">
-            <div class="glass-card rounded-3xl shadow-2xl p-6 sm:p-10 animate-slide-up" style="animation-delay: 0.6s">
-                <h2 class="text-3xl sm:text-4xl font-bold gradient-text mb-6 sm:mb-8 flex items-center">
-                    <i class="fas fa-home mr-3"></i>Featured Properties
-                </h2>
-                
-                <div id="properties-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                    @foreach($properties as $index => $property)
-                    <div class="card-hover bg-white rounded-2xl overflow-hidden shadow-xl border border-gray-200 property-grid-item" 
-                         style="animation-delay: {{ 0.1 * $index }}s">
-                        <div class="relative h-56 sm:h-64 overflow-hidden group">
-                            @if(!empty($property->images))
-                                <img src="{{ $property->images[0] }}" 
-                                     alt="{{ $property->name['en'] ?? 'Property' }}" 
-                                     class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
-                            @else
-                                <div class="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-                                    <i class="fas fa-home text-white text-5xl sm:text-6xl"></i>
-                                </div>
-                            @endif
-                            <div class="image-overlay"></div>
-                            <div class="absolute top-4 right-4 z-10">
-                                <span class="bg-{{ $property->listing_type === 'rent' ? 'blue' : 'green' }}-500 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-lg">
-                                    {{ ucfirst($property->listing_type) }}
-                                </span>
+                <!-- Properties -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <div class="section-header">
+                            <div class="card-title">
+                                <i class="fas fa-home"></i>
+                                Our Properties
                             </div>
-                            @if($property->is_boosted)
-                            <div class="absolute top-4 left-4 z-10">
-                                <span class="bg-yellow-500 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-lg">
-                                    <i class="fas fa-star mr-1"></i>Featured
-                                </span>
-                            </div>
+                            @if(isset($properties) && $properties->count() > 8)
+                            <a href="{{ route('property.list') }}?office_id={{ $office->id }}" class="view-all">View All</a>
                             @endif
                         </div>
-                        <div class="p-5 sm:p-6">
-                            <h3 class="font-bold text-xl sm:text-2xl text-gray-800 mb-3 truncate">
-                                {{ $property->name['en'] ?? 'Property' }}
-                            </h3>
-                            <p class="text-gray-600 mb-4 flex items-center text-sm sm:text-base">
-                                <i class="fas fa-map-marker-alt text-red-500 mr-2"></i>
-                                <span class="truncate">{{ $property->address_details['city']['en'] ?? 'N/A' }}</span>
-                            </p>
-                            <div class="mb-4">
-                                <span class="text-2xl sm:text-3xl font-bold gradient-text">
-                                    ${{ number_format($property->price['usd']) }}
-                                </span>
-                                @if($property->listing_type === 'rent')
-                                <span class="text-gray-500 text-xs sm:text-sm">/ {{ $property->rental_period ?? 'month' }}</span>
-                                @endif
-                            </div>
-                            <div class="flex items-center justify-between pt-4 border-t border-gray-200 text-sm sm:text-base">
-                                <div class="flex items-center text-gray-600">
-                                    <i class="fas fa-bed text-purple-500 mr-1 sm:mr-2"></i>
-                                    <span class="font-semibold">{{ $property->rooms['bedroom']['count'] }}</span>
-                                </div>
-                                <div class="flex items-center text-gray-600">
-                                    <i class="fas fa-bath text-purple-500 mr-1 sm:mr-2"></i>
-                                    <span class="font-semibold">{{ $property->rooms['bathroom']['count'] }}</span>
-                                </div>
-                                <div class="flex items-center text-gray-600">
-                                    <i class="fas fa-ruler-combined text-purple-500 mr-1 sm:mr-2"></i>
-                                    <span class="font-semibold">{{ $property->area }}m²</span>
-                                </div>
-                            </div>
-                        </div>
                     </div>
-                    @endforeach
-                </div>
+                    <div class="card-body">
+                        @if(isset($properties) && $properties->count() > 0)
+                        <div class="properties-grid">
+                            @foreach($properties->take(8) as $property)
+                            <a href="{{ route('property.PropertyDetail', $property->id) }}" class="property-card">
+                                <div class="property-image">
+                                    @php
+                                        $propertyImage = $property->main_image
+                                            ?? (isset($property->images[0]) ? $property->images[0] : asset('property_images/default-property.jpg'));
 
-                @if($totalProperties > 9)
-                <div class="text-center mt-8 sm:mt-10">
-                    <button id="load-more-properties" 
-                            data-offset="9" 
-                            data-office-id="{{ $office->id }}"
-                            class="bg-gradient-to-r from-green-600 via-green-700 to-green-800 text-white px-8 sm:px-10 py-3 sm:py-4 rounded-xl hover:shadow-2xl transition-all transform hover:scale-105 font-semibold text-base sm:text-lg">
-                        <i class="fas fa-chevron-down mr-2"></i>Show More Properties
-                    </button>
-                </div>
-                @endif
-            </div>
-        </div>
-
-        <!-- Location Tab -->
-        @if($office->office_address || ($office->latitude && $office->longitude))
-        <div id="location-tab" class="tab-content hidden">
-            <div class="glass-card rounded-3xl shadow-2xl p-6 sm:p-10 animate-slide-up" style="animation-delay: 0.6s">
-                <h2 class="text-3xl sm:text-4xl font-bold gradient-text mb-6 sm:mb-8 flex items-center">
-                    <i class="fas fa-map-marker-alt mr-3"></i>Our Location
-                </h2>
-                
-                @if($office->office_address)
-                <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-2xl p-6 sm:p-8 mb-6 sm:mb-8">
-                    <p class="text-base sm:text-xl text-gray-700 flex items-start">
-                        <i class="fas fa-location-dot text-purple-600 mr-3 sm:mr-4 mt-1 text-xl sm:text-2xl flex-shrink-0"></i>
-                        <span class="flex-1">{{ $office->office_address }}</span>
-                    </p>
-                </div>
-                @endif
-                
-                @if($office->latitude && $office->longitude)
-                <div class="rounded-2xl overflow-hidden shadow-2xl h-64 sm:h-96">
-                    <iframe 
-                        width="100%" 
-                        height="100%" 
-                        frameborder="0" 
-                        scrolling="no" 
-                        marginheight="0" 
-                        marginwidth="0" 
-                        src="https://maps.google.com/maps?q={{ $office->latitude }},{{ $office->longitude }}&hl=en&z=15&output=embed">
-                    </iframe>
-                </div>
-                @endif
-            </div>
-        </div>
-        @endif
-    </div>
-
-    <!-- Footer -->
-    <footer class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white py-12 sm:py-16 mt-12 sm:mt-20">
-        <div class="container mx-auto px-4 sm:px-6 text-center">
-            <h3 class="text-2xl sm:text-3xl font-bold mb-4">{{ $office->company_name }}</h3>
-            <p class="text-gray-400 mb-6 text-sm sm:text-base">Your trusted real estate partner</p>
-            <div class="flex justify-center gap-6 sm:gap-8">
-                <a href="mailto:{{ $office->email_address }}" 
-                   class="hover:text-purple-400 transition transform hover:scale-110">
-                    <i class="fas fa-envelope text-2xl sm:text-3xl"></i>
-                </a>
-                <a href="tel:{{ $office->phone_number }}" 
-                   class="hover:text-purple-400 transition transform hover:scale-110">
-                    <i class="fas fa-phone text-2xl sm:text-3xl"></i>
-                </a>
-                @if($office->latitude && $office->longitude)
-                <a href="https://maps.google.com/maps?q={{ $office->latitude }},{{ $office->longitude }}" 
-                   target="_blank"
-                   class="hover:text-purple-400 transition transform hover:scale-110">
-                    <i class="fas fa-map-marked-alt text-2xl sm:text-3xl"></i>
-                </a>
-                @endif
-            </div>
-            <p class="text-gray-500 text-xs sm:text-sm mt-8">© {{ date('Y') }} {{ $office->company_name }}. All rights reserved.</p>
-        </div>
-    </footer>
-
-    <script>
-        // Tab switching
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.add('hidden');
-            });
-            
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            
-            document.getElementById(tabName + '-tab').classList.remove('hidden');
-            event.target.closest('.tab-button').classList.add('active');
-        }
-
-        // Load more agents
-        document.getElementById('load-more-agents')?.addEventListener('click', function() {
-            const button = this;
-            const offset = parseInt(button.dataset.offset);
-            const officeId = button.dataset.officeId;
-            
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
-            
-            fetch(`/office/${officeId}/agents/load-more?offset=${offset}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.agents.length > 0) {
-                        const grid = document.getElementById('agents-grid');
-                        
-                        data.agents.forEach((agent, index) => {
-                            const agentCard = document.createElement('div');
-                            agentCard.className = 'card-hover glass-card rounded-2xl p-6 border border-gray-200 property-grid-item';
-                            agentCard.style.animationDelay = `${0.1 * index}s`;
-                            agentCard.innerHTML = `
-                                <div class="flex items-center gap-4 sm:gap-5 mb-5">
-                                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600 flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg flex-shrink-0">
-                                        ${agent.agent_name.charAt(0)}
-                                    </div>
-                                    <div class="min-w-0">
-                                        <h3 class="font-bold text-lg sm:text-xl text-gray-800 truncate">${agent.agent_name}</h3>
-                                        <p class="text-purple-600 font-medium text-sm sm:text-base">${agent.type}</p>
-                                    </div>
-                                </div>
-                                <div class="space-y-3">
-                                    <a href="mailto:${agent.primary_email}" class="flex items-center text-gray-600 hover:text-purple-600 transition group">
-                                        <i class="fas fa-envelope text-purple-500 mr-3 w-5 group-hover:scale-110 transition"></i>
-                                        <span class="text-xs sm:text-sm truncate">${agent.primary_email}</span>
-                                    </a>
-                                    <a href="tel:${agent.primary_phone}" class="flex items-center text-gray-600 hover:text-purple-600 transition group">
-                                        <i class="fas fa-phone text-purple-500 mr-3 w-5 group-hover:scale-110 transition"></i>
-                                        <span class="text-xs sm:text-sm">${agent.primary_phone}</span>
-                                    </a>
-                                    <p class="flex items-center text-gray-600">
-                                        <i class="fas fa-map-marker-alt text-purple-500 mr-3 w-5"></i>
-                                        <span class="text-xs sm:text-sm">${agent.city}</span>
-                                    </p>
-                                </div>
-                            `;
-                            grid.appendChild(agentCard);
-                        });
-                        
-                        button.dataset.offset = offset + 6;
-                        button.disabled = false;
-                        button.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>Show More Agents';
-                        
-                        if (!data.hasMore) {
-                            button.remove();
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>Show More Agents';
-                });
-        });
-
-        // Load more properties
-        document.getElementById('load-more-properties')?.addEventListener('click', function() {
-            const button = this;
-            const offset = parseInt(button.dataset.offset);
-            const officeId = button.dataset.officeId;
-            
-            button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
-            
-            fetch(`/office/${officeId}/properties/load-more?offset=${offset}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.properties.length > 0) {
-                        const grid = document.getElementById('properties-grid');
-                        
-                        data.properties.forEach((property, index) => {
-                            const imageUrl = property.images && property.images.length > 0 ? property.images[0] : '';
-                            const isBoosted = property.is_boosted || false;
-                            const listingColor = property.listing_type === 'rent' ? 'blue' : 'green';
-                            
-                            const propertyCard = document.createElement('div');
-                            propertyCard.className = 'card-hover bg-white rounded-2xl overflow-hidden shadow-xl border border-gray-200 property-grid-item';
-                            propertyCard.style.animationDelay = `${0.1 * index}s`;
-                            propertyCard.innerHTML = `
-                                <div class="relative h-56 sm:h-64 overflow-hidden group">
-                                    ${imageUrl ? 
-                                        `<img src="${imageUrl}" alt="${property.name.en || 'Property'}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">` :
-                                        `<div class="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-                                            <i class="fas fa-home text-white text-5xl sm:text-6xl"></i>
-                                        </div>`
-                                    }
-                                    <div class="image-overlay"></div>
-                                    <div class="absolute top-4 right-4 z-10">
-                                        <span class="bg-${listingColor}-500 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-lg">
-                                            ${property.listing_type.charAt(0).toUpperCase() + property.listing_type.slice(1)}
-                                        </span>
-                                    </div>
-                                    ${isBoosted ? 
-                                        `<div class="absolute top-4 left-4 z-10">
-                                            <span class="bg-yellow-500 text-white px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-lg">
-                                                <i class="fas fa-star mr-1"></i>Featured
-                                            </span>
-                                        </div>` : ''
-                                    }
-                                </div>
-                                <div class="p-5 sm:p-6">
-                                    <h3 class="font-bold text-xl sm:text-2xl text-gray-800 mb-3 truncate">
-                                        ${property.name.en || 'Property'}
-                                    </h3>
-                                    <p class="text-gray-600 mb-4 flex items-center text-sm sm:text-base">
-                                        <i class="fas fa-map-marker-alt text-red-500 mr-2"></i>
-                                        <span class="truncate">${property.address_details.city.en || 'N/A'}</span>
-                                    </p>
-                                    <div class="mb-4">
-                                        <span class="text-2xl sm:text-3xl font-bold gradient-text">
-                                            ${Number(property.price.usd).toLocaleString()}
-                                        </span>
-                                        ${property.listing_type === 'rent' ? 
-                                            `<span class="text-gray-500 text-xs sm:text-sm">/ ${property.rental_period || 'month'}</span>` : ''
+                                        if(!filter_var($propertyImage, FILTER_VALIDATE_URL) && !str_starts_with($propertyImage, '/')) {
+                                            $propertyImage = asset('storage/' . ltrim($propertyImage, '/'));
                                         }
+                                    @endphp
+                                    <img src="{{ $propertyImage }}"
+                                         alt="{{ $property->name['en'] ?? 'Property' }}"
+                                         onerror="this.src='{{ asset('property_images/default-property.jpg') }}'">
+
+                                    @if($property->listing_type)
+                                    <div class="property-badge">{{ $property->listing_type }}</div>
+                                    @endif
+                                </div>
+                                <div class="property-content">
+                                    <h3 class="property-title">{{ $property->name['en'] ?? 'Property' }}</h3>
+                                    <div class="property-location">
+                                        <i class="fas fa-map-marker-alt"></i>
+                                        {{ $property->address_details['city']['en'] ?? 'Location' }}
                                     </div>
-                                    <div class="flex items-center justify-between pt-4 border-t border-gray-200 text-sm sm:text-base">
-                                        <div class="flex items-center text-gray-600">
-                                            <i class="fas fa-bed text-purple-500 mr-1 sm:mr-2"></i>
-                                            <span class="font-semibold">${property.rooms.bedroom.count}</span>
-                                        </div>
-                                        <div class="flex items-center text-gray-600">
-                                            <i class="fas fa-bath text-purple-500 mr-1 sm:mr-2"></i>
-                                            <span class="font-semibold">${property.rooms.bathroom.count}</span>
-                                        </div>
-                                        <div class="flex items-center text-gray-600">
-                                            <i class="fas fa-ruler-combined text-purple-500 mr-1 sm:mr-2"></i>
-                                            <span class="font-semibold">${property.area}m²</span>
-                                        </div>
+                                    <div class="property-price">
+                                        ${{ number_format($property->price['usd'] ?? 0) }}
+                                    </div>
+                                    <div class="property-features">
+                                        <span><i class="fas fa-bed"></i> {{ $property->rooms['bedroom']['count'] ?? 0 }}</span>
+                                        <span><i class="fas fa-bath"></i> {{ $property->rooms['bathroom']['count'] ?? 0 }}</span>
+                                        <span><i class="fas fa-ruler-combined"></i> {{ number_format($property->area ?? 0) }}m²</span>
                                     </div>
                                 </div>
-                            `;
-                            grid.appendChild(propertyCard);
-                        });
-                        
-                        button.dataset.offset = offset + 9;
-                        button.disabled = false;
-                        button.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>Show More Properties';
-                     
-                        if (!data.hasMore) {
-                            button.remove();
-                        }
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    button.disabled = false;
-                    button.innerHTML = '<i class="fas fa-chevron-down mr-2"></i>Show More Properties';
-                });
-        });
+                            </a>
+                            @endforeach
+                        </div>
+                        @else
+                        <div class="empty-state">
+                            <i class="fas fa-home"></i>
+                            <p>No properties available</p>
+                        </div>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // Smooth scroll for internal links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'start'
-                    });
-                }
-            });
-        });
-
-        // Add loading shimmer to images
-        document.querySelectorAll('img').forEach(img => {
-            img.addEventListener('load', function() {
-                this.classList.add('animate-fade-in');
-            });
-        });
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
-

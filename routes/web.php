@@ -16,6 +16,7 @@ use App\Http\Middleware\AgentOnly;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\OfficeAuthController;
 use App\Http\Controllers\SubscriptionPlanController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\AgentOrAdmin;
@@ -55,7 +56,7 @@ Route::get('/about-us', function () {
     return view('about-us');
 })->name('about-us');
 
-Route::get('/properties/search', [PropertyController::class, 'search'])->name('properties.search');
+Route::get('/properties/search', [PropertyController::class, 'searchView'])->name('properties.search');
 Route::get('/list', [PropertyController::class, 'showList'])->name('property.list');
 Route::get('/PropertyDetail/{property_id}', [PropertyController::class, 'showPortfolio'])->name('property.PropertyDetail');
 Route::get('/projects', [ProjectController::class, 'showProjects'])->name('projects.index');
@@ -108,7 +109,9 @@ Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(functi
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
-
+    Route::get('/agent/profile-page', [AgentController::class, 'showProfilePage'])->name('agent.profile.page');
+    Route::put('/agent/profile-update', [AgentController::class, 'updateAgentProfileNew'])->name('agent.profile.update');
+    Route::put('/agent/password-update', [AgentController::class, 'updateAgentPassword'])->name('agent.password.update');
     // Profile Management
     Route::get('profile/{id}/edit', [AuthController::class, 'edit'])->name('profile.edit');
     Route::put('/profile/update/{id}', [AuthController::class, 'updateProfile'])->name('profile.update');
@@ -648,6 +651,7 @@ Route::put('/profile/update/{id}', [AuthController::class, 'updateProfile'])->na
 Route::get('/agent/edit/{id}', [AgentController::class, 'edit'])->name('agent.edit');
 Route::put('/agent/update-profile/{id}', [AgentController::class, 'updateAgentProfile'])->name('agent.updateProfile');
 Route::get('/profile/{id}/edit', [PropertyController::class, 'editUser'])->name('profile.edit');
+Route::get('/agent/{id}', [AgentController::class, 'showProfile'])->name('agent.profile');
 
 
 
@@ -785,15 +789,6 @@ Route::middleware(['web', 'auth:agent'])->group(function () {
 
 
 
-
-
-
-// Show verification notice
-
-
-
-
-
 Route::post('/auth/google', [AuthController::class, 'googleLogin'])->name('auth.google');
 
 
@@ -817,4 +812,65 @@ Route::prefix('subscription-plans')->group(function () {
     // Additional routes
     Route::get('/type/{type}', [SubscriptionPlanController::class, 'getByType']);
     Route::patch('/{id}/toggle-active', [SubscriptionPlanController::class, 'toggleActive']);
+});
+
+
+Route::middleware(['auth:web,agent'])->group(function () {
+
+    Route::get('/my-appointments', [AppointmentController::class, 'showAppointmentsPage'])
+        ->name('user.appointments');
+
+    // User Notifications Page
+    Route::get('/my-notifications', [NotificationController::class, 'showNotificationsPage'])
+        ->name('user.notifications');
+
+    Route::get('/user/profile', [UserController::class, 'showProfile'])->name('user.profile');
+    Route::put('/user/profile', [UserController::class, 'updateProfile'])->name('user.profile.update');
+    Route::put('/user/password', [UserController::class, 'updatePassword'])->name('user.password.update');
+
+
+    // Notification Actions (AJAX endpoints - return JSON)
+    Route::get('/notifications/read/{id}', [NotificationController::class, 'markAsReadWeb'])
+        ->name('notifications.read');
+
+    Route::get('/notifications/delete/{id}', [NotificationController::class, 'deleteWeb'])
+        ->name('notifications.delete');
+
+    // Appointment Actions (Web form submissions)
+    Route::post('/appointments/{id}/cancel', [AppointmentController::class, 'cancelAppointment'])
+        ->name('appointments.cancel');
+
+    Route::post('/appointments/{id}/reschedule', [AppointmentController::class, 'rescheduleAppointmentWeb'])
+        ->name('appointments.reschedule');
+});
+
+
+// Public Office Routes
+Route::get('/office/login', [OfficeAuthController::class, 'showLoginForm'])->name('office.login');
+Route::post('/office/login', [OfficeAuthController::class, 'login'])->name('office.login.submit');
+Route::get('/office/register', [OfficeAuthController::class, 'showRegisterForm'])->name('office.register');
+Route::post('/office/register', [OfficeAuthController::class, 'register'])->name('office.register.submit');
+
+// Protected Office Routes
+Route::middleware(['auth:office'])->group(function () {
+    // Dashboard
+    Route::get('/office/dashboard', [OfficeAuthController::class, 'showDashboard'])->name('office.dashboard');
+
+    // Profile Management
+    Route::get('/office/profile-page', [OfficeAuthController::class, 'showProfilePage'])->name('office.profile.page');
+    Route::put('/office/profile-update', [OfficeAuthController::class, 'updateProfile'])->name('office.profile.update');
+    Route::put('/office/password-update', [OfficeAuthController::class, 'updatePassword'])->name('office.password.update');
+
+    // Logout
+    Route::post('/office/logout', [OfficeAuthController::class, 'logout'])->name('office.logout');
+
+    // Properties Management
+    Route::get('/office/properties', [PropertyController::class, 'showOfficeProperties'])->name('office.property.list');
+
+    // Agents Management
+    Route::get('/office/agents', [AgentController::class, 'showOfficeAgents'])->name('office.agents.list');
+
+    // Appointments & Notifications (using existing routes with office context)
+    Route::get('/office/appointments', [AppointmentController::class, 'showOfficeAppointments'])->name('office.appointments');
+    Route::get('/office/notifications', [NotificationController::class, 'showOfficeNotifications'])->name('office.notifications');
 });

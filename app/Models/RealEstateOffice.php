@@ -11,14 +11,16 @@ use App\Models\Support\OfficePropertyType;
 use App\Models\Support\OfficeSocialMedia;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
-class RealEstateOffice extends Model
+class RealEstateOffice extends Authenticatable
 {
-    use HasFactory, HasUuids;
+    use HasFactory, HasUuids, Notifiable, HasApiTokens;
 
     protected $fillable = [
         'company_name',
@@ -31,6 +33,7 @@ class RealEstateOffice extends Model
         'is_verified',
         'average_rating',
         'email_address',
+        'password',
         'phone_number',
         'office_address',
         'latitude',
@@ -41,16 +44,18 @@ class RealEstateOffice extends Model
         'years_experience',
         'about_company',
         'availability_schedule',
-        'password', // Add this if you need authentication
     ];
 
     protected $hidden = [
-        'password', // Hide password in JSON responses
+        'password',
+        'remember_token',
     ];
 
     protected function casts(): array
     {
         return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
             'is_verified' => 'boolean',
             'average_rating' => 'decimal:2',
             'latitude' => 'decimal:8',
@@ -59,6 +64,18 @@ class RealEstateOffice extends Model
             'years_experience' => 'integer',
             'availability_schedule' => 'array',
         ];
+    }
+
+    // Override the email column name for authentication
+    public function getEmailForPasswordReset()
+    {
+        return $this->email_address;
+    }
+
+    // Override username for authentication
+    public function getAuthIdentifierName()
+    {
+        return 'id';
     }
 
     // Relationships

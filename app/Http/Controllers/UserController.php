@@ -3519,4 +3519,42 @@ class UserController extends Controller
             return ApiResponse::error('Failed to get user', $e->getMessage(), 500);
         }
     }
+    public function showProfile()
+    {
+        return view('user-profile-page');
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email,' . auth()->id(),
+            'phone' => 'nullable|string|max:20',
+        ]);
+
+        auth()->user()->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+        ]);
+
+        return redirect()->route('user.profile')->with('success', 'Profile updated successfully');
+    }
+    public function updatePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|min:8|confirmed',
+        ]);
+
+        if (!Hash::check($request->current_password, auth()->user()->password)) {
+            return back()->withErrors(['current_password' => 'Current password is incorrect']);
+        }
+
+        auth()->user()->update([
+            'password' => Hash::make($request->password)
+        ]);
+
+        return redirect()->route('user.profile')->with('success', 'Password updated successfully');
+    }
 }

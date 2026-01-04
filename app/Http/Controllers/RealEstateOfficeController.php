@@ -49,7 +49,7 @@ class RealEstateOfficeController extends Controller
             'company_name' => $request->company_name,
             'city' => $request->city,
             'district' => $request->district,
-            // ...other fields...
+
         ]);
 
         // Set agent's company_id
@@ -348,55 +348,26 @@ class RealEstateOfficeController extends Controller
         return view('office.dashboard', compact('office', 'properties', 'stats', 'totalAgents', 'totalProperties'));
     }
 
-    /**
-     * Display the real estate office profile page
-     */
     public function profile($id)
     {
-        // Debug guard
-        Log::info('--- Agent Debug Start ---');
-        Log::info('Auth check:', [
-            'guard_check' => Auth::guard('agent')->check(),
-            'guard_user' => Auth::guard('agent')->user(),
-        ]);
+        // Load office with agents only (the relationship that actually exists)
+        $office = RealEstateOffice::with(['agents'])->findOrFail($id);
 
-        // Debug default auth
-        Log::info('Default Auth:', [
-            'default_check' => Auth::check(),
-            'default_user' => Auth::user(),
-        ]);
+        // Get all agent IDs from this office
+        $agentIds = $office->agents->pluck('id')->toArray();
 
-        // Debug session
-        Log::info('Session Keys:', session()->all());
+        // Get properties owned by these agents
+        $properties = collect();
 
-        // Debug cookies
-        Log::info('Cookies:', request()->cookies->all());
+        if (!empty($agentIds)) {
+            $properties = Property::where('owner_type', 'App\Models\Agent')
+                ->whereIn('owner_id', $agentIds)
+                ->orderBy('created_at', 'desc')
+                ->get();
+        }
 
-        // Proceed with existing code
-        $office = RealEstateOffice::with(['agents' => function ($query) {
-            $query->take(6);
-        }])->findOrFail($id);
-
-        $totalAgents = Agent::where('company_id', $id)->count();
-
-        $agentIds = Agent::where('company_id', $id)->pluck('id')->toArray();
-
-        $properties = Property::where('owner_type', 'App\Models\Agent')
-            ->whereIn('owner_id', $agentIds)
-            ->with(['owner'])
-            ->latest()
-            ->take(9)
-            ->get();
-
-        $totalProperties = Property::where('owner_type', 'App\Models\Agent')
-            ->whereIn('owner_id', $agentIds)
-            ->count();
-
-        Log::info('--- Agent Debug End ---');
-
-        return view('agent.real-estate-office-profile', compact('office', 'properties', 'totalAgents', 'totalProperties'));
+        return view('agent.real-estate-office-profile', compact('office', 'properties'));
     }
-
 
     /**
      * Helper function to load property owner
@@ -483,5 +454,54 @@ class RealEstateOfficeController extends Controller
     public function create()
     {
         return view('agent.real-estate-office');
+    }
+
+    public function showProfilePage($id)
+    {
+        $office = RealEstateOffice::findOrFail($id);
+        return view('office.office-profile-page', compact('office'));
+    }
+    public function updateOfficeProfile(Request $request, $id)
+    {
+        $office = RealEstateOffice::findOrFail($id);
+
+        $request->validate([
+            'company_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:real_estate_offices,email,' . $id,
+            'phone' => 'nullable|string|max:20',
+            'license_number' => 'nullable|string|max:100',
+            'address' => 'nullable|string|max:500',
+            'description' => 'nullable|string|max:1000',
+        ]);
+
+        $office->update([
+            'company_name' => $request->company_name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'license_number' => $request->license_number,
+            'address' => $request->address,
+            'description' => $request->description,
+        ]);
+
+        return redirect()->route('office.profile.page', $id)->with('success', 'Profile updated successfully');
+    }
+    public function updateOfficePassword(Request $request, $id)
+    {
+        $office = RealEstateOffice::findOrFail($id);
+
+        $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|min:8|confirmed',
+        ]);
+
+        if (!\Hash::check($request->current_password, $office->password)) {
+            return back()->withErrors(['current_password' => 'Current password is incorrect']);
+        }
+
+        $office->update([
+            'password' => \Hash::make($request->password)
+        ]);
+
+        return redirect()->route('office.profile.page', $id)->with('success', 'Password updated successfully');
     }
 }

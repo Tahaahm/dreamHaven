@@ -2132,20 +2132,169 @@ class NotificationController extends Controller
         }
     }
 
+    public function markAsReadWeb($id)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return redirect()->route('login-page')->with('error', 'Please log in');
+            }
+
+            $notification = DB::table('notifications')
+                ->where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$notification) {
+                return redirect()->back()->with('error', 'Notification not found');
+            }
+
+            DB::table('notifications')
+                ->where('id', $id)
+                ->update([
+                    'is_read' => true,
+                    'read_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+            Log::info('Notification marked as read (web)', [
+                'user_id' => $user->id,
+                'notification_id' => $id
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Notification marked as read'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Mark notification as read error (web)', [
+                'message' => $e->getMessage(),
+                'notification_id' => $id,
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to mark notification as read'
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete notification (Web version - returns redirect)
+     */
+    public function deleteWeb($id)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return redirect()->route('login-page')->with('error', 'Please log in');
+            }
+
+            $notification = DB::table('notifications')
+                ->where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$notification) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Notification not found'
+                ], 404);
+            }
+
+            DB::table('notifications')
+                ->where('id', $id)
+                ->delete();
+
+            Log::info('Notification deleted (web)', [
+                'user_id' => $user->id,
+                'notification_id' => $id
+            ]);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Notification deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Delete notification error (web)', [
+                'message' => $e->getMessage(),
+                'notification_id' => $id,
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to delete notification'
+            ], 500);
+        }
+    }
 
 
 
+    //  zana's code --------------------------------------------------------------------------------------------
 
-  //  zana's code --------------------------------------------------------------------------------------------
-
-      public function showNotifications()
+    public function showNotifications()
     {
         // Retrieve notifications (add any necessary logic here, e.g., filtering by user)
         $notifications = Notification::all();
-    
+
         // Pass notifications data to the view in the 'agent' folder
         return view('agent.notification', compact('notifications'));
     }
-    
 
+
+    public function showNotificationsPage()
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return redirect()->route('login-page')->with('error', 'Please log in to view your notifications');
+            }
+
+            // Get user notifications (excluding expired ones)
+            $notifications = DB::table('notifications')
+                ->where('user_id', $user->id)
+                ->where(function ($query) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                })
+                ->orderBy('sent_at', 'desc')
+                ->get()
+                ->map(function ($notification) {
+                    return (object)[
+                        'id' => $notification->id,
+                        'title' => $notification->title,
+                        'message' => $notification->message,
+                        'type' => $notification->type,
+                        'priority' => $notification->priority,
+                        'data' => json_decode($notification->data, true),
+                        'action_url' => $notification->action_url,
+                        'action_text' => $notification->action_text,
+                        'is_read' => $notification->is_read,
+                        'read_at' => $notification->read_at,
+                        'sent_at' => $notification->sent_at,
+                        'created_at' => $notification->created_at,
+                        'updated_at' => $notification->updated_at
+                    ];
+                });
+
+            Log::info('User notifications page loaded', [
+                'user_id' => $user->id,
+                'notifications_count' => $notifications->count()
+            ]);
+
+            return view('user.notifications', compact('notifications'));
+        } catch (\Exception $e) {
+            Log::error('Error loading user notifications page', [
+                'message' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+
+            return redirect()->back()->with('error', 'Failed to load notifications');
+        }
+    }
 }

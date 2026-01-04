@@ -14,10 +14,10 @@
 
     <!-- Favicons -->
     <link href="assets/img/favicon.png" rel="icon" />
-  
+
 
     <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon" />
- 
+
     <!-- Google Fonts -->
     <link
       href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,700,700i|Poppins:300,400,500,700"
@@ -26,10 +26,10 @@
 
     <!-- Vendor CSS Files -->
     <link href="assets/vendor/aos/aos.css" rel="stylesheet" />
-    
+
     <link rel="stylesheet" type="text/css" href="{{ asset('assets/vendor/bootstrap/css/bootstrap.min.css') }}">
 
-    
+
     <link
       href="../vendor2/bootstrap-icons/bootstrap-icons.css"
       rel="stylesheet"
@@ -40,11 +40,11 @@
     />
 
     <link rel="stylesheet" type="text/css" href="{{ asset('../vendor2/swiper/swiper-bundle.min.css') }}">
- 
+
 
     <!-- t Main CSS File -->
     <link rel="stylesheet" type="text/css" href="{{ asset('../css/newstyle.css') }}">
-    
+
     <!-- =======================================================
   * t Name: Regna
   * Updated: Sep 18 2023 with Bootstrap v5.3.2
@@ -57,9 +57,9 @@
   <body>
 
 
- 
 
-  
+
+
     <!-- ======= Header ======= -->
     @include('navbar')
     <!-- End Header -->
@@ -71,7 +71,7 @@
 
 <section style="background-image: url('{{ $backgroundImageUrl }}');" id="hero">
     <div class="hero-container" data-aos="zoom-in" data-aos-delay="100">
-        <h1>DREAM HAVEN</h1>
+        <h1>DREAM Mulk</h1>
         <h2>
             A great platform to buy, sell and rent your properties without any agent or commissions.
         </h2>
@@ -282,7 +282,7 @@
     transform: translate(100%, 50%) rotate(75deg);
   }
 
- 
+
 
   @keyframes particle-fade {
     0%,
@@ -503,8 +503,8 @@
 
 
 
-	
- 
+
+
 
 
 
@@ -513,7 +513,7 @@
                                      <!--searchBox-->
 
     </div>
-                                     
+
 </section>
     <!-- End Hero Section -->
 
@@ -587,7 +587,7 @@
 
           <!-- search section -->
 
-          
+
 
 
 <div class="about-centered-content">
@@ -601,28 +601,28 @@
             <p>Thank you for visiting and being a part of our story.</p>
             <p>Created by Ahmad Nyaz, Zana Goran, and Taha Ahmed.</p>
             <p><strong>Address:</strong> Erbil, Kurdistan, Iraq</p>
-            <p><strong>Website Creation Date:</strong> April 3, 2024</p> 
-            
+            <p><strong>Website Creation Date:</strong> April 3, 2024</p>
+
         </div>
     </div>
 </div>
 
 
 
-   
+
 
       </section>
 
-      
 
-     
-   
-      
+
+
+
+
     </main>
     <!-- End #main -->
 
-   
-   
+
+
 
     <a
       href="#"
@@ -679,7 +679,7 @@
   }
 
   /**
-   * Easy on scroll event listener 
+   * Easy on scroll event listener
    */
   const onscroll = (el, listener) => {
     el.addEventListener('scroll', listener)
@@ -858,7 +858,7 @@
   })
 
   /**
-   * Initiate portfolio lightbox 
+   * Initiate portfolio lightbox
    */
   const portfolioLightbox = GLightbox({
     selector: '.portfolio-lightbox'
@@ -894,11 +894,11 @@
   })
 
   /**
-   * Initiate Pure Counter 
+   * Initiate Pure Counter
    */
   new PureCounter()
 })()
 </script>
-    
+
   </body>
 </html>

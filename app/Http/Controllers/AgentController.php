@@ -14,6 +14,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use App\Models\RealEstateOffice;
 use App\Models\Support\UserFavoriteProperty;
+use Illuminate\Support\Facades\Hash;
 
 class AgentController extends Controller
 {
@@ -441,5 +442,71 @@ class AgentController extends Controller
             // Don't throw exception - let the agent creation succeed
             // even if data transfer fails partially
         }
+    }
+    public function showProfile($id)
+    {
+        $agent = Agent::with([
+            'company',
+            'specializations',
+            'ownedProperties' => function ($query) {
+                $query->where('is_active', 1)
+                    ->where('published', 1)
+                    ->orderBy('created_at', 'desc');
+            },
+            'clientReviews' => function ($query) {
+                $query->orderBy('created_at', 'desc');
+            }
+        ])->findOrFail($id);
+
+        return view('agent-profile', compact('agent'));
+    }
+
+    public function updateAgentProfileNew(Request $request)
+    {
+        $request->validate([
+            'agent_name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:agents,email,' . auth()->guard('agent')->id(),
+            'phone' => 'nullable|string|max:20',
+            'license_number' => 'nullable|string|max:100',
+            'bio' => 'nullable|string|max:1000',
+        ]);
+
+        auth()->guard('agent')->user()->update([
+            'agent_name' => $request->agent_name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'license_number' => $request->license_number,
+            'bio' => $request->bio,
+        ]);
+
+        return redirect()->route('agent.profile.page')->with('success', 'Profile updated successfully');
+    }
+    // AgentController.php - showProfilePage method
+    public function showProfilePage()
+    {
+        $agent = Auth::guard('agent')->user();
+
+        if (!$agent) {
+            return redirect()->route('login-page')->with('error', 'Please log in');
+        }
+
+        return view('agent.agent-profile-page', compact('agent'));
+    }
+    public function updateAgentPassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|min:8|confirmed',
+        ]);
+
+        if (!Hash::check($request->current_password, auth()->guard('agent')->user()->password)) {
+            return back()->withErrors(['current_password' => 'Current password is incorrect']);
+        }
+
+        auth()->guard('agent')->user()->update([
+            'password' => Hash::make($request->password)
+        ]);
+
+        return redirect()->route('agent.profile.page')->with('success', 'Password updated successfully');
     }
 }

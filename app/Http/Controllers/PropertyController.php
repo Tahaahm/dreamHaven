@@ -3338,4 +3338,25 @@ class PropertyController extends Controller
 
         return redirect()->back()->with('success', 'Image removed successfully');
     }
+    public function searchView(Request $request)
+    {
+        $query = $request->input('q');
+
+        // Get properties based on search query
+        $properties = Property::query();
+
+        if ($query) {
+            $properties->where(function ($q) use ($query) {
+                $q->where('name->en', 'like', "%{$query}%")
+                    ->orWhere('name->ar', 'like', "%{$query}%")
+                    ->orWhere('name->ku', 'like', "%{$query}%")
+                    ->orWhere('address', 'like', "%{$query}%");
+            });
+        }
+
+        $properties = $properties->paginate(12);
+
+        // Return the LIST VIEW, not JSON
+        return view('list', compact('properties'));
+    }
 }

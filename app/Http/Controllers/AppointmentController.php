@@ -8,6 +8,7 @@ use App\Models\Appointment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Auth;
 
 class AppointmentController extends Controller
 {
@@ -393,10 +394,195 @@ class AppointmentController extends Controller
 
     // zana's code ----------------------------------------------------------------------------------
 
-     public function showSchedule()
-{
-    $appointments = Appointment::all();
-    return view('agent.scheduleList', compact('appointments'));
-}
+    public function showSchedule()
+    {
+        $appointments = Appointment::all();
+        return view('agent.scheduleList', compact('appointments'));
+    }
+    public function showAppointmentsPage()
+    {
+        try {
+            $user = Auth::user();
 
+            if (!$user) {
+                return redirect()->route('login-page')->with('error', 'Please log in to view your appointments');
+            }
+
+            // Get user appointments with relationships
+            $appointments = Appointment::with(['agent', 'office', 'property'])
+                ->where('user_id', $user->id)
+                ->orderBy('appointment_date', 'desc')
+                ->orderBy('appointment_time', 'desc')
+                ->get();
+
+            Log::info('User appointments page loaded', [
+                'user_id' => $user->id,
+                'appointments_count' => $appointments->count()
+            ]);
+
+            return view('user.appointments', compact('appointments'));
+        } catch (\Exception $e) {
+            Log::error('Error loading user appointments page', [
+                'message' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+
+            return redirect()->back()->with('error', 'Failed to load appointments');
+        }
+    }
+
+    /**
+     * Cancel appointment (WEB version)
+     * Allows user to cancel their own appointment
+     */
+    public function cancelAppointment($id)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return redirect()->route('login-page')->with('error', 'Please log in');
+            }
+
+            // Find appointment and verify ownership
+            $appointment = Appointment::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$appointment) {
+                return redirect()->route('user.appointments')
+                    ->with('error', 'Appointment not found or you do not have permission to cancel it');
+            }
+
+            // Check if already cancelled or completed
+            if ($appointment->status === 'cancelled') {
+                return redirect()->route('user.appointments')
+                    ->with('error', 'This appointment is already cancelled');
+            }
+
+            if ($appointment->status === 'completed') {
+                return redirect()->route('user.appointments')
+                    ->with('error', 'Cannot cancel a completed appointment');
+            }
+
+            // Update appointment status
+            $appointment->status = 'cancelled';
+            $appointment->cancelled_at = now();
+            $appointment->save();
+
+            // Send cancellation notification
+            app(NotificationController::class)->sendAppointmentStatusNotification($appointment->id, 'cancelled');
+
+            Log::info('Appointment cancelled by user (web)', [
+                'user_id' => $user->id,
+                'appointment_id' => $id
+            ]);
+
+            return redirect()->route('user.appointments')
+                ->with('success', 'Appointment cancelled successfully');
+        } catch (\Exception $e) {
+            Log::error('Cancel appointment error (web)', [
+                'message' => $e->getMessage(),
+                'appointment_id' => $id,
+                'user_id' => Auth::id()
+            ]);
+
+            return redirect()->route('user.appointments')
+                ->with('error', 'Failed to cancel appointment');
+        }
+    }
+
+    /**
+     * Reschedule appointment (WEB version)
+     * Allows user to reschedule their own appointment
+     */
+    public function rescheduleAppointmentWeb(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return redirect()->route('login-page')->with('error', 'Please log in');
+            }
+
+            // Validate input
+            $validator = Validator::make($request->all(), [
+                'appointment_date' => 'required|date|after_or_equal:today',
+                'appointment_time' => 'required|date_format:H:i'
+            ]);
+
+            if ($validator->fails()) {
+                return redirect()->route('user.appointments')
+                    ->withErrors($validator)
+                    ->withInput();
+            }
+
+            // Find appointment and verify ownership
+            $appointment = Appointment::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$appointment) {
+                return redirect()->route('user.appointments')
+                    ->with('error', 'Appointment not found or you do not have permission to reschedule it');
+            }
+
+            // Check if already completed or cancelled
+            if ($appointment->status === 'completed') {
+                return redirect()->route('user.appointments')
+                    ->with('error', 'Cannot reschedule a completed appointment');
+            }
+
+            if ($appointment->status === 'cancelled') {
+                return redirect()->route('user.appointments')
+                    ->with('error', 'Cannot reschedule a cancelled appointment');
+            }
+
+            // Check for time slot conflicts
+            $conflictQuery = Appointment::where('id', '!=', $id)
+                ->where('appointment_date', $request->appointment_date)
+                ->where('appointment_time', $request->appointment_time)
+                ->whereIn('status', ['pending', 'confirmed']);
+
+            if ($appointment->agent_id) {
+                $conflictQuery->where('agent_id', $appointment->agent_id);
+            } elseif ($appointment->office_id) {
+                $conflictQuery->where('office_id', $appointment->office_id);
+            }
+
+            if ($conflictQuery->exists()) {
+                return redirect()->route('user.appointments')
+                    ->with('error', 'This time slot is already booked. Please choose another time.');
+            }
+
+            // Update appointment
+            $appointment->appointment_date = $request->appointment_date;
+            $appointment->appointment_time = $request->appointment_time;
+            $appointment->status = 'pending'; // Reset to pending after reschedule
+            $appointment->confirmed_at = null;
+            $appointment->save();
+
+            // Send reschedule notification
+            app(NotificationController::class)->sendAppointmentStatusNotification($appointment->id, 'rescheduled');
+
+            Log::info('Appointment rescheduled by user (web)', [
+                'user_id' => $user->id,
+                'appointment_id' => $id,
+                'new_date' => $request->appointment_date,
+                'new_time' => $request->appointment_time
+            ]);
+
+            return redirect()->route('user.appointments')
+                ->with('success', 'Appointment rescheduled successfully');
+        } catch (\Exception $e) {
+            Log::error('Reschedule appointment error (web)', [
+                'message' => $e->getMessage(),
+                'appointment_id' => $id,
+                'user_id' => Auth::id()
+            ]);
+
+            return redirect()->route('user.appointments')
+                ->with('error', 'Failed to reschedule appointment');
+        }
+    }
 }

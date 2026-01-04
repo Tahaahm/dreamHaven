@@ -38,7 +38,7 @@ return [
 
 
 
-    
+
 
     'guards' => [
         'web' => [
@@ -50,11 +50,14 @@ return [
             'provider' => 'users',
             'hash' => false,
         ],
-
-     'agent' => [
-        'driver' => 'session',
-        'provider' => 'agents',
-    ],
+        'office' => [
+            'driver' => 'session',
+            'provider' => 'offices',
+        ],
+        'agent' => [
+            'driver' => 'session',
+            'provider' => 'agents',
+        ],
 
     ],
 
@@ -87,10 +90,14 @@ return [
             'model' => App\Models\RealEstateOffice::class,  // If you're using RealEstateOffice model for authentication
         ],
 
-      'agents' => [
-        'driver' => 'eloquent',
-        'model' => App\Models\Agent::class,
-    ],
+        'agents' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Agent::class,
+        ],
+        'offices' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\RealEstateOffice::class,
+        ],
 
     ],
 

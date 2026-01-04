@@ -145,6 +145,12 @@ class Agent extends Authenticatable
         return $query->where('city', $city);
     }
 
+    public function properties(): MorphMany
+    {
+        return $this->morphMany(Property::class, 'owner');
+    }
+
+
     public function scopeByPlan($query, $plan)
     {
         return $query->where('current_plan', $plan);
