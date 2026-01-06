@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Models\Agent;
 use App\Models\Property;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class RealEstateOfficeController extends Controller
 {
@@ -494,14 +495,100 @@ class RealEstateOfficeController extends Controller
             'password' => 'required|min:8|confirmed',
         ]);
 
-        if (!\Hash::check($request->current_password, $office->password)) {
+        if (!Hash::check($request->current_password, $office->password)) {
             return back()->withErrors(['current_password' => 'Current password is incorrect']);
         }
 
         $office->update([
-            'password' => \Hash::make($request->password)
+            'password' => Hash::make($request->password)
         ]);
 
         return redirect()->route('office.profile.page', $id)->with('success', 'Password updated successfully');
+    }
+    public function updateProfile(Request $request)
+    {
+        $office = auth('office')->user();
+
+        $request->validate([
+            'company_name' => 'required|string|max:255',
+            'phone_number' => 'required|string|max:20',
+            'company_bio' => 'nullable|string',
+            'about_company' => 'nullable|string',
+            'properties_sold' => 'nullable|integer|min:0',
+            'years_experience' => 'nullable|integer|min:0',
+            'current_plan' => 'nullable|in:starter,professional,enterprise',
+            'office_address' => 'nullable|string',
+            'city' => 'nullable|string|max:255',
+            'district' => 'nullable|string|max:255',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'availability_schedule' => 'nullable|string',
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'company_bio_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        $data = $request->only([
+            'company_name',
+            'phone_number',
+            'company_bio',
+            'about_company',
+            'properties_sold',
+            'years_experience',
+            'current_plan',
+            'office_address',
+            'city',
+            'district',
+            'latitude',
+            'longitude',
+            'availability_schedule',
+        ]);
+
+        // ✅ Handle profile image upload
+        if ($request->hasFile('profile_image')) {
+            // Delete old image if exists
+            if ($office->profile_image && Storage::disk('public')->exists($office->profile_image)) {
+                Storage::disk('public')->delete($office->profile_image);
+            }
+
+            // Store new image in office_profiles folder
+            $data['profile_image'] = $request->file('profile_image')->store('office_profiles', 'public');
+        }
+
+        // ✅ Handle company bio image upload
+        if ($request->hasFile('company_bio_image')) {
+            // Delete old image if exists
+            if ($office->company_bio_image && Storage::disk('public')->exists($office->company_bio_image)) {
+                Storage::disk('public')->delete($office->company_bio_image);
+            }
+
+            // Store new image in office_bio_images folder
+            $data['company_bio_image'] = $request->file('company_bio_image')->store('office_bio_images', 'public');
+        }
+
+        $office->update($data);
+
+        return redirect()->route('office.profile')->with('success', 'Profile updated successfully!');
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $office = auth('office')->user();
+
+        $request->validate([
+            'current_password' => 'required',
+            'password' => 'required|min:8|confirmed',
+        ]);
+
+        // Check if current password is correct
+        if (!Hash::check($request->current_password, $office->password)) {
+            return back()->withErrors(['current_password' => 'Current password is incorrect']);
+        }
+
+        // Update password
+        $office->update([
+            'password' => Hash::make($request->password)
+        ]);
+
+        return redirect()->route('office.profile')->with('success', 'Password changed successfully!');
     }
 }

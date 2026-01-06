@@ -3,491 +3,387 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Office Dashboard - Dream Mulk</title>
+    <title>Dashboard - Dream Mulk</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --bg-main: #ffffff;
+            --bg-card: #f8f9fb;
+            --bg-hover: #f1f3f5;
+            --text-primary: #1a1a1a;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --border-color: #e8eaed;
+            --shadow: rgba(0,0,0,0.08);
         }
 
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f3f4f6;
+        [data-theme="dark"] {
+            /* Dark Mode */
+            --bg-main: #0a0b0f;
+            --bg-card: #16171d;
+            --bg-hover: #1f2028;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255,255,255,0.8);
+            --text-muted: rgba(255,255,255,0.5);
+            --border-color: rgba(255,255,255,0.08);
+            --shadow: rgba(0,0,0,0.4);
         }
 
-        /* Navbar styles same as agent profile page */
-        nav {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 1rem 2rem;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; display: flex; height: 100vh; overflow: hidden; }
 
-        .nav-content {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        /* Sidebar - ALWAYS DARK */
+        .sidebar { width: 240px; background: #16171d; display: flex; flex-direction: column; border-right: 1px solid rgba(255,255,255,0.06); }
+        .logo { padding: 20px 24px; font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .logo i { font-size: 22px; color: #6366f1; }
+        .nav-menu { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-item { padding: 11px 16px; color: rgba(255,255,255,0.5); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 14px; font-size: 14px; text-decoration: none; margin-bottom: 4px; border-radius: 8px; font-weight: 500; }
+        .nav-item:hover { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.9); }
+        .nav-item.active { background: #6366f1; color: #fff; }
+        .nav-item i { width: 20px; text-align: center; font-size: 16px; }
+        .nav-bottom { border-top: 1px solid rgba(255,255,255,0.06); padding: 16px 12px; }
 
-        .logo {
-            color: white;
-            font-size: 24px;
-            font-weight: 700;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        /* Main Content - Theme Adaptive */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-main); transition: background 0.3s; }
 
-        .nav-actions {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-        }
+        /* Top Bar - Light */
+        .top-bar { background: #ffffff; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e8eaed; }
+        .search-bar { flex: 1; max-width: 420px; position: relative; }
+        .search-bar input { width: 100%; background: #f8f9fb; border: 1px solid #e8eaed; border-radius: 8px; padding: 11px 44px; color: #1a1a1a; font-size: 14px; font-weight: 400; }
+        .search-bar input::placeholder { color: #9ca3af; }
+        .search-bar i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 15px; }
+        .top-actions { display: flex; align-items: center; gap: 14px; }
+        .icon-btn { width: 42px; height: 42px; background: #f8f9fb; border: 1px solid #e8eaed; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6b7280; cursor: pointer; transition: all 0.2s; position: relative; }
+        .icon-btn:hover { background: #eff3ff; color: #6366f1; border-color: #6366f1; }
+        .icon-btn .badge { position: absolute; top: -5px; right: -5px; background: #6366f1; color: white; font-size: 10px; padding: 3px 6px; border-radius: 10px; font-weight: 700; }
+        .add-btn { background: #6366f1; color: white; padding: 11px 22px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 9px; font-size: 14px; text-decoration: none; transition: all 0.2s; }
+        .add-btn:hover { background: #5558e3; transform: translateY(-1px); }
+        .theme-toggle { width: 42px; height: 42px; background: #f8f9fb; border: 1px solid #e8eaed; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6b7280; cursor: pointer; transition: all 0.2s; }
+        .theme-toggle:hover { background: #eff3ff; color: #6366f1; border-color: #6366f1; }
+        .user-profile { display: flex; align-items: center; gap: 11px; cursor: pointer; padding: 7px 13px; border-radius: 8px; transition: all 0.2s; }
+        .user-profile:hover { background: #f8f9fb; }
+        .user-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 15px; }
 
-        .nav-btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s;
-            border: none;
-            cursor: pointer;
-        }
+        /* Content Area - Theme Adaptive */
+        .content-area { flex: 1; overflow-y: auto; padding: 32px; background: var(--bg-main); transition: background 0.3s; }
+        .page-title { font-size: 32px; font-weight: 700; color: var(--text-primary); margin-bottom: 10px; transition: color 0.3s; }
+        .page-subtitle { color: var(--text-muted); font-size: 15px; margin-bottom: 32px; transition: color 0.3s; }
 
-        .nav-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-bottom: 32px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 26px; transition: all 0.3s; }
+        .stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 40px var(--shadow); border-color: rgba(99,102,241,0.25); }
+        .stat-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .stat-icon { width: 54px; height: 54px; border-radius: 13px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+        .stat-icon.blue { background: rgba(99,102,241,0.12); color: #6366f1; }
+        .stat-icon.green { background: rgba(34,197,94,0.12); color: #22c55e; }
+        .stat-icon.orange { background: rgba(249,115,22,0.12); color: #f97316; }
+        .stat-icon.purple { background: rgba(168,85,247,0.12); color: #a855f7; }
+        .stat-value { font-size: 36px; font-weight: 700; color: var(--text-primary); margin-top: 18px; margin-bottom: 6px; transition: color 0.3s; }
+        .stat-label { color: var(--text-muted); font-size: 15px; font-weight: 500; transition: color 0.3s; }
 
-        /* Dashboard Content */
-        .dashboard-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-
-        .dashboard-header {
-            margin-bottom: 40px;
-        }
-
-        .dashboard-header h1 {
-            font-size: 32px;
-            color: #111827;
-            margin-bottom: 8px;
-        }
-
-        .dashboard-header p {
-            color: #6b7280;
-            font-size: 16px;
-        }
-
-        /* Stats Cards */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 24px;
-            margin-bottom: 40px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 24px;
-            border-radius: 16px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            margin-bottom: 16px;
-        }
-
-        .stat-icon.purple {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .stat-icon.green {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white;
-        }
-
-        .stat-icon.blue {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            color: white;
-        }
-
-        .stat-icon.orange {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            color: white;
-        }
-
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 4px;
-        }
-
-        .stat-label {
-            color: #6b7280;
-            font-size: 14px;
-        }
-
-        /* Section Titles */
-        .section-title {
-            font-size: 24px;
-            font-weight: 700;
-            color: #111827;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .section-title i {
-            color: #667eea;
-        }
+        /* Section */
+        .section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 28px; margin-bottom: 28px; transition: all 0.3s; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+        .section-title { font-size: 20px; font-weight: 700; color: var(--text-primary); transition: color 0.3s; }
+        .view-all { color: #6366f1; font-size: 14px; font-weight: 600; text-decoration: none; transition: all 0.2s; display: flex; align-items: center; gap: 7px; }
+        .view-all:hover { gap: 11px; }
 
         /* Properties Grid */
-        .properties-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 24px;
-            margin-bottom: 40px;
-        }
+        .properties-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 22px; }
+        .property-mini { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 12px; overflow: hidden; transition: all 0.3s; cursor: pointer; }
+        .property-mini:hover { transform: translateY(-5px); box-shadow: 0 12px 40px var(--shadow); border-color: rgba(99,102,241,0.4); }
+        .property-img { position: relative; width: 100%; height: 160px; overflow: hidden; }
+        .property-img img { width: 100%; height: 100%; object-fit: cover; }
+        .property-badge { position: absolute; top: 10px; left: 10px; background: #6366f1; color: white; padding: 5px 12px; border-radius: 7px; font-size: 11px; font-weight: 700; }
+        .img-dots { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; }
+        .dot { width: 7px; height: 7px; background: rgba(255,255,255,0.35); border-radius: 50%; }
+        .dot.active { width: 22px; border-radius: 4px; background: #fff; }
+        .property-info { padding: 18px; }
+        .property-price { font-size: 22px; font-weight: 700; color: var(--text-primary); margin-bottom: 7px; transition: color 0.3s; }
+        .property-type { font-size: 13px; color: var(--text-secondary); margin-bottom: 5px; transition: color 0.3s; }
+        .property-loc { font-size: 13px; color: var(--text-muted); margin-bottom: 14px; transition: color 0.3s; }
+        .property-specs { display: flex; gap: 14px; font-size: 13px; color: var(--text-muted); padding-top: 14px; border-top: 1px solid var(--border-color); transition: all 0.3s; }
 
-        .property-card {
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s;
-        }
+        /* Table */
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { text-align: left; padding: 14px; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border-color); transition: all 0.3s; }
+        .data-table td { padding: 18px 14px; border-bottom: 1px solid var(--border-color); font-size: 14px; color: var(--text-secondary); transition: all 0.3s; }
+        .data-table tr:hover { background: var(--bg-hover); }
+        .status-badge { display: inline-block; padding: 5px 13px; border-radius: 13px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .status-badge.pending { background: rgba(249,115,22,0.12); color: #f97316; }
+        .status-badge.confirmed { background: rgba(59,130,246,0.12); color: #3b82f6; }
+        .status-badge.completed { background: rgba(34,197,94,0.12); color: #22c55e; }
+        .status-badge.cancelled { background: rgba(239,68,68,0.12); color: #ef4444; }
 
-        .property-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
+        /* Agents Grid */
+        .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 18px; }
+        .agent-mini { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 11px; padding: 22px; text-align: center; transition: all 0.3s; cursor: pointer; }
+        .agent-mini:hover { transform: translateY(-3px); box-shadow: 0 12px 40px var(--shadow); border-color: rgba(99,102,241,0.25); }
+        .agent-avatar { width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 26px; margin: 0 auto 14px; }
+        .agent-name { font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 5px; transition: color 0.3s; }
+        .agent-count { font-size: 14px; color: var(--text-muted); transition: color 0.3s; }
 
-        .property-image {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-        }
+        /* Empty */
+        .empty { text-align: center; padding: 70px 20px; color: var(--text-muted); transition: color 0.3s; }
+        .empty i { font-size: 52px; margin-bottom: 18px; opacity: 0.4; }
+        .empty h3 { font-size: 19px; margin-bottom: 9px; }
 
-        .property-content {
-            padding: 20px;
-        }
-
-        .property-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 8px;
-        }
-
-        .property-price {
-            font-size: 20px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 12px;
-        }
-
-        .property-details {
-            display: flex;
-            gap: 16px;
-            color: #6b7280;
-            font-size: 14px;
-        }
-
-        /* Appointments Table */
-        .appointments-table {
-            background: white;
-            border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            overflow-x: auto;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        thead {
-            background: #f9fafb;
-        }
-
-        th {
-            padding: 12px;
-            text-align: left;
-            font-weight: 600;
-            color: #374151;
-            font-size: 14px;
-        }
-
-        td {
-            padding: 16px 12px;
-            border-top: 1px solid #f3f4f6;
-            color: #6b7280;
-            font-size: 14px;
-        }
-
-        .status-badge {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .status-pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-confirmed {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .status-completed {
-            background: #e0e7ff;
-            color: #3730a3;
-        }
-
-        /* Top Agents */
-        .agents-list {
-            display: grid;
-            gap: 16px;
-            background: white;
-            padding: 24px;
-            border-radius: 16px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .agent-item {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 16px;
-            border-radius: 12px;
-            background: #f9fafb;
-            transition: all 0.3s;
-        }
-
-        .agent-item:hover {
-            background: #f3f4f6;
-        }
-
-        .agent-avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 18px;
-        }
-
-        .agent-info {
-            flex: 1;
-        }
-
-        .agent-name {
-            font-weight: 600;
-            color: #111827;
-            margin-bottom: 4px;
-        }
-
-        .agent-stats {
-            color: #6b7280;
-            font-size: 13px;
-        }
-
-        @media (max-width: 768px) {
-            .nav-content {
-                flex-direction: column;
-                gap: 20px;
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .properties-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+        /* Scrollbar */
+        .content-area::-webkit-scrollbar { width: 9px; }
+        .content-area::-webkit-scrollbar-track { background: var(--bg-main); }
+        .content-area::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 5px; }
+        .content-area::-webkit-scrollbar-thumb:hover { background: var(--bg-hover); }
     </style>
 </head>
 <body>
-    <!-- Navbar -->
-    <nav>
-        <div class="nav-content">
-            <a href="{{ route('newindex') }}" class="logo">
-                <i class="fas fa-home"></i> Dream Mulk
-            </a>
-            <div class="nav-actions">
-                <a href="{{ route('office.profile.page') }}" class="nav-btn">
-                    <i class="fas fa-user"></i> Profile
-                </a>
-                <form action="{{ route('office.logout') }}" method="POST" style="display: inline;">
-                    @csrf
-                    <button type="submit" class="nav-btn">
-                        <i class="fas fa-sign-out-alt"></i> Logout
-                    </button>
-                </form>
+    <div class="sidebar">
+    <div class="logo"><i class="fas fa-layer-group"></i> Dream Mulk</div>
+    <div class="nav-menu">
+    <a href="{{ route('office.dashboard') }}" class="nav-item {{ request()->routeIs('office.dashboard') ? 'active' : '' }}">
+        <i class="fas fa-chart-line"></i> Dashboard
+    </a>
+    <a href="{{ route('office.properties') }}" class="nav-item {{ request()->routeIs('office.properties*') ? 'active' : '' }}">
+        <i class="fas fa-building"></i> Properties
+    </a>
+    <a href="{{ route('office.projects') }}" class="nav-item {{ request()->routeIs('office.projects*') ? 'active' : '' }}">
+        <i class="fas fa-folder"></i> Projects
+    </a>
+    <a href="{{ route('office.leads') }}" class="nav-item {{ request()->routeIs('office.leads*') ? 'active' : '' }}">
+        <i class="fas fa-user-friends"></i> Leads
+    </a>
+    <a href="{{ route('office.subscriptions') }}" class="nav-item {{ request()->routeIs('office.subscriptions*') ? 'active' : '' }}">
+        <i class="fas fa-tag"></i> Offers
+    </a>
+    <a href="{{ route('office.agreements') }}" class="nav-item {{ request()->routeIs('office.agreements*') ? 'active' : '' }}">
+        <i class="fas fa-file-contract"></i> Agreements
+    </a>
+    <a href="{{ route('office.appointments') }}" class="nav-item {{ request()->routeIs('office.appointments*') ? 'active' : '' }}">
+        <i class="fas fa-calendar-alt"></i> Calendar
+    </a>
+    <a href="{{ route('office.activities') }}" class="nav-item {{ request()->routeIs('office.activities*') ? 'active' : '' }}">
+        <i class="fas fa-chart-bar"></i> Activities
+    </a>
+    <a href="{{ route('office.contacts') }}" class="nav-item {{ request()->routeIs('office.contacts*') ? 'active' : '' }}">
+        <i class="fas fa-address-book"></i> Contacts
+    </a>
+    <a href="{{ route('office.agents') }}" class="nav-item {{ request()->routeIs('office.agents*') ? 'active' : '' }}">
+        <i class="fas fa-user-tie"></i> Agents
+    </a>
+    <a href="{{ route('office.campaigns') }}" class="nav-item {{ request()->routeIs('office.campaigns*') ? 'active' : '' }}">
+        <i class="fas fa-bullhorn"></i> Campaigns
+    </a>
+    <a href="{{ route('office.documents') }}" class="nav-item {{ request()->routeIs('office.documents*') ? 'active' : '' }}">
+        <i class="fas fa-file-alt"></i> Documents
+    </a>
+</div>
+    <div class="nav-bottom">
+        <a href="{{ route('office.profile') }}" class="nav-item {{ request()->routeIs('office.profile') ? 'active' : '' }}">
+            <i class="fas fa-cog"></i> Settings
+        </a>
+        <form action="{{ route('office.logout') }}" method="POST" style="margin: 0;">
+            @csrf
+            <button type="submit" class="nav-item" style="width: 100%; background: none; border: none; text-align: left; cursor: pointer; color: rgba(255,255,255,0.5); font-family: inherit; font-size: 14px; font-weight: 500;">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </form>
+    </div>
+</div>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search properties, leads, contacts and more">
+            </div>
+            <div class="top-actions">
+                <button class="theme-toggle" onclick="toggleTheme()">
+                    <i class="fas fa-moon" id="theme-icon"></i>
+                </button>
+                <a href="{{ route('office.property.upload') }}" class="add-btn"><i class="fas fa-plus"></i> Add Property</a>
+                <button class="icon-btn"><i class="fas fa-bell"></i><span class="badge">3</span></button>
+                <button class="icon-btn"><i class="fas fa-envelope"></i><span class="badge">5</span></button>
+                <div class="user-profile">
+                    <div class="user-avatar">{{ strtoupper(substr($office->company_name, 0, 2)) }}</div>
+                    <span style="font-size: 14px; color: #1a1a1a; font-weight: 600;">{{ $office->company_name }}</span>
+                    <i class="fas fa-chevron-down" style="font-size: 12px; color: #9ca3af;"></i>
+                </div>
             </div>
         </div>
-    </nav>
 
-    <!-- Dashboard Content -->
-    <div class="dashboard-container">
-        <div class="dashboard-header">
-            <h1>Welcome back, {{ $office->company_name }}! 👋</h1>
-            <p>Here's what's happening with your real estate office today.</p>
-        </div>
+        <div class="content-area">
+            <h1 class="page-title">Welcome back, {{ $office->company_name }}!</h1>
+            <p class="page-subtitle">Here's what's happening with your real estate business today.</p>
 
-        <!-- Stats Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon purple">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="stat-value">{{ $stats['total_agents'] }}</div>
-                <div class="stat-label">Total Agents</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-icon blue">
-                    <i class="fas fa-building"></i>
-                </div>
-                <div class="stat-value">{{ $stats['total_properties'] }}</div>
-                <div class="stat-label">Total Properties</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-icon green">
-                    <i class="fas fa-check-circle"></i>
-                </div>
-                <div class="stat-value">{{ $stats['active_listings'] }}</div>
-                <div class="stat-label">Active Listings</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-icon orange">
-                    <i class="fas fa-calendar-check"></i>
-                </div>
-                <div class="stat-value">{{ $stats['pending_appointments'] }}</div>
-                <div class="stat-label">Pending Appointments</div>
-            </div>
-        </div>
-
-        <!-- Recent Properties -->
-        <h2 class="section-title">
-            <i class="fas fa-building"></i> Recent Properties
-        </h2>
-        <div class="properties-grid">
-            @forelse($recentProperties as $property)
-                <div class="property-card">
-                    @if($property->images && count(json_decode($property->images, true)) > 0)
-                        <img src="{{ asset('storage/' . json_decode($property->images, true)[0]) }}" alt="{{ $property->name }}" class="property-image">
-                    @else
-                        <img src="https://via.placeholder.com/400x300?text=No+Image" alt="No image" class="property-image">
-                    @endif
-                    <div class="property-content">
-                        <div class="property-title">{{ $property->name }}</div>
-                        <div class="property-price">${{ number_format($property->price) }}</div>
-                        <div class="property-details">
-                            <span><i class="fas fa-bed"></i> {{ $property->rooms ?? 'N/A' }}</span>
-                            <span><i class="fas fa-ruler-combined"></i> {{ $property->area ?? 'N/A' }} m²</span>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-value">{{ $stats['total_agents'] }}</div>
+                            <div class="stat-label">Total Agents</div>
                         </div>
+                        <div class="stat-icon blue"><i class="fas fa-users"></i></div>
                     </div>
                 </div>
-            @empty
-                <p style="grid-column: 1/-1; text-align: center; color: #6b7280;">No properties yet</p>
-            @endforelse
-        </div>
-
-        <!-- Recent Appointments -->
-        <h2 class="section-title">
-            <i class="fas fa-calendar"></i> Recent Appointments
-        </h2>
-        <div class="appointments-table">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Client</th>
-                        <th>Agent</th>
-                        <th>Property</th>
-                        <th>Date & Time</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @forelse($recentAppointments as $appointment)
-                        <tr>
-                            <td>{{ $appointment->client_name }}</td>
-                            <td>{{ $appointment->agent->full_name ?? 'N/A' }}</td>
-                            <td>{{ $appointment->property->name ?? 'N/A' }}</td>
-                            <td>{{ $appointment->appointment_date }} {{ $appointment->appointment_time }}</td>
-                            <td>
-                                <span class="status-badge status-{{ $appointment->status }}">
-                                    {{ ucfirst($appointment->status) }}
-                                </span>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="5" style="text-align: center;">No appointments yet</td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Top Agents -->
-        <h2 class="section-title" style="margin-top: 40px;">
-            <i class="fas fa-star"></i> Top Performing Agents
-        </h2>
-        <div class="agents-list">
-            @forelse($topAgents as $agent)
-                <div class="agent-item">
-                    <div class="agent-avatar">
-                        {{ strtoupper(substr($agent->full_name, 0, 1)) }}
-                    </div>
-                    <div class="agent-info">
-                        <div class="agent-name">{{ $agent->full_name }}</div>
-                        <div class="agent-stats">{{ $agent->properties_count }} properties</div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-value">{{ $stats['total_properties'] }}</div>
+                            <div class="stat-label">Total Properties</div>
+                        </div>
+                        <div class="stat-icon green"><i class="fas fa-building"></i></div>
                     </div>
                 </div>
-            @empty
-                <p style="text-align: center; color: #6b7280;">No agents yet</p>
-            @endforelse
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-value">{{ $stats['active_listings'] }}</div>
+                            <div class="stat-label">Active Listings</div>
+                        </div>
+                        <div class="stat-icon orange"><i class="fas fa-check-circle"></i></div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <div>
+                            <div class="stat-value">{{ $stats['pending_appointments'] }}</div>
+                            <div class="stat-label">Pending Appointments</div>
+                        </div>
+                        <div class="stat-icon purple"><i class="fas fa-calendar-alt"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title">Recent Properties</h2>
+                    <a href="{{ route('office.properties') }}" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+                </div>
+                @if($recentProperties->count() > 0)
+                    <div class="properties-grid">
+                        @foreach($recentProperties as $property)
+                        <div class="property-mini">
+                            <div class="property-img">
+                                @php
+                                    $images = json_decode($property->images, true);
+                                    $firstImage = is_array($images) && count($images) > 0 ? $images[0] : 'https://via.placeholder.com/300x200/f8f9fb/6366f1?text=No+Image';
+                                @endphp
+                                <img src="{{ $firstImage }}" alt="Property">
+                                <div class="property-badge">#{{ $property->id }}</div>
+                                <div class="img-dots">
+                                    @if(is_array($images))
+                                        @foreach(array_slice($images, 0, 5) as $index => $image)
+                                            <div class="dot {{ $index === 0 ? 'active' : '' }}"></div>
+                                        @endforeach
+                                    @else
+                                        <div class="dot active"></div>
+                                    @endif
+                                </div>
+                            </div>
+                            <div class="property-info">
+                                @php
+                                    $price = json_decode($property->price, true);
+                                    $rooms = json_decode($property->rooms, true);
+                                @endphp
+                                <div class="property-price">${{ number_format($price['usd'] ?? 0) }}</div>
+                                <div class="property-type">{{ ucfirst($property->listing_type) }}</div>
+                                <div class="property-loc">
+                                    @php $address = json_decode($property->address_details, true); @endphp
+                                    {{ $address['city']['en'] ?? '' }}, {{ $address['district']['en'] ?? '' }}
+                                </div>
+                                <div class="property-specs">
+                                    <span><i class="fas fa-bed"></i> {{ $rooms['bedroom']['count'] ?? 0 }}</span>
+                                    <span><i class="fas fa-bath"></i> {{ $rooms['bathroom']['count'] ?? 0 }}</span>
+                                    <span><i class="fas fa-ruler-combined"></i> {{ $property->area ?? 0 }} m²</span>
+                                </div>
+                            </div>
+                        </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="empty"><i class="fas fa-building"></i><h3>No Properties Yet</h3></div>
+                @endif
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title">Recent Appointments</h2>
+                    <a href="{{ route('office.appointments') }}" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+                </div>
+                @if($recentAppointments->count() > 0)
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Client</th><th>Agent</th><th>Property</th><th>Date & Time</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach($recentAppointments as $appointment)
+                            <tr>
+                                <td><strong>{{ $appointment->user->name ?? 'N/A' }}</strong><br><span style="font-size: 12px; opacity: 0.6;">{{ $appointment->user->phone_number ?? '' }}</span></td>
+                                <td>{{ $appointment->agent->first_name ?? 'N/A' }} {{ $appointment->agent->last_name ?? '' }}</td>
+                                <td>{{ json_decode($appointment->property->name ?? '{}')->en ?? 'N/A' }}</td>
+                                <td>{{ \Carbon\Carbon::parse($appointment->appointment_date)->format('M d, Y') }}<br><small style="opacity: 0.6;">{{ \Carbon\Carbon::parse($appointment->appointment_time)->format('h:i A') }}</small></td>
+                                <td><span class="status-badge {{ $appointment->status }}">{{ ucfirst($appointment->status) }}</span></td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                @else
+                    <div class="empty"><i class="fas fa-calendar-alt"></i><h3>No Appointments Yet</h3></div>
+                @endif
+            </div>
+
+            <div class="section">
+                <div class="section-header">
+                    <h2 class="section-title">Top Performing Agents</h2>
+                    <a href="{{ route('office.agents') }}" class="view-all">View All <i class="fas fa-arrow-right"></i></a>
+                </div>
+                @if($topAgents->count() > 0)
+                    <div class="agents-grid">
+                        @foreach($topAgents as $agent)
+                        <div class="agent-mini">
+                            <div class="agent-avatar">{{ strtoupper(substr($agent->first_name, 0, 1)) }}{{ strtoupper(substr($agent->last_name, 0, 1)) }}</div>
+                            <div class="agent-name">{{ $agent->first_name }} {{ $agent->last_name }}</div>
+                            <div class="agent-count">{{ $agent->owned_properties_count }} Properties</div>
+                        </div>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="empty"><i class="fas fa-users"></i><h3>No Agents Yet</h3></div>
+                @endif
+            </div>
         </div>
     </div>
+
+    <script>
+        // Theme Toggle Function
+        function toggleTheme() {
+            const mainContent = document.querySelector('.main-content');
+            const icon = document.getElementById('theme-icon');
+            const currentTheme = mainContent.getAttribute('data-theme');
+
+            if (currentTheme === 'dark') {
+                mainContent.removeAttribute('data-theme');
+                icon.className = 'fas fa-moon';
+                localStorage.setItem('theme', 'light');
+            } else {
+                mainContent.setAttribute('data-theme', 'dark');
+                icon.className = 'fas fa-sun';
+                localStorage.setItem('theme', 'dark');
+            }
+        }
+
+        // Load saved theme on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme');
+            const mainContent = document.querySelector('.main-content');
+            const icon = document.getElementById('theme-icon');
+
+            if (savedTheme === 'dark') {
+                mainContent.setAttribute('data-theme', 'dark');
+                icon.className = 'fas fa-sun';
+            }
+        });
+    </script>
 </body>
 </html>

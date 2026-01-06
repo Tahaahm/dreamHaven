@@ -7,32 +7,28 @@
 
         <title>{{ config('app.name', 'Laravel') }}</title>
 
-        <!-- Favicon -->
-        <link rel="icon" type="image/png" href="{{ asset('logo_dream_mulk.png') }}">
-        <link rel="shortcut icon" type="image/png" href="{{ asset('logo_dream_mulk.png') }}">
+        <!-- Favicons with cache busting -->
+        <link rel="icon" type="image/x-icon" href="{{ asset('favicon.ico?v=2') }}">
+        <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('logo_dream_mulk.png?v=2') }}">
+        <link rel="shortcut icon" type="image/png" href="{{ asset('logo_dream_mulk.png?v=2') }}">
+        <link rel="apple-touch-icon" href="{{ asset('logo_dream_mulk.png?v=2') }}">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
-<!-- resources/views/layouts/app.blade.php -->
-<link href="{{ asset('css/app.css') }}" rel="stylesheet">
-<!-- Bootstrap CSS -->
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
- <script src="https://cdn.tailwindcss.com"></script>
-<!-- Font Awesome -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 
-<!-- Your custom styles -->
-<link href="{{ asset('css/style.css') }}" rel="stylesheet">
+        <!-- CSS Libraries -->
+        <link href="{{ asset('css/app.css') }}" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+        <link href="{{ asset('css/style.css') }}" rel="stylesheet">
 
-        <!-- Scripts -->
-
+        <!-- Tailwind CSS -->
+        <script src="https://cdn.tailwindcss.com"></script>
     </head>
- <body class="font-sans antialiased" style="background:white !important;">
-    <div class="min-h-screen" style="background:white !important;">
 
-
-
+    <body class="font-sans antialiased" style="background:white !important;">
+        <div class="min-h-screen" style="background:white !important;">
             <!-- Page Heading -->
             @if (isset($header))
                 <header class="bg-white dark:bg-gray-800 shadow">
@@ -43,16 +39,13 @@
             @endif
 
             <!-- Page Content -->
-           <main>
-    @yield('content')
-</main>
+            <main>
+                @yield('content')
+            </main>
         </div>
 
-        <!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-
-<!-- Your custom JS -->
-<script src="{{ asset('js/script.js') }}"></script>
-
+        <!-- JavaScript Libraries -->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="{{ asset('js/script.js') }}"></script>
     </body>
 </html>

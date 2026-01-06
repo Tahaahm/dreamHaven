@@ -21,6 +21,17 @@ class RedirectIfAuthenticated
 
         foreach ($guards as $guard) {
             if (Auth::guard($guard)->check()) {
+                // Office guard - redirect to office dashboard
+                if ($guard === 'office') {
+                    return redirect()->route('office.dashboard');
+                }
+
+                // Agent guard - redirect to agent profile
+                if ($guard === 'agent') {
+                    return redirect()->route('agent.profile.page');
+                }
+
+                // Web guard or null - redirect to home
                 return redirect(RouteServiceProvider::HOME);
             }
         }
