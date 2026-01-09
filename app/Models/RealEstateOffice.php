@@ -9,6 +9,7 @@ use App\Models\Support\OfficeProjectPortfolio;
 use App\Models\Support\OfficePropertyListing;
 use App\Models\Support\OfficePropertyType;
 use App\Models\Support\OfficeSocialMedia;
+use App\Models\Subscription\Subscription;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -78,8 +79,9 @@ class RealEstateOffice extends Authenticatable
         return 'id';
     }
 
-    // Relationships
-    public function Subscription(): BelongsTo
+    // ==================== RELATIONSHIPS ====================
+
+    public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class, 'Subscription_id');
     }
@@ -144,7 +146,8 @@ class RealEstateOffice extends Authenticatable
         return $this->morphMany(Property::class, 'owner');
     }
 
-    // Scopes
+    // ==================== SCOPES ====================
+
     public function scopeVerified($query)
     {
         return $query->where('is_verified', true);
@@ -160,9 +163,167 @@ class RealEstateOffice extends Authenticatable
         return $query->where('current_plan', $plan);
     }
 
-    // Accessors
+    public function scopeWithActiveSubscription($query)
+    {
+        return $query->whereHas('subscription', function ($q) {
+            $q->where('status', 'active')
+                ->where(function ($subQ) {
+                    $subQ->whereNull('end_date')
+                        ->orWhere('end_date', '>=', now());
+                });
+        });
+    }
+
+    // ==================== ACCESSORS ====================
+
     public function getActiveAgentsCountAttribute()
     {
         return $this->companyAgents()->where('is_active', true)->count();
+    }
+
+    // ==================== SUBSCRIPTION HELPER METHODS ====================
+
+    /**
+     * Check if office has active subscription
+     */
+    public function hasActiveSubscription(): bool
+    {
+        if (!$this->Subscription_id || !$this->subscription) {
+            return false;
+        }
+
+        return $this->subscription->isActive();
+    }
+
+    /**
+     * Get current property count
+     */
+    public function getCurrentPropertyCount(): int
+    {
+        return Property::where('owner_type', 'App\Models\RealEstateOffice')
+            ->where('owner_id', $this->id)
+            ->count();
+    }
+
+    /**
+     * Check if office can add more properties
+     */
+    public function canAddProperty(): bool
+    {
+        // No subscription = no access
+        if (!$this->hasActiveSubscription()) {
+            return false;
+        }
+
+        $subscription = $this->subscription;
+
+        // Unlimited properties (null or 0 limit)
+        if ($subscription->property_activation_limit === null || $subscription->property_activation_limit === 0) {
+            return true;
+        }
+
+        // Check remaining activations
+        return $subscription->remaining_activations > 0;
+    }
+
+    /**
+     * Get property limit info
+     */
+    public function getPropertyLimitInfo(): array
+    {
+        $subscription = $this->subscription;
+        $currentCount = $this->getCurrentPropertyCount();
+
+        if (!$subscription || !$subscription->isActive()) {
+            return [
+                'has_subscription' => false,
+                'current' => $currentCount,
+                'limit' => 0,
+                'remaining' => 0,
+                'can_add' => false,
+                'percentage_used' => 0,
+                'is_unlimited' => false,
+            ];
+        }
+
+        $limit = $subscription->property_activation_limit ?? null;
+        $isUnlimited = $limit === null || $limit === 0;
+
+        $remaining = $isUnlimited ? PHP_INT_MAX : max(0, $subscription->remaining_activations);
+        $percentageUsed = $isUnlimited ? 0 : ($limit > 0 ? ($currentCount / $limit) * 100 : 0);
+
+        return [
+            'has_subscription' => true,
+            'current' => $currentCount,
+            'limit' => $isUnlimited ? '∞' : $limit,
+            'remaining' => $isUnlimited ? '∞' : $remaining,
+            'can_add' => $this->canAddProperty(),
+            'percentage_used' => $percentageUsed,
+            'is_unlimited' => $isUnlimited,
+            'subscription_end_date' => $subscription->end_date,
+            'days_remaining' => $subscription->daysRemaining(),
+            'is_trial' => $subscription->isTrialActive(),
+            'trial_end_date' => $subscription->trial_end_date,
+        ];
+    }
+
+    /**
+     * Increment property count (when adding property)
+     */
+    public function incrementPropertyCount(): void
+    {
+        if ($this->subscription && $this->subscription->property_activation_limit > 0) {
+            $this->subscription->incrementPropertyCount();
+        }
+    }
+
+    /**
+     * Decrement property count (when removing property)
+     */
+    public function decrementPropertyCount(): void
+    {
+        if ($this->subscription && $this->subscription->property_activation_limit > 0) {
+            $this->subscription->decrementPropertyCount();
+        }
+    }
+
+    /**
+     * Get subscription status badge
+     */
+    public function getSubscriptionStatusBadge(): array
+    {
+        if (!$this->hasActiveSubscription()) {
+            return [
+                'text' => 'No Subscription',
+                'color' => 'red',
+                'icon' => 'ban',
+            ];
+        }
+
+        $subscription = $this->subscription;
+
+        if ($subscription->isTrialActive()) {
+            return [
+                'text' => 'Trial Active',
+                'color' => 'blue',
+                'icon' => 'clock',
+            ];
+        }
+
+        $daysLeft = $subscription->daysRemaining();
+
+        if ($daysLeft <= 7) {
+            return [
+                'text' => 'Expiring Soon',
+                'color' => 'orange',
+                'icon' => 'exclamation-triangle',
+            ];
+        }
+
+        return [
+            'text' => 'Active',
+            'color' => 'green',
+            'icon' => 'check-circle',
+        ];
     }
 }

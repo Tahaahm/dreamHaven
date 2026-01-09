@@ -96,6 +96,11 @@
         <a href="{{ route('office.subscriptions') }}" class="nav-item {{ request()->routeIs('office.subscriptions*') ? 'active' : '' }}">
             <i class="fas fa-crown"></i> Subscriptions
         </a>
+
+    <a href="{{ route('office.banners') }}" class="nav-item {{ request()->routeIs('office.banners*') ? 'active' : '' }}">
+             <i class="fas fa-bullhorn"></i> Banner Ads
+        </a>
+
     </div>
 
     <div class="nav-bottom">

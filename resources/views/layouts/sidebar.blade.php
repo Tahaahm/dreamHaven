@@ -132,14 +132,13 @@
 
     </a>
 
-{{--
-@if(session()->has('agent_id'))
-    <a href="{{ route('agent.review') }}" class="{{ request()->routeIs('agent.review') ? 'active' : '' }}">
-        <i class="fas fa-star"></i> Reviews
+<!-- Add this menu item in your sidebar -->
+<li class="nav-item">
+    <a href="{{ route('office.banners') }}" class="nav-link {{ request()->routeIs('office.banners*') ? 'active' : '' }}">
+        <i class="fas fa-bullhorn"></i>
+        <span>Banner Ads</span>
     </a>
-@endif
---}}
-
+</li>
 
 
 
@@ -154,7 +153,7 @@
        class="{{ request()->routeIs('admin.profile') ? 'active' : '' }}">
         <i class="fas fa-user"></i> My Profile
     </a>
-{{-- 
+{{--
     <a href="{{ route('agents.list') }}"
        class="{{ request()->routeIs('agents.list') ? 'active' : '' }}">
         <i class="fas fa-users"></i> Agents
@@ -168,7 +167,7 @@
 @endif
 
 
-  
+
 
     <a href="{{ route('notifications') }}" class="{{ request()->routeIs('notifications') ? 'active' : '' }}">
     <i class="fas fa-bell"></i> Notifications
@@ -217,15 +216,15 @@
 
 
 
-  
+
 @auth
     @if(Auth::check() && Auth::user()->role === 'admin')
-        <a href="{{ route('admin.users') }}" 
+        <a href="{{ route('admin.users') }}"
            class="{{ request()->routeIs('admin.users') ? 'active' : '' }}">
             <i class="fas fa-users"></i> Manage Users
         </a>
 
-              <a href="{{ route('admin.properties') }}" 
+              <a href="{{ route('admin.properties') }}"
            class="{{ request()->routeIs('admin.properties') ? 'active' : '' }}">
             <i class="fas fa-building"></i> Manage Properties
         </a>

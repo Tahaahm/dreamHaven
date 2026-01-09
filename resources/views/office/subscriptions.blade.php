@@ -8,15 +8,114 @@
     .page-header { margin-bottom: 40px; }
     .page-title { font-size: 32px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
     .page-subtitle { color: var(--text-secondary); font-size: 16px; }
+
+    /* Current Subscription Widget */
+    .current-subscription {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border-radius: 16px;
+        padding: 32px;
+        margin-bottom: 32px;
+        color: white;
+        position: relative;
+        overflow: hidden;
+    }
+    .current-subscription::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+    }
+    .current-sub-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 24px;
+        position: relative;
+        z-index: 1;
+    }
+    .current-sub-title {
+        font-size: 14px;
+        text-transform: uppercase;
+        font-weight: 600;
+        opacity: 0.9;
+        margin-bottom: 8px;
+    }
+    .current-sub-plan {
+        font-size: 28px;
+        font-weight: 800;
+    }
+    .current-sub-badge {
+        background: rgba(255,255,255,0.2);
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .current-sub-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        position: relative;
+        z-index: 1;
+    }
+    .sub-detail-item {
+        background: rgba(255,255,255,0.15);
+        padding: 16px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+    }
+    .sub-detail-label {
+        font-size: 12px;
+        opacity: 0.8;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    .sub-detail-value {
+        font-size: 24px;
+        font-weight: 700;
+    }
+    .sub-progress-bar {
+        margin-top: 24px;
+        position: relative;
+        z-index: 1;
+    }
+    .sub-progress-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .sub-progress-track {
+        background: rgba(255,255,255,0.2);
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    .sub-progress-fill {
+        background: white;
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.3s;
+    }
+
     .filter-tabs { display: flex; gap: 12px; margin-bottom: 32px; }
     .filter-tab { padding: 10px 20px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; text-decoration: none; }
     .filter-tab:hover { border-color: #6366f1; color: #6366f1; }
     .filter-tab.active { background: #6366f1; color: white; border-color: #6366f1; }
+
     .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 32px; }
     .plan-card { background: var(--bg-card); border: 2px solid var(--border-color); border-radius: 16px; padding: 36px; transition: all 0.3s; position: relative; }
     .plan-card:hover { transform: translateY(-8px); box-shadow: 0 20px 50px var(--shadow); border-color: #6366f1; }
     .plan-card.featured { border-color: #6366f1; background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.08) 100%); }
+    .plan-card.current-plan { border-color: #22c55e; background: linear-gradient(135deg, rgba(34,197,94,0.08) 0%, rgba(16,185,129,0.08) 100%); }
     .plan-badge { position: absolute; top: -12px; right: 24px; background: #6366f1; color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .plan-badge.current { background: #22c55e; }
     .plan-type { display: inline-block; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 16px; }
     .plan-type.banner { background: rgba(99,102,241,0.15); color: #6366f1; }
     .plan-type.real_estate_office { background: rgba(34,197,94,0.15); color: #22c55e; }
@@ -34,6 +133,10 @@
     .plan-features li i { color: #22c55e; font-size: 18px; margin-top: 2px; flex-shrink: 0; }
     .btn-subscribe { width: 100%; background: #6366f1; color: white; padding: 16px; border: none; border-radius: 10px; font-size: 17px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     .btn-subscribe:hover { background: #5558e3; transform: translateY(-2px); }
+    .btn-subscribe.current { background: #22c55e; }
+    .btn-subscribe.upgrade { background: #f59e0b; }
+    .btn-subscribe.extend { background: #8b5cf6; }
+    .btn-subscribe:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
     .empty { text-align: center; padding: 80px 20px; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; }
     .empty i { font-size: 64px; margin-bottom: 20px; opacity: 0.4; }
 </style>
@@ -44,6 +147,54 @@
     <h1 class="page-title">Subscription Plans</h1>
     <p class="page-subtitle">Choose the perfect plan for your business</p>
 </div>
+
+{{-- Current Subscription Widget --}}
+@if($currentSubscription && $currentSubscription->isActive())
+<div class="current-subscription">
+    <div class="current-sub-header">
+        <div>
+            <div class="current-sub-title">Current Plan</div>
+            <div class="current-sub-plan">{{ $currentSubscription->currentPlan->name ?? 'Active Subscription' }}</div>
+        </div>
+        <div class="current-sub-badge">
+            <i class="fas fa-check-circle"></i> Active
+        </div>
+    </div>
+
+    <div class="current-sub-details">
+        <div class="sub-detail-item">
+            <div class="sub-detail-label">Days Remaining</div>
+            <div class="sub-detail-value">{{ $currentSubscription->daysRemaining() }}</div>
+        </div>
+        <div class="sub-detail-item">
+            <div class="sub-detail-label">Expires On</div>
+            <div class="sub-detail-value" style="font-size: 16px;">
+                {{ $currentSubscription->end_date ? $currentSubscription->end_date->format('M d, Y') : 'Never' }}
+            </div>
+        </div>
+        @if($propertyLimit['has_subscription'])
+        <div class="sub-detail-item">
+            <div class="sub-detail-label">Properties</div>
+            <div class="sub-detail-value" style="font-size: 18px;">
+                {{ $propertyLimit['current'] }} / {{ $propertyLimit['limit'] }}
+            </div>
+        </div>
+        @endif
+    </div>
+
+    @if($currentSubscription->end_date)
+    <div class="sub-progress-bar">
+        <div class="sub-progress-label">
+            <span>Subscription Progress</span>
+            <span>{{ round($currentSubscription->remainingPercentage()) }}% remaining</span>
+        </div>
+        <div class="sub-progress-track">
+            <div class="sub-progress-fill" style="width: {{ $currentSubscription->remainingPercentage() }}%"></div>
+        </div>
+    </div>
+    @endif
+</div>
+@endif
 
 <div class="filter-tabs">
     <a href="{{ route('office.subscriptions', ['type' => 'real_estate_office']) }}" class="filter-tab {{ !request('type') || request('type') == 'real_estate_office' ? 'active' : '' }}">
@@ -57,8 +208,13 @@
 @if(isset($plans) && $plans->count() > 0)
     <div class="plans-grid">
         @foreach($plans as $plan)
-        <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }}">
-            @if($plan->is_featured)
+        @php
+            $isCurrentPlan = $currentSubscription && $currentSubscription->current_plan_id == $plan->id;
+        @endphp
+        <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }} {{ $isCurrentPlan ? 'current-plan' : '' }}">
+            @if($isCurrentPlan)
+                <div class="plan-badge current">Current Plan</div>
+            @elseif($plan->is_featured)
                 <div class="plan-badge">Recommended</div>
             @endif
 
@@ -113,9 +269,19 @@
 
             <form action="{{ route('office.subscription.subscribe', $plan->id) }}" method="POST">
                 @csrf
-                <button type="submit" class="btn-subscribe">
-                    <i class="fas fa-crown"></i> Subscribe Now
-                </button>
+                @if($isCurrentPlan)
+                    <button type="submit" class="btn-subscribe extend">
+                        <i class="fas fa-plus-circle"></i> Extend Plan
+                    </button>
+                @elseif($currentSubscription && $currentSubscription->isActive())
+                    <button type="submit" class="btn-subscribe upgrade">
+                        <i class="fas fa-arrow-up"></i> Upgrade to This Plan
+                    </button>
+                @else
+                    <button type="submit" class="btn-subscribe">
+                        <i class="fas fa-crown"></i> Subscribe Now
+                    </button>
+                @endif
             </form>
         </div>
         @endforeach

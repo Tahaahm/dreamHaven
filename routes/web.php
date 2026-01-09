@@ -600,6 +600,21 @@ Route::prefix('office')->name('office.')->group(function () {
     // ========== PROTECTED ROUTES (Office only) ==========
     Route::middleware('auth.office')->group(function () {
 
+        Route::get('/agents', [OfficeAuthController::class, 'showAgents'])->name('agents');
+        Route::get('/agents/add', [OfficeAuthController::class, 'showAddAgent'])->name('agents.add');
+        Route::get('/agents/search', [OfficeAuthController::class, 'searchAgents'])->name('agents.search');
+        Route::post('/agents/store', [OfficeAuthController::class, 'storeAgent'])->name('agents.store');
+        Route::delete('/agents/{id}/remove', [OfficeAuthController::class, 'removeAgent'])->name('agents.remove');
+
+        Route::get('/banners', [OfficeAuthController::class, 'showBanners'])->name('banners');
+        Route::get('/banner/add', [OfficeAuthController::class, 'showAddBanner'])->name('banner.add');
+        Route::post('/banner/store', [OfficeAuthController::class, 'storeBanner'])->name('banner.store');
+        Route::get('/banner/{id}/edit', [OfficeAuthController::class, 'editBanner'])->name('banner.edit');
+        Route::put('/banner/{id}', [OfficeAuthController::class, 'updateBanner'])->name('banner.update');
+        Route::delete('/banner/{id}', [OfficeAuthController::class, 'deleteBanner'])->name('banner.delete');
+        Route::post('/banner/{id}/pause', [OfficeAuthController::class, 'pauseBanner'])->name('banner.pause');
+        Route::post('/banner/{id}/resume', [OfficeAuthController::class, 'resumeBanner'])->name('banner.resume');
+        Route::get('/banner/{id}/analytics', [OfficeAuthController::class, 'bannerAnalytics'])->name('banner.analytics');
         // Logout
         Route::post('/logout', [OfficeAuthController::class, 'logout'])->name('logout');
 
@@ -620,11 +635,6 @@ Route::prefix('office')->name('office.')->group(function () {
         Route::delete('/property/{id}', [OfficeAuthController::class, 'deleteProperty'])->name('property.delete');
 
         // Agents Management - FIXED
-        Route::get('/agents', [OfficeAuthController::class, 'showAgents'])->name('agents');
-        Route::get('/agents/add', [OfficeAuthController::class, 'showAddAgent'])->name('agents.add');
-        Route::get('/agents/search', [OfficeAuthController::class, 'searchAgents'])->name('agents.search');
-        Route::post('/agents/store', [OfficeAuthController::class, 'storeAgent'])->name('agents.store');
-        Route::delete('/agents/{id}/remove', [OfficeAuthController::class, 'removeAgent'])->name('agents.remove');
 
         // Appointments Management
         Route::get('/appointments', [OfficeAuthController::class, 'showAppointments'])->name('appointments');
@@ -647,10 +657,13 @@ Route::prefix('office')->name('office.')->group(function () {
         Route::put('/project/{id}', [OfficeAuthController::class, 'updateProject'])->name('project.update');
         Route::delete('/project/{id}', [OfficeAuthController::class, 'deleteProject'])->name('project.delete');
 
+
+
         Route::get('/subscriptions', [OfficeAuthController::class, 'showSubscriptions'])->name('subscriptions');
-        Route::get('/subscription/{id}/details', [OfficeAuthController::class, 'subscriptionDetails'])->name('subscription.details');
-        Route::post('/subscription/{id}/subscribe', [OfficeAuthController::class, 'subscribe'])->name('subscription.subscribe');
-        Route::get('/my-subscriptions', [OfficeAuthController::class, 'mySubscriptions'])->name('subscriptions.my');
+        Route::post('/subscription/subscribe/{id}', [OfficeAuthController::class, 'subscribe'])->name('subscription.subscribe');
+        Route::get('/subscription/confirm', [OfficeAuthController::class, 'confirmSubscription'])->name('subscription.confirm');
+        Route::post('/subscription/process', [OfficeAuthController::class, 'processSubscription'])->name('subscription.process');
+        Route::post('/subscription/cancel', [OfficeAuthController::class, 'cancelSubscription'])->name('subscription.cancel');
 
         // Leads Management
         Route::get('/leads', [OfficeAuthController::class, 'showLeads'])->name('leads');

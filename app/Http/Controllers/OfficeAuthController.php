@@ -7,6 +7,7 @@ use App\Models\Agent;
 use App\Models\Property;
 use App\Models\Appointment;
 use App\Models\Project;
+use App\Models\Subscription\Subscription;
 use App\Models\Subscription\SubscriptionPlan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -111,7 +112,7 @@ class OfficeAuthController extends Controller
 
     public function dashboard(Request $request)
     {
-        $office = Auth::guard('office')->user();
+        $office = Auth::guard('office')->user()->load('subscription.currentPlan');
 
         // Get search query
         $search = $request->get('search', '');
@@ -231,6 +232,11 @@ class OfficeAuthController extends Controller
             ->limit(5)
             ->get();
 
+        // ==================== SUBSCRIPTION INFO ====================
+        $subscription = $office->subscription;
+        $propertyLimit = $office->getPropertyLimitInfo();
+        $subscriptionBadge = $office->getSubscriptionStatusBadge();
+
         return view('office.dashboard', compact(
             'office',
             'totalProperties',
@@ -243,7 +249,10 @@ class OfficeAuthController extends Controller
             'revenueGrowth',
             'recentProperties',
             'topAgents',
-            'search'
+            'search',
+            'subscription',          // Added
+            'propertyLimit',         // Added
+            'subscriptionBadge'      // Added
         ));
     }
 
@@ -543,6 +552,9 @@ class OfficeAuthController extends Controller
 
         $property->delete();
 
+        // ✅ DECREMENT PROPERTY COUNT
+        $office->decrementPropertyCount();
+
         return redirect()->route('office.properties')
             ->with('success', 'Property deleted successfully!');
     }
@@ -656,6 +668,12 @@ class OfficeAuthController extends Controller
 
     public function showPropertyUpload()
     {
+        // ✅ CHECK SUBSCRIPTION FIRST
+        $validationResult = $this->validateSubscription();
+        if ($validationResult) {
+            return $validationResult;
+        }
+
         return view('office.property-add');
     }
 
@@ -664,6 +682,12 @@ class OfficeAuthController extends Controller
      */
     public function storeProperty(Request $request)
     {
+        // ✅ CHECK SUBSCRIPTION FIRST
+        $validationResult = $this->validateSubscription();
+        if ($validationResult) {
+            return $validationResult;
+        }
+
         $request->validate([
             'name_en' => 'required|string|max:255',
             'name_ar' => 'nullable|string|max:255',
@@ -692,7 +716,6 @@ class OfficeAuthController extends Controller
             'longitude' => 'required|numeric|between:-180,180',
             'images' => 'required|array|min:3|max:10',
             'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:5120',
-
             'electricity' => 'nullable|boolean',
             'water' => 'nullable|boolean',
             'internet' => 'nullable|boolean',
@@ -821,12 +844,16 @@ class OfficeAuthController extends Controller
             // ✅ Insert property
             Property::insert($propertyData);
 
+            // ✅ INCREMENT PROPERTY COUNT AFTER SUCCESSFUL CREATION
+            $office->incrementPropertyCount();
+
             return redirect()->route('office.properties')->with('success', 'Property added successfully!');
         } catch (\Exception $e) {
             Log::error('Property creation error: ' . $e->getMessage());
             return back()->withErrors(['error' => 'Failed to create property. Please try again.'])->withInput();
         }
     }
+
 
     /**
      * ✅ Generate unique property ID
@@ -856,7 +883,6 @@ class OfficeAuthController extends Controller
 
         return $translations[$type][$lang] ?? ucfirst($type);
     }
-
 
     public function projects()
     {
@@ -901,7 +927,7 @@ class OfficeAuthController extends Controller
 
     public function showSubscriptions(Request $request)
     {
-        $office = auth('office')->user();
+        $office = auth('office')->user()->load('subscription.currentPlan');
 
         // Default to real_estate_office if no type specified
         $type = $request->get('type', 'real_estate_office');
@@ -912,13 +938,17 @@ class OfficeAuthController extends Controller
         }
 
         // ✅ Fetch ONLY the selected type
-        $plans = \App\Models\SubscriptionPlan::where('active', true)
-            ->where('type', $type)  // This ensures ONLY selected type
+        $plans = SubscriptionPlan::where('active', true)
+            ->where('type', $type)
             ->orderBy('is_featured', 'desc')
             ->orderBy('sort_order', 'asc')
             ->get();
 
-        return view('office.subscriptions', compact('plans'));
+        // Get current subscription info
+        $currentSubscription = $office->subscription;
+        $propertyLimit = $office->getPropertyLimitInfo();
+
+        return view('office.subscriptions', compact('plans', 'currentSubscription', 'propertyLimit', 'type'));
     }
 
 
@@ -936,21 +966,65 @@ class OfficeAuthController extends Controller
      */
     public function subscribe(Request $request, $id)
     {
-        $office = auth('office')->user();
-        $plan = \App\Models\SubscriptionPlan::findOrFail($id);
+        $office = auth('office')->user()->load('subscription');
+        $plan = SubscriptionPlan::findOrFail($id);
 
         // ✅ Validate plan type
         if (!in_array($plan->type, ['banner', 'real_estate_office'])) {
-            return redirect()->route('office.subscription-plans')
+            return redirect()->route('office.subscriptions')
                 ->with('error', 'Invalid subscription plan type.');
         }
 
-        // TODO: Implement subscription logic
+        try {
+            // Check if office already has a subscription
+            $existingSubscription = $office->subscription;
 
-        return redirect()->route('office.subscriptions')
-            ->with('success', 'Subscription request submitted successfully!');
+            if ($existingSubscription && $existingSubscription->isActive()) {
+                // Office has active subscription - show upgrade/extend options
+                return redirect()->route('office.subscription.confirm', [
+                    'plan_id' => $plan->id,
+                    'action' => 'upgrade'
+                ]);
+            }
+
+            // No active subscription - create new one
+            $subscription = $this->createSubscription($office, $plan);
+
+            return redirect()->route('office.dashboard')
+                ->with('success', "Successfully subscribed to {$plan->name}! Your subscription is now active.");
+        } catch (\Exception $e) {
+            Log::error('Subscription error: ' . $e->getMessage());
+            return redirect()->route('office.subscriptions')
+                ->with('error', 'Failed to process subscription. Please try again.');
+        }
     }
+    private function createSubscription($office, $plan)
+    {
+        $startDate = now();
+        $endDate = now()->addMonths($plan->duration_months);
 
+        $subscription = Subscription::create([
+            'user_id' => $office->id,
+            'current_plan_id' => $plan->id,
+            'status' => 'active',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'billing_cycle' => $plan->duration_months >= 12 ? 'annual' : 'monthly',
+            'auto_renewal' => true,
+            'property_activation_limit' => $plan->max_properties ?? 0, // 0 = unlimited
+            'properties_activated_this_month' => 0,
+            'remaining_activations' => $plan->max_properties ?? 0,
+            'next_billing_date' => $endDate,
+            'last_payment_date' => now(),
+            'trial_period' => false,
+            'monthly_amount' => $plan->price_per_month_iqd,
+        ]);
+
+        // Link subscription to office
+        $office->update(['Subscription_id' => $subscription->id]);
+
+        return $subscription;
+    }
     /**
      * Show user's active subscriptions
      */
@@ -963,7 +1037,15 @@ class OfficeAuthController extends Controller
 
         return view('office.my-subscriptions', compact('subscriptions'));
     }
+    public function confirmSubscription(Request $request)
+    {
+        $office = auth('office')->user()->load('subscription.currentPlan');
+        $newPlan = SubscriptionPlan::findOrFail($request->plan_id);
+        $currentSubscription = $office->subscription;
+        $action = $request->action; // 'upgrade' or 'extend'
 
+        return view('office.subscription-confirm', compact('office', 'newPlan', 'currentSubscription', 'action'));
+    }
     // ==================== LEADS ====================
 
     /**
@@ -1012,7 +1094,31 @@ class OfficeAuthController extends Controller
 
         return view('office.leads', compact('leads', 'stats'));
     }
+    public function processSubscription(Request $request)
+    {
+        $office = auth('office')->user()->load('subscription');
+        $plan = SubscriptionPlan::findOrFail($request->plan_id);
+        $action = $request->action; // 'upgrade' or 'extend'
 
+        try {
+            if ($action === 'upgrade') {
+                // Upgrade to new plan
+                $this->upgradeSubscription($office, $plan);
+                $message = "Successfully upgraded to {$plan->name}!";
+            } else {
+                // Extend current plan
+                $this->extendSubscription($office, $plan);
+                $message = "Successfully extended your subscription by {$plan->duration_months} months!";
+            }
+
+            return redirect()->route('office.dashboard')
+                ->with('success', $message);
+        } catch (\Exception $e) {
+            Log::error('Subscription processing error: ' . $e->getMessage());
+            return redirect()->route('office.subscriptions')
+                ->with('error', 'Failed to process subscription. Please try again.');
+        }
+    }
     /**
      * Update lead status
      */
@@ -1031,7 +1137,29 @@ class OfficeAuthController extends Controller
 
         return redirect()->back()->with('success', 'Lead status updated successfully!');
     }
+    private function upgradeSubscription($office, $newPlan)
+    {
+        $subscription = $office->subscription;
 
+        // Calculate new end date (add months to current end date)
+        $currentEndDate = $subscription->end_date ?? now();
+        $newEndDate = max($currentEndDate, now())->addMonths($newPlan->duration_months);
+
+        // Update subscription
+        $subscription->update([
+            'current_plan_id' => $newPlan->id,
+            'status' => 'active',
+            'end_date' => $newEndDate,
+            'billing_cycle' => $newPlan->duration_months >= 12 ? 'annual' : 'monthly',
+            'property_activation_limit' => $newPlan->max_properties ?? 0,
+            'remaining_activations' => $newPlan->max_properties ?? 0,
+            'next_billing_date' => $newEndDate,
+            'last_payment_date' => now(),
+            'monthly_amount' => $newPlan->price_per_month_iqd,
+        ]);
+
+        return $subscription;
+    }
     /**
      * Create new lead
      */
@@ -1054,6 +1182,25 @@ class OfficeAuthController extends Controller
         // Lead::create([...]);
 
         return redirect()->route('office.leads')->with('success', 'Lead created successfully!');
+    }
+
+    private function extendSubscription($office, $plan)
+    {
+        $subscription = $office->subscription;
+
+        // Add months to current end date
+        $currentEndDate = $subscription->end_date ?? now();
+        $newEndDate = max($currentEndDate, now())->addMonths($plan->duration_months);
+
+        // Update subscription
+        $subscription->update([
+            'end_date' => $newEndDate,
+            'next_billing_date' => $newEndDate,
+            'last_payment_date' => now(),
+            'status' => 'active',
+        ]);
+
+        return $subscription;
     }
 
     // ==================== OFFERS ====================
@@ -1121,7 +1268,20 @@ class OfficeAuthController extends Controller
 
         return redirect()->route('office.offers')->with('success', 'Offer created successfully!');
     }
+    public function cancelSubscription()
+    {
+        $office = auth('office')->user()->load('subscription');
 
+        if (!$office->subscription) {
+            return redirect()->route('office.subscriptions')
+                ->with('error', 'You do not have an active subscription.');
+        }
+
+        $office->subscription->cancel();
+
+        return redirect()->route('office.subscriptions')
+            ->with('success', 'Your subscription has been cancelled.');
+    }
     /**
      * Respond to an offer
      */
@@ -1923,5 +2083,356 @@ class OfficeAuthController extends Controller
         $project->delete();
 
         return redirect()->route('office.projects')->with('success', 'Project deleted successfully!');
+    }
+
+
+    // ==================== BANNER MANAGEMENT ====================
+
+    /**
+     * Show all banners
+     */
+    public function showBanners(Request $request)
+    {
+        $office = auth('office')->user();
+
+        $bannersQuery = \App\Models\BannerAd::where('owner_type', 'real_estate')
+            ->where('owner_id', $office->id);
+
+        // Apply filters
+        if ($request->filled('status')) {
+            $bannersQuery->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $bannersQuery->where(function ($q) use ($search) {
+                $q->where('title', 'LIKE', "%{$search}%")
+                    ->orWhere('description', 'LIKE', "%{$search}%");
+            });
+        }
+
+        $banners = $bannersQuery->orderBy('created_at', 'desc')->paginate(12);
+
+        // Stats
+        $stats = [
+            'total' => \App\Models\BannerAd::where('owner_type', 'real_estate')
+                ->where('owner_id', $office->id)->count(),
+            'active' => \App\Models\BannerAd::where('owner_type', 'real_estate')
+                ->where('owner_id', $office->id)
+                ->where('status', 'active')->count(),
+            'draft' => \App\Models\BannerAd::where('owner_type', 'real_estate')
+                ->where('owner_id', $office->id)
+                ->where('status', 'draft')->count(),
+            'paused' => \App\Models\BannerAd::where('owner_type', 'real_estate')
+                ->where('owner_id', $office->id)
+                ->where('status', 'paused')->count(),
+        ];
+
+        return view('office.banners', compact('banners', 'stats'));
+    }
+
+    /**
+     * Show add banner form
+     */
+    public function showAddBanner()
+    {
+        $office = auth('office')->user();
+
+        // Get office properties for linking
+        $properties = Property::where('owner_type', 'App\Models\RealEstateOffice')
+            ->where('owner_id', $office->id)
+            ->where('status', 'available')
+            ->get();
+
+        return view('office.banner-add', compact('properties'));
+    }
+
+    /**
+     * Store new banner
+     */
+    public function storeBanner(Request $request)
+    {
+        $office = auth('office')->user();
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'banner_type' => 'required|in:property_listing,agency_branding,service_promotion,event_announcement,general_marketing',
+            'link_url' => 'nullable|url|max:500',
+            'link_opens_new_tab' => 'nullable|boolean',
+            'property_id' => 'nullable|exists:properties,id',
+            'banner_size' => 'required|in:banner,leaderboard,rectangle,sidebar,mobile',
+            'position' => 'required|in:header,sidebar_top,sidebar_bottom,content_top,content_middle,content_bottom,footer',
+            'start_date' => 'required|date|after_or_equal:today',
+            'end_date' => 'nullable|date|after:start_date',
+            'call_to_action' => 'nullable|string|max:50',
+            'show_contact_info' => 'nullable|boolean',
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120',
+            'target_locations' => 'nullable|array',
+            'target_property_types' => 'nullable|array',
+        ]);
+
+        try {
+            // Upload image
+            $imagePath = $request->file('image')->store('banner_ads', 'public');
+            $imageUrl = Storage::url($imagePath);
+
+            // Create banner
+            $banner = \App\Models\BannerAd::create([
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'image_url' => asset($imageUrl),
+                'image_alt' => $validated['title'],
+                'link_url' => $validated['link_url'] ?? null,
+                'link_opens_new_tab' => $request->has('link_opens_new_tab'),
+
+                // Owner info
+                'owner_type' => 'real_estate',
+                'owner_id' => $office->id,
+                'owner_name' => $office->company_name,
+                'owner_email' => $office->email_address,
+                'owner_phone' => $office->phone_number,
+                'owner_logo' => $office->profile_image ? asset('storage/' . $office->profile_image) : null,
+
+                // Banner details
+                'banner_type' => $validated['banner_type'],
+                'property_id' => $validated['property_id'] ?? null,
+                'banner_size' => $validated['banner_size'],
+                'position' => $validated['position'],
+
+                // Targeting
+                'target_locations' => $request->target_locations ? json_encode($request->target_locations) : null,
+                'target_property_types' => $request->target_property_types ? json_encode($request->target_property_types) : null,
+
+                // Dates
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'] ?? null,
+
+                // Additional
+                'call_to_action' => $validated['call_to_action'] ?? null,
+                'show_contact_info' => $request->has('show_contact_info'),
+
+                // Status
+                'is_active' => true,
+                'status' => 'draft',
+                'billing_type' => 'free',
+                'display_priority' => 50,
+
+                // Metadata
+                'created_by_ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
+
+            return redirect()->route('office.banners')
+                ->with('success', 'Banner created successfully and pending approval!');
+        } catch (\Exception $e) {
+            Log::error('Banner creation error: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Failed to create banner. Please try again.'])->withInput();
+        }
+    }
+
+    /**
+     * Show edit banner form
+     */
+    public function editBanner($id)
+    {
+        $office = auth('office')->user();
+
+        $banner = \App\Models\BannerAd::where('owner_type', 'real_estate')
+            ->where('owner_id', $office->id)
+            ->findOrFail($id);
+
+        $properties = Property::where('owner_type', 'App\Models\RealEstateOffice')
+            ->where('owner_id', $office->id)
+            ->where('status', 'available')
+            ->get();
+
+        return view('office.banner-edit', compact('banner', 'properties'));
+    }
+
+    /**
+     * Update banner
+     */
+    public function updateBanner(Request $request, $id)
+    {
+        $office = auth('office')->user();
+
+        $banner = \App\Models\BannerAd::where('owner_type', 'real_estate')
+            ->where('owner_id', $office->id)
+            ->findOrFail($id);
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'banner_type' => 'required|in:property_listing,agency_branding,service_promotion,event_announcement,general_marketing',
+            'link_url' => 'nullable|url|max:500',
+            'property_id' => 'nullable|exists:properties,id',
+            'banner_size' => 'required|in:banner,leaderboard,rectangle,sidebar,mobile',
+            'position' => 'required|in:header,sidebar_top,sidebar_bottom,content_top,content_middle,content_bottom,footer',
+            'start_date' => 'required|date',
+            'end_date' => 'nullable|date|after:start_date',
+            'call_to_action' => 'nullable|string|max:50',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
+        ]);
+
+        try {
+            $updateData = [
+                'title' => $validated['title'],
+                'description' => $validated['description'] ?? null,
+                'link_url' => $validated['link_url'] ?? null,
+                'link_opens_new_tab' => $request->has('link_opens_new_tab'),
+                'banner_type' => $validated['banner_type'],
+                'property_id' => $validated['property_id'] ?? null,
+                'banner_size' => $validated['banner_size'],
+                'position' => $validated['position'],
+                'start_date' => $validated['start_date'],
+                'end_date' => $validated['end_date'] ?? null,
+                'call_to_action' => $validated['call_to_action'] ?? null,
+                'show_contact_info' => $request->has('show_contact_info'),
+            ];
+
+            // Update image if new one uploaded
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('banner_ads', 'public');
+                $updateData['image_url'] = asset(Storage::url($imagePath));
+            }
+
+            $banner->update($updateData);
+
+            return redirect()->route('office.banners')
+                ->with('success', 'Banner updated successfully!');
+        } catch (\Exception $e) {
+            Log::error('Banner update error: ' . $e->getMessage());
+            return back()->withErrors(['error' => 'Failed to update banner.'])->withInput();
+        }
+    }
+
+    /**
+     * Delete banner
+     */
+    public function deleteBanner($id)
+    {
+        $office = auth('office')->user();
+
+        $banner = \App\Models\BannerAd::where('owner_type', 'real_estate')
+            ->where('owner_id', $office->id)
+            ->findOrFail($id);
+
+        $banner->delete();
+
+        return redirect()->route('office.banners')
+            ->with('success', 'Banner deleted successfully!');
+    }
+
+    /**
+     * Pause banner
+     */
+    public function pauseBanner($id)
+    {
+        $office = auth('office')->user();
+
+        $banner = \App\Models\BannerAd::where('owner_type', 'real_estate')
+            ->where('owner_id', $office->id)
+            ->findOrFail($id);
+
+        $banner->pause();
+
+        return redirect()->route('office.banners')
+            ->with('success', 'Banner paused successfully!');
+    }
+
+    /**
+     * Resume banner
+     */
+    public function resumeBanner($id)
+    {
+        $office = auth('office')->user();
+
+        $banner = \App\Models\BannerAd::where('owner_type', 'real_estate')
+            ->where('owner_id', $office->id)
+            ->findOrFail($id);
+
+        $banner->resume();
+
+        return redirect()->route('office.banners')
+            ->with('success', 'Banner resumed successfully!');
+    }
+
+    /**
+     * Show banner analytics
+     */
+    public function bannerAnalytics($id)
+    {
+        $office = auth('office')->user();
+
+        $banner = \App\Models\BannerAd::where('owner_type', 'real_estate')
+            ->where('owner_id', $office->id)
+            ->findOrFail($id);
+
+        $metrics = $banner->getPerformanceMetrics();
+
+        return view('office.banner-analytics', compact('banner', 'metrics'));
+    }
+
+
+
+    private function validateSubscription()
+    {
+        $office = auth('office')->user()->load('subscription.currentPlan');
+
+        // Check if has subscription
+        if (!$office->Subscription_id || !$office->subscription) {
+            return redirect()->route('office.subscriptions')
+                ->with('error', 'You need an active subscription to add properties. Please subscribe to continue.');
+        }
+
+        // Check if subscription is active
+        if (!$office->hasActiveSubscription()) {
+            $subscription = $office->subscription;
+
+            if ($subscription->isExpired()) {
+                return redirect()->route('office.subscriptions')
+                    ->with('error', 'Your subscription has expired on ' . $subscription->end_date->format('M d, Y') . '. Please renew to continue adding properties.');
+            }
+
+            if ($subscription->status === 'suspended') {
+                return redirect()->route('office.subscriptions')
+                    ->with('error', 'Your subscription is suspended. Please contact support for assistance.');
+            }
+
+            return redirect()->route('office.subscriptions')
+                ->with('error', 'Your subscription is not active. Please activate your subscription to continue.');
+        }
+
+        // Check property limit
+        if (!$office->canAddProperty()) {
+            $info = $office->getPropertyLimitInfo();
+
+            if ($info['is_unlimited']) {
+                return null; // Unlimited, allow
+            }
+
+            $message = "You've reached your property limit ({$info['limit']} properties). ";
+
+            if ($info['remaining'] == 0) {
+                $message .= "Please upgrade your subscription or remove some properties to add new ones.";
+            } else {
+                $message .= "You have {$info['remaining']} properties remaining.";
+            }
+
+            return redirect()->route('office.properties')
+                ->with('error', $message);
+        }
+
+        return null; // Validation passed
+    }
+    public function showSubscriptionStatus()
+    {
+        $office = auth('office')->user()->load('subscription.currentPlan');
+        $subscription = $office->subscription;
+        $propertyInfo = $office->getPropertyLimitInfo();
+        $subscriptionBadge = $office->getSubscriptionStatusBadge();
+
+        return view('office.subscription-status', compact('subscription', 'propertyInfo', 'subscriptionBadge'));
     }
 }
