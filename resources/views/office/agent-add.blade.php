@@ -1,281 +1,322 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Agent - Dream Mulk</title>
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --bg-main: #ffffff;
-            --bg-card: #f8f9fb;
-            --bg-hover: #f1f3f5;
-            --text-primary: #1a1a1a;
-            --text-secondary: #6b7280;
-            --text-muted: #9ca3af;
-            --border-color: #e8eaed;
-            --shadow: rgba(0,0,0,0.08);
-        }
-        [data-theme="dark"] {
-            --bg-main: #0a0b0f;
-            --bg-card: #16171d;
-            --bg-hover: #1f2028;
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255,255,255,0.8);
-            --text-muted: rgba(255,255,255,0.5);
-            --border-color: rgba(255,255,255,0.08);
-            --shadow: rgba(0,0,0,0.4);
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', sans-serif; display: flex; height: 100vh; overflow: hidden; }
-        .sidebar { width: 240px; background: #16171d; display: flex; flex-direction: column; border-right: 1px solid rgba(255,255,255,0.06); }
-        .logo { padding: 20px 24px; font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
-        .logo i { font-size: 22px; color: #6366f1; }
-        .nav-menu { flex: 1; padding: 16px 12px; overflow-y: auto; }
-        .nav-item { padding: 11px 16px; color: rgba(255,255,255,0.5); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 14px; font-size: 14px; text-decoration: none; margin-bottom: 4px; border-radius: 8px; font-weight: 500; }
-        .nav-item:hover { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.9); }
-        .nav-item.active { background: #6366f1; color: #fff; }
-        .nav-item i { width: 20px; text-align: center; font-size: 16px; }
-        .nav-bottom { border-top: 1px solid rgba(255,255,255,0.06); padding: 16px 12px; }
-        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-main); transition: background 0.3s; }
-        .top-bar { background: #ffffff; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e8eaed; }
-        .search-bar { flex: 1; max-width: 420px; position: relative; }
-        .search-bar input { width: 100%; background: #f8f9fb; border: 1px solid #e8eaed; border-radius: 8px; padding: 11px 44px; color: #1a1a1a; font-size: 14px; }
-        .search-bar input::placeholder { color: #9ca3af; }
-        .search-bar i { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 15px; }
-        .top-actions { display: flex; align-items: center; gap: 14px; }
-        .icon-btn { width: 42px; height: 42px; background: #f8f9fb; border: 1px solid #e8eaed; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6b7280; cursor: pointer; transition: all 0.2s; }
-        .icon-btn:hover { background: #eff3ff; color: #6366f1; border-color: #6366f1; }
-        .back-btn { background: #f8f9fb; color: #6b7280; padding: 11px 22px; border-radius: 8px; border: 1px solid #e8eaed; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 9px; font-size: 14px; text-decoration: none; transition: all 0.2s; }
-        .back-btn:hover { background: #eff3ff; color: #6366f1; border-color: #6366f1; }
-        .theme-toggle { width: 42px; height: 42px; background: #f8f9fb; border: 1px solid #e8eaed; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6b7280; cursor: pointer; transition: all 0.2s; }
-        .theme-toggle:hover { background: #eff3ff; color: #6366f1; border-color: #6366f1; }
-        .user-profile { display: flex; align-items: center; gap: 11px; cursor: pointer; padding: 7px 13px; border-radius: 8px; transition: all 0.2s; }
-        .user-profile:hover { background: #f8f9fb; }
-        .user-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 15px; }
-        .content-area { flex: 1; overflow-y: auto; padding: 32px; background: var(--bg-main); transition: background 0.3s; }
-        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
-        .page-title { font-size: 32px; font-weight: 700; color: var(--text-primary); transition: color 0.3s; }
-        .form-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 32px; transition: all 0.3s; margin-bottom: 24px; }
-        .form-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 24px; transition: color 0.3s; }
-        .form-group { margin-bottom: 20px; }
-        .form-label { display: block; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; font-size: 14px; transition: color 0.3s; }
-        .form-input { width: 100%; background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 12px 16px; font-size: 15px; transition: all 0.3s; }
-        .form-input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
-        .alert { padding: 16px; border-radius: 8px; margin-bottom: 24px; }
-        .alert-success { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
-        .alert-error { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
-        .content-area::-webkit-scrollbar { width: 9px; }
-        .content-area::-webkit-scrollbar-track { background: var(--bg-main); }
-        .content-area::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 5px; }
+@extends('layouts.office-layout')
 
-        /* Agent Cards */
-        .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-        .agent-card { background: var(--bg-main); border: 2px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px; transition: all 0.3s; cursor: pointer; }
-        .agent-card:hover { border-color: #6366f1; transform: translateY(-3px); box-shadow: 0 8px 24px var(--shadow); }
-        .agent-card.selected { border-color: #22c55e; background: rgba(34,197,94,0.05); }
-        .agent-avatar-large { width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 24px; flex-shrink: 0; }
-        .agent-info { flex: 1; min-width: 0; }
-        .agent-name { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; transition: color 0.3s; }
-        .agent-email { font-size: 14px; color: var(--text-secondary); margin-bottom: 3px; transition: color 0.3s; }
-        .agent-phone { font-size: 13px; color: var(--text-muted); transition: color 0.3s; }
-        .agent-stats { display: flex; gap: 16px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border-color); }
-        .stat-small { font-size: 12px; color: var(--text-muted); }
-        .stat-small strong { color: var(--text-primary); font-weight: 600; }
-        .btn-add { background: #6366f1; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; flex-shrink: 0; }
-        .btn-add:hover { background: #5558e3; transform: scale(1.05); }
-        .btn-added { background: #22c55e; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: default; flex-shrink: 0; }
-        .empty-state { text-align: center; padding: 80px 20px; color: var(--text-muted); }
-        .empty-state i { font-size: 64px; margin-bottom: 20px; opacity: 0.4; }
-        .empty-state h3 { font-size: 20px; margin-bottom: 10px; color: var(--text-secondary); }
-        .search-box { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 20px; font-size: 15px; color: var(--text-primary); transition: all 0.3s; width: 100%; }
-        .search-box:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
-        .helper-text { font-size: 13px; color: var(--text-muted); margin-top: 8px; }
-    </style>
-</head>
-<body>
-    <div class="sidebar">
-        <div class="logo"><i class="fas fa-layer-group"></i> Dream Mulk</div>
-        <div class="nav-menu">
-            <a href="{{ route('office.dashboard') }}" class="nav-item"><i class="fas fa-chart-line"></i> Dashboard</a>
-            <a href="{{ route('office.properties') }}" class="nav-item"><i class="fas fa-building"></i> Properties</a>
-            <a href="#" class="nav-item"><i class="fas fa-folder"></i> Projects</a>
-            <a href="#" class="nav-item"><i class="fas fa-user-friends"></i> Leads</a>
-            <a href="#" class="nav-item"><i class="fas fa-tag"></i> Offers</a>
-            <a href="#" class="nav-item"><i class="fas fa-file-contract"></i> Agreements</a>
-            <a href="{{ route('office.appointments') }}" class="nav-item"><i class="fas fa-calendar-alt"></i> Calendar</a>
-            <a href="#" class="nav-item"><i class="fas fa-chart-bar"></i> Activities</a>
-            <a href="#" class="nav-item"><i class="fas fa-address-book"></i> Contacts</a>
-            <a href="{{ route('office.agents') }}" class="nav-item active"><i class="fas fa-user-tie"></i> Agents</a>
-            <a href="#" class="nav-item"><i class="fas fa-bullhorn"></i> Campaigns</a>
-            <a href="#" class="nav-item"><i class="fas fa-file-alt"></i> Documents</a>
-        </div>
-        <div class="nav-bottom">
-            <a href="{{ route('office.profile') }}" class="nav-item"><i class="fas fa-cog"></i> Settings</a>
-            <form action="{{ route('office.logout') }}" method="POST" style="margin: 0;">
-                @csrf
-                <button type="submit" class="nav-item" style="width: 100%; background: none; border: none; text-align: left; cursor: pointer; color: rgba(255,255,255,0.5); font-family: inherit; font-size: 14px; font-weight: 500;"><i class="fas fa-sign-out-alt"></i> Logout</button>
-            </form>
+@section('title', 'Add Agent - Dream Mulk')
+@section('search-placeholder', 'Search agents...')
+
+@section('top-actions')
+    <a href="{{ route('office.agents') }}" class="back-btn" style="background: #f8f9fb; color: #6b7280; padding: 11px 22px; border-radius: 8px; border: 1px solid #e8eaed; font-weight: 600; display: flex; align-items: center; gap: 9px; font-size: 14px; text-decoration: none; transition: all 0.2s;">
+        <i class="fas fa-arrow-left"></i> Back
+    </a>
+@endsection
+
+@section('styles')
+<style>
+    .page-title { font-size: 32px; font-weight: 700; color: var(--text-primary); margin-bottom: 32px; }
+    .form-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 32px; margin-bottom: 24px; }
+    .form-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 24px; }
+
+    .alert { padding: 16px; border-radius: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+    .alert-success { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
+    .alert-error { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+
+    .search-box { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 20px; font-size: 15px; color: var(--text-primary); width: 100%; transition: all 0.3s; }
+    .search-box:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+
+    .helper-text { font-size: 13px; color: var(--text-muted); margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+
+    .privacy-notice { background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2); border-radius: 10px; padding: 16px; margin-top: 12px; display: flex; align-items: start; gap: 12px; }
+    .privacy-notice i { color: #6366f1; font-size: 20px; margin-top: 2px; }
+    .privacy-notice-text { flex: 1; }
+    .privacy-notice-text strong { color: var(--text-primary); display: block; margin-bottom: 4px; font-size: 15px; }
+    .privacy-notice-text p { color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin: 0; }
+
+    .agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+
+    .agent-card { background: var(--bg-main); border: 2px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; align-items: center; gap: 16px; transition: all 0.3s; }
+    .agent-card:hover { border-color: #6366f1; transform: translateY(-3px); box-shadow: 0 8px 24px var(--shadow); }
+
+    .agent-avatar-large { width: 70px; height: 70px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 24px; flex-shrink: 0; }
+
+    .agent-info { flex: 1; min-width: 0; }
+    .agent-name { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .agent-email { font-size: 14px; color: var(--text-secondary); margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .agent-phone { font-size: 13px; color: var(--text-muted); }
+
+    .btn-add { background: #6366f1; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.3s; display: flex; align-items: center; gap: 6px; }
+    .btn-add:hover { background: #5558e3; transform: scale(1.05); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+
+    .btn-added { background: #22c55e; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: default; display: flex; align-items: center; gap: 6px; }
+
+    .initial-state { text-align: center; padding: 60px 20px; color: var(--text-muted); background: var(--bg-main); border: 2px dashed var(--border-color); border-radius: 12px; }
+    .initial-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.3; color: #6366f1; }
+    .initial-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text-primary); font-weight: 600; }
+    .initial-state p { font-size: 14px; color: var(--text-secondary); margin: 0; }
+
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state i { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+    .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text-secondary); font-weight: 600; }
+    .empty-state p { font-size: 14px; color: var(--text-muted); margin: 0; }
+
+    .loading { text-align: center; padding: 40px; color: var(--text-muted); }
+    .loading i { font-size: 32px; margin-bottom: 12px; }
+    .loading p { font-size: 14px; margin: 0; }
+
+    .back-btn:hover { background: #eff3ff !important; color: #6366f1 !important; border-color: #6366f1 !important; }
+
+    .search-count { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; font-weight: 500; }
+</style>
+@endsection
+
+@section('content')
+<h1 class="page-title">Add Agents to Your Office</h1>
+
+@if(session('success'))
+    <div class="alert alert-success">
+        <i class="fas fa-check-circle"></i>
+        <span>{{ session('success') }}</span>
+    </div>
+@endif
+
+@if(session('error'))
+    <div class="alert alert-error">
+        <i class="fas fa-exclamation-circle"></i>
+        <span>{{ session('error') }}</span>
+    </div>
+@endif
+
+@if($errors->any())
+    <div class="alert alert-error">
+        <i class="fas fa-exclamation-circle"></i>
+        <div>
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
         </div>
     </div>
+@endif
 
-    <div class="main-content">
-        <div class="top-bar">
-            <div class="search-bar">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Search" id="quick-search" onkeyup="quickSearch()">
-            </div>
-            <div class="top-actions">
-                <button class="theme-toggle" onclick="toggleTheme()">
-                    <i class="fas fa-moon" id="theme-icon"></i>
-                </button>
-                <a href="{{ route('office.agents') }}" class="back-btn"><i class="fas fa-arrow-left"></i> Back</a>
-                <button class="icon-btn"><i class="fas fa-bell"></i></button>
-                <button class="icon-btn"><i class="fas fa-envelope"></i></button>
-                <div class="user-profile">
-                    <div class="user-avatar">{{ strtoupper(substr(auth('office')->user()->company_name, 0, 2)) }}</div>
-                    <span style="font-size: 14px; color: #1a1a1a; font-weight: 600;">{{ auth('office')->user()->company_name }}</span>
-                    <i class="fas fa-chevron-down" style="font-size: 12px; color: #9ca3af;"></i>
-                </div>
-            </div>
+<div class="form-card">
+    <h2 class="form-title"><i class="fas fa-search"></i> Search Available Agents</h2>
+    <input type="text" class="search-box" id="agent-search" placeholder="Search by name, email, phone, or license number..." oninput="searchAgents()">
+    <div class="helper-text">
+        <i class="fas fa-info-circle"></i>
+        <span>Enter at least 3 characters to search for available agents</span>
+    </div>
+    <div class="privacy-notice">
+        <i class="fas fa-shield-alt"></i>
+        <div class="privacy-notice-text">
+            <strong>Privacy Protection</strong>
+            <p>For privacy reasons, agent information is hidden by default. Please search for specific agents by name, email, phone, or license number to view their profiles.</p>
+        </div>
+    </div>
+</div>
+
+<div class="form-card">
+    <h2 class="form-title"><i class="fas fa-users"></i> Search Results</h2>
+    <div id="search-count" class="search-count" style="display: none;"></div>
+    <div id="agents-list">
+        <div class="loading" id="loading-state" style="display: none;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Searching agents...</p>
         </div>
 
-        <div class="content-area">
-            <div class="page-header">
-                <h1 class="page-title">Add Agents to Your Office</h1>
-            </div>
-
-            @if(session('success'))
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle"></i> {{ session('success') }}
-                </div>
-            @endif
-
-            @if($errors->any())
-                <div class="alert alert-error">
-                    @foreach($errors->all() as $error)
-                        <div><i class="fas fa-exclamation-circle"></i> {{ $error }}</div>
-                    @endforeach
-                </div>
-            @endif
-
-            <!-- Search Section -->
-            <div class="form-card">
-                <h2 class="form-title"><i class="fas fa-search"></i> Search Available Agents</h2>
-                <input type="text" class="search-box" id="agent-search" placeholder="Search by name, email, or phone..." onkeyup="searchAgents()">
-                <div class="helper-text">
-                    <i class="fas fa-info-circle"></i> Only agents without an office assignment will appear
-                </div>
-            </div>
-
-            <!-- Available Agents -->
-            <div class="form-card">
-                <h2 class="form-title"><i class="fas fa-users"></i> Available Agents</h2>
-                <div id="agents-list">
-                    @if(isset($availableAgents) && $availableAgents->count() > 0)
-                        <div class="agents-grid">
-                            @foreach($availableAgents as $agent)
-                            <div class="agent-card" data-agent-id="{{ $agent->id }}">
-                                <div class="agent-avatar-large">
-                                    {{ strtoupper(substr($agent->first_name ?? $agent->agent_name, 0, 1)) }}{{ strtoupper(substr($agent->last_name ?? '', 0, 1)) }}
-                                </div>
-                                <div class="agent-info">
-                                    <div class="agent-name">{{ $agent->first_name ?? $agent->agent_name }} {{ $agent->last_name ?? '' }}</div>
-                                    <div class="agent-email">{{ $agent->primary_email ?? $agent->email }}</div>
-                                    <div class="agent-phone">{{ $agent->primary_phone ?? $agent->phone_number }}</div>
-                                    <div class="agent-stats">
-                                        <div class="stat-small"><strong>{{ $agent->properties_sold ?? 0 }}</strong> sold</div>
-                                        <div class="stat-small"><strong>{{ number_format($agent->overall_rating ?? 0, 1) }}</strong> rating</div>
-                                    </div>
-                                </div>
-                                <form action="{{ route('office.agent.add', $agent->id) }}" method="POST" onsubmit="return handleAddAgent(event, '{{ $agent->id }}')">
-                                    @csrf
-                                    <button type="submit" class="btn-add">
-                                        <i class="fas fa-plus"></i> Add
-                                    </button>
-                                </form>
-                            </div>
-                            @endforeach
-                        </div>
-                    @else
-                        <div class="empty-state">
-                            <i class="fas fa-user-slash"></i>
-                            <h3>No Available Agents</h3>
-                            <p>All agents are currently assigned to offices or there are no registered agents yet.</p>
-                        </div>
-                    @endif
-                </div>
+        <div id="agents-grid">
+            <div class="initial-state">
+                <i class="fas fa-user-shield"></i>
+                <h3>Start Your Search</h3>
+                <p>Use the search box above to find agents by their name, email, phone, or license number</p>
             </div>
         </div>
     </div>
+</div>
+@endsection
 
-    <script>
-        function toggleTheme() {
-            const mainContent = document.querySelector('.main-content');
-            const icon = document.getElementById('theme-icon');
-            const currentTheme = mainContent.getAttribute('data-theme');
-            if (currentTheme === 'dark') {
-                mainContent.removeAttribute('data-theme');
-                icon.className = 'fas fa-moon';
-                localStorage.setItem('theme', 'light');
-            } else {
-                mainContent.setAttribute('data-theme', 'dark');
-                icon.className = 'fas fa-sun';
-                localStorage.setItem('theme', 'dark');
-            }
-        }
+@section('scripts')
+<script>
+let searchTimeout;
 
-        document.addEventListener('DOMContentLoaded', function() {
-            const savedTheme = localStorage.getItem('theme');
-            const mainContent = document.querySelector('.main-content');
-            const icon = document.getElementById('theme-icon');
-            if (savedTheme === 'dark') {
-                mainContent.setAttribute('data-theme', 'dark');
-                icon.className = 'fas fa-sun';
-            }
-        });
+function searchAgents() {
+    clearTimeout(searchTimeout);
 
-        // Quick search in top bar
-        function quickSearch() {
-            const query = document.getElementById('quick-search').value.toLowerCase();
-            const cards = document.querySelectorAll('.agent-card');
+    const searchInput = document.getElementById('agent-search');
+    const query = searchInput.value.trim();
+    const loadingState = document.getElementById('loading-state');
+    const agentsGrid = document.getElementById('agents-grid');
+    const searchCount = document.getElementById('search-count');
 
-            cards.forEach(card => {
-                const text = card.textContent.toLowerCase();
-                card.style.display = text.includes(query) ? '' : 'none';
-            });
-        }
+    console.log('=== SEARCH STARTED ===');
+    console.log('Query:', query);
+    console.log('Query Length:', query.length);
 
-        // Main agent search
-        function searchAgents() {
-            const query = document.getElementById('agent-search').value.toLowerCase();
-            const cards = document.querySelectorAll('.agent-card');
+    // Reset if less than 3 characters
+    if (query.length < 3) {
+        console.log('Query too short, resetting');
+        searchCount.style.display = 'none';
+        agentsGrid.innerHTML = `
+            <div class="initial-state">
+                <i class="fas fa-user-shield"></i>
+                <h3>Start Your Search</h3>
+                <p>Use the search box above to find agents by their name, email, phone, or license number</p>
+            </div>
+        `;
+        return;
+    }
 
-            cards.forEach(card => {
-                const text = card.textContent.toLowerCase();
-                card.style.display = text.includes(query) ? '' : 'none';
-            });
-        }
+    // Debounce the search
+    searchTimeout = setTimeout(() => {
+        console.log('Executing search after debounce');
 
-        // Handle add agent
-        function handleAddAgent(event, agentId) {
-            const confirmed = confirm('Add this agent to your office?');
-            if (confirmed) {
-                const card = document.querySelector(`[data-agent-id="${agentId}"]`);
-                if (card) {
-                    card.classList.add('selected');
-                    const btn = card.querySelector('button');
-                    if (btn) {
-                        btn.className = 'btn-added';
-                        btn.innerHTML = '<i class="fas fa-check"></i> Added';
-                        btn.disabled = true;
+        loadingState.style.display = 'block';
+        agentsGrid.style.display = 'none';
+        searchCount.style.display = 'none';
+
+        // Build the URL
+        const baseUrl = '{{ route("office.agents.search") }}';
+        const url = `${baseUrl}?search=${encodeURIComponent(query)}`;
+
+        console.log('Fetch URL:', url);
+        console.log('CSRF Token:', '{{ csrf_token() }}');
+
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => {
+            console.log('=== RESPONSE RECEIVED ===');
+            console.log('Status:', response.status);
+            console.log('Status Text:', response.statusText);
+            console.log('Headers:', [...response.headers.entries()]);
+
+            // Clone response to read it twice
+            return response.clone().text().then(text => {
+                console.log('Raw Response:', text);
+
+                // Try to parse as JSON
+                try {
+                    const json = JSON.parse(text);
+                    console.log('Parsed JSON:', json);
+
+                    if (!response.ok) {
+                        throw new Error(json.message || 'Network response was not ok');
                     }
+
+                    return json;
+                } catch (e) {
+                    console.error('JSON Parse Error:', e);
+                    throw new Error('Invalid JSON response: ' + text.substring(0, 100));
                 }
+            });
+        })
+        .then(data => {
+            console.log('=== PROCESSING DATA ===');
+            console.log('Success:', data.success);
+            console.log('Agents Count:', data.agents ? data.agents.length : 0);
+            console.log('Agents Data:', data.agents);
+            console.log('Debug Info:', data.debug);
+
+            loadingState.style.display = 'none';
+            agentsGrid.style.display = 'block';
+
+            if (data.success && data.agents && data.agents.length > 0) {
+                console.log('Displaying', data.agents.length, 'agents');
+
+                // Show count
+                searchCount.style.display = 'block';
+                searchCount.innerHTML = `<i class="fas fa-check-circle"></i> Found ${data.agents.length} agent${data.agents.length > 1 ? 's' : ''}`;
+
+                // Display agents
+                const agentsHtml = data.agents.map(agent => {
+                    console.log('Rendering agent:', agent);
+                    return `
+                        <div class="agent-card" data-agent-id="${agent.id}">
+                            <div class="agent-avatar-large">
+                                ${agent.agent_name ? agent.agent_name.charAt(0).toUpperCase() : 'A'}
+                            </div>
+                            <div class="agent-info">
+                                <div class="agent-name">${escapeHtml(agent.agent_name || 'Unknown Agent')}</div>
+                                <div class="agent-email">${escapeHtml(agent.primary_email || 'No email')}</div>
+                                <div class="agent-phone">${escapeHtml(agent.primary_phone || 'No phone')}</div>
+                            </div>
+                            <form action="{{ route('office.agents.store') }}" method="POST" onsubmit="return handleAddAgent(event, '${agent.id}')">
+                                <input type="hidden" name="_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="agent_id" value="${agent.id}">
+                                <button type="submit" class="btn-add">
+                                    <i class="fas fa-plus"></i> Add
+                                </button>
+                            </form>
+                        </div>
+                    `;
+                }).join('');
+
+                agentsGrid.innerHTML = '<div class="agents-grid">' + agentsHtml + '</div>';
+                console.log('Agents rendered successfully');
+            } else {
+                console.log('No agents found or unsuccessful response');
+                searchCount.style.display = 'none';
+                agentsGrid.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>No Agents Found</h3>
+                        <p>No agents match your search criteria. Try different keywords or check spelling.</p>
+                        ${data.debug ? `<p style="font-size: 12px; color: #999;">Debug: Total agents: ${data.debug.total_agents}, Available: ${data.debug.available_agents}</p>` : ''}
+                    </div>
+                `;
             }
-            return confirmed;
+        })
+        .catch(error => {
+            console.error('=== ERROR OCCURRED ===');
+            console.error('Error:', error);
+            console.error('Error Message:', error.message);
+            console.error('Error Stack:', error.stack);
+
+            loadingState.style.display = 'none';
+            agentsGrid.style.display = 'block';
+            searchCount.style.display = 'none';
+            agentsGrid.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>Search Error</h3>
+                    <p>${escapeHtml(error.message || 'Failed to search agents. Please check your connection and try again.')}</p>
+                    <p style="font-size: 12px; color: #ef4444; margin-top: 10px;">Check browser console for details</p>
+                </div>
+            `;
+        });
+    }, 400);
+}
+
+
+function handleAddAgent(event, agentId) {
+    const confirmed = confirm('Are you sure you want to add this agent to your office?');
+    if (confirmed) {
+        const card = document.querySelector(`[data-agent-id="${agentId}"]`);
+        if (card) {
+            const btn = card.querySelector('button[type="submit"]');
+            if (btn) {
+                btn.className = 'btn-added';
+                btn.innerHTML = '<i class="fas fa-check"></i> Added';
+                btn.disabled = true;
+            }
         }
-    </script>
-</body>
-</html>
+    }
+    return confirmed;
+}
+
+function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return String(text).replace(/[&<>"']/g, m => map[m]);
+}
+</script>
+@endsection

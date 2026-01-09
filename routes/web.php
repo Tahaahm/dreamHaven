@@ -228,6 +228,8 @@ Route::prefix('api/v1')->group(function () {
         Route::post('/verify-code', [UserController::class, 'verifyCodeBeforeRegister']);
     });
 
+
+
     // ===== AUTHENTICATED USER ROUTES =====
     Route::middleware('auth:sanctum')->group(function () {
 
@@ -244,6 +246,8 @@ Route::prefix('api/v1')->group(function () {
             Route::get('/profile', [UserController::class, 'getProfile']);
             Route::patch('/profile', [UserController::class, 'updateLocation']);
             Route::delete('/profile', [UserController::class, 'deleteAccount']);
+
+
 
             // Device Token Management
             Route::patch('/device-token', [UserController::class, 'updateDeviceToken']);
@@ -594,7 +598,7 @@ Route::prefix('office')->name('office.')->group(function () {
     });
 
     // ========== PROTECTED ROUTES (Office only) ==========
-    Route::middleware('auth:office')->group(function () {
+    Route::middleware('auth.office')->group(function () {
 
         // Logout
         Route::post('/logout', [OfficeAuthController::class, 'logout'])->name('logout');
@@ -615,11 +619,12 @@ Route::prefix('office')->name('office.')->group(function () {
         Route::put('/property/{id}', [OfficeAuthController::class, 'updateProperty'])->name('property.update');
         Route::delete('/property/{id}', [OfficeAuthController::class, 'deleteProperty'])->name('property.delete');
 
-        // Agents Management
+        // Agents Management - FIXED
         Route::get('/agents', [OfficeAuthController::class, 'showAgents'])->name('agents');
-        Route::get('/agent/add', [OfficeAuthController::class, 'showAddAgent'])->name('agent.add');
-        Route::post('/agent/store', [OfficeAuthController::class, 'storeAgent'])->name('agent.store');
-        Route::delete('/agent/{id}/remove', [OfficeAuthController::class, 'removeAgent'])->name('agent.remove');
+        Route::get('/agents/add', [OfficeAuthController::class, 'showAddAgent'])->name('agents.add');
+        Route::get('/agents/search', [OfficeAuthController::class, 'searchAgents'])->name('agents.search');
+        Route::post('/agents/store', [OfficeAuthController::class, 'storeAgent'])->name('agents.store');
+        Route::delete('/agents/{id}/remove', [OfficeAuthController::class, 'removeAgent'])->name('agents.remove');
 
         // Appointments Management
         Route::get('/appointments', [OfficeAuthController::class, 'showAppointments'])->name('appointments');
@@ -630,9 +635,10 @@ Route::prefix('office')->name('office.')->group(function () {
         Route::post('/property/store', [OfficeAuthController::class, 'storeProperty'])->name('property.store');
 
         // Optional: Edit and Delete (add these if needed)
-        Route::get('/property/{id}/edit', [OfficeAuthController::class, 'editProperty'])->name('property.edit');
-        Route::put('/property/{id}', [OfficeAuthController::class, 'updateProperty'])->name('property.update');
-        Route::delete('/property/{id}', [OfficeAuthController::class, 'deleteProperty'])->name('property.delete');
+        Route::get('/office/property/{id}/edit', [OfficeAuthController::class, 'editProperty'])->name('office.property.edit');
+        Route::put('/office/property/{id}', [OfficeAuthController::class, 'updateProperty'])->name('office.property.update');
+        Route::delete('/office/property/{id}', [OfficeAuthController::class, 'deleteProperty'])->name('office.property.delete');
+
 
         Route::get('/projects', [OfficeAuthController::class, 'projects'])->name('projects');
         Route::get('/project/add', [OfficeAuthController::class, 'showProjectAdd'])->name('project.add');
@@ -669,4 +675,9 @@ Route::prefix('office')->name('office.')->group(function () {
         // Documents
         Route::get('/documents', [OfficeAuthController::class, 'showDocuments'])->name('documents');
     });
+});
+
+
+Route::get('/account-deletion', function () {
+    return view('account-deletion');
 });

@@ -22,6 +22,11 @@ class Authenticate
             return $next($request);
         }
 
-        return redirect()->route('login-page'); // Redirect to login page
+        // ✅ Check if accessing office routes
+        if ($request->is('office') || $request->is('office/*')) {
+            return redirect()->route('office.login');
+        }
+
+        return redirect()->route('login-page');
     }
 }

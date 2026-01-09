@@ -3557,4 +3557,228 @@ class UserController extends Controller
 
         return redirect()->route('user.profile')->with('success', 'Password updated successfully');
     }
+
+
+
+    public function getUserStatus(Request $request, $userId)
+    {
+        if (!Str::isUuid($userId)) {
+            return ApiResponse::error('Invalid user ID', [], 400);
+        }
+
+        $exists = User::whereKey($userId)->exists();
+
+        return ApiResponse::success(
+            'User status checked',
+            [
+                'user_id' => $userId,
+                'exists' => $exists,
+            ],
+            200
+        );
+    }
+
+
+    /**
+     * Delete user via API (with comprehensive cleanup)
+     * This is for Play Store compliance
+     */
+    public function deleteUserApi(Request $request, $userId)
+    {
+        try {
+            $authenticatedUser = $request->user();
+
+            // Validate UUID format
+            if (!Str::isUuid($userId)) {
+                return ApiResponse::error(
+                    'Invalid user ID format',
+                    ['user_id' => 'User ID must be a valid UUID'],
+                    400
+                );
+            }
+
+            // Get the user to delete
+            $userToDelete = User::find($userId);
+
+            if (!$userToDelete) {
+                return ApiResponse::error('User not found', null, 404);
+            }
+
+            // Check permissions
+            $isSelf = $authenticatedUser->id === $userId;
+            $isAdmin = $authenticatedUser->role === 'admin' || $authenticatedUser->role === 'super_admin';
+
+            if (!$isSelf && !$isAdmin) {
+                return ApiResponse::error(
+                    'Unauthorized',
+                    ['permission' => 'You can only delete your own account or need admin privileges'],
+                    403
+                );
+            }
+
+            // Additional validation for self-deletion
+            if ($isSelf) {
+                $validator = Validator::make($request->all(), [
+                    'password' => 'required|string',
+                    'confirmation' => 'required|string|in:DELETE',
+                ]);
+
+                if ($validator->fails()) {
+                    return ApiResponse::error('Validation failed', $validator->errors(), 400);
+                }
+
+                if (!Hash::check($request->password, $authenticatedUser->password)) {
+                    return ApiResponse::error(
+                        'Invalid password',
+                        ['password' => ['The provided password is incorrect.']],
+                        401
+                    );
+                }
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // 1. Delete Firebase Auth user (if available)
+                if ($this->firebaseAuth) {
+                    try {
+                        $firebaseUserExists = $this->firebaseAuth->userExists($userToDelete->email);
+                        if ($firebaseUserExists) {
+                            $firebaseUser = $this->firebaseAuth->getUserByEmail($userToDelete->email);
+                            if ($firebaseUser) {
+                                $this->firebaseAuth->deleteUser($firebaseUser->uid);
+                                Log::info('Firebase Auth user deleted via API', [
+                                    'user_id' => $userToDelete->id,
+                                    'deleted_by' => $authenticatedUser->id
+                                ]);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Firebase Auth deletion failed (non-critical) via API', [
+                            'error' => $e->getMessage(),
+                            'user_id' => $userToDelete->id
+                        ]);
+                    }
+                }
+
+                // 2. Delete Firestore document (if available)
+                if ($this->firebaseFirestore) {
+                    try {
+                        $this->firebaseFirestore->deleteUserDocument($userToDelete->id);
+                        Log::info('Firestore user deleted via API', [
+                            'user_id' => $userToDelete->id,
+                            'deleted_by' => $authenticatedUser->id
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::warning('Firestore deletion failed (non-critical) via API', [
+                            'error' => $e->getMessage(),
+                            'user_id' => $userToDelete->id
+                        ]);
+                    }
+                }
+
+                // 3. Clear user's device tokens
+                $userToDelete->update(['device_tokens' => json_encode([])]);
+
+                // 4. Cancel user's appointments
+                $cancelledAppointments = DB::table('appointments')
+                    ->where('user_id', $userToDelete->id)
+                    ->whereNull('cancelled_at')
+                    ->update([
+                        'cancelled_at' => now(),
+                        'status' => 'cancelled',
+                        'updated_at' => now()
+                    ]);
+
+                // 5. Delete user's notifications
+                $deletedNotifications = DB::table('notifications')
+                    ->where('user_id', $userToDelete->id)
+                    ->delete();
+
+                // 6. Revoke all user's tokens
+                $revokedTokens = $userToDelete->tokens()->delete();
+
+                // 7. Anonymize user data (for GDPR compliance)
+                $anonymizedData = [
+                    'username' => 'deleted_user_' . Str::random(8),
+                    'email' => 'deleted_' . Str::random(8) . '@example.com',
+                    'phone' => null,
+                    'place' => null,
+                    'lat' => null,
+                    'lng' => null,
+                    'about_me' => null,
+                    'photo_image' => null,
+                    'google_id' => null,
+                    'device_tokens' => json_encode([]),
+                    'is_active' => false,
+                    'deleted_at' => now(),
+                ];
+
+                // 8. Soft delete the user (preserves record for audit but makes it inaccessible)
+                $userToDelete->update($anonymizedData);
+                $userToDelete->delete();
+
+                DB::commit();
+
+                // Log the deletion
+                $logData = [
+                    'deleted_user_id' => $userId,
+                    'deleted_by_user_id' => $authenticatedUser->id,
+                    'deleted_by_role' => $authenticatedUser->role,
+                    'deleted_at' => now()->toISOString(),
+                    'action' => $isSelf ? 'self_deletion' : 'admin_deletion',
+                    'affected_records' => [
+                        'appointments_cancelled' => $cancelledAppointments,
+                        'notifications_deleted' => $deletedNotifications,
+                        'tokens_revoked' => $revokedTokens,
+                    ],
+                    'firebase_cleanup' => $this->firebaseAuth ? 'attempted' : 'not_available',
+                    'firestore_cleanup' => $this->firebaseFirestore ? 'attempted' : 'not_available',
+                ];
+
+                Log::info('User account deleted via API', $logData);
+
+                // Prepare response
+                $responseData = [
+                    'user_id' => $userId,
+                    'deleted_at' => now()->toISOString(),
+                    'deletion_type' => 'soft_delete',
+                    'anonymized' => true,
+                    'cleanup_performed' => [
+                        'appointments_cancelled' => $cancelledAppointments,
+                        'notifications_deleted' => $deletedNotifications,
+                        'tokens_revoked' => $revokedTokens,
+                        'firebase_auth' => $this->firebaseAuth ? 'attempted' : 'not_available',
+                        'firestore' => $this->firebaseFirestore ? 'attempted' : 'not_available',
+                    ],
+                    'can_be_restored' => true,
+                    'restore_window_days' => 30, // Typically GDPR gives 30 days to restore
+                ];
+
+                return ApiResponse::success(
+                    'User account deleted successfully',
+                    $responseData,
+                    200
+                );
+            } catch (\Exception $e) {
+                DB::rollback();
+                throw $e;
+            }
+        } catch (\Exception $e) {
+            DB::rollback();
+
+            Log::error('Delete user API error', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $userId,
+                'deleted_by' => $request->user()?->id
+            ]);
+
+            return ApiResponse::error(
+                'Failed to delete user account',
+                ['error' => $e->getMessage()],
+                500
+            );
+        }
+    }
 }

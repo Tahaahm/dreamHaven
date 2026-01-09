@@ -274,4 +274,41 @@ class SubscriptionPlanController extends Controller
             ], 500);
         }
     }
+    public function showSubscriptions(Request $request)
+    {
+        $office = auth('office')->user();
+
+        $query = SubscriptionPlan::where('active', true);
+
+        // Filter by type if provided
+        if ($request->has('type') && $request->type != 'all') {
+            $query->where('type', $request->type);
+        }
+
+        // Get plans ordered by featured first, then by sort_order
+        $plans = $query->orderBy('is_featured', 'desc')
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        return view('office.subscriptions', compact('plans', 'office'));
+    }
+
+    public function showSubscriptionDetails($id)
+    {
+        $office = auth('office')->user();
+        $plan = SubscriptionPlan::findOrFail($id);
+
+        return view('office.subscription-details', compact('plan', 'office'));
+    }
+
+    public function subscribeNow($id)
+    {
+        $office = auth('office')->user();
+        $plan = SubscriptionPlan::findOrFail($id);
+
+        // Here you would handle the subscription logic
+        // For now, just return a view or redirect
+
+        return view('office.subscription-checkout', compact('plan', 'office'));
+    }
 }

@@ -10,9 +10,9 @@ class Property extends Model
     use HasFactory;
 
     protected $table = 'properties';
-    protected $primaryKey = 'id'; // Correct primary key
-    public $incrementing = false; // UUID, not auto-incrementing
-    protected $keyType = 'string'; // UUID is a string
+    protected $primaryKey = 'id';
+    public $incrementing = false;
+    protected $keyType = 'string';
 
     protected $fillable = [
         'id',

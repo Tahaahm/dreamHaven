@@ -1,19 +1,40 @@
 @extends('layouts.office-layout')
 
-@section('title', 'Add Property - Dream Mulk Office')
+@section('title', 'Add Property - Dream Mulk')
+@section('search-placeholder', 'Search...')
+
+@section('styles')
+<style>
+    .form-container { max-width: 900px; }
+    .form-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 32px; }
+    .form-section { margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid var(--border-color); }
+    .form-section:last-of-type { border-bottom: none; }
+    .form-section h3 { font-size: 18px; font-weight: 700; color: var(--text-primary); margin-bottom: 20px; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; font-size: 14px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px 16px; border: 2px solid var(--border-color); border-radius: 8px; font-size: 15px; background: var(--bg-main); color: var(--text-primary); }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #6366f1; }
+    .form-group small { display: block; margin-top: 4px; color: var(--text-muted); font-size: 13px; }
+    .form-actions { display: flex; gap: 12px; margin-top: 32px; }
+    .btn-primary { background: #6366f1; color: white; padding: 14px 32px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    .btn-primary:hover { background: #5558e3; transform: translateY(-1px); }
+    .btn-secondary { background: var(--bg-card); border: 1px solid var(--border-color); color: var(--text-primary); padding: 14px 32px; border-radius: 8px; font-weight: 600; text-decoration: none; }
+    .alert { padding: 16px; border-radius: 8px; margin-bottom: 20px; }
+    .alert-error { background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+</style>
+@endsection
 
 @section('content')
-<div class="container">
-    <div class="page-header">
-        <h1 class="page-title"><i class="fas fa-plus"></i> Add New Property</h1>
-        <a href="{{ route('office.properties') }}" class="back-btn">
-            <i class="fas fa-arrow-left"></i> Back to Properties
-        </a>
+<div class="form-container">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px;">
+        <h1 style="font-size: 32px; font-weight: 700; color: var(--text-primary);">Add New Property</h1>
+        <a href="{{ route('office.properties') }}" class="btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 
     @if($errors->any())
         <div class="alert alert-error">
-            <ul>
+            <ul style="margin: 0; padding-left: 20px;">
                 @foreach($errors->all() as $error)
                     <li>{{ $error }}</li>
                 @endforeach
@@ -94,12 +115,12 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="city">City *</label>
-                        <input type="text" id="city" name="city" value="{{ old('city', $office->city) }}" required>
+                        <input type="text" id="city" name="city" value="{{ old('city', $office->city ?? '') }}" required>
                     </div>
 
                     <div class="form-group">
                         <label for="district">District</label>
-                        <input type="text" id="district" name="district" value="{{ old('district', $office->district) }}">
+                        <input type="text" id="district" name="district" value="{{ old('district', $office->district ?? '') }}">
                     </div>
                 </div>
 
@@ -120,28 +141,12 @@
             </div>
 
             <div class="form-actions">
-                <button type="submit" class="submit-btn">
+                <button type="submit" class="btn-primary">
                     <i class="fas fa-save"></i> Add Property
                 </button>
-                <a href="{{ route('office.properties') }}" class="cancel-btn">Cancel</a>
+                <a href="{{ route('office.properties') }}" class="btn-secondary">Cancel</a>
             </div>
         </form>
     </div>
 </div>
-
-<style>
-    .form-card { background: white; padding: 32px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .form-section { margin-bottom: 32px; padding-bottom: 32px; border-bottom: 1px solid #e5e7eb; }
-    .form-section:last-of-type { border-bottom: none; }
-    .form-section h3 { font-size: 18px; margin-bottom: 20px; color: #111827; }
-    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-    .form-group { margin-bottom: 20px; }
-    .form-group label { display: block; font-weight: 600; color: #374151; margin-bottom: 8px; font-size: 14px; }
-    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 15px; }
-    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #667eea; }
-    .form-group small { display: block; margin-top: 4px; color: #6b7280; font-size: 13px; }
-    .form-actions { display: flex; gap: 12px; margin-top: 32px; }
-    .submit-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
-    .cancel-btn { background: #e5e7eb; color: #374151; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; }
-</style>
 @endsection

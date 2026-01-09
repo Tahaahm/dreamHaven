@@ -435,59 +435,82 @@
 
 @section('scripts')
 <script>
-    // Track images to remove
     let imagesToRemove = [];
-
-    // Track new files
     let newFiles = [];
 
-    // Remove existing image
     function removeExistingImage(index) {
         const imageElement = document.getElementById(`existing-img-${index}`);
         if (imageElement) {
-            // Add to removal list
             imagesToRemove.push(index);
-
-            // Update hidden input
             document.getElementById('removeImagesInput').value = JSON.stringify(imagesToRemove);
 
-            // Remove from display with animation
+            imageElement.style.transition = 'all 0.3s ease';
             imageElement.style.opacity = '0';
             imageElement.style.transform = 'scale(0.8)';
+
             setTimeout(() => {
                 imageElement.remove();
-
-                // Check if no images left
                 const grid = document.getElementById('existingImagesGrid');
                 if (grid && grid.children.length === 0) {
-                    grid.parentElement.querySelector('.images-section-title').remove();
+                    const title = document.querySelector('.images-section-title');
+                    if (title) title.remove();
                     grid.remove();
                 }
             }, 300);
         }
     }
 
-    // Preview new images
     function previewNewImages(event) {
         const files = Array.from(event.target.files);
-        newFiles = files;
+        if (files.length === 0) return;
 
+        newFiles = files;
         const grid = document.getElementById('newImagesGrid');
         const container = document.getElementById('newImagesContainer');
+
+        grid.innerHTML = '';
+        container.style.display = 'block';
+
+        files.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const div = document.createElement('div');
+                div.className = 'current-image';
+                div.id = `new-img-${index}`;
+                div.innerHTML = `
+                    <img src="${e.target.result}" alt="New ${index + 1}">
+                    <button type="button" class="remove-image-btn" onclick="removeNewImage(${index})" title="Remove">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                grid.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function removeNewImage(index) {
+        newFiles.splice(index, 1);
+
+        const dt = new DataTransfer();
+        newFiles.forEach(file => dt.items.add(file));
+        document.getElementById('imageUpload').files = dt.files;
+
+        const grid = document.getElementById('newImagesGrid');
         grid.innerHTML = '';
 
-        if (files.length > 0) {
-            container.style.display = 'block';
-
-            files.forEach((file, index) => {
+        if (newFiles.length === 0) {
+            document.getElementById('newImagesContainer').style.display = 'none';
+        } else {
+            newFiles.forEach((file, newIndex) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const div = document.createElement('div');
                     div.className = 'current-image';
-                    div.id = `new-img-${index}`;
+                    div.id = `new-img-${newIndex}`;
                     div.innerHTML = `
-                        <img src="${e.target.result}" alt="New Image ${index + 1}">
-                        <button type="button" class="remove-image-btn" onclick="removeNewImage(${index})" title="Remove image">
+                        <img src="${e.target.result}" alt="New ${newIndex + 1}">
+                        <button type="button" class="remove-image-btn" onclick="removeNewImage(${newIndex})" title="Remove">
                             <i class="fas fa-times"></i>
                         </button>
                     `;
@@ -495,35 +518,6 @@
                 };
                 reader.readAsDataURL(file);
             });
-        } else {
-            container.style.display = 'none';
-        }
-    }
-
-    // Remove new image before upload
-    function removeNewImage(index) {
-        const imageElement = document.getElementById(`new-img-${index}`);
-        if (imageElement) {
-            // Remove from files array
-            newFiles.splice(index, 1);
-
-            // Update file input
-            const dt = new DataTransfer();
-            newFiles.forEach(file => dt.items.add(file));
-            document.getElementById('imageUpload').files = dt.files;
-
-            // Remove from display
-            imageElement.style.opacity = '0';
-            imageElement.style.transform = 'scale(0.8)';
-            setTimeout(() => {
-                imageElement.remove();
-
-                // Hide container if no images
-                const grid = document.getElementById('newImagesGrid');
-                if (grid && grid.children.length === 0) {
-                    document.getElementById('newImagesContainer').style.display = 'none';
-                }
-            }, 300);
         }
     }
 </script>
