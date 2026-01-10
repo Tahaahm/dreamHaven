@@ -14,6 +14,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // ✅ ADD THIS - Register middleware alias
         $middleware->alias([
             'auth.office' => \App\Http\Middleware\OfficeAuthenticate::class,
+
+            'auth.agent' => \App\Http\Middleware\AgentAuth::class,
+
+            'guest.agent' => \App\Http\Middleware\RedirectIfAgent::class,
+
         ]);
 
         // Existing CSRF exceptions

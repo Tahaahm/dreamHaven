@@ -14,6 +14,7 @@ use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Middleware\AgentOnly;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AgentAuthController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\OfficeAuthController;
@@ -547,7 +548,7 @@ Route::get('/property/{property_id}/edit', [PropertyController::class, 'edit'])-
 Route::put('/property/{id}', [PropertyController::class, 'update'])->name('property.update');
 Route::post('/property/{property_id}/remove-image', [PropertyController::class, 'removeImage'])->name('property.removeImage');
 Route::get('/properties', [PropertyController::class, 'showList'])->name('property.list');
-Route::get('/agent/{id}', [AgentController::class, 'showProfile'])->name('agent.profile');
+
 Route::get('/profile', [AuthController::class, 'showProfile'])->middleware(\App\Http\Middleware\AgentOrAdmin::class)->name('admin.profile');
 
 Route::group(['prefix' => 'admin'], function () {
@@ -691,6 +692,43 @@ Route::prefix('office')->name('office.')->group(function () {
 });
 
 
+
+Route::prefix('agent')->name('agent.')->group(function () {
+    Route::get('/login', [AgentAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login', [AgentAuthController::class, 'login'])->name('login.submit');
+    Route::get('/register', [AgentAuthController::class, 'showRegister'])->name('register');
+    Route::post('/register', [AgentAuthController::class, 'register'])->name('register.submit');
+});
+
+// Protected Agent Routes (Auth required)
+Route::middleware('auth:agent')->prefix('agent')->name('agent.')->group(function () {
+    // Logout
+    Route::post('/logout', [AgentAuthController::class, 'logout'])->name('logout');
+
+    // Dashboard
+    Route::get('/dashboard', [AgentAuthController::class, 'showDashboard'])->name('dashboard');
+
+    // Properties Management
+    Route::get('/properties', [AgentAuthController::class, 'showProperties'])->name('properties');
+    Route::get('/property/add', [AgentAuthController::class, 'showAddProperty'])->name('property.add');
+    Route::post('/property/store', [AgentAuthController::class, 'storeProperty'])->name('property.store');
+    Route::get('/property/{id}/edit', [AgentAuthController::class, 'showEditProperty'])->name('property.edit');
+    Route::put('/property/{id}', [AgentAuthController::class, 'updateProperty'])->name('property.update');
+    Route::delete('/property/{id}', [AgentAuthController::class, 'deleteProperty'])->name('property.delete');
+
+    // Subscriptions
+    Route::get('/subscriptions', [AgentAuthController::class, 'showSubscriptions'])->name('subscriptions');
+
+    // Profile
+    Route::get('/profile/{id}', [AgentAuthController::class, 'showProfile'])->name('profile');
+});
+
 Route::get('/account-deletion', function () {
     return view('account-deletion');
 });
+
+
+Route::get('/agent/test', function () {
+    dd('AGENT TEST ROUTE WORKS');
+});
+Route::get('/agent/{id}', [AgentAuthController::class, 'showProfile'])->name('agent.profile');

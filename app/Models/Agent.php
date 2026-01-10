@@ -91,7 +91,7 @@ class Agent extends Authenticatable
 
     public function specializations(): HasMany
     {
-        return $this->hasMany(AgentSpecialization::class, 'agent_id');
+        return $this->hasMany(AgentSpecialization::class, 'agent_id', 'id');
     }
 
     public function uploadedProperties(): HasMany

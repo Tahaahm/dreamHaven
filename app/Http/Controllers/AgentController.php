@@ -445,17 +445,16 @@ class AgentController extends Controller
     }
     public function showProfile($id)
     {
+        // Load agent with only the relationships that have existing tables
         $agent = Agent::with([
             'company',
-            'specializations',
+            // Remove 'specializations' - table doesn't exist
             'ownedProperties' => function ($query) {
                 $query->where('is_active', 1)
                     ->where('published', 1)
                     ->orderBy('created_at', 'desc');
             },
-            'clientReviews' => function ($query) {
-                $query->orderBy('created_at', 'desc');
-            }
+            // Remove 'clientReviews' if that table doesn't exist either
         ])->findOrFail($id);
 
         return view('agent-profile', compact('agent'));
