@@ -245,6 +245,32 @@
         background: #f1f5f9;
     }
 
+    .image-upload-zone.dragover {
+        border-color: #303b97;
+        background: rgba(48,59,151,0.05);
+    }
+
+    .image-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 20px;
+    }
+
+    .image-preview-item {
+        position: relative;
+        border-radius: 16px;
+        overflow: hidden;
+        aspect-ratio: 1;
+        border: 3px solid #e5e7eb;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    .image-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
     .upload-icon {
         width: 80px;
         height: 80px;
@@ -671,7 +697,79 @@ function markImageForRemoval(index) {
 
 const uploadZone = document.getElementById('uploadZone');
 const imageInput = document.getElementById('imageInput');
+let selectedFiles = [];
 
 uploadZone.addEventListener('click', () => imageInput.click());
+
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+
+uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('dragover');
+});
+
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+});
+
+imageInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+});
+
+function handleFiles(files) {
+    // Create preview container if it doesn't exist
+    let previewContainer = document.getElementById('newImagePreviewGrid');
+    if (!previewContainer) {
+        previewContainer = document.createElement('div');
+        previewContainer.id = 'newImagePreviewGrid';
+        previewContainer.className = 'image-preview-grid';
+        previewContainer.style.marginTop = '24px';
+        uploadZone.parentNode.insertBefore(previewContainer, uploadZone.nextSibling);
+    }
+
+    Array.from(files).forEach(file => {
+        if (file.type.startsWith('image/') && file.size <= 5 * 1024 * 1024) {
+            selectedFiles.push(file);
+            displayNewImage(file, selectedFiles.length - 1);
+        }
+    });
+    updateFileInput();
+}
+
+function displayNewImage(file, index) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const previewContainer = document.getElementById('newImagePreviewGrid');
+        const div = document.createElement('div');
+        div.className = 'image-preview-item';
+        div.setAttribute('data-new-index', index);
+        div.innerHTML = `
+            <img src="${e.target.result}" alt="New Image Preview">
+            <button type="button" class="image-remove-btn" onclick="removeNewImage(${index})">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        previewContainer.appendChild(div);
+    };
+    reader.readAsDataURL(file);
+}
+
+function removeNewImage(index) {
+    selectedFiles.splice(index, 1);
+    const previewContainer = document.getElementById('newImagePreviewGrid');
+    previewContainer.innerHTML = '';
+    selectedFiles.forEach((file, i) => displayNewImage(file, i));
+    updateFileInput();
+}
+
+function updateFileInput() {
+    const dataTransfer = new DataTransfer();
+    selectedFiles.forEach(file => dataTransfer.items.add(file));
+    imageInput.files = dataTransfer.files;
+}
 </script>
 @endsection

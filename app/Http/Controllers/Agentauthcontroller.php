@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Agent;
 use App\Models\Property;
 use App\Models\Subscription\Subscription as ModelsSubscription;
+use App\Models\BannerAd;
+use App\Models\Appointment;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -100,6 +102,11 @@ class AgentAuthController extends Controller
             ->where('status', 'available')
             ->count();
 
+        // Calculate total views
+        $totalViews = Property::where('owner_id', $agent->id)
+            ->where('owner_type', 'App\Models\Agent')
+            ->sum('views');
+
         $stats = [
             'total_properties' => $totalProperties,
             'active_properties' => $activeProperties,
@@ -108,8 +115,11 @@ class AgentAuthController extends Controller
                 ->where('owner_type', 'App\Models\Agent')
                 ->whereMonth('created_at', now()->month)
                 ->count(),
-            'total_views' => 0,
-            'views_this_week' => 0,
+            'total_views' => $totalViews,
+            'views_this_week' => Property::where('owner_id', $agent->id)
+                ->where('owner_type', 'App\Models\Agent')
+                ->where('updated_at', '>=', now()->subWeek())
+                ->sum('views'),
             'properties_sold' => Property::where('owner_id', $agent->id)
                 ->where('owner_type', 'App\Models\Agent')
                 ->where('status', 'sold')
@@ -125,7 +135,17 @@ class AgentAuthController extends Controller
             ->where('owner_type', 'App\Models\Agent')
             ->latest()
             ->take(6)
-            ->get();
+            ->get()
+            ->map(function ($property) {
+                // Decode JSON fields
+                $property->name = is_string($property->name) ? json_decode($property->name, true) : $property->name;
+                $property->price = is_string($property->price) ? json_decode($property->price, true) : $property->price;
+                $property->images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
+                $property->type = is_string($property->type) ? json_decode($property->type, true) : $property->type;
+                $property->rooms = is_string($property->rooms) ? json_decode($property->rooms, true) : $property->rooms;
+                $property->address_details = is_string($property->address_details) ? json_decode($property->address_details, true) : $property->address_details;
+                return $property;
+            });
 
         return view('agent.agent-dashboard', compact('stats', 'recentProperties'));
     }
@@ -139,6 +159,17 @@ class AgentAuthController extends Controller
             ->where('owner_type', 'App\Models\Agent')
             ->latest()
             ->paginate(12);
+
+        // Decode JSON fields for each property
+        $properties->getCollection()->transform(function ($property) {
+            $property->name = is_string($property->name) ? json_decode($property->name, true) : $property->name;
+            $property->price = is_string($property->price) ? json_decode($property->price, true) : $property->price;
+            $property->images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
+            $property->type = is_string($property->type) ? json_decode($property->type, true) : $property->type;
+            $property->rooms = is_string($property->rooms) ? json_decode($property->rooms, true) : $property->rooms;
+            $property->address_details = is_string($property->address_details) ? json_decode($property->address_details, true) : $property->address_details;
+            return $property;
+        });
 
         return view('agent.agent-properties', compact('properties'));
     }
@@ -172,7 +203,7 @@ class AgentAuthController extends Controller
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('properties', 'public');
-                $imagePaths[] = Storage::url($path);
+                $imagePaths[] = url(Storage::url($path)); // Full URL with domain
             }
         }
 
@@ -333,7 +364,7 @@ class AgentAuthController extends Controller
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('properties', 'public');
-                $currentImages[] = Storage::url($path);
+                $currentImages[] = url(Storage::url($path)); // Full URL with domain
             }
         }
 
@@ -416,11 +447,268 @@ class AgentAuthController extends Controller
         $agent = Auth::guard('agent')->user();
 
         $currentSubscription = ModelsSubscription::where('user_id', $agent->id)
-            // Remove this line: ->where('user_type', 'App\Models\Agent')
             ->where('status', 'active')
             ->first();
 
         return view('agent.agent-subscriptions', compact('currentSubscription'));
+    }
+
+    // APPOINTMENTS
+    public function showAppointments()
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $appointments = Appointment::where(function ($query) use ($agent) {
+            $query->where('agent_id', $agent->id)
+                ->orWhereHas('property', function ($q) use ($agent) {
+                    $q->where('owner_id', $agent->id)
+                        ->where('owner_type', 'Agent');
+                });
+        })
+            ->with(['user', 'property'])
+            ->orderBy('appointment_date', 'desc')
+            ->paginate(15);
+
+        $stats = [
+            'total' => Appointment::where('agent_id', $agent->id)->count(),
+            'pending' => Appointment::where('agent_id', $agent->id)->where('status', 'pending')->count(),
+            'confirmed' => Appointment::where('agent_id', $agent->id)->where('status', 'confirmed')->count(),
+            'completed' => Appointment::where('agent_id', $agent->id)->where('status', 'completed')->count(),
+        ];
+
+        return view('agent.agent-appointments', compact('appointments', 'stats'));
+    }
+
+    public function updateAppointmentStatus(Request $request, $id)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $appointment = Appointment::where('id', $id)
+            ->where('agent_id', $agent->id)
+            ->firstOrFail();
+
+        $request->validate([
+            'status' => 'required|in:pending,confirmed,completed,cancelled'
+        ]);
+
+        $appointment->update(['status' => $request->status]);
+
+        return redirect()->back()->with('success', 'Appointment status updated successfully!');
+    }
+
+    // BANNERS
+    public function showBanners(Request $request)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $query = BannerAd::where('owner_type', 'agent')
+            ->where('owner_id', $agent->id);
+
+        if ($request->has('status') && $request->status != '') {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('search') && $request->search != '') {
+            $query->where('title', 'like', '%' . $request->search . '%');
+        }
+
+        $banners = $query->orderBy('created_at', 'desc')->paginate(12);
+
+        $stats = [
+            'total' => BannerAd::where('owner_type', 'agent')->where('owner_id', $agent->id)->count(),
+            'active' => BannerAd::where('owner_type', 'agent')->where('owner_id', $agent->id)->where('status', 'active')->count(),
+            'draft' => BannerAd::where('owner_type', 'agent')->where('owner_id', $agent->id)->where('status', 'draft')->count(),
+            'paused' => BannerAd::where('owner_type', 'agent')->where('owner_id', $agent->id)->where('status', 'paused')->count(),
+        ];
+
+        return view('agent.agent-banners', compact('banners', 'stats'));
+    }
+
+    public function showAddBanner()
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $properties = Property::where('owner_type', 'Agent')
+            ->where('owner_id', $agent->id)
+            ->get();
+
+        return view('agent.agent-banner-add', compact('properties'));
+    }
+
+    public function storeBanner(Request $request)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $request->validate([
+            'title' => 'required|string|min:5|max:255',
+            'banner_type' => 'required|string',
+            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'banner_size' => 'required|string',
+            'position' => 'required|string',
+            'start_date' => 'required|date',
+            'description' => 'nullable|string|max:1000',
+            'link_url' => 'nullable|url|max:500',
+            'call_to_action' => 'nullable|string|max:50',
+            'property_id' => 'nullable|exists:properties,id',
+            'end_date' => 'nullable|date|after:start_date',
+        ], [
+            'title.min' => 'Banner title must be at least 5 characters.',
+            'title.required' => 'Banner title is required.',
+            'end_date.after' => 'End date must be after start date.',
+        ]);
+
+        // Upload image
+        $imagePath = $request->file('image')->store('banners', 'public');
+        $imageUrl = url(Storage::url($imagePath));
+
+        BannerAd::create([
+            'title' => json_encode(['en' => $request->title, 'ar' => $request->title, 'ku' => $request->title]),  // JSON format for multi-language
+            'description' => $request->description ? json_encode(['en' => $request->description, 'ar' => $request->description, 'ku' => $request->description]) : null,
+            'call_to_action' => $request->call_to_action ? json_encode(['en' => $request->call_to_action, 'ar' => $request->call_to_action, 'ku' => $request->call_to_action]) : null,
+            'image_url' => $imageUrl,
+            'link_url' => $request->link_url,
+            'link_opens_new_tab' => $request->has('link_opens_new_tab'),
+            'owner_type' => 'agent',
+            'owner_id' => $agent->id,
+            'owner_name' => $agent->agent_name,
+            'owner_email' => $agent->primary_email,
+            'owner_phone' => $agent->primary_phone,
+            'banner_type' => $request->banner_type,
+            'property_id' => $request->property_id,
+            'banner_size' => $request->banner_size,
+            'position' => $request->position,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'call_to_action' => $request->call_to_action,
+            'show_contact_info' => $request->has('show_contact_info'),
+            'status' => 'draft',
+            'is_active' => false,
+            'views' => 0,
+            'clicks' => 0,
+            'ctr' => 0,
+        ]);
+
+        return redirect()->route('agent.banners')->with('success', 'Banner created successfully! Pending admin approval.');
+    }
+
+    public function editBanner($id)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $banner = BannerAd::where('owner_type', 'agent')
+            ->where('owner_id', $agent->id)
+            ->findOrFail($id);
+
+        $properties = Property::where('owner_type', 'Agent')
+            ->where('owner_id', $agent->id)
+            ->get();
+
+        return view('agent.agent-banner-edit', compact('banner', 'properties'));
+    }
+
+    public function updateBanner(Request $request, $id)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $banner = BannerAd::where('owner_type', 'agent')
+            ->where('owner_id', $agent->id)
+            ->findOrFail($id);
+
+        $request->validate([
+            'title' => 'required|string|min:5|max:255',
+            'banner_type' => 'required|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'banner_size' => 'required|string',
+            'position' => 'required|string',
+            'start_date' => 'required|date',
+            'description' => 'nullable|string|max:1000',
+            'link_url' => 'nullable|url|max:500',
+            'call_to_action' => 'nullable|string|max:50',
+            'property_id' => 'nullable|exists:properties,id',
+            'end_date' => 'nullable|date|after:start_date',
+        ], [
+            'title.min' => 'Banner title must be at least 5 characters.',
+            'title.required' => 'Banner title is required.',
+            'end_date.after' => 'End date must be after start date.',
+        ]);
+
+        $data = [
+            'title' => json_encode(['en' => $request->title, 'ar' => $request->title, 'ku' => $request->title]),  // JSON format for multi-language
+            'description' => $request->description ? json_encode(['en' => $request->description, 'ar' => $request->description, 'ku' => $request->description]) : null,
+            'call_to_action' => $request->call_to_action ? json_encode(['en' => $request->call_to_action, 'ar' => $request->call_to_action, 'ku' => $request->call_to_action]) : null,
+            'link_url' => $request->link_url,
+            'link_opens_new_tab' => $request->has('link_opens_new_tab'),
+            'banner_type' => $request->banner_type,
+            'property_id' => $request->property_id,
+            'banner_size' => $request->banner_size,
+            'position' => $request->position,
+            'start_date' => $request->start_date,
+            'end_date' => $request->end_date,
+            'call_to_action' => $request->call_to_action,
+            'show_contact_info' => $request->has('show_contact_info'),
+        ];
+
+        // Upload new image if provided
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('banners', 'public');
+            $data['image_url'] = url(Storage::url($imagePath));
+        }
+
+        $banner->update($data);
+
+        return redirect()->route('agent.banners')->with('success', 'Banner updated successfully!');
+    }
+
+    public function deleteBanner($id)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $banner = BannerAd::where('owner_type', 'agent')
+            ->where('owner_id', $agent->id)
+            ->findOrFail($id);
+
+        $banner->delete();
+
+        return redirect()->back()->with('success', 'Banner deleted successfully!');
+    }
+
+    public function pauseBanner($id)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $banner = BannerAd::where('owner_type', 'agent')
+            ->where('owner_id', $agent->id)
+            ->findOrFail($id);
+
+        $banner->pause();
+
+        return redirect()->back()->with('success', 'Banner paused successfully!');
+    }
+
+    public function resumeBanner($id)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $banner = BannerAd::where('owner_type', 'agent')
+            ->where('owner_id', $agent->id)
+            ->findOrFail($id);
+
+        $banner->resume();
+
+        return redirect()->back()->with('success', 'Banner resumed successfully!');
+    }
+
+    public function bannerAnalytics($id)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $banner = BannerAd::where('owner_type', 'agent')
+            ->where('owner_id', $agent->id)
+            ->findOrFail($id);
+
+        $metrics = $banner->getPerformanceMetrics();
+
+        return view('agent.agent-banner-analytics', compact('banner', 'metrics'));
     }
 
     // PROFILE
@@ -428,26 +716,92 @@ class AgentAuthController extends Controller
     {
         $agent = Auth::guard('agent')->user();
 
-        // Security check: agents can only view their own profile
         if ($agent->id !== $id) {
-            abort(403, 'Unauthorized - You can only view your own profile');
-        }
-
-        // Load relationships safely
-        try {
-            $agent->load([
-                'properties' => function ($query) {
-                    $query->latest()->limit(10);
-                },
-                'Subscription.currentPlan'
-            ]);
-        } catch (Exception $e) {
-            Log::warning('Could not load agent relationships in profile', [
-                'agent_id' => $id,
-                'error' => $e->getMessage()
-            ]);
+            abort(403, 'Unauthorized');
         }
 
         return view('agent.agent-profile', compact('agent'));
+    }
+
+    public function showEditProfile()
+    {
+        $agent = Auth::guard('agent')->user();
+        return view('agent.agent-edit-profile', compact('agent'));
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $request->validate([
+            'agent_name' => 'required|string|max:255',
+            'primary_phone' => 'required|string|max:20',
+            'whatsapp_number' => 'nullable|string|max:20',
+            'city' => 'required|string',
+            'district' => 'nullable|string',
+            'license_number' => 'nullable|string',
+            'years_experience' => 'nullable|integer|min:0',
+            'agent_bio' => 'nullable|string|max:1000',
+            'office_address' => 'nullable|string',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+        ]);
+
+        // Handle profile image upload
+        if ($request->hasFile('profile_image')) {
+            $path = $request->file('profile_image')->store('agents/profiles', 'public');
+            $agent->profile_image = url(Storage::url($path));
+        }
+
+        // Handle bio image upload
+        if ($request->hasFile('bio_image')) {
+            $path = $request->file('bio_image')->store('agents/bio', 'public');
+            $agent->bio_image = url(Storage::url($path));
+        }
+
+        // Update allowed fields only
+        $agent->agent_name = $request->agent_name;
+        $agent->primary_phone = $request->primary_phone;
+        $agent->whatsapp_number = $request->whatsapp_number;
+        $agent->city = $request->city;
+        $agent->district = $request->district;
+        $agent->license_number = $request->license_number;
+        $agent->years_experience = $request->years_experience;
+        $agent->agent_bio = $request->agent_bio;
+        $agent->office_address = $request->office_address;
+        $agent->latitude = $request->latitude;
+        $agent->longitude = $request->longitude;
+
+        $agent->save();
+
+        return redirect()->route('agent.profile', $agent->id)->with('success', 'Profile updated successfully!');
+    }
+
+    public function showChangePassword()
+    {
+        return view('agent.agent-change-password');
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $agent = Auth::guard('agent')->user();
+
+        $request->validate([
+            'current_password' => 'required',
+            'new_password' => 'required|min:8|confirmed',
+        ]);
+
+        // Check current password
+        if (!Hash::check($request->current_password, $agent->password)) {
+            return back()->with('error', 'Current password is incorrect');
+        }
+
+        // Update password
+        $agent->password = Hash::make($request->new_password);
+        $agent->save();
+
+        return redirect()->route('agent.profile', $agent->id)->with('success', 'Password changed successfully!');
     }
 }

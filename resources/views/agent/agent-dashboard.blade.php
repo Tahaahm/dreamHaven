@@ -245,147 +245,181 @@
         color: #1a202c;
     }
 
-    /* Content Grid */
-    .content-grid {
+    /* Property Cards Grid */
+    .properties-grid {
         display: grid;
-        grid-template-columns: 1.5fr 1fr;
-        gap: 16px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
         margin-bottom: 20px;
     }
 
-    .card-box {
+    .property-card {
         background: white;
-        border-radius: 14px;
-        padding: 20px;
+        border-radius: 16px;
+        overflow: hidden;
         box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        transition: all 0.3s;
         border: 1px solid #e2e8f0;
-    }
-
-    .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-        padding-bottom: 16px;
-        border-bottom: 1px solid #f1f5f9;
-    }
-
-    .card-title {
-        font-size: 16px;
-        font-weight: 800;
-        color: #1a202c;
-    }
-
-    .view-all-link {
-        color: #303b97;
-        font-size: 12px;
-        font-weight: 700;
         text-decoration: none;
-        transition: all 0.3s;
+        color: inherit;
+        display: block;
     }
 
-    .view-all-link:hover {
-        gap: 10px;
-    }
-
-    /* Activity List */
-    .activity-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .activity-item {
-        display: flex;
-        gap: 16px;
-        padding: 14px;
-        border-radius: 12px;
-        transition: all 0.3s;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-    }
-
-    .activity-item:hover {
-        background: white;
+    .property-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 12px 28px rgba(48,59,151,0.15);
         border-color: #303b97;
-        transform: translateX(4px);
     }
 
-    .activity-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        background: #303b97;
-        color: white;
-        flex-shrink: 0;
-        box-shadow: 0 4px 12px rgba(48,59,151,0.3);
+    .property-image {
+        position: relative;
+        width: 100%;
+        height: 200px;
+        overflow: hidden;
+        background: #f1f5f9;
     }
 
-    .activity-content {
-        flex: 1;
+    .property-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.3s;
     }
 
-    .activity-text {
-        font-size: 14px;
-        color: #1a202c;
+    .property-card:hover .property-image img {
+        transform: scale(1.05);
+    }
+
+    .property-status {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 11px;
         font-weight: 700;
-        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
 
-    .activity-time {
-        font-size: 12px;
+    .status-available { color: #059669; background: #d1fae5; }
+    .status-sold { color: #dc2626; background: #fee2e2; }
+    .status-rented { color: #2563eb; background: #dbeafe; }
+    .status-pending { color: #d97706; background: #fed7aa; }
+
+    .property-content {
+        padding: 18px;
+    }
+
+    .property-price {
+        font-size: 22px;
+        font-weight: 800;
+        color: #303b97;
+        margin-bottom: 10px;
+    }
+
+    .property-price-usd {
+        font-size: 13px;
         color: #64748b;
         font-weight: 600;
+        margin-left: 6px;
+    }
+
+    .property-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1a202c;
+        margin-bottom: 8px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.4;
+        min-height: 42px;
+    }
+
+    .property-location {
+        font-size: 13px;
+        color: #64748b;
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .property-features {
+        display: flex;
+        gap: 16px;
+        padding-top: 14px;
+        border-top: 1px solid #f1f5f9;
+    }
+
+    .property-feature {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #64748b;
+        font-weight: 600;
+    }
+
+    .property-feature i {
+        color: #303b97;
+        font-size: 14px;
     }
 
     /* Empty State */
     .empty-state {
         text-align: center;
-        padding: 60px 30px;
+        padding: 80px 30px;
+        background: white;
+        border-radius: 16px;
+        border: 2px dashed #e2e8f0;
     }
 
     .empty-icon {
-        width: 80px;
-        height: 80px;
-        margin: 0 auto 20px;
-        background: #303b97;
+        width: 100px;
+        height: 100px;
+        margin: 0 auto 24px;
+        background: linear-gradient(135deg, #303b97, #1e2875);
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 36px;
+        font-size: 48px;
         color: white;
         box-shadow: 0 8px 24px rgba(48,59,151,0.3);
     }
 
     .empty-title {
-        font-size: 18px;
+        font-size: 24px;
         font-weight: 800;
         color: #1a202c;
-        margin-bottom: 8px;
+        margin-bottom: 10px;
     }
 
     .empty-text {
-        font-size: 14px;
+        font-size: 15px;
         color: #64748b;
-        margin-bottom: 20px;
+        margin-bottom: 28px;
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
     }
 
     .btn-primary {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        background: #303b97;
+        gap: 10px;
+        background: linear-gradient(135deg, #303b97, #1e2875);
         color: white;
-        padding: 12px 24px;
-        border-radius: 10px;
+        padding: 14px 32px;
+        border-radius: 12px;
         font-weight: 700;
         text-decoration: none;
-        font-size: 14px;
+        font-size: 15px;
         transition: all 0.3s;
         box-shadow: 0 4px 12px rgba(48,59,151,0.3);
     }
@@ -393,6 +427,21 @@
     .btn-primary:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 20px rgba(48,59,151,0.4);
+    }
+
+    .view-all-link {
+        color: #303b97;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all 0.3s;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .view-all-link:hover {
+        gap: 10px;
     }
 
     /* Responsive */
@@ -405,8 +454,8 @@
             grid-template-columns: repeat(2, 1fr);
         }
 
-        .content-grid {
-            grid-template-columns: 1fr;
+        .properties-grid {
+            grid-template-columns: repeat(2, 1fr);
         }
     }
 
@@ -425,6 +474,10 @@
         }
 
         .quick-actions-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .properties-grid {
             grid-template-columns: 1fr;
         }
     }
@@ -453,7 +506,7 @@
         <div class="stat-card">
             <div class="stat-header">
                 <div>
-                    <div class="stat-value">{{ $stats['total_properties'] ?? 0 }}</div>
+                    <div class="stat-value">{{ $stats['total_properties'] }}</div>
                     <div class="stat-label">Total Properties</div>
                 </div>
                 <div class="stat-icon">
@@ -461,14 +514,14 @@
                 </div>
             </div>
             <span class="stat-trend">
-                <i class="fas fa-arrow-up"></i> +{{ $stats['new_this_month'] ?? 0 }} this month
+                <i class="fas fa-arrow-up"></i> +{{ $stats['new_this_month'] }} this month
             </span>
         </div>
 
         <div class="stat-card">
             <div class="stat-header">
                 <div>
-                    <div class="stat-value">{{ $stats['active_properties'] ?? 0 }}</div>
+                    <div class="stat-value">{{ $stats['active_properties'] }}</div>
                     <div class="stat-label">Active Listings</div>
                 </div>
                 <div class="stat-icon">
@@ -476,14 +529,14 @@
                 </div>
             </div>
             <span class="stat-trend">
-                <i class="fas fa-chart-line"></i> {{ $stats['active_percentage'] ?? 0 }}% of total
+                <i class="fas fa-chart-line"></i> {{ $stats['active_percentage'] }}% of total
             </span>
         </div>
 
         <div class="stat-card">
             <div class="stat-header">
                 <div>
-                    <div class="stat-value">{{ $stats['total_views'] ?? 0 }}</div>
+                    <div class="stat-value">{{ number_format($stats['total_views']) }}</div>
                     <div class="stat-label">Total Views</div>
                 </div>
                 <div class="stat-icon">
@@ -491,14 +544,14 @@
                 </div>
             </div>
             <span class="stat-trend">
-                <i class="fas fa-arrow-up"></i> +{{ $stats['views_this_week'] ?? 0 }} this week
+                <i class="fas fa-arrow-up"></i> +{{ $stats['views_this_week'] }} this week
             </span>
         </div>
 
         <div class="stat-card">
             <div class="stat-header">
                 <div>
-                    <div class="stat-value">{{ $stats['properties_sold'] ?? 0 }}</div>
+                    <div class="stat-value">{{ $stats['properties_sold'] }}</div>
                     <div class="stat-label">Properties Sold</div>
                 </div>
                 <div class="stat-icon">
@@ -506,7 +559,7 @@
                 </div>
             </div>
             <span class="stat-trend">
-                <i class="fas fa-arrow-up"></i> +{{ $stats['sold_this_year'] ?? 0 }} this year
+                <i class="fas fa-arrow-up"></i> +{{ $stats['sold_this_year'] }} this year
             </span>
         </div>
     </div>
@@ -545,85 +598,76 @@
         </a>
     </div>
 
-    <!-- Content Grid -->
-    <div class="content-grid">
-        <!-- Recent Activity -->
-        <div class="card-box">
-            <div class="card-header">
-                <h3 class="card-title">Recent Activity</h3>
-                <a href="{{ route('agent.properties') }}" class="view-all-link">
-                    View All <i class="fas fa-arrow-right"></i>
-                </a>
-            </div>
-
-            @if($recentProperties && $recentProperties->count() > 0)
-                <div class="activity-list">
-                    @foreach($recentProperties->take(5) as $property)
-                    <div class="activity-item">
-                        <div class="activity-icon">
-                            <i class="fas fa-home"></i>
-                        </div>
-                        <div class="activity-content">
-                            <div class="activity-text">{{ $property->title['en'] ?? 'Property' }}</div>
-                            <div class="activity-time">
-                                <i class="fas fa-clock"></i> Listed {{ $property->created_at->diffForHumans() }}
-                            </div>
-                        </div>
-                    </div>
-                    @endforeach
-                </div>
-            @else
-                <div class="empty-state">
-                    <div class="empty-icon">
-                        <i class="fas fa-home"></i>
-                    </div>
-                    <div class="empty-title">No Properties Yet</div>
-                    <div class="empty-text">Start adding properties to see your activity here</div>
-                    <a href="{{ route('agent.property.add') }}" class="btn-primary">
-                        <i class="fas fa-plus"></i> Add Your First Property
-                    </a>
-                </div>
-            @endif
-        </div>
-
-        <!-- This Month Summary -->
-        <div class="card-box">
-            <div class="card-header">
-                <h3 class="card-title">This Month Summary</h3>
-            </div>
-
-            <div class="activity-list">
-                <div class="activity-item">
-                    <div class="activity-icon">
-                        <i class="fas fa-plus"></i>
-                    </div>
-                    <div class="activity-content">
-                        <div class="activity-text">{{ $stats['new_this_month'] ?? 0 }} New Listings</div>
-                        <div class="activity-time">Added this month</div>
-                    </div>
-                </div>
-
-                <div class="activity-item">
-                    <div class="activity-icon">
-                        <i class="fas fa-eye"></i>
-                    </div>
-                    <div class="activity-content">
-                        <div class="activity-text">{{ $stats['views_this_week'] ?? 0 }} Views</div>
-                        <div class="activity-time">This week</div>
-                    </div>
-                </div>
-
-                <div class="activity-item">
-                    <div class="activity-icon">
-                        <i class="fas fa-trophy"></i>
-                    </div>
-                    <div class="activity-content">
-                        <div class="activity-text">{{ $stats['sold_this_year'] ?? 0 }} Sold</div>
-                        <div class="activity-time">This year</div>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- Recent Properties -->
+    <div class="section-header">
+        <h2 class="section-title">Recent Properties</h2>
+        @if($recentProperties && $recentProperties->count() > 0)
+            <a href="{{ route('agent.properties') }}" class="view-all-link">
+                View All <i class="fas fa-arrow-right"></i>
+            </a>
+        @endif
     </div>
+
+    @if($recentProperties && $recentProperties->count() > 0)
+        <div class="properties-grid">
+            @foreach($recentProperties as $property)
+            <a href="{{ route('agent.property.edit', $property->id) }}" class="property-card">
+                <div class="property-image">
+                    @if(isset($property->images) && is_array($property->images) && count($property->images) > 0)
+                        <img src="{{ $property->images[0] }}" alt="{{ $property->name['en'] ?? 'Property' }}">
+                    @else
+                        <img src="https://via.placeholder.com/400x300/303b97/ffffff?text=No+Image" alt="No Image">
+                    @endif
+
+                    <span class="property-status status-{{ $property->status }}">
+                        {{ ucfirst($property->status) }}
+                    </span>
+                </div>
+
+                <div class="property-content">
+                    <div class="property-price">
+                        {{ number_format($property->price['iqd'] ?? 0) }} IQD
+                        <span class="property-price-usd">${{ number_format($property->price['usd'] ?? 0) }}</span>
+                    </div>
+
+                    <div class="property-title">
+                        {{ $property->name['en'] ?? 'Untitled Property' }}
+                    </div>
+
+                    <div class="property-location">
+                        <i class="fas fa-map-marker-alt"></i>
+                        {{ $property->address_details['city']['en'] ?? 'Unknown' }}, {{ $property->address_details['district']['en'] ?? '' }}
+                    </div>
+
+                    <div class="property-features">
+                        <div class="property-feature">
+                            <i class="fas fa-bed"></i>
+                            {{ $property->rooms['bedroom']['count'] ?? 0 }} Beds
+                        </div>
+                        <div class="property-feature">
+                            <i class="fas fa-bath"></i>
+                            {{ $property->rooms['bathroom']['count'] ?? 0 }} Baths
+                        </div>
+                        <div class="property-feature">
+                            <i class="fas fa-ruler-combined"></i>
+                            {{ number_format($property->area ?? 0) }} m²
+                        </div>
+                    </div>
+                </div>
+            </a>
+            @endforeach
+        </div>
+    @else
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-home"></i>
+            </div>
+            <div class="empty-title">No Properties Yet</div>
+            <div class="empty-text">Start building your real estate portfolio by adding your first property</div>
+            <a href="{{ route('agent.property.add') }}" class="btn-primary">
+                <i class="fas fa-plus"></i> Add Your First Property
+            </a>
+        </div>
+    @endif
 </div>
 @endsection

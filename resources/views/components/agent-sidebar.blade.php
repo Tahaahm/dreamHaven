@@ -48,6 +48,16 @@
             <span>Add Property</span>
         </a>
 
+        <a href="{{ route('agent.appointments') }}" class="nav-item {{ request()->routeIs('agent.appointments') ? 'active' : '' }}">
+            <i class="fas fa-calendar-check"></i>
+            <span>Appointments</span>
+        </a>
+
+        <a href="{{ route('agent.banners') }}" class="nav-item {{ request()->routeIs('agent.banners*') ? 'active' : '' }}">
+            <i class="fas fa-bullhorn"></i>
+            <span>Banner Ads</span>
+        </a>
+
         <div class="nav-section-title">ACCOUNT</div>
 
         <a href="{{ route('agent.subscriptions') }}" class="nav-item {{ request()->routeIs('agent.subscriptions') ? 'active' : '' }}">

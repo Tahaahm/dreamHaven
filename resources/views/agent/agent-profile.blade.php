@@ -7,6 +7,7 @@
     .profile-container {
         max-width: 1200px;
         margin: 0 auto;
+        padding: 20px;
     }
 
     .profile-header {
@@ -49,6 +50,13 @@
         font-weight: 700;
         color: #303b97;
         box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        overflow: hidden;
+    }
+
+    .profile-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
     }
 
     .profile-info h1 {
@@ -62,6 +70,7 @@
         gap: 24px;
         font-size: 14px;
         opacity: 0.95;
+        flex-wrap: wrap;
     }
 
     .profile-meta-item {
@@ -97,6 +106,18 @@
 
     .card-title i {
         color: #303b97;
+    }
+
+    .bio-image-section {
+        margin-bottom: 24px;
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .bio-image-section img {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
     }
 
     .info-grid {
@@ -196,6 +217,19 @@
         margin-top: 12px;
     }
 
+    .alert-success {
+        background: #d1fae5;
+        border: 2px solid #059669;
+        color: #059669;
+        padding: 16px 20px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 600;
+    }
+
     @media (max-width: 1024px) {
         .profile-grid {
             grid-template-columns: 1fr;
@@ -216,16 +250,31 @@
             flex-direction: column;
             gap: 12px;
         }
+
+        .profile-container {
+            padding: 16px;
+        }
     }
 </style>
 @endsection
 
 @section('content')
 <div class="profile-container">
+    @if(session('success'))
+    <div class="alert-success">
+        <i class="fas fa-check-circle"></i>
+        {{ session('success') }}
+    </div>
+    @endif
+
     <div class="profile-header">
         <div class="profile-header-content">
             <div class="profile-avatar">
-                {{ strtoupper(substr($agent->agent_name, 0, 1)) }}
+                @if($agent->profile_image)
+                    <img src="{{ $agent->profile_image }}" alt="{{ $agent->agent_name }}">
+                @else
+                    {{ strtoupper(substr($agent->agent_name, 0, 1)) }}
+                @endif
             </div>
             <div class="profile-info">
                 <h1>{{ $agent->agent_name }}</h1>
@@ -242,6 +291,12 @@
                         <i class="fas fa-map-marker-alt"></i>
                         <span>{{ $agent->city }}</span>
                     </div>
+                    @if($agent->is_verified)
+                    <div class="profile-meta-item">
+                        <i class="fas fa-check-circle" style="color: #22c55e;"></i>
+                        <span>Verified Agent</span>
+                    </div>
+                    @endif
                 </div>
                 @if($agent->Subscription)
                 <div class="subscription-badge">
@@ -259,6 +314,12 @@
                 <i class="fas fa-user"></i>
                 Personal Information
             </h2>
+
+            @if($agent->bio_image)
+            <div class="bio-image-section">
+                <img src="{{ $agent->bio_image }}" alt="Bio Image">
+            </div>
+            @endif
 
             <div class="info-grid">
                 <div class="info-item">
@@ -316,6 +377,13 @@
                         @endif
                     </div>
                 </div>
+
+                @if($agent->office_address)
+                <div class="info-item" style="grid-column: 1 / -1;">
+                    <div class="info-label">Office Address</div>
+                    <div class="info-value">{{ $agent->office_address }}</div>
+                </div>
+                @endif
             </div>
 
             @if($agent->agent_bio)
@@ -325,11 +393,11 @@
             </div>
             @endif
 
-            <div style="margin-top: 24px; display: flex; gap: 12px;">
-                <a href="#" class="btn btn-primary">
+            <div style="margin-top: 24px; display: flex; gap: 12px; flex-wrap: wrap;">
+                <a href="{{ route('agent.profile.edit') }}" class="btn btn-primary">
                     <i class="fas fa-edit"></i> Edit Profile
                 </a>
-                <a href="#" class="btn btn-outline">
+                <a href="{{ route('agent.password.change') }}" class="btn btn-outline">
                     <i class="fas fa-key"></i> Change Password
                 </a>
             </div>
@@ -337,47 +405,47 @@
 
         <div>
             <div class="profile-card" style="margin-bottom: 24px;">
-    <h2 class="card-title">
-        <i class="fas fa-chart-bar"></i>
-        Statistics
-    </h2>
+                <h2 class="card-title">
+                    <i class="fas fa-chart-bar"></i>
+                    Statistics
+                </h2>
 
-    <div class="stat-card">
-        <div class="stat-value">
-            @php
-                try {
-                    echo $agent->properties()->count();
-                } catch (\Exception $e) {
-                    echo '0';
-                }
-            @endphp
-        </div>
-        <div class="stat-label">Total Properties</div>
-    </div>
+                <div class="stat-card">
+                    <div class="stat-value">
+                        @php
+                            try {
+                                echo $agent->properties()->count();
+                            } catch (\Exception $e) {
+                                echo '0';
+                            }
+                        @endphp
+                    </div>
+                    <div class="stat-label">Total Properties</div>
+                </div>
 
-    <div class="stat-card">
-        <div class="stat-value">
-            @php
-                try {
-                    echo $agent->properties()->where('status', 'available')->count();
-                } catch (\Exception $e) {
-                    echo '0';
-                }
-            @endphp
-        </div>
-        <div class="stat-label">Active Listings</div>
-    </div>
+                <div class="stat-card">
+                    <div class="stat-value">
+                        @php
+                            try {
+                                echo $agent->properties()->where('status', 'available')->count();
+                            } catch (\Exception $e) {
+                                echo '0';
+                            }
+                        @endphp
+                    </div>
+                    <div class="stat-label">Active Listings</div>
+                </div>
 
-    <div class="stat-card">
-        <div class="stat-value">{{ $agent->properties_sold ?? 0 }}</div>
-        <div class="stat-label">Properties Sold</div>
-    </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ $agent->properties_sold ?? 0 }}</div>
+                    <div class="stat-label">Properties Sold</div>
+                </div>
 
-    <div class="stat-card">
-        <div class="stat-value">{{ number_format($agent->overall_rating ?? 0, 1) }}</div>
-        <div class="stat-label">Overall Rating</div>
-    </div>
-</div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ number_format($agent->overall_rating ?? 0, 1) }}</div>
+                    <div class="stat-label">Overall Rating</div>
+                </div>
+            </div>
 
             @if($agent->company)
             <div class="profile-card">
