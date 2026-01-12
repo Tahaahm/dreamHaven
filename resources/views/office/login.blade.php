@@ -5,17 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Office Login - Dream Mulk</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --brand-color: #303B97;
+            --brand-hover: #252d75;
+            --text-main: #1f2937;
+            --text-muted: #6b7280;
+            --error: #ef4444;
         }
 
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, var(--brand-color) 0%, #1a2052 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -24,307 +30,163 @@
         }
 
         .login-container {
-            background: white;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(10px);
+            border-radius: 28px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
             width: 100%;
             max-width: 450px;
-            padding: 48px 40px;
+            padding: 50px 40px;
         }
 
-        .logo-section {
-            text-align: center;
-            margin-bottom: 32px;
+        .logo-section { text-align: center; margin-bottom: 35px; }
+
+        .office-badge {
+            display: inline-block;
+            background: rgba(48, 59, 151, 0.1);
+            color: var(--brand-color);
+            padding: 6px 16px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 15px;
         }
 
         .logo-section h1 {
             font-size: 32px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 8px;
+            font-weight: 800;
+            color: var(--text-main);
+            letter-spacing: -1px;
         }
 
-        .logo-section p {
-            color: #6b7280;
-            font-size: 14px;
-        }
-
-        .form-group {
-            margin-bottom: 24px;
-        }
-
+        .form-group { margin-bottom: 22px; }
         .form-group label {
             display: block;
-            font-weight: 500;
-            color: #374151;
+            font-weight: 600;
+            color: var(--text-main);
             margin-bottom: 8px;
             font-size: 14px;
         }
 
         .form-group input {
             width: 100%;
-            padding: 14px 16px;
-            border: 2px solid #e5e7eb;
-            border-radius: 12px;
+            padding: 14px 18px;
+            border: 2px solid #f3f4f6;
+            background: #f9fafb;
+            border-radius: 14px;
             font-size: 15px;
-            transition: all 0.3s ease;
-            font-family: inherit;
+            transition: all 0.2s;
         }
 
         .form-group input:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            border-color: var(--brand-color);
+            background: white;
+            box-shadow: 0 0 0 4px rgba(48, 59, 151, 0.1);
         }
 
-        .form-group input.error {
-            border-color: #ef4444;
+        .login-button {
+            width: 100%;
+            background: var(--brand-color);
+            color: white;
+            padding: 16px;
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 10px 15px -3px rgba(48, 59, 151, 0.3);
         }
 
-        .error-message {
-            color: #ef4444;
-            font-size: 13px;
-            margin-top: 6px;
-            display: block;
+        .login-button:hover {
+            background: var(--brand-hover);
+            transform: translateY(-1px);
         }
 
         .remember-forgot {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 24px;
-        }
-
-        .remember-me {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .remember-me input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-        }
-
-        .remember-me label {
+            margin: 20px 0 30px;
             font-size: 14px;
-            color: #6b7280;
-            cursor: pointer;
         }
 
-        .forgot-password {
-            font-size: 14px;
-            color: #667eea;
+        .forgot-password, .register-link a {
+            color: var(--brand-color);
             text-decoration: none;
-            font-weight: 500;
-            transition: color 0.3s;
-        }
-
-        .forgot-password:hover {
-            color: #764ba2;
-        }
-
-        .login-button {
-            width: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 16px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
             font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .login-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-        }
-
-        .login-button:active {
-            transform: translateY(0);
         }
 
         .divider {
             text-align: center;
-            margin: 32px 0;
+            margin: 30px 0;
             position: relative;
-        }
-
-        .divider::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 1px;
-            background: #e5e7eb;
+            border-top: 1px solid #e5e7eb;
         }
 
         .divider span {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
             background: white;
-            padding: 0 16px;
-            position: relative;
+            padding: 0 15px;
             color: #9ca3af;
-            font-size: 14px;
-        }
-
-        .register-link {
-            text-align: center;
-            font-size: 14px;
-            color: #6b7280;
-        }
-
-        .register-link a {
-            color: #667eea;
-            font-weight: 600;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-
-        .register-link a:hover {
-            color: #764ba2;
-        }
-
-        .back-home {
-            text-align: center;
-            margin-top: 24px;
-        }
-
-        .back-home a {
-            color: #667eea;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: color 0.3s;
-        }
-
-        .back-home a:hover {
-            color: #764ba2;
-        }
-
-        .alert {
-            padding: 12px 16px;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-
-        .alert-success {
-            background-color: #d1fae5;
-            border: 1px solid #6ee7b7;
-            color: #065f46;
+            font-size: 13px;
         }
 
         .alert-error {
-            background-color: #fee2e2;
-            border: 1px solid #fecaca;
-            color: #991b1b;
-        }
-
-        @media (max-width: 480px) {
-            .login-container {
-                padding: 32px 24px;
-            }
-
-            .logo-section h1 {
-                font-size: 28px;
-            }
+            background: #fef2f2;
+            color: var(--error);
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            border: 1px solid #fee2e2;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
         <div class="logo-section">
-            <h1>🏢 Dream Mulk Office</h1>
-            <p>Real Estate Office Portal</p>
+            <span class="office-badge">Office Portal</span>
+            <h1>Dream Mulk</h1>
         </div>
 
-        @if(session('success'))
-            <div class="alert alert-success">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        @if(session('error'))
-            <div class="alert alert-error">
-                {{ session('error') }}
-            </div>
-        @endif
-
-        @if($errors->any())
-            <div class="alert alert-error">
-                <ul style="margin: 0; padding-left: 20px;">
-                    @foreach($errors->all() as $error)
-                        <li>{{ $error }}</li>
-                    @endforeach
-                </ul>
+        @if(session('error') || $errors->any())
+            <div class="alert-error">
+                <i class="fas fa-exclamation-circle"></i> Invalid credentials.
             </div>
         @endif
 
         <form action="{{ route('office.login.submit') }}" method="POST">
             @csrf
-
             <div class="form-group">
-                <label for="email">Office Email Address</label>
-                <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value="{{ old('email') }}"
-                    required
-                    autofocus
-                    class="{{ $errors->has('email') ? 'error' : '' }}"
-                    placeholder="office@example.com"
-                >
-                @error('email')
-                    <span class="error-message">{{ $message }}</span>
-                @enderror
+                <label>Office Email</label>
+                <input type="email" name="email" required placeholder="office@dreammulk.com">
             </div>
 
             <div class="form-group">
-                <label for="password">Password</label>
-                <input
-                    type="password"
-                    id="password"
-                    name="password"
-                    required
-                    class="{{ $errors->has('password') ? 'error' : '' }}"
-                    placeholder="Enter your password"
-                >
-                @error('password')
-                    <span class="error-message">{{ $message }}</span>
-                @enderror
+                <label>Password</label>
+                <input type="password" name="password" required placeholder="••••••••">
             </div>
 
             <div class="remember-forgot">
-                <div class="remember-me">
-                    <input type="checkbox" id="remember" name="remember">
-                    <label for="remember">Remember me</label>
-                </div>
-                <a href="#" class="forgot-password">Forgot password?</a>
+                <label style="cursor:pointer; color: var(--text-muted);">
+                    <input type="checkbox" name="remember"> Remember me
+                </label>
+                <a href="#" class="forgot-password">Forgot Password?</a>
             </div>
 
-            <button type="submit" class="login-button">
-                Sign In to Office Portal
-            </button>
+            <button type="submit" class="login-button">Sign In</button>
         </form>
 
-        <div class="divider">
-            <span>or</span>
-        </div>
+        <div class="divider"><span>OR</span></div>
 
-        <div class="register-link">
-            Don't have an office account? <a href="{{ route('office.register') }}">Register Now</a>
-        </div>
-
-        <div class="back-home">
-            <a href="{{ route('newindex') }}">← Back to Home</a>
+        <div class="register-link" style="text-align:center; font-size: 14px; color: var(--text-muted);">
+            Don't have an office? <a href="{{ route('office.register') }}">Register Now</a>
         </div>
     </div>
 </body>

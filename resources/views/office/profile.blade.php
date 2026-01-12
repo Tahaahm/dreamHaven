@@ -102,37 +102,47 @@
     </div>
 
     <!-- Images -->
-    <div class="form-card">
-        <h2 class="form-title"><i class="fas fa-image"></i> Images</h2>
+<div class="form-card">
+    <h2 class="form-title"><i class="fas fa-image"></i> Images</h2>
 
-        <div class="form-row">
-            <div class="form-group">
-                <label class="form-label">Profile Image</label>
-                @if(auth('office')->user()->profile_image)
-                    <img src="{{ asset('storage/' . auth('office')->user()->profile_image) }}" alt="Profile" class="image-preview" id="profile-preview">
-                @else
-                    <img src="https://via.placeholder.com/150/6366f1/ffffff?text=No+Image" alt="Profile" class="image-preview" id="profile-preview">
-                @endif
-                <label class="file-input-label">
-                    <i class="fas fa-upload"></i> Upload Profile Image
-                    <input type="file" name="profile_image" accept="image/*" onchange="previewImage(event, 'profile-preview')">
-                </label>
-            </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label class="form-label">Profile Image</label>
+            @php
+                $profileImageUrl = auth('office')->user()->profile_image;
+                if ($profileImageUrl && !str_starts_with($profileImageUrl, 'http')) {
+                    $profileImageUrl = asset('storage/' . $profileImageUrl);
+                }
+            @endphp
+            <img src="{{ $profileImageUrl ?? 'https://via.placeholder.com/150/6366f1/ffffff?text=No+Image' }}"
+                 alt="Profile"
+                 class="image-preview"
+                 id="profile-preview">
+            <label class="file-input-label">
+                <i class="fas fa-upload"></i> Upload Profile Image
+                <input type="file" name="profile_image" accept="image/*" onchange="previewImage(event, 'profile-preview')">
+            </label>
+        </div>
 
-            <div class="form-group">
-                <label class="form-label">Company Bio Image</label>
-                @if(auth('office')->user()->company_bio_image)
-                    <img src="{{ asset('storage/' . auth('office')->user()->company_bio_image) }}" alt="Bio" class="image-preview" id="bio-preview">
-                @else
-                    <img src="https://via.placeholder.com/150/6366f1/ffffff?text=No+Image" alt="Bio" class="image-preview" id="bio-preview">
-                @endif
-                <label class="file-input-label">
-                    <i class="fas fa-upload"></i> Upload Bio Image
-                    <input type="file" name="company_bio_image" accept="image/*" onchange="previewImage(event, 'bio-preview')">
-                </label>
-            </div>
+        <div class="form-group">
+            <label class="form-label">Company Bio Image</label>
+            @php
+                $bioImageUrl = auth('office')->user()->company_bio_image;
+                if ($bioImageUrl && !str_starts_with($bioImageUrl, 'http')) {
+                    $bioImageUrl = asset('storage/' . $bioImageUrl);
+                }
+            @endphp
+            <img src="{{ $bioImageUrl ?? 'https://via.placeholder.com/150/6366f1/ffffff?text=No+Image' }}"
+                 alt="Bio"
+                 class="image-preview"
+                 id="bio-preview">
+            <label class="file-input-label">
+                <i class="fas fa-upload"></i> Upload Bio Image
+                <input type="file" name="company_bio_image" accept="image/*" onchange="previewImage(event, 'bio-preview')">
+            </label>
         </div>
     </div>
+</div>
 
     <!-- Contact -->
     <div class="form-card">

@@ -1,178 +1,220 @@
 @extends('layouts.office-layout')
 
-@section('title', 'Banner Ads - Dream Haven')
+@section('title', 'Ad Management | Dream Haven')
 
 @section('styles')
 <style>
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 30px; }
-    .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; }
-    .stat-value { font-size: 32px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; }
-    .stat-label { font-size: 14px; color: var(--text-muted); }
+    :root {
+        --primary: #6366f1;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --bg-subtle: #f8fafc;
+        --card-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    }
 
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-    .page-title { font-size: 28px; font-weight: 700; color: var(--text-primary); }
-    .btn-primary { background: #6366f1; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
-    .btn-primary:hover { background: #5558e3; }
+    /* Page Header */
+    .page-header { margin-bottom: 2rem; }
+    .page-title { font-size: 1.875rem; font-weight: 800; color: #111827; letter-spacing: -0.025em; }
 
-    .filters { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; margin-bottom: 24px; display: flex; gap: 16px; flex-wrap: wrap; }
-    .filter-group { flex: 1; min-width: 200px; }
-    .filter-label { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; font-weight: 600; }
-    .filter-select { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-main); color: var(--text-primary); }
+    .btn-create {
+        background: var(--primary); color: white; padding: 0.75rem 1.5rem;
+        border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center;
+        gap: 0.5rem; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
+    }
+    .btn-create:hover { background: #4f46e5; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.5); }
 
-    .banners-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px; }
-    .banner-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; transition: transform 0.2s; }
-    .banner-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+    /* Stats Section */
+    .stats-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2.5rem; }
+    .stat-glass-card {
+        background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 1.5rem;
+        position: relative; overflow: hidden; transition: transform 0.3s ease;
+    }
+    .stat-glass-card:hover { transform: translateY(-5px); }
+    .stat-number { font-size: 2rem; font-weight: 800; color: #1e293b; line-height: 1; margin-bottom: 0.5rem; }
+    .stat-label { font-size: 0.875rem; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-icon { position: absolute; right: -10px; bottom: -10px; font-size: 4rem; opacity: 0.05; color: var(--primary); }
 
-    .banner-image { width: 100%; height: 180px; object-fit: cover; background: #f3f4f6; }
-    .banner-content { padding: 20px; }
-    .banner-title { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
-    .banner-meta { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-    .banner-badge { padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; }
-    .badge-active { background: #dcfce7; color: #16a34a; }
-    .badge-draft { background: #fef3c7; color: #d97706; }
-    .badge-paused { background: #e0e7ff; color: #6366f1; }
-    .badge-rejected { background: #fee2e2; color: #dc2626; }
+    /* Filter Bar */
+    .filter-bar {
+        background: white; padding: 1.25rem; border-radius: 16px; border: 1px solid #e2e8f0;
+        display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; box-shadow: var(--card-shadow);
+    }
+    .search-wrapper { position: relative; flex: 1; }
+    .search-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+    .input-custom {
+        width: 100%; padding: 0.625rem 1rem 0.625rem 2.5rem; border-radius: 10px;
+        border: 1px solid #e2e8f0; background: #fcfcfd; transition: border 0.2s;
+    }
+    .input-custom:focus { border-color: var(--primary); outline: none; background: white; }
 
-    .banner-stats { display: flex; gap: 20px; margin: 16px 0; padding: 16px; background: var(--bg-main); border-radius: 8px; }
-    .stat-item { flex: 1; text-align: center; }
-    .stat-item-value { font-size: 20px; font-weight: 700; color: var(--text-primary); }
-    .stat-item-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    /* Banner Grid & Cards */
+    .banners-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 2rem; }
+    .premium-card {
+        background: white; border-radius: 20px; overflow: hidden; border: 1px solid #f1f5f9;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); position: relative;
+    }
+    .premium-card:hover { transform: scale(1.02); box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
 
-    .banner-actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-    .btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border: none; cursor: pointer; }
-    .btn-edit { background: #e0e7ff; color: #6366f1; }
-    .btn-pause { background: #fef3c7; color: #d97706; }
-    .btn-resume { background: #dcfce7; color: #16a34a; }
-    .btn-delete { background: #fee2e2; color: #dc2626; }
-    .btn-analytics { background: #f3f4f6; color: #374151; }
+    .img-wrapper { position: relative; height: 200px; overflow: hidden; }
+    .img-wrapper img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s; }
+    .premium-card:hover .img-wrapper img { transform: scale(1.1); }
+
+    .status-floating {
+        position: absolute; top: 1rem; left: 1rem; padding: 0.4rem 1rem;
+        border-radius: 50px; font-size: 0.75rem; font-weight: 700; backdrop-filter: blur(8px);
+    }
+    .status-active { background: rgba(16, 185, 129, 0.9); color: white; }
+    .status-paused { background: rgba(245, 158, 11, 0.9); color: white; }
+
+    .card-body { padding: 1.5rem; }
+    .card-title { font-size: 1.125rem; font-weight: 700; color: #1e293b; margin-bottom: 1rem; }
+
+    /* Micro Stats */
+    .micro-stats { display: flex; justify-content: space-between; background: #f8fafc; border-radius: 12px; padding: 1rem; }
+    .m-stat-val { display: block; font-weight: 800; color: #334155; font-size: 1rem; }
+    .m-stat-lbl { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
+
+    /* Action Buttons */
+    .action-row { display: flex; gap: 0.5rem; margin-top: 1.5rem; }
+    .btn-icon {
+        flex: 1; padding: 0.6rem; border-radius: 8px; border: none; cursor: pointer;
+        display: flex; align-items: center; justify-content: center; transition: all 0.2s;
+        font-size: 0.875rem; font-weight: 600;
+    }
+    .btn-edit { background: #eff6ff; color: #2563eb; }
+    .btn-edit:hover { background: #2563eb; color: white; }
+    .btn-pause { background: #fff7ed; color: #ea580c; }
+    .btn-pause:hover { background: #ea580c; color: white; }
+    .btn-delete { background: #fef2f2; color: #dc2626; }
+    .btn-delete:hover { background: #dc2626; color: white; }
 </style>
 @endsection
 
 @section('content')
 <div class="page-header">
-    <h1 class="page-title">Banner Ads</h1>
-    <a href="{{ route('office.banner.add') }}" class="btn-primary">
-        <i class="fas fa-plus"></i> Create Banner
-    </a>
+    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+        <div>
+            <h1 class="page-title">Advertising Console</h1>
+            <p style="color: #64748b; margin-top: 0.5rem;">Manage and monitor your banner performance across the network.</p>
+        </div>
+        <a href="{{ route('office.banner.add') }}" class="btn-create">
+            <i class="fas fa-plus"></i> New Campaign
+        </a>
+    </div>
 </div>
 
-{{-- Stats --}}
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-value">{{ $stats['total'] }}</div>
+{{-- Stats Section --}}
+<div class="stats-container">
+    <div class="stat-glass-card">
+        <div class="stat-number">{{ $stats['total'] }}</div>
         <div class="stat-label">Total Banners</div>
+        <i class="fas fa-layer-group stat-icon"></i>
     </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ $stats['active'] }}</div>
-        <div class="stat-label">Active</div>
+    <div class="stat-glass-card" style="border-left: 4px solid var(--success);">
+        <div class="stat-number" style="color: var(--success);">{{ $stats['active'] }}</div>
+        <div class="stat-label">Live Now</div>
+        <i class="fas fa-broadcast-tower stat-icon"></i>
     </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ $stats['draft'] }}</div>
-        <div class="stat-label">Pending Approval</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ $stats['paused'] }}</div>
+    <div class="stat-glass-card" style="border-left: 4px solid var(--warning);">
+        <div class="stat-number" style="color: var(--warning);">{{ $stats['paused'] }}</div>
         <div class="stat-label">Paused</div>
+        <i class="fas fa-pause-circle stat-icon"></i>
+    </div>
+    <div class="stat-glass-card">
+        <div class="stat-number">{{ $stats['draft'] }}</div>
+        <div class="stat-label">In Review</div>
+        <i class="fas fa-clock stat-icon"></i>
     </div>
 </div>
 
 {{-- Filters --}}
-<form method="GET" class="filters">
-    <div class="filter-group">
-        <div class="filter-label">Status</div>
-        <select name="status" class="filter-select" onchange="this.form.submit()">
-            <option value="">All Statuses</option>
-            <option value="draft" {{ request('status') == 'draft' ? 'selected' : '' }}>Draft</option>
-            <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Active</option>
-            <option value="paused" {{ request('status') == 'paused' ? 'selected' : '' }}>Paused</option>
-            <option value="rejected" {{ request('status') == 'rejected' ? 'selected' : '' }}>Rejected</option>
-        </select>
+<form method="GET" action="{{ route('office.banners') }}" class="filter-bar">
+    <div class="search-wrapper">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" name="search" class="input-custom" placeholder="Search campaigns..." value="{{ request('search') }}">
     </div>
-
-    <div class="filter-group">
-        <div class="filter-label">Search</div>
-        <input type="text" name="search" class="filter-select" placeholder="Search banners..." value="{{ request('search') }}">
-    </div>
+    <select name="status" class="input-custom" style="width: 180px;" onchange="this.form.submit()">
+        <option value="">All Status</option>
+        <option value="active" {{ request('status') == 'active' ? 'selected' : '' }}>Active</option>
+        <option value="paused" {{ request('status') == 'paused' ? 'selected' : '' }}>Paused</option>
+    </select>
 </form>
 
-{{-- Banners Grid --}}
+{{-- Banner Grid --}}
 <div class="banners-grid">
     @forelse($banners as $banner)
-        <div class="banner-card">
-            <img src="{{ $banner->image_url }}" alt="{{ $banner->title }}" class="banner-image">
+    <div class="premium-card">
+        <div class="img-wrapper">
+            <span class="status-floating status-{{ $banner->status }}">
+                {{ strtoupper($banner->status) }}
+            </span>
+            <img src="{{ $banner->image_url }}" alt="Banner Title">
+        </div>
 
-            <div class="banner-content">
-                <h3 class="banner-title">{{ $banner->title }}</h3>
+        <div class="card-body">
+            <h3 class="card-title">{{ $banner->title }}</h3>
 
-                <div class="banner-meta">
-                    <span class="banner-badge badge-{{ $banner->status }}">
-                        {{ ucfirst($banner->status) }}
-                    </span>
-                    <span class="banner-badge" style="background: #f3f4f6; color: #374151;">
-                        {{ ucfirst(str_replace('_', ' ', $banner->banner_type)) }}
-                    </span>
+            <div class="micro-stats">
+                <div style="text-align: center;">
+                    <span class="m-stat-lbl">Views</span>
+                    <span class="m-stat-val">{{ number_format($banner->views) }}</span>
                 </div>
-
-                <div class="banner-stats">
-                    <div class="stat-item">
-                        <div class="stat-item-value">{{ number_format($banner->views ?? 0) }}</div>
-                        <div class="stat-item-label">Views</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-item-value">{{ number_format($banner->clicks ?? 0) }}</div>
-                        <div class="stat-item-label">Clicks</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-item-value">{{ number_format($banner->ctr * 100, 1) }}%</div>
-                        <div class="stat-item-label">CTR</div>
-                    </div>
+                <div style="border-left: 1px solid #e2e8f0; padding-left: 1rem; text-align: center;">
+                    <span class="m-stat-lbl">Clicks</span>
+                    <span class="m-stat-val">{{ number_format($banner->clicks) }}</span>
                 </div>
-
-                <div class="banner-actions">
-                    <a href="{{ route('office.banner.edit', $banner->id) }}" class="btn btn-edit">
-                        <i class="fas fa-edit"></i> Edit
-                    </a>
-
-                    @if($banner->status == 'active')
-                        <form method="POST" action="{{ route('office.banner.pause', $banner->id) }}" style="display: inline;">
-                            @csrf
-                            <button type="submit" class="btn btn-pause">
-                                <i class="fas fa-pause"></i> Pause
-                            </button>
-                        </form>
-                    @elseif($banner->status == 'paused')
-                        <form method="POST" action="{{ route('office.banner.resume', $banner->id) }}" style="display: inline;">
-                            @csrf
-                            <button type="submit" class="btn btn-resume">
-                                <i class="fas fa-play"></i> Resume
-                            </button>
-                        </form>
-                    @endif
-
-                    <a href="{{ route('office.banner.analytics', $banner->id) }}" class="btn btn-analytics">
-                        <i class="fas fa-chart-line"></i> Analytics
-                    </a>
-
-                    <form method="POST" action="{{ route('office.banner.delete', $banner->id) }}" style="display: inline;" onsubmit="return confirm('Delete this banner?')">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="btn btn-delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </form>
+                <div style="border-left: 1px solid #e2e8f0; padding-left: 1rem; text-align: center;">
+                    <span class="m-stat-lbl">CTR</span>
+                    <span class="m-stat-val" style="color: var(--primary);">{{ number_format($banner->ctr * 100, 1) }}%</span>
                 </div>
             </div>
+
+            <div class="action-row">
+                <a href="{{ route('office.banner.edit', $banner->id) }}" class="btn-icon btn-edit" title="Edit">
+                    <i class="fas fa-pen"></i>
+                </a>
+
+                @if($banner->status == 'active')
+                <form method="POST" action="{{ route('office.banner.pause', $banner->id) }}" style="flex: 1;">
+                    @csrf
+                    <button type="submit" class="btn-icon btn-pause" style="width: 100%;">
+                        <i class="fas fa-pause"></i>
+                    </button>
+                </form>
+                @else
+                <form method="POST" action="{{ route('office.banner.resume', $banner->id) }}" style="flex: 1;">
+                    @csrf
+                    <button type="submit" class="btn-icon" style="width: 100%; background: #ecfdf5; color: #059669;">
+                        <i class="fas fa-play"></i>
+                    </button>
+                </form>
+                @endif
+
+                <a href="{{ route('office.banner.analytics', $banner->id) }}" class="btn-icon" style="background: #f1f5f9; color: #475569;">
+                    <i class="fas fa-chart-bar"></i>
+                </a>
+
+                <form method="POST" action="{{ route('office.banner.delete', $banner->id) }}" onsubmit="return confirm('Delete this banner permanently?')" style="flex: 0 0 45px;">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="btn-icon btn-delete">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </form>
+            </div>
         </div>
+    </div>
     @empty
-        <div style="grid-column: 1/-1; text-align: center; padding: 60px; color: var(--text-muted);">
-            <i class="fas fa-bullhorn" style="font-size: 48px; margin-bottom: 16px; opacity: 0.3;"></i>
-            <p>No banners found. Create your first banner to get started!</p>
-        </div>
+    <div style="grid-column: 1/-1; text-align: center; padding: 5rem; background: white; border-radius: 20px; border: 2px dashed #e2e8f0;">
+        <i class="fas fa-folder-open" style="font-size: 3rem; color: #cbd5e1; margin-bottom: 1rem;"></i>
+        <h3 style="color: #64748b;">No active campaigns found</h3>
+        <p style="color: #94a3b8;">Start by creating your first banner advertisement.</p>
+    </div>
     @endforelse
 </div>
 
-{{-- Pagination --}}
-<div style="margin-top: 32px;">
+<div style="margin-top: 3rem;">
     {{ $banners->links() }}
 </div>
 @endsection

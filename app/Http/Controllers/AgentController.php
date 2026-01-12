@@ -404,43 +404,73 @@ class AgentController extends Controller
                 'agent_id' => $agent->id
             ]);
 
-            // Transfer properties
+            // ✅ 1. Transfer Properties
             $propertiesTransferred = Property::where('owner_id', $user->id)
-                ->where('owner_type', 'User')
+                ->where('owner_type', 'App\\Models\\User')
                 ->update([
                     'owner_id' => $agent->id,
-                    'owner_type' => 'Agent'
+                    'owner_type' => 'App\\Models\\Agent'
                 ]);
 
             Log::info('Properties transferred', ['count' => $propertiesTransferred]);
 
-            // Transfer favorites (if you have a favorites table)
-            if (class_exists(UserFavoriteProperty::class)) {
-                $favoritesTransferred = UserFavoriteProperty::where('user_id', $user->id)
+            // ✅ 2. Transfer Favorites
+            if (class_exists(\App\Models\Support\UserFavoriteProperty::class)) {
+                $favoritesTransferred = \App\Models\Support\UserFavoriteProperty::where('user_id', $user->id)
                     ->update(['user_id' => $agent->id]);
 
                 Log::info('Favorites transferred', ['count' => $favoritesTransferred]);
             }
 
-
-
-            // Transfer appointments (if you have appointments)
+            // ✅ 3. Transfer Appointments - Convert user appointments to agent appointments
             if (class_exists(\App\Models\Appointment::class)) {
                 $appointmentsTransferred = \App\Models\Appointment::where('user_id', $user->id)
-                    ->update(['agent_id' => $agent->id]);
+                    ->update([
+                        'agent_id' => $agent->id,
+                        'user_id' => null // Clear user_id since they're now an agent
+                    ]);
 
                 Log::info('Appointments transferred', ['count' => $appointmentsTransferred]);
             }
 
-            Log::info('Data transfer completed successfully');
+            // ✅ 4. Transfer User Notifications to Agent Notifications
+            if (class_exists(\App\Models\Support\UserNotificationReference::class)) {
+                $userNotifications = \App\Models\Support\UserNotificationReference::where('user_id', $user->id)->get();
+
+                foreach ($userNotifications as $userNotif) {
+                    \App\Models\Support\AgentNotification::create([
+                        'agent_id' => $agent->id,
+                        'notification_id' => $userNotif->notification_id,
+                        'title' => $userNotif->title,
+                        'message' => $userNotif->message,
+                        'type' => $userNotif->type,
+                        'is_read' => $userNotif->notification_status === 'read',
+                        'read_at' => $userNotif->notification_status === 'read' ? $userNotif->notification_date : null,
+                        'created_at' => $userNotif->notification_date,
+                        'updated_at' => now(),
+                    ]);
+                }
+
+                // Delete old user notifications
+                $userNotifications->each->delete();
+
+                Log::info('User notifications converted to agent notifications', ['count' => $userNotifications->count()]);
+            }
+
+            Log::info('Data transfer completed successfully', [
+                'agent_id' => $agent->id,
+                'properties' => $propertiesTransferred,
+                'appointments' => $appointmentsTransferred ?? 0,
+                'favorites' => $favoritesTransferred ?? 0,
+                'notifications' => $userNotifications->count() ?? 0
+            ]);
         } catch (\Exception $e) {
             Log::error('Error during data transfer', [
+                'user_id' => $user->id,
+                'agent_id' => $agent->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-
-            // Don't throw exception - let the agent creation succeed
-            // even if data transfer fails partially
         }
     }
     public function showProfile($id)

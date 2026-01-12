@@ -268,87 +268,90 @@ class OfficeAuthController extends Controller
 
     public function updateProfile(Request $request)
     {
-        $office = auth('office')->user();
+        $agent = Auth::guard('agent')->user();
 
         $request->validate([
-            'company_name' => 'required|string|max:255',
-            'phone_number' => 'required|string|max:20',
-            'company_bio' => 'nullable|string',
-            'about_company' => 'nullable|string',
-            'properties_sold' => 'nullable|integer|min:0',
+            'agent_name' => 'required|string|max:255',
+            'primary_phone' => 'required|string|max:20',
+            'whatsapp_number' => 'nullable|string|max:20',
+            'city' => 'required|string',
+            'district' => 'nullable|string',
+            'license_number' => 'nullable|string',
             'years_experience' => 'nullable|integer|min:0',
+            'agent_bio' => 'nullable|string|max:1000',
             'office_address' => 'nullable|string',
-            'city' => 'nullable|string|max:255',
-            'district' => 'nullable|string|max:255',
-            'latitude' => 'nullable|numeric|between:-90,90',
-            'longitude' => 'nullable|numeric|between:-180,180',
-            'availability_schedule' => 'nullable|string',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
-            'company_bio_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'working_hours' => 'nullable|string', // ✅ Add this
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
-        $data = $request->only([
-            'company_name',
-            'phone_number',
-            'company_bio',
-            'about_company',
-            'properties_sold',
-            'years_experience',
-            'office_address',
-            'city',
-            'district',
-            'latitude',
-            'longitude',
-        ]);
+        // Handle profile image upload
+        if ($request->hasFile('profile_image')) {
+            if ($agent->profile_image) {
+                $oldPath = str_replace(asset('storage/'), '', $agent->profile_image);
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
 
-        // ✅ Transform schedule format
-        if ($request->has('availability_schedule') && $request->availability_schedule) {
+            $path = $request->file('profile_image')->store('agents/profiles', 'public');
+            $agent->profile_image = asset('storage/' . $path);
+        }
+
+        // Handle bio image upload
+        if ($request->hasFile('bio_image')) {
+            if ($agent->bio_image) {
+                $oldPath = str_replace(asset('storage/'), '', $agent->bio_image);
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+
+            $path = $request->file('bio_image')->store('agents/bio', 'public');
+            $agent->bio_image = asset('storage/' . $path);
+        }
+
+        // ✅ Transform working hours schedule
+        if ($request->has('working_hours') && $request->working_hours) {
             try {
-                $scheduleData = json_decode($request->availability_schedule, true);
+                $scheduleData = json_decode($request->working_hours, true);
                 $transformedSchedule = [];
-
-                // Define all days
                 $allDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
                 foreach ($allDays as $day) {
                     if (isset($scheduleData[$day]) && is_array($scheduleData[$day])) {
-                        // Day is available with open/close times
                         $open = $scheduleData[$day]['open'] ?? '09:00';
                         $close = $scheduleData[$day]['close'] ?? '18:00';
                         $transformedSchedule[$day] = "{$open}-{$close}";
                     } else {
-                        // Day is not available
                         $transformedSchedule[$day] = 'closed';
                     }
                 }
 
-                $data['availability_schedule'] = json_encode($transformedSchedule);
+                $agent->working_hours = $transformedSchedule;
             } catch (\Exception $e) {
-                Log::error('Schedule transformation error: ' . $e->getMessage());
-                // If transformation fails, keep original or set to null
-                $data['availability_schedule'] = null;
+                Log::error('Working hours transformation error: ' . $e->getMessage());
             }
         }
 
-        // ✅ Handle profile image
-        if ($request->hasFile('profile_image')) {
-            if ($office->profile_image && Storage::disk('public')->exists($office->profile_image)) {
-                Storage::disk('public')->delete($office->profile_image);
-            }
-            $data['profile_image'] = $request->file('profile_image')->store('office_profiles', 'public');
-        }
+        // Update other fields
+        $agent->agent_name = $request->agent_name;
+        $agent->primary_phone = $request->primary_phone;
+        $agent->whatsapp_number = $request->whatsapp_number;
+        $agent->city = $request->city;
+        $agent->district = $request->district;
+        $agent->license_number = $request->license_number;
+        $agent->years_experience = $request->years_experience;
+        $agent->agent_bio = $request->agent_bio;
+        $agent->office_address = $request->office_address;
+        $agent->latitude = $request->latitude;
+        $agent->longitude = $request->longitude;
 
-        // ✅ Handle bio image
-        if ($request->hasFile('company_bio_image')) {
-            if ($office->company_bio_image && Storage::disk('public')->exists($office->company_bio_image)) {
-                Storage::disk('public')->delete($office->company_bio_image);
-            }
-            $data['company_bio_image'] = $request->file('company_bio_image')->store('office_bio_images', 'public');
-        }
+        $agent->save();
 
-        $office->update($data);
-
-        return redirect()->route('office.profile')->with('success', 'Profile updated successfully!');
+        return redirect()->route('agent.profile.show', $agent->id)->with('success', 'Profile updated successfully!');
     }
 
     public function updatePassword(Request $request)
@@ -370,7 +373,6 @@ class OfficeAuthController extends Controller
 
         return redirect()->route('office.profile')->with('success', 'Password changed successfully!');
     }
-
     // ==================== PROPERTIES ====================
 
     public function showProperties()

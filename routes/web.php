@@ -57,7 +57,7 @@ Route::get('/about-us', function () {
     return view('about-us');
 })->name('about-us');
 
-Route::get('/properties/search', [PropertyController::class, 'searchView'])->name('properties.search');
+Route::get('/properties/search', [PropertyController::class, 'searchView'])->name(name: 'properties.search');
 Route::get('/list', [PropertyController::class, 'showList'])->name('property.list');
 Route::get('/PropertyDetail/{property_id}', [PropertyController::class, 'showPortfolio'])->name('property.PropertyDetail');
 Route::get('/projects', [ProjectController::class, 'showProjects'])->name('projects.index');
@@ -711,64 +711,60 @@ Route::prefix('office')->name('office.')->group(function () {
 
 
 Route::prefix('agent')->name('agent.')->group(function () {
-    Route::get('/login', [AgentAuthController::class, 'showLogin'])->name('login');
-    Route::post('/login', [AgentAuthController::class, 'login'])->name('login.submit');
-    Route::get('/register', [AgentAuthController::class, 'showRegister'])->name('register');
-    Route::post('/register', [AgentAuthController::class, 'register'])->name('register.submit');
+    // ========== GUEST ROUTES ==========
+    Route::middleware('guest:agent')->group(function () {
+        Route::get('/login', [AgentAuthController::class, 'showLogin'])->name('login');
+        Route::post('/login', [AgentAuthController::class, 'login'])->name('login.submit');
+        Route::get('/register', [AgentAuthController::class, 'showRegister'])->name('register');
+        Route::post('/register', [AgentAuthController::class, 'register'])->name('register.submit');
+    });
+
+    // ========== AUTHENTICATED ROUTES ==========
+    Route::middleware('auth:agent')->group(function () {
+        // Logout
+        Route::post('/logout', [AgentAuthController::class, 'logout'])->name('logout');
+
+        // Dashboard
+        Route::get('/dashboard', [AgentAuthController::class, 'showDashboard'])->name('dashboard');
+
+        // Properties
+        Route::get('/properties', [AgentAuthController::class, 'showProperties'])->name('properties');
+        Route::get('/properties/add', [AgentAuthController::class, 'showAddProperty'])->name('property.add');
+        Route::post('/properties/add', [AgentAuthController::class, 'storeProperty'])->name('property.store');
+        Route::get('/properties/{id}/edit', [AgentAuthController::class, 'showEditProperty'])->name('property.edit');
+        Route::put('/properties/{id}', [AgentAuthController::class, 'updateProperty'])->name('property.update');
+        Route::delete('/properties/{id}', [AgentAuthController::class, 'deleteProperty'])->name('property.delete');
+
+        // Subscriptions
+        Route::get('/subscriptions', [AgentAuthController::class, 'showSubscriptions'])->name('subscriptions');
+
+        // Appointments
+        Route::get('/appointments', [AgentAuthController::class, 'showAppointments'])->name('appointments');
+        Route::put('/appointment/{id}/status', [AgentAuthController::class, 'updateAppointmentStatus'])->name('appointment.status');
+
+        // Banners
+        Route::get('/banners', [AgentAuthController::class, 'showBanners'])->name('banners');
+        Route::get('/banner/add', [AgentAuthController::class, 'showAddBanner'])->name('banner.add');
+        Route::post('/banner/store', [AgentAuthController::class, 'storeBanner'])->name('banner.store');
+        Route::get('/banner/{id}/edit', [AgentAuthController::class, 'editBanner'])->name('banner.edit');
+        Route::put('/banner/{id}', [AgentAuthController::class, 'updateBanner'])->name('banner.update');
+        Route::delete('/banner/{id}', [AgentAuthController::class, 'deleteBanner'])->name('banner.delete');
+        Route::post('/banner/{id}/pause', [AgentAuthController::class, 'pauseBanner'])->name('banner.pause');
+        Route::post('/banner/{id}/resume', [AgentAuthController::class, 'resumeBanner'])->name('banner.resume');
+        Route::get('/banner/{id}/analytics', [AgentAuthController::class, 'bannerAnalytics'])->name('banner.analytics');
+
+        // ✅ PROFILE - SPECIFIC ROUTES FIRST, THEN DYNAMIC ROUTES
+        Route::get('/profile/edit', [AgentAuthController::class, 'showEditProfile'])->name('profile.edit');
+        Route::put('/profile/update', [AgentAuthController::class, 'updateProfile'])->name('profile.update');
+        Route::get('/profile/{id}', [AgentAuthController::class, 'showProfile'])->name('profile.show');
+
+        // Change Password
+        Route::get('/password/change', [AgentAuthController::class, 'showChangePassword'])->name('password.change');
+        Route::put('/password/update', [AgentAuthController::class, 'updatePassword'])->name('password.update');
+    });
 });
 
-Route::middleware('guest:agent')->group(function () {
-    Route::get('/agent/login', [AgentAuthController::class, 'showLogin'])->name('agent.login');
-    Route::post('/agent/login', [AgentAuthController::class, 'login'])->name('agent.login.submit');
-    Route::get('/agent/register', [AgentAuthController::class, 'showRegister'])->name('agent.register');
-    Route::post('/agent/register', [AgentAuthController::class, 'register'])->name('agent.register.submit');
-});
-
-// Authenticated agent routes
-Route::middleware('auth:agent')->group(function () {
-    // Logout
-    Route::post('/agent/logout', [AgentAuthController::class, 'logout'])->name('agent.logout');
-
-    // Dashboard
-    Route::get('/agent/dashboard', [AgentAuthController::class, 'showDashboard'])->name('agent.dashboard');
-
-    // Properties
-    Route::get('/agent/properties', [AgentAuthController::class, 'showProperties'])->name('agent.properties');
-    Route::get('/agent/properties/add', [AgentAuthController::class, 'showAddProperty'])->name('agent.property.add');
-    Route::post('/agent/properties/add', [AgentAuthController::class, 'storeProperty'])->name('agent.property.store');
-    Route::get('/agent/properties/{id}/edit', [AgentAuthController::class, 'showEditProperty'])->name('agent.property.edit');
-    Route::put('/agent/properties/{id}', [AgentAuthController::class, 'updateProperty'])->name('agent.property.update');
-    Route::delete('/agent/properties/{id}', [AgentAuthController::class, 'deleteProperty'])->name('agent.property.delete');
-
-    // Subscriptions
-    Route::get('/agent/subscriptions', [AgentAuthController::class, 'showSubscriptions'])->name('agent.subscriptions');
-
-    // Appointments
-    Route::get('/agent/appointments', [AgentAuthController::class, 'showAppointments'])->name('agent.appointments');
-    Route::put('/agent/appointment/{id}/status', [AgentAuthController::class, 'updateAppointmentStatus'])->name('agent.appointment.status');
-
-    // Banners
-    Route::get('/agent/banners', [AgentAuthController::class, 'showBanners'])->name('agent.banners');
-    Route::get('/agent/banner/add', [AgentAuthController::class, 'showAddBanner'])->name('agent.banner.add');
-    Route::post('/agent/banner/store', [AgentAuthController::class, 'storeBanner'])->name('agent.banner.store');
-    Route::get('/agent/banner/{id}/edit', [AgentAuthController::class, 'editBanner'])->name('agent.banner.edit');
-    Route::put('/agent/banner/{id}', [AgentAuthController::class, 'updateBanner'])->name('agent.banner.update');
-    Route::delete('/agent/banner/{id}', [AgentAuthController::class, 'deleteBanner'])->name('agent.banner.delete');
-    Route::post('/agent/banner/{id}/pause', [AgentAuthController::class, 'pauseBanner'])->name('agent.banner.pause');
-    Route::post('/agent/banner/{id}/resume', [AgentAuthController::class, 'resumeBanner'])->name('agent.banner.resume');
-    Route::get('/agent/banner/{id}/analytics', [AgentAuthController::class, 'bannerAnalytics'])->name('agent.banner.analytics');
-
-    // Profile
-    Route::get('/agent/profile/{id}', [AgentAuthController::class, 'showProfile'])->name('agent.profile');
-    Route::get('/agent/profile/edit', [AgentAuthController::class, 'showEditProfile'])->name('agent.profile.edit');
-    Route::put('/agent/profile/update', [AgentAuthController::class, 'updateProfile'])->name('agent.profile.update');
-
-    // Change Password
-    Route::get('/agent/password/change', [AgentAuthController::class, 'showChangePassword'])->name('agent.password.change');
-    Route::put('/agent/password/update', [AgentAuthController::class, 'updatePassword'])->name('agent.password.update');
-});
-
-// Other routes
+// ========== PUBLIC ROUTES ==========
 Route::get('/account-deletion', function () {
     return view('account-deletion');
 });
@@ -776,5 +772,4 @@ Route::get('/account-deletion', function () {
 Route::get('/agent/test', function () {
     dd('AGENT TEST ROUTE WORKS');
 });
-
 Route::get('/agent/{id}', [AgentAuthController::class, 'showProfile'])->name('agent.profile');

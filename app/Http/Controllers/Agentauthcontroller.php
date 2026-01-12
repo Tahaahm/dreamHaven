@@ -181,8 +181,10 @@ class AgentAuthController extends Controller
 
     public function storeProperty(Request $request)
     {
+        // 1. Get the authenticated Agent
         $agent = Auth::guard('agent')->user();
 
+        // 2. Validate the request exactly as required
         $request->validate([
             'title_en' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
@@ -198,31 +200,34 @@ class AgentAuthController extends Controller
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
-        // Handle image uploads
+        // 3. Handle image uploads - matching your FIXED logic
         $imagePaths = [];
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('properties', 'public');
-                $imagePaths[] = url(Storage::url($path)); // Full URL with domain
+                $imagePaths[] = asset('storage/' . $path);
             }
         }
 
-        // Calculate USD price (assuming 1 USD = 1320 IQD)
+        // 4. Calculate USD price (assuming 1 USD = 1320 IQD)
         $priceIQD = $request->price;
         $priceUSD = round($priceIQD / 1320, 2);
 
-        // Generate unique property ID
+        // 5. Generate unique property ID
         do {
             $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
         } while (DB::table('properties')->where('id', $propertyId)->exists());
 
-        // Create property with correct structure matching PropertyController
+        // 6. Database Insertion - EVERY SINGLE FIELD INCLUDED
         DB::table('properties')->insert([
             'id' => $propertyId,
-            'owner_id' => $agent->id,
-            'owner_type' => 'App\Models\Agent',
 
-            // JSON fields
+            // --- UPDATED OWNER LOGIC ---
+            'owner_id' => $agent->id,            // Links specifically to the Agent ID
+            'owner_type' => 'App\Models\Agent',   // Specifically sets the Morph Class
+            // ---------------------------
+
+            // JSON fields for Multi-language support
             'name' => json_encode([
                 'en' => $request->title_en,
                 'ar' => $request->title_ar ?? '',
@@ -263,7 +268,7 @@ class AgentAuthController extends Controller
                 ],
             ]),
 
-            // Simple fields
+            // Simple/Static fields from your original code
             'listing_type' => 'sell',
             'area' => (float) ($request->area ?? 0),
             'furnished' => 0,
@@ -275,7 +280,7 @@ class AgentAuthController extends Controller
             'floor_number' => (int) ($request->floors ?? 0),
             'year_built' => (int) ($request->year_built ?? null),
 
-            // Additional required fields
+            // Additional required JSON fields
             'features' => json_encode([]),
             'amenities' => json_encode([]),
             'furnishing_details' => json_encode(['status' => 'unfurnished']),
@@ -292,7 +297,7 @@ class AgentAuthController extends Controller
                 ]
             ]),
 
-            // System fields
+            // System & Analytics fields
             'verified' => 0,
             'is_active' => 1,
             'published' => 1,
@@ -361,10 +366,11 @@ class AgentAuthController extends Controller
         }
 
         // Add new images
+        // ✅ Add new images - SAME AS PROPERTY CONTROLLER
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('properties', 'public');
-                $currentImages[] = url(Storage::url($path)); // Full URL with domain
+                $currentImages[] = asset('storage/' . $path); // ✅ FIXED
             }
         }
 
@@ -559,13 +565,14 @@ class AgentAuthController extends Controller
 
         // Upload image
         $imagePath = $request->file('image')->store('banners', 'public');
-        $imageUrl = url(Storage::url($imagePath));
+        $imageUrl = asset('storage/' . $imagePath); // ✅ FIXED
 
         BannerAd::create([
             'title' => json_encode(['en' => $request->title, 'ar' => $request->title, 'ku' => $request->title]),  // JSON format for multi-language
             'description' => $request->description ? json_encode(['en' => $request->description, 'ar' => $request->description, 'ku' => $request->description]) : null,
             'call_to_action' => $request->call_to_action ? json_encode(['en' => $request->call_to_action, 'ar' => $request->call_to_action, 'ku' => $request->call_to_action]) : null,
             'image_url' => $imageUrl,
+
             'link_url' => $request->link_url,
             'link_opens_new_tab' => $request->has('link_opens_new_tab'),
             'owner_type' => 'agent',
@@ -649,9 +656,10 @@ class AgentAuthController extends Controller
         ];
 
         // Upload new image if provided
+        // ✅ Upload new image if provided - SAME AS OFFICE CONTROLLER
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('banners', 'public');
-            $data['image_url'] = url(Storage::url($imagePath));
+            $data['image_url'] = asset('storage/' . $imagePath); // ✅ FIXED
         }
 
         $banner->update($data);
@@ -747,21 +755,34 @@ class AgentAuthController extends Controller
             'longitude' => 'nullable|numeric',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'working_hours' => 'nullable|json', // ✅ Added validation for the JSON string
         ]);
 
-        // Handle profile image upload
+        // ✅ Handle profile image upload
         if ($request->hasFile('profile_image')) {
+            if ($agent->profile_image) {
+                $oldPath = str_replace(asset('storage/'), '', $agent->profile_image);
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
             $path = $request->file('profile_image')->store('agents/profiles', 'public');
-            $agent->profile_image = url(Storage::url($path));
+            $agent->profile_image = asset('storage/' . $path);
         }
 
-        // Handle bio image upload
+        // ✅ Handle bio image upload
         if ($request->hasFile('bio_image')) {
+            if ($agent->bio_image) {
+                $oldPath = str_replace(asset('storage/'), '', $agent->bio_image);
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
             $path = $request->file('bio_image')->store('agents/bio', 'public');
-            $agent->bio_image = url(Storage::url($path));
+            $agent->bio_image = asset('storage/' . $path);
         }
 
-        // Update allowed fields only
+        // Update basic fields
         $agent->agent_name = $request->agent_name;
         $agent->primary_phone = $request->primary_phone;
         $agent->whatsapp_number = $request->whatsapp_number;
@@ -774,9 +795,15 @@ class AgentAuthController extends Controller
         $agent->latitude = $request->latitude;
         $agent->longitude = $request->longitude;
 
+        // ✅ THE MISSING PIECE: Save Working Hours
+        if ($request->has('working_hours')) {
+            // We store it as a JSON string directly into the database column
+            $agent->working_hours = $request->working_hours;
+        }
+
         $agent->save();
 
-        return redirect()->route('agent.profile', $agent->id)->with('success', 'Profile updated successfully!');
+        return redirect()->route('agent.profile', $agent->id)->with('success', 'Profile and Working Hours updated successfully!');
     }
 
     public function showChangePassword()
