@@ -350,12 +350,20 @@ Route::prefix('v1/api/location')->group(function () {
 // ============================================
 // API ROUTES - Properties
 // ============================================
-
 Route::prefix('v1/api/properties')->group(function () {
+    // ============================================
+    // PUBLIC ROUTES - Property Discovery
+    // ============================================
     Route::get('/search', [PropertyController::class, 'search']);
     Route::get('/nearby', [PropertyController::class, 'nearby']);
+
+    // Property Discovery Endpoints
     Route::get('/featured', [PropertyController::class, 'getFeatured']);
+    Route::get('/recommended', [PropertyController::class, 'getRecommended']); // ✅ NEW
     Route::get('/boosted', [PropertyController::class, 'getBoosted']);
+    Route::get('/recent', [PropertyController::class, 'getRecent']); // ✅ NEW
+    Route::get('/popular', [PropertyController::class, 'getPopular']); // ✅ NEW
+
     Route::get('/statistics', [PropertyController::class, 'getStatistics']);
     Route::post('/map', [PropertyController::class, 'getMapProperties']);
     Route::get('/owner/{ownerType}/{ownerId}', [PropertyController::class, 'getByOwner'])
@@ -364,6 +372,9 @@ Route::prefix('v1/api/properties')->group(function () {
     Route::get('/{id}', [PropertyController::class, 'show']);
     Route::post('/store', [PropertyController::class, 'store']);
 
+    // ============================================
+    // AUTHENTICATED ROUTES - User Actions
+    // ============================================
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/', [PropertyController::class, 'store']);
         Route::put('/{id}', [PropertyController::class, 'update']);
@@ -377,6 +388,9 @@ Route::prefix('v1/api/properties')->group(function () {
         Route::patch('/bulk-update', [PropertyController::class, 'bulkUpdate']);
     });
 
+    // ============================================
+    // ADMIN/AGENT ROUTES - Management
+    // ============================================
     Route::middleware(['auth:sanctum', 'role:admin,agent'])->group(function () {
         Route::patch('/{id}/verification', [PropertyController::class, 'toggleVerification']);
         Route::patch('/{id}/active', [PropertyController::class, 'toggleActive']);
@@ -389,6 +403,9 @@ Route::prefix('v1/api/properties')->group(function () {
         Route::patch('/bulk-status', [PropertyController::class, 'bulkStatusUpdate']);
     });
 
+    // ============================================
+    // SUPER ADMIN ROUTES - System Management
+    // ============================================
     Route::middleware(['auth:sanctum', 'role:super_admin'])->group(function () {
         Route::get('/admin/dashboard', [PropertyController::class, 'getAdminDashboard']);
         Route::get('/admin/flagged', [PropertyController::class, 'getFlaggedProperties']);

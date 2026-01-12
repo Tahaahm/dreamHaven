@@ -89,7 +89,7 @@ class BannerAdController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 // Required fields
-                'title' => 'required|string|max:255',
+                'title' => 'required|string|min:5|max:255',
                 'owner_type' => 'required|in:real_estate,agent',
                 'owner_id' => 'required|uuid',
                 'owner_name' => 'required|string|max:255',
@@ -97,7 +97,7 @@ class BannerAdController extends Controller
                 'start_date' => 'required|date|after_or_equal:today',
 
                 // Optional fields
-                'description' => 'nullable|string',
+                'description' => 'nullable|string|max:1000',
                 'image_url' => 'nullable|url|max:500',
                 'image_alt' => 'nullable|string|max:255',
                 'link_url' => 'nullable|url|max:500',
@@ -138,8 +138,33 @@ class BannerAdController extends Controller
                 ], 422);
             }
 
+            $validated = $validator->validated();
+
+            // Convert title, description, and call_to_action to JSON for multi-language support
+            $data = $validated;
+            $data['title'] = json_encode([
+                'en' => $validated['title'],
+                'ar' => $validated['title'],
+                'ku' => $validated['title']
+            ]);
+
+            if (isset($validated['description']) && $validated['description']) {
+                $data['description'] = json_encode([
+                    'en' => $validated['description'],
+                    'ar' => $validated['description'],
+                    'ku' => $validated['description']
+                ]);
+            }
+
+            if (isset($validated['call_to_action']) && $validated['call_to_action']) {
+                $data['call_to_action'] = json_encode([
+                    'en' => $validated['call_to_action'],
+                    'ar' => $validated['call_to_action'],
+                    'ku' => $validated['call_to_action']
+                ]);
+            }
+
             // Set additional fields
-            $data = $validator->validated();
             $data['created_by_ip'] = $request->ip();
             $data['user_agent'] = $request->userAgent();
             $data['status'] = 'draft'; // All new banners start as draft
@@ -189,13 +214,13 @@ class BannerAdController extends Controller
             $bannerAd = BannerAd::findOrFail($id);
 
             $validator = Validator::make($request->all(), [
-                'title' => 'sometimes|required|string|max:255',
+                'title' => 'sometimes|required|string|min:5|max:255',
                 'owner_type' => 'sometimes|required|in:real_estate,agent',
                 'owner_id' => 'sometimes|required|uuid',
                 'owner_name' => 'sometimes|required|string|max:255',
                 'banner_type' => 'sometimes|required|in:property_listing,agent_profile,agency_branding,service_promotion,event_announcement,general_marketing',
                 'start_date' => 'sometimes|required|date',
-                'description' => 'nullable|string',
+                'description' => 'nullable|string|max:1000',
                 'image_url' => 'nullable|url|max:500',
                 'image_alt' => 'nullable|string|max:255',
                 'link_url' => 'nullable|url|max:500',
@@ -237,7 +262,36 @@ class BannerAdController extends Controller
                 ], 422);
             }
 
-            $bannerAd->update($validator->validated());
+            $validated = $validator->validated();
+
+            // Convert title to JSON if provided
+            if (isset($validated['title'])) {
+                $validated['title'] = json_encode([
+                    'en' => $validated['title'],
+                    'ar' => $validated['title'],
+                    'ku' => $validated['title']
+                ]);
+            }
+
+            // Convert description to JSON if provided
+            if (isset($validated['description']) && $validated['description']) {
+                $validated['description'] = json_encode([
+                    'en' => $validated['description'],
+                    'ar' => $validated['description'],
+                    'ku' => $validated['description']
+                ]);
+            }
+
+            // Convert call_to_action to JSON if provided
+            if (isset($validated['call_to_action']) && $validated['call_to_action']) {
+                $validated['call_to_action'] = json_encode([
+                    'en' => $validated['call_to_action'],
+                    'ar' => $validated['call_to_action'],
+                    'ku' => $validated['call_to_action']
+                ]);
+            }
+
+            $bannerAd->update($validated);
 
             return response()->json([
                 'success' => true,

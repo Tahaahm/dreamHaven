@@ -107,7 +107,10 @@ class BannerAd extends Model
         ];
     }
 
-    // Relationships
+    // ========================
+    // RELATIONSHIPS
+    // ========================
+
     public function property()
     {
         return $this->belongsTo(Property::class);
@@ -118,14 +121,22 @@ class BannerAd extends Model
         return $this->morphTo();
     }
 
-    // Accessors
+    public function approver()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'approved_by');
+    }
+
+    // ========================
+    // ACCESSORS
+    // ========================
+
     public function getTitleAttribute($value)
     {
         $decoded = json_decode($value, true);
         if (is_array($decoded)) {
             return $decoded['en'] ?? $decoded['ar'] ?? $decoded['ku'] ?? '';
         }
-        return $value; // Fallback for old string data
+        return $value;
     }
 
     public function getDescriptionAttribute($value)
@@ -148,7 +159,19 @@ class BannerAd extends Model
         return $value;
     }
 
-    // Scopes
+    // ✅ NEW: Computed property for boosted status
+    public function getIsBoostedNowAttribute()
+    {
+        return $this->is_boosted
+            && $this->boost_start_date
+            && $this->boost_start_date <= now()
+            && (!$this->boost_end_date || $this->boost_end_date >= now());
+    }
+
+    // ========================
+    // SCOPES
+    // ========================
+
     public function scopeActive($query)
     {
         return $query->where('is_active', true)
@@ -169,7 +192,10 @@ class BannerAd extends Model
     {
         return $query->where('is_boosted', true)
             ->where('boost_start_date', '<=', now())
-            ->where('boost_end_date', '>=', now());
+            ->where(function ($q) {
+                $q->whereNull('boost_end_date')
+                    ->orWhere('boost_end_date', '>=', now());
+            });
     }
 
     public function scopeByPosition($query, $position)
@@ -182,26 +208,108 @@ class BannerAd extends Model
         return $query->where('banner_type', $type);
     }
 
-    // Methods
-    public function incrementViews()
+    // ✅ NEW: Missing scope methods
+    public function scopeOrderByPriority($query)
+    {
+        return $query->orderByRaw('
+            CASE
+                WHEN is_boosted = 1
+                    AND boost_start_date <= NOW()
+                    AND (boost_end_date IS NULL OR boost_end_date >= NOW())
+                THEN 1
+                WHEN is_featured = 1 THEN 2
+                ELSE 3
+            END ASC,
+            display_priority DESC,
+            created_at DESC
+        ');
+    }
+
+    public function scopeTargetingLocation($query, $location)
+    {
+        return $query->where(function ($q) use ($location) {
+            $q->whereJsonContains('target_locations', $location)
+                ->orWhereNull('target_locations')
+                ->orWhereRaw('JSON_LENGTH(target_locations) = 0');
+        });
+    }
+
+    public function scopeTargetingPropertyType($query, $propertyType)
+    {
+        return $query->where(function ($q) use ($propertyType) {
+            $q->whereJsonContains('target_property_types', $propertyType)
+                ->orWhereNull('target_property_types')
+                ->orWhereRaw('JSON_LENGTH(target_property_types) = 0');
+        });
+    }
+
+    public function scopeTargetingPriceRange($query, $price)
+    {
+        return $query->where(function ($q) use ($price) {
+            $q->whereNull('target_price_range')
+                ->orWhereRaw('JSON_LENGTH(target_price_range) = 0')
+                ->orWhere(function ($subQuery) use ($price) {
+                    $subQuery->whereRaw('? BETWEEN JSON_EXTRACT(target_price_range, "$.min") AND JSON_EXTRACT(target_price_range, "$.max")', [$price]);
+                });
+        });
+    }
+
+    public function scopePendingApproval($query)
+    {
+        return $query->where('status', 'draft')
+            ->whereNull('approved_at');
+    }
+
+    // ========================
+    // METHODS
+    // ========================
+
+    public function recordView()
     {
         $this->increment('views');
         $this->update(['last_viewed_at' => now()]);
         $this->updateCTR();
     }
 
-    public function incrementClicks()
+    public function recordClick()
     {
         $this->increment('clicks');
         $this->update(['last_clicked_at' => now()]);
         $this->updateCTR();
+        $this->updateBudgetSpent();
     }
 
     public function updateCTR()
     {
         if ($this->views > 0) {
-            $this->update(['ctr' => $this->clicks / $this->views]);
+            $this->update(['ctr' => ($this->clicks / $this->views) * 100]);
         }
+    }
+
+    public function updateBudgetSpent()
+    {
+        if ($this->billing_type === 'per_click' && $this->cost_per_click > 0) {
+            $spent = $this->clicks * $this->cost_per_click;
+            $this->update(['budget_spent' => $spent]);
+        } elseif ($this->billing_type === 'per_impression' && $this->cost_per_impression > 0) {
+            $spent = $this->views * $this->cost_per_impression;
+            $this->update(['budget_spent' => $spent]);
+        }
+    }
+
+    public function canDisplay()
+    {
+        // Check if banner is active
+        if (!$this->isActive()) {
+            return false;
+        }
+
+        // Check budget limits
+        if ($this->budget_total > 0 && $this->budget_spent >= $this->budget_total) {
+            return false;
+        }
+
+        return true;
     }
 
     public function isExpired()
@@ -215,5 +323,67 @@ class BannerAd extends Model
             && $this->status === 'active'
             && $this->start_date <= now()
             && (!$this->end_date || $this->end_date >= now());
+    }
+
+    public function approve($userId = null)
+    {
+        $this->update([
+            'status' => 'active',
+            'approved_by' => $userId,
+            'approved_at' => now(),
+            'rejection_reason' => null,
+        ]);
+    }
+
+    public function reject($reason)
+    {
+        $this->update([
+            'status' => 'rejected',
+            'rejection_reason' => $reason,
+            'approved_at' => null,
+            'approved_by' => null,
+        ]);
+    }
+
+    public function pause()
+    {
+        $this->update(['status' => 'paused']);
+    }
+
+    public function resume()
+    {
+        $this->update(['status' => 'active']);
+    }
+
+    // ✅ NEW: Performance metrics
+    public function getPerformanceMetrics()
+    {
+        return [
+            'views' => $this->views,
+            'clicks' => $this->clicks,
+            'ctr' => $this->ctr,
+            'budget_spent' => $this->budget_spent,
+            'budget_remaining' => $this->budget_total > 0
+                ? $this->budget_total - $this->budget_spent
+                : null,
+            'cost_per_click' => $this->clicks > 0
+                ? $this->budget_spent / $this->clicks
+                : 0,
+            'cost_per_view' => $this->views > 0
+                ? $this->budget_spent / $this->views
+                : 0,
+        ];
+    }
+
+    // ✅ NEW: Targeting summary
+    public function getTargetingSummary()
+    {
+        return [
+            'locations' => $this->target_locations ?? [],
+            'property_types' => $this->target_property_types ?? [],
+            'price_range' => $this->target_price_range ?? null,
+            'pages' => $this->target_pages ?? [],
+            'position' => $this->position,
+        ];
     }
 }

@@ -1131,22 +1131,18 @@ class PropertyController extends Controller
             $language = $request->get('language', 'en');
             $strategy = $request->get('strategy', 'balanced');
 
-            // Base query for all featured properties
+            // Base query
             $baseQuery = Property::where('is_active', true)
                 ->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
 
             $featured = $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
 
-            // ✅ Use transformPropertyData instead of transformPropertyForSearch to get FULL data like index
+            // Transform using FULL property data
             $transformedData = $featured->map(function ($property) use ($language) {
-                // Use the SAME transformation as index method - this includes ALL fields
                 $propertyData = $this->transformPropertyData($property);
-
-                // Add featured-specific fields
                 $propertyData['featured_reason'] = $this->getFeaturedReason($property);
                 $propertyData['featured_score'] = $this->calculateFeaturedScore($property);
-
                 return $propertyData;
             });
 
@@ -1196,63 +1192,154 @@ class PropertyController extends Controller
                 return $this->getBalancedFeatured($baseQuery, $limit);
         }
     }
+    public function getRecommended(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'limit' => 'integer|min:1|max:50',
+                'language' => 'in:en,ar,ku',
+                'user_lat' => 'nullable|numeric|between:-90,90',
+                'user_lng' => 'nullable|numeric|between:-180,180',
+            ]);
 
+            if ($validator->fails()) {
+                return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
+            }
+
+            $limit = $request->get('limit', 10);
+            $language = $request->get('language', 'en');
+            $userLat = $request->get('user_lat');
+            $userLng = $request->get('user_lng');
+
+            $query = Property::where('is_active', true)
+                ->where('published', true)
+                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
+
+            // If user location provided, prioritize nearby
+            if ($userLat && $userLng) {
+                $query->select('*')
+                    ->selectRaw("
+                    (6371 * acos(
+                        cos(radians(?)) *
+                        cos(radians(JSON_EXTRACT(locations, '$[0].lat'))) *
+                        cos(radians(JSON_EXTRACT(locations, '$[0].lng')) - radians(?)) +
+                        sin(radians(?)) *
+                        sin(radians(JSON_EXTRACT(locations, '$[0].lat')))
+                    )) as distance
+                ", [$userLat, $userLng, $userLat])
+                    ->orderBy('distance', 'asc');
+            } else {
+                // Mix of quality + recency + popularity
+                $query->selectRaw('
+                *,
+                (
+                    -- ✅ NEW: Freshness bonus (0-40 points based on age)
+                    (CASE
+                        WHEN DATEDIFF(NOW(), created_at) <= 1 THEN 40
+                        WHEN DATEDIFF(NOW(), created_at) <= 3 THEN 35
+                        WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 30
+                        WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 20
+                        WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
+                        ELSE 0
+                    END) +
+
+                    -- Popularity (30 points max)
+                    (views * 0.3) +
+                    (favorites_count * 2) +
+
+                    -- Quality (30 points max)
+                    (rating * 6) +
+                    (CASE WHEN verified = 1 THEN 10 ELSE 0 END) +
+                    (CASE WHEN is_boosted = 1 THEN 15 ELSE 0 END)
+
+                ) as recommendation_score
+            ')
+                    ->orderByDesc('recommendation_score');
+            }
+
+            $properties = $query->limit($limit)->get();
+
+            $transformedData = $properties->map(function ($property) {
+                return $this->transformPropertyData($property);
+            });
+
+            return ApiResponse::success(
+                'Recommended properties retrieved',
+                [
+                    'data' => $transformedData,
+                    'total' => $transformedData->count()
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Recommended properties error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to get recommended properties', $e->getMessage(), 500);
+        }
+    }
     /**
      * Balanced approach - mix of all factors (MORE SELECTIVE)
      */
     private function getBalancedFeatured($baseQuery, $limit)
     {
-        // First, get top performers using percentile-based selection
         $totalCount = $baseQuery->count();
-        $topPercentile = max(1, intval($totalCount * 0.15)); // Top 15% of properties
+        $topPercentile = max(1, intval($totalCount * 0.15)); // Top 15%
 
         $candidates = $baseQuery
             ->select('*')
             ->selectRaw('
             (
-                -- Boost score (50% weight - higher priority for paid)
+                -- ✅ FRESHNESS BONUS (0-40 points)
+                (CASE
+                    WHEN DATEDIFF(NOW(), created_at) <= 1 THEN 40
+                    WHEN DATEDIFF(NOW(), created_at) <= 3 THEN 35
+                    WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 30
+                    WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 20
+                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
+                    ELSE 0
+                END) +
+
+                -- Boost score (40 points)
                 (CASE WHEN is_boosted = 1 AND boost_start_date <= NOW()
                       AND (boost_end_date IS NULL OR boost_end_date >= NOW())
-                 THEN 50 ELSE 0 END) +
+                 THEN 40 ELSE 0 END) +
 
-                -- Performance score (30% weight - stricter thresholds)
+                -- Performance score (25 points)
                 (CASE
-                    WHEN views >= 50 THEN 20
-                    WHEN views >= 25 THEN 15
-                    WHEN views >= 10 THEN 10
+                    WHEN views >= 50 THEN 15
+                    WHEN views >= 25 THEN 12
+                    WHEN views >= 10 THEN 8
                     ELSE views * 0.5
                 END) +
                 (CASE
-                    WHEN favorites_count >= 10 THEN 15
-                    WHEN favorites_count >= 5 THEN 10
+                    WHEN favorites_count >= 10 THEN 10
+                    WHEN favorites_count >= 5 THEN 8
                     WHEN favorites_count >= 2 THEN 5
                     ELSE favorites_count * 2
                 END) +
 
-                -- Quality score (20% weight - must be high quality)
-                (CASE WHEN verified = 1 THEN 15 ELSE 0 END) +
-                (CASE WHEN rating >= 4.5 THEN 10
-                      WHEN rating >= 4.0 THEN 8
-                      WHEN rating >= 3.5 THEN 5
-                      ELSE 0 END) +
+                -- Quality score (20 points)
+                (CASE WHEN verified = 1 THEN 10 ELSE 0 END) +
+                (CASE WHEN rating >= 4.5 THEN 8
+                      WHEN rating >= 4.0 THEN 6
+                      WHEN rating >= 3.5 THEN 4
+                      ELSE rating END) +
                 (CASE WHEN JSON_LENGTH(images) >= 5 THEN 5 ELSE 0 END) +
 
-                -- Premium content bonus (Additional quality indicators)
+                -- Premium content (10 points)
                 (CASE WHEN virtual_tour_url IS NOT NULL THEN 5 ELSE 0 END) +
                 (CASE WHEN floor_plan_url IS NOT NULL THEN 3 ELSE 0 END) +
                 (CASE WHEN energy_rating IN ("A+", "A") THEN 2 ELSE 0 END)
 
             ) as featured_score
         ')
-            // Much higher minimum threshold - only truly exceptional properties
-            ->having('featured_score', '>=', 35)
+            // ✅ LOWERED threshold: 15 points (was 35)
+            ->having('featured_score', '>=', 15)
             ->orderByDesc('featured_score')
             ->orderByDesc('is_boosted')
-            ->orderByDesc('verified')
-            ->limit(min($limit, $topPercentile * 2)) // Don't exceed reasonable limits
+            ->orderByDesc('created_at') // ✅ NEW: Recent properties first
+            ->limit(min($limit, $topPercentile * 2))
             ->get();
 
-        // Additional filtering: ensure diversity and avoid over-saturation
         return $this->diversifyFeaturedProperties($candidates, $limit);
     }
 
@@ -1303,7 +1390,48 @@ class PropertyController extends Controller
             ->limit($limit)
             ->get();
     }
+    public function getRecent(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'limit' => 'integer|min:1|max:50',
+                'language' => 'in:en,ar,ku',
+                'days' => 'integer|min:1|max:90',
+            ]);
 
+            if ($validator->fails()) {
+                return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
+            }
+
+            $limit = $request->get('limit', 20);
+            $days = $request->get('days', 30);
+
+            $properties = Property::where('is_active', true)
+                ->where('published', true)
+                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                ->where('created_at', '>=', now()->subDays($days))
+                ->orderByDesc('created_at')
+                ->limit($limit)
+                ->get();
+
+            $transformedData = $properties->map(function ($property) {
+                return $this->transformPropertyData($property);
+            });
+
+            return ApiResponse::success(
+                'Recent properties retrieved',
+                [
+                    'data' => $transformedData,
+                    'total' => $transformedData->count(),
+                    'days' => $days
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Recent properties error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to get recent properties', $e->getMessage(), 500);
+        }
+    }
     /**
      * Calculate featured score for a property
      */
@@ -1311,7 +1439,21 @@ class PropertyController extends Controller
     {
         $score = 0;
 
-        // Boost bonus (40 points max)
+        // ✅ FRESHNESS BONUS (0-40 points) - NEW PROPERTIES GET PRIORITY!
+        $daysSinceCreated = $property->created_at->diffInDays(now());
+        if ($daysSinceCreated <= 1) {
+            $score += 40; // Brand new (today)
+        } elseif ($daysSinceCreated <= 3) {
+            $score += 35; // Very recent (1-3 days)
+        } elseif ($daysSinceCreated <= 7) {
+            $score += 30; // Recent (3-7 days)
+        } elseif ($daysSinceCreated <= 14) {
+            $score += 20; // This week (7-14 days)
+        } elseif ($daysSinceCreated <= 30) {
+            $score += 10; // This month (14-30 days)
+        }
+
+        // Boost bonus (40 points)
         if (
             $property->is_boosted &&
             $property->boost_start_date <= now() &&
@@ -1321,8 +1463,8 @@ class PropertyController extends Controller
         }
 
         // Performance metrics (25 points max)
-        $score += min($property->views / 10, 15); // Up to 15 points for views
-        $score += min($property->favorites_count * 2, 10); // Up to 10 points for favorites
+        $score += min($property->views / 10, 15); // Up to 15 for views
+        $score += min($property->favorites_count * 2, 10); // Up to 10 for favorites
 
         // Quality indicators (20 points max)
         if ($property->verified) $score += 10;
@@ -1335,19 +1477,62 @@ class PropertyController extends Controller
         if (!empty($property->description['en']) && strlen($property->description['en']) > 100) $score += 3;
         if (count($property->features ?? []) >= 5) $score += 2;
 
-        // Freshness (15 points max - decays over time)
-        $daysSinceCreated = $property->created_at->diffInDays(now());
-        $score += max(15 - ($daysSinceCreated / 7), 0);
-
         return round($score, 2);
     }
+    public function getPopular(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'limit' => 'integer|min:1|max:50',
+                'language' => 'in:en,ar,ku',
+            ]);
 
+            if ($validator->fails()) {
+                return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
+            }
+
+            $limit = $request->get('limit', 20);
+
+            $properties = Property::where('is_active', true)
+                ->where('published', true)
+                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                ->where(function ($q) {
+                    $q->where('views', '>', 0)
+                        ->orWhere('favorites_count', '>', 0);
+                })
+                ->orderByRaw('(views * 0.6) + (favorites_count * 2) + (rating * 10) DESC')
+                ->limit($limit)
+                ->get();
+
+            $transformedData = $properties->map(function ($property) {
+                return $this->transformPropertyData($property);
+            });
+
+            return ApiResponse::success(
+                'Popular properties retrieved',
+                [
+                    'data' => $transformedData,
+                    'total' => $transformedData->count()
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Popular properties error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to get popular properties', $e->getMessage(), 500);
+        }
+    }
     /**
      * Get human-readable reason why property is featured
      */
     private function getFeaturedReason($property)
     {
         $reasons = [];
+
+        // ✅ NEW: Show if property is new
+        $daysSinceCreated = $property->created_at->diffInDays(now());
+        if ($daysSinceCreated <= 7) {
+            $reasons[] = 'New listing';
+        }
 
         if ($property->is_boosted) {
             $reasons[] = 'Promoted listing';
@@ -1367,10 +1552,6 @@ class PropertyController extends Controller
 
         if ($property->favorites_count > 10) {
             $reasons[] = 'Frequently saved';
-        }
-
-        if ($property->created_at >= now()->subDays(7)) {
-            $reasons[] = 'Recently listed';
         }
 
         if (count($property->images ?? []) >= 8) {
