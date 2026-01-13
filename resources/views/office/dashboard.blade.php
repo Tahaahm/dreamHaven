@@ -611,21 +611,30 @@
     ============================================ */
     .empty-state {
         text-align: center;
-        padding: 80px 20px;
-        animation: fadeIn 0.5s ease;
+        padding: 80px 24px;
+        background: #fff;
+        border-radius: var(--radius);
+        /* Optional: Add border if it's standalone */
+        /* border: 1px dashed var(--border); */
     }
 
     .empty-state-icon {
-        width: 120px;
-        height: 120px;
+        width: 80px;
+        height: 80px;
         margin: 0 auto 24px;
-        background: rgba(99, 102, 241, 0.08);
+        /* Light version of your primary color */
+        background-color: #eff6ff;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
+        transition: transform 0.3s ease;
     }
-
+.empty-state-icon i {
+        font-size: 32px;
+        /* Your Primary Color */
+        color: var(--primary);
+    }
     .empty-state-icon i {
         font-size: 48px;
         color: #6366f1;
@@ -633,16 +642,20 @@
     }
 
     .empty-state h3 {
-        color: var(--text-primary);
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 700;
+        color: var(--text-main);
         margin-bottom: 8px;
     }
 
-    .empty-state p {
+   .empty-state p {
         color: var(--text-muted);
-        font-size: 15px;
+        font-size: 14px;
         margin-bottom: 24px;
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
+        line-height: 1.5;
     }
 
     .empty-state-action {
@@ -650,18 +663,23 @@
         align-items: center;
         gap: 8px;
         padding: 12px 24px;
-        background: var(--gradient-primary);
+        /* Primary Background */
+        background-color: var(--primary);
         color: white;
-        border-radius: 10px;
-        text-decoration: none;
+        border-radius: 8px;
         font-weight: 600;
-        transition: var(--transition-smooth);
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        font-size: 14px;
+        text-decoration: none;
+        transition: all 0.2s;
+        /* Primary colored shadow */
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
     }
 
     .empty-state-action:hover {
+        /* Slightly darker primary for hover state */
+        background-color: #2563eb;
         transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.4);
+        box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4);
     }
 
     /* ============================================

@@ -131,12 +131,10 @@
     .plan-features { list-style: none; margin-bottom: 32px; }
     .plan-features li { padding: 12px 0; color: var(--text-secondary); font-size: 15px; display: flex; align-items: flex-start; gap: 12px; }
     .plan-features li i { color: #22c55e; font-size: 18px; margin-top: 2px; flex-shrink: 0; }
+
+    /* Ensure disabled button looks correct */
     .btn-subscribe { width: 100%; background: #6366f1; color: white; padding: 16px; border: none; border-radius: 10px; font-size: 17px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-    .btn-subscribe:hover { background: #5558e3; transform: translateY(-2px); }
-    .btn-subscribe.current { background: #22c55e; }
-    .btn-subscribe.upgrade { background: #f59e0b; }
-    .btn-subscribe.extend { background: #8b5cf6; }
-    .btn-subscribe:disabled { background: #94a3b8; cursor: not-allowed; transform: none; }
+    .btn-subscribe:disabled { background: #94a3b8; cursor: not-allowed; transform: none; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .empty { text-align: center; padding: 80px 20px; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; }
     .empty i { font-size: 64px; margin-bottom: 20px; opacity: 0.4; }
 </style>
@@ -267,22 +265,26 @@
                 </div>
             @endif
 
-            <form action="{{ route('office.subscription.subscribe', $plan->id) }}" method="POST">
-                @csrf
-                @if($isCurrentPlan)
-                    <button type="submit" class="btn-subscribe extend">
-                        <i class="fas fa-plus-circle"></i> Extend Plan
-                    </button>
-                @elseif($currentSubscription && $currentSubscription->isActive())
-                    <button type="submit" class="btn-subscribe upgrade">
-                        <i class="fas fa-arrow-up"></i> Upgrade to This Plan
-                    </button>
-                @else
-                    <button type="submit" class="btn-subscribe">
-                        <i class="fas fa-crown"></i> Subscribe Now
-                    </button>
-                @endif
-            </form>
+            {{--
+                LOCKED BUTTON SECTION
+                We have removed the form and replaced it with a disabled button
+                that instructs the user to contact the admin.
+            --}}
+            @if($isCurrentPlan)
+                <button type="button" class="btn-subscribe" disabled>
+                    <i class="fas fa-check-circle"></i> Active Plan
+                </button>
+            @else
+                <button type="button" class="btn-subscribe" disabled>
+                    <i class="fas fa-lock"></i> Contact Admin to Subscribe
+                </button>
+            @endif
+
+            {{-- Optional small help text to reinforce the message --}}
+            <div style="text-align: center; margin-top: 12px; font-size: 13px; color: var(--text-muted);">
+                <i class="fas fa-info-circle"></i> Admin activation required
+            </div>
+
         </div>
         @endforeach
     </div>

@@ -244,12 +244,14 @@
         aspect-ratio: 1;
         border: 3px solid #e5e7eb;
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        background: #f3f4f6;
     }
 
     .image-preview-item img {
         width: 100%;
         height: 100%;
         object-fit: cover;
+        display: block;
     }
 
     .image-remove-btn {
@@ -269,6 +271,7 @@
         font-size: 16px;
         transition: all 0.3s;
         box-shadow: 0 4px 12px rgba(239,68,68,0.4);
+        z-index: 10;
     }
 
     .image-remove-btn:hover {
@@ -336,6 +339,10 @@
 
         .form-actions {
             flex-direction: column;
+        }
+
+        .image-preview-grid {
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
         }
     }
 </style>
@@ -411,6 +418,11 @@
                 <div class="form-group">
                     <label class="form-label">Price (IQD)<span class="required">*</span></label>
                     <input type="number" name="price" class="form-input" placeholder="e.g., 150000000" min="0" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Price (USD)</label>
+                    <input type="number" name="price_usd" class="form-input" placeholder="e.g., 100000" min="0">
                 </div>
 
                 <div class="form-group">
@@ -644,81 +656,172 @@ function updateCoordinates(lat, lng) {
     document.getElementById('longitude').value = lng.toFixed(7);
 }
 
-// Language tabs
-document.querySelectorAll('.language-tab').forEach(tab => {
-    tab.addEventListener('click', function() {
-        const lang = this.dataset.lang;
-        document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
-        this.classList.add('active');
-        document.querySelector(`[data-content="${lang}"]`).classList.add('active');
+// Language tabs functionality
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.language-tab').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const lang = this.dataset.lang;
+
+            // Remove active class from all tabs and contents
+            document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
+
+            // Add active class to clicked tab and corresponding content
+            this.classList.add('active');
+            document.querySelector(`[data-content="${lang}"]`).classList.add('active');
+        });
     });
 });
 
-// Image upload
-const uploadZone = document.getElementById('uploadZone');
-const imageInput = document.getElementById('imageInput');
-const imagePreviewGrid = document.getElementById('imagePreviewGrid');
-let selectedFiles = [];
+// Image upload functionality - SIMPLIFIED AND BULLETPROOF
+(function() {
+    'use strict';
 
-uploadZone.addEventListener('click', () => imageInput.click());
+    console.log('Image upload script loaded'); // Debug
 
-uploadZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    uploadZone.classList.add('dragover');
-});
+    const uploadZone = document.getElementById('uploadZone');
+    const imageInput = document.getElementById('imageInput');
+    const imagePreviewGrid = document.getElementById('imagePreviewGrid');
 
-uploadZone.addEventListener('dragleave', () => {
-    uploadZone.classList.remove('dragover');
-});
+    if (!uploadZone || !imageInput || !imagePreviewGrid) {
+        console.error('Required elements not found!');
+        return;
+    }
 
-uploadZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadZone.classList.remove('dragover');
-    handleFiles(e.dataTransfer.files);
-});
+    let selectedFiles = [];
 
-imageInput.addEventListener('change', (e) => {
-    handleFiles(e.target.files);
-});
-
-function handleFiles(files) {
-    Array.from(files).forEach(file => {
-        if (file.type.startsWith('image/') && file.size <= 5 * 1024 * 1024) {
-            selectedFiles.push(file);
-            displayImage(file, selectedFiles.length - 1);
-        }
-    });
-    updateFileInput();
-}
-
-function displayImage(file, index) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const div = document.createElement('div');
-        div.className = 'image-preview-item';
-        div.innerHTML = `
-            <img src="${e.target.result}" alt="Preview">
-            <button type="button" class="image-remove-btn" onclick="removeImage(${index})">
-                <i class="fas fa-times"></i>
-            </button>
-        `;
-        imagePreviewGrid.appendChild(div);
+    // Simple click handler
+    uploadZone.onclick = function(e) {
+        console.log('Upload zone clicked');
+        imageInput.click();
     };
-    reader.readAsDataURL(file);
-}
 
-function removeImage(index) {
-    selectedFiles.splice(index, 1);
-    imagePreviewGrid.innerHTML = '';
-    selectedFiles.forEach((file, i) => displayImage(file, i));
-    updateFileInput();
-}
+    // File input change - THE MAIN HANDLER
+    imageInput.onchange = function(e) {
+        console.log('File input changed, files:', this.files.length);
+        handleNewFiles(this.files);
+    };
 
-function updateFileInput() {
-    const dataTransfer = new DataTransfer();
-    selectedFiles.forEach(file => dataTransfer.items.add(file));
-    imageInput.files = dataTransfer.files;
-}
+    // Drag and drop
+    uploadZone.ondragover = function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+    };
+
+    uploadZone.ondragleave = function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+    };
+
+    uploadZone.ondrop = function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        console.log('Files dropped:', e.dataTransfer.files.length);
+        handleNewFiles(e.dataTransfer.files);
+    };
+
+    function handleNewFiles(fileList) {
+        if (!fileList || fileList.length === 0) {
+            console.log('No files provided');
+            return;
+        }
+
+        console.log('Processing', fileList.length, 'files');
+
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            console.log('File:', file.name, file.type, file.size);
+
+            // Validate
+            if (!file.type.match('image.*')) {
+                alert(file.name + ' is not an image');
+                continue;
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert(file.name + ' is too large (max 5MB)');
+                continue;
+            }
+
+            // Add to array
+            selectedFiles.push(file);
+
+            // Show preview
+            showPreview(file, selectedFiles.length - 1);
+        }
+
+        // Update the input
+        syncInputFiles();
+    }
+
+    function showPreview(file, index) {
+        console.log('Creating preview for:', file.name);
+
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            console.log('Preview loaded for:', file.name);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'image-preview-item';
+            wrapper.setAttribute('data-index', index);
+
+            const img = document.createElement('img');
+            img.src = e.target.result;
+            img.alt = 'Preview';
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'image-remove-btn';
+            btn.innerHTML = '<i class="fas fa-times"></i>';
+            btn.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Remove clicked for index:', index);
+                removePreview(index);
+            };
+
+            wrapper.appendChild(img);
+            wrapper.appendChild(btn);
+            imagePreviewGrid.appendChild(wrapper);
+
+            console.log('Preview added to DOM');
+        };
+
+        reader.onerror = function(err) {
+            console.error('FileReader error:', err);
+        };
+
+        reader.readAsDataURL(file);
+    }
+
+    function removePreview(index) {
+        console.log('Removing file at index:', index);
+
+        // Remove from array
+        selectedFiles.splice(index, 1);
+
+        // Clear and rebuild
+        imagePreviewGrid.innerHTML = '';
+        selectedFiles.forEach((file, i) => showPreview(file, i));
+
+        // Update input
+        syncInputFiles();
+    }
+
+    function syncInputFiles() {
+        try {
+            const dt = new DataTransfer();
+            selectedFiles.forEach(f => dt.items.add(f));
+            imageInput.files = dt.files;
+            console.log('Input synced, total files:', imageInput.files.length);
+        } catch (err) {
+            console.error('Failed to sync files:', err);
+        }
+    }
+
+    console.log('Image upload handlers attached successfully');
+})();
 </script>
 @endsection

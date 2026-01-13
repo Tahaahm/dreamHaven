@@ -436,6 +436,11 @@
                     <label class="form-label">Price (IQD)<span class="required">*</span></label>
                     <input type="number" name="price" class="form-input" value="{{ $property->price['iqd'] ?? 0 }}" min="0" required>
                 </div>
+                    <div class="form-group">
+                <label class="form-label">Price (USD)</label>
+                {{-- Assuming your JSON structure in the DB stores it under 'usd' --}}
+                <input type="number" name="price_usd" class="form-input" value="{{ $property->price['usd'] ?? '' }}" min="0" placeholder="e.g., 100000">
+            </div>
 
                 <div class="form-group">
                     <label class="form-label">Property Type<span class="required">*</span></label>

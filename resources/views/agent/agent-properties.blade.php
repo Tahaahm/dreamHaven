@@ -219,55 +219,59 @@
 
 @if($properties && $properties->count() > 0)
     <div class="properties-grid">
-        @foreach($properties as $property)
-        <div class="property-card">
-            @if($property->images && count($property->images) > 0)
-                <img src="{{ $property->images[0] }}" alt="{{ $property->title['en'] ?? 'Property' }}" class="property-image" style="object-fit: cover;">
-            @else
-                <div class="property-image">
-                    <i class="fas fa-home"></i>
-                </div>
-            @endif
+      @foreach($properties as $property)
+<div class="property-card">
+    @if($property->images && count($property->images) > 0)
+        <img src="{{ $property->images[0] }}" alt="{{ $property->name['en'] ?? 'Property' }}" class="property-image" style="object-fit: cover;">
+    @else
+        <div class="property-image">
+            <i class="fas fa-home"></i>
+        </div>
+    @endif
 
-            <div class="property-status {{ $property->status == 'sold' ? 'sold' : '' }}">
-                {{ ucfirst($property->status ?? 'available') }}
+    <div class="property-status {{ $property->status == 'sold' ? 'sold' : '' }}">
+        {{ ucfirst($property->status ?? 'available') }}
+    </div>
+
+    <div class="property-content">
+        <div class="property-title">{{ $property->name['en'] ?? 'Untitled Property' }}</div>
+
+        <div class="property-location">
+            <i class="fas fa-map-marker-alt"></i>
+            {{ $property->address_details['city']['en'] ?? 'Unknown' }}, {{ $property->address_details['district']['en'] ?? '' }}
+        </div>
+
+        <div class="property-price">
+            {{ number_format($property->price['iqd'] ?? 0) }} IQD
+        </div>
+
+        <div class="property-features">
+            <div class="feature">
+                <i class="fas fa-bed"></i> {{ $property->rooms['bedroom']['count'] ?? 0 }}
             </div>
-
-            <div class="property-content">
-                <div class="property-title">{{ $property->title['en'] ?? 'Untitled Property' }}</div>
-                <div class="property-location">
-                    <i class="fas fa-map-marker-alt"></i>
-                    {{ $property->city['en'] ?? 'Unknown' }}, {{ $property->district['en'] ?? '' }}
-                </div>
-                <div class="property-price">
-                    {{ number_format($property->price['iqd'] ?? 0) }} IQD
-                </div>
-                <div class="property-features">
-                    <div class="feature">
-                        <i class="fas fa-bed"></i> {{ $property->bedrooms ?? 0 }}
-                    </div>
-                    <div class="feature">
-                        <i class="fas fa-bath"></i> {{ $property->bathrooms ?? 0 }}
-                    </div>
-                    <div class="feature">
-                        <i class="fas fa-ruler-combined"></i> {{ $property->area ?? 0 }}m²
-                    </div>
-                </div>
-                <div class="property-actions">
-                    <a href="{{ route('agent.property.edit', $property->id) }}" class="btn-edit">
-                        <i class="fas fa-edit"></i> Edit
-                    </a>
-                    <form action="{{ route('agent.property.delete', $property->id) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete this property?')">
-                        @csrf
-                        @method('DELETE')
-                        <button type="submit" class="btn-delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </form>
-                </div>
+            <div class="feature">
+                <i class="fas fa-bath"></i> {{ $property->rooms['bathroom']['count'] ?? 0 }}
+            </div>
+            <div class="feature">
+                <i class="fas fa-ruler-combined"></i> {{ $property->area ?? 0 }}m²
             </div>
         </div>
-        @endforeach
+
+        <div class="property-actions">
+            <a href="{{ route('agent.property.edit', $property->id) }}" class="btn-edit">
+                <i class="fas fa-edit"></i> Edit
+            </a>
+            <form action="{{ route('agent.property.delete', $property->id) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete this property?')">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="btn-delete">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+@endforeach
     </div>
 
     <div style="margin-top: 32px;">

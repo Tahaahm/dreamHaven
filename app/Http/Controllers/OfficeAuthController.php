@@ -1023,7 +1023,7 @@ class OfficeAuthController extends Controller
         ]);
 
         // Link subscription to office
-        $office->update(['Subscription_id' => $subscription->id]);
+        $office->update(['subscription_id' => $subscription->id]);
 
         return $subscription;
     }
@@ -2383,7 +2383,7 @@ class OfficeAuthController extends Controller
         $office = auth('office')->user()->load('subscription.currentPlan');
 
         // Check if has subscription
-        if (!$office->Subscription_id || !$office->subscription) {
+        if (!$office->subscription_id || !$office->subscription) {
             return redirect()->route('office.subscriptions')
                 ->with('error', 'You need an active subscription to add properties. Please subscribe to continue.');
         }

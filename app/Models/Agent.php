@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Models\Subscription\Subscription;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -15,7 +14,7 @@ use App\Models\Support\AgentSocialPlatform;
 use App\Models\Support\AgentSpecialization;
 use App\Models\Support\AgentUploadedProperty;
 
-use Illuminate\Foundation\Auth\User as Authenticatable; // <-- important for Auth
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class Agent extends Authenticatable
@@ -23,7 +22,7 @@ class Agent extends Authenticatable
     use HasFactory, HasUuids, Notifiable;
 
     protected $table = 'agents';
-    public $incrementing = false;      // UUIDs are not auto-incrementing
+    public $incrementing = false;
     protected $keyType = 'string';
 
     protected $fillable = [
@@ -36,7 +35,7 @@ class Agent extends Authenticatable
         'subscriber_id',
         'is_verified',
         'overall_rating',
-        'Subscription_id',
+        'Subscription_id', // Note: Ideally this should be subscription_id (lowercase) in DB
         'current_plan',
         'properties_uploaded_this_month',
         'remaining_property_uploads',
@@ -78,8 +77,12 @@ class Agent extends Authenticatable
         ];
     }
 
-    // Relationships
-    public function Subscription(): BelongsTo
+    // ==========================================
+    // 🔗 RELATIONSHIPS
+    // ==========================================
+
+    // Fixed naming convention (camelCase) for easier access: $agent->subscription
+    public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class, 'Subscription_id');
     }
@@ -134,7 +137,102 @@ class Agent extends Authenticatable
         return $this->morphMany(Property::class, 'owner');
     }
 
-    // Scopes
+    public function properties(): MorphMany
+    {
+        return $this->morphMany(Property::class, 'owner');
+    }
+
+    // ==========================================
+    // 🛡️ SUBSCRIPTION LOGIC HELPERS
+    // ==========================================
+
+    /**
+     * Check if the agent has a valid, active subscription
+     */
+    public function hasActiveSubscription(): bool
+    {
+        if (!$this->subscription) {
+            return false;
+        }
+
+        return $this->subscription->status === 'active'
+            && $this->subscription->end_date > now();
+    }
+
+    /**
+     * Check if the agent has remaining slots to upload properties
+     */
+    public function canAddProperty(): bool
+    {
+        if (!$this->hasActiveSubscription()) {
+            return false;
+        }
+
+        $limit = $this->subscription->property_activation_limit;
+
+        // If limit is 0 or -1, treat as unlimited (depending on your logic)
+        // Here assuming > 0 is a hard limit
+        if ($limit > 0) {
+            return $this->subscription->remaining_activations > 0;
+        }
+
+        return true; // Unlimited
+    }
+
+    /**
+     * Get info for the dashboard UI (Limit vs Used)
+     */
+    public function getPropertyLimitInfo(): array
+    {
+        if (!$this->subscription) {
+            return ['limit' => 0, 'remaining' => 0, 'used' => 0];
+        }
+
+        $limit = $this->subscription->property_activation_limit;
+        $remaining = $this->subscription->remaining_activations;
+
+        return [
+            'limit' => $limit,
+            'remaining' => $remaining,
+            'used' => $limit - $remaining,
+            'is_unlimited' => $limit <= 0
+        ];
+    }
+
+    /**
+     * Increment usage when a property is uploaded
+     */
+    public function incrementPropertyCount(): void
+    {
+        if ($this->subscription) {
+            $this->subscription->decrement('remaining_activations');
+            $this->subscription->increment('properties_activated_this_month');
+
+            // Also update local Agent stats if you keep them synced
+            $this->increment('properties_uploaded_this_month');
+            $this->decrement('remaining_property_uploads');
+        }
+    }
+
+    /**
+     * Decrement usage (e.g. if property is deleted)
+     */
+    public function decrementPropertyCount(): void
+    {
+        if ($this->subscription) {
+            $this->subscription->increment('remaining_activations');
+            $this->subscription->decrement('properties_activated_this_month');
+
+            // Also update local Agent stats
+            $this->decrement('properties_uploaded_this_month');
+            $this->increment('remaining_property_uploads');
+        }
+    }
+
+    // ==========================================
+    // 🔍 SCOPES
+    // ==========================================
+
     public function scopeVerified($query)
     {
         return $query->where('is_verified', true);
@@ -144,12 +242,6 @@ class Agent extends Authenticatable
     {
         return $query->where('city', $city);
     }
-
-    public function properties(): MorphMany
-    {
-        return $this->morphMany(Property::class, 'owner');
-    }
-
 
     public function scopeByPlan($query, $plan)
     {

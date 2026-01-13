@@ -29,7 +29,7 @@ class RealEstateOffice extends Authenticatable
         'company_bio_image',
         'profile_image',
         'account_type',
-        'Subscription_id',
+        'subscription_id',
         'current_plan',
         'is_verified',
         'average_rating',
@@ -45,6 +45,7 @@ class RealEstateOffice extends Authenticatable
         'years_experience',
         'about_company',
         'availability_schedule',
+
     ];
 
     protected $hidden = [
@@ -83,7 +84,7 @@ class RealEstateOffice extends Authenticatable
 
     public function subscription(): BelongsTo
     {
-        return $this->belongsTo(Subscription::class, 'Subscription_id');
+        return $this->belongsTo(Subscription::class, 'subscription_id');
     }
 
     public function propertyTypes(): HasMany
@@ -188,7 +189,8 @@ class RealEstateOffice extends Authenticatable
      */
     public function hasActiveSubscription(): bool
     {
-        if (!$this->Subscription_id || !$this->subscription) {
+        // ✅ CHANGE THIS to lowercase
+        if (!$this->subscription_id || !$this->subscription) {
             return false;
         }
 

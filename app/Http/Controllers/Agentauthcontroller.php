@@ -7,6 +7,7 @@ use App\Models\Property;
 use App\Models\Subscription\Subscription as ModelsSubscription;
 use App\Models\BannerAd;
 use App\Models\Appointment;
+use App\Models\Subscription\SubscriptionPlan;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -181,13 +182,25 @@ class AgentAuthController extends Controller
 
     public function storeProperty(Request $request)
     {
+
+        $validationRedirect = $this->validateSubscription();
+        if ($validationRedirect) {
+            return $validationRedirect;
+        }
         // 1. Get the authenticated Agent
         $agent = Auth::guard('agent')->user();
 
-        // 2. Validate the request exactly as required
+        // 2. Validate the request
+        // We added 'price_usd', 'title_ar', 'title_ku', and more to ensure everything is caught
         $request->validate([
             'title_en' => 'required|string|max:255',
+            'title_ar' => 'nullable|string|max:255',
+            'title_ku' => 'nullable|string|max:255',
+            'description_en' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_ku' => 'nullable|string',
             'price' => 'required|numeric|min:0',
+            'price_usd' => 'nullable|numeric|min:0', // Manual USD input
             'property_type' => 'required|string',
             'status' => 'required|string',
             'city_en' => 'required|string',
@@ -197,124 +210,146 @@ class AgentAuthController extends Controller
             'area' => 'nullable|numeric',
             'bedrooms' => 'nullable|integer',
             'bathrooms' => 'nullable|integer',
+            'floors' => 'nullable|integer',
+            'year_built' => 'nullable|integer',
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
-        // 3. Handle image uploads - matching your FIXED logic
+        // 3. Handle image uploads
         $imagePaths = [];
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
+                // Stores in storage/app/public/properties
                 $path = $image->store('properties', 'public');
+                // Generates a full URL for the Flutter app to consume
                 $imagePaths[] = asset('storage/' . $path);
             }
         }
 
-        // 4. Calculate USD price (assuming 1 USD = 1320 IQD)
+        // 4. Currency Logic
         $priceIQD = $request->price;
-        $priceUSD = round($priceIQD / 1320, 2);
+        // If the user didn't provide a USD price, calculate it using the 1320 rate
+        $priceUSD = $request->filled('price_usd')
+            ? $request->price_usd
+            : round($priceIQD / 1320, 2);
 
-        // 5. Generate unique property ID
+        // 5. Generate unique property ID (prop_YYYY_MM_DD_xxxxx)
         do {
             $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
         } while (DB::table('properties')->where('id', $propertyId)->exists());
 
-        // 6. Database Insertion - EVERY SINGLE FIELD INCLUDED
-        DB::table('properties')->insert([
-            'id' => $propertyId,
+        // 6. Database Insertion
+        try {
+            DB::table('properties')->insert([
+                'id' => $propertyId,
+                'owner_id' => $agent->id,
+                'owner_type' => 'App\Models\Agent',
 
-            // --- UPDATED OWNER LOGIC ---
-            'owner_id' => $agent->id,            // Links specifically to the Agent ID
-            'owner_type' => 'App\Models\Agent',   // Specifically sets the Morph Class
-            // ---------------------------
+                // Multi-language Name
+                'name' => json_encode([
+                    'en' => $request->title_en,
+                    'ar' => $request->title_ar ?? '',
+                    'ku' => $request->title_ku ?? '',
+                ]),
 
-            // JSON fields for Multi-language support
-            'name' => json_encode([
-                'en' => $request->title_en,
-                'ar' => $request->title_ar ?? '',
-                'ku' => $request->title_ku ?? '',
-            ]),
-            'description' => json_encode([
-                'en' => $request->description_en ?? '',
-                'ar' => $request->description_ar ?? '',
-                'ku' => $request->description_ku ?? '',
-            ]),
-            'type' => json_encode([
-                'category' => $request->property_type,
-            ]),
-            'price' => json_encode([
-                'iqd' => (float) $priceIQD,
-                'usd' => (float) $priceUSD,
-            ]),
-            'rooms' => json_encode([
-                'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
-                'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
-            ]),
-            'locations' => json_encode([
-                [
-                    'lat' => (float) $request->latitude,
-                    'lng' => (float) $request->longitude,
-                ]
-            ]),
-            'address_details' => json_encode([
-                'city' => [
-                    'en' => $request->city_en,
-                    'ar' => $request->city_ar ?? '',
-                    'ku' => $request->city_ku ?? '',
-                ],
-                'district' => [
-                    'en' => $request->district_en,
-                    'ar' => $request->district_ar ?? '',
-                    'ku' => $request->district_ku ?? '',
-                ],
-            ]),
+                // Multi-language Description
+                'description' => json_encode([
+                    'en' => $request->description_en ?? '',
+                    'ar' => $request->description_ar ?? '',
+                    'ku' => $request->description_ku ?? '',
+                ]),
 
-            // Simple/Static fields from your original code
-            'listing_type' => 'sell',
-            'area' => (float) ($request->area ?? 0),
-            'furnished' => 0,
-            'electricity' => 1,
-            'water' => 1,
-            'internet' => 0,
-            'images' => json_encode($imagePaths),
-            'address' => $request->address ?? null,
-            'floor_number' => (int) ($request->floors ?? 0),
-            'year_built' => (int) ($request->year_built ?? null),
+                // Property Category
+                'type' => json_encode([
+                    'category' => $request->property_type,
+                ]),
 
-            // Additional required JSON fields
-            'features' => json_encode([]),
-            'amenities' => json_encode([]),
-            'furnishing_details' => json_encode(['status' => 'unfurnished']),
-            'floor_details' => null,
-            'rental_period' => null,
-            'virtual_tour_url' => null,
-            'floor_plan_url' => null,
-            'availability' => json_encode([
-                'status' => 'available',
-                'labels' => [
-                    'en' => 'Available',
-                    'ar' => 'متوفر',
-                    'ku' => 'بەردەست'
-                ]
-            ]),
+                // Structured Price (Crucial for Flutter)
+                'price' => json_encode([
+                    'iqd' => (float) $priceIQD,
+                    'usd' => (float) $priceUSD,
+                ]),
 
-            // System & Analytics fields
-            'verified' => 0,
-            'is_active' => 1,
-            'published' => 1,
-            'status' => $request->status,
-            'views' => 0,
-            'favorites_count' => 0,
-            'rating' => 0,
-            'is_boosted' => 0,
-            'view_analytics' => json_encode(['unique_views' => 0, 'returning_views' => 0]),
-            'favorites_analytics' => json_encode(['last_30_days' => 0]),
+                // Room details
+                'rooms' => json_encode([
+                    'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
+                    'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
+                ]),
 
-            // Timestamps
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+                // Map Coordinates
+                'locations' => json_encode([
+                    [
+                        'lat' => (float) $request->latitude,
+                        'lng' => (float) $request->longitude,
+                    ]
+                ]),
 
-        return redirect()->route('agent.properties')->with('success', 'Property added successfully!');
+                // Detailed Address Structure
+                'address_details' => json_encode([
+                    'city' => [
+                        'en' => $request->city_en,
+                        'ar' => $request->city_ar ?? '',
+                        'ku' => $request->city_ku ?? '',
+                    ],
+                    'district' => [
+                        'en' => $request->district_en,
+                        'ar' => $request->district_ar ?? '',
+                        'ku' => $request->district_ku ?? '',
+                    ],
+                ]),
+
+                // Static/Standard Fields
+                'listing_type' => 'sell',
+                'area' => (float) ($request->area ?? 0),
+                'furnished' => 0,
+                'electricity' => 1,
+                'water' => 1,
+                'internet' => 0,
+                'images' => json_encode($imagePaths),
+                'address' => $request->address ?? null,
+                'floor_number' => (int) ($request->floors ?? 0),
+                'year_built' => (int) ($request->year_built ?? null),
+
+                // Default JSON fields to prevent null errors in the app
+                'features' => json_encode([]),
+                'amenities' => json_encode([]),
+                'furnishing_details' => json_encode(['status' => 'unfurnished']),
+                'floor_details' => null,
+                'rental_period' => null,
+                'virtual_tour_url' => null,
+                'floor_plan_url' => null,
+
+                'availability' => json_encode([
+                    'status' => 'available',
+                    'labels' => [
+                        'en' => 'Available',
+                        'ar' => 'متوفر',
+                        'ku' => 'بەردەست'
+                    ]
+                ]),
+
+                // System & Metadata
+                'verified' => 0,
+                'is_active' => 1,
+                'published' => 1,
+                'status' => $request->status,
+                'views' => 0,
+                'favorites_count' => 0,
+                'rating' => 0,
+                'is_boosted' => 0,
+                'view_analytics' => json_encode(['unique_views' => 0, 'returning_views' => 0]),
+                'favorites_analytics' => json_encode(['last_30_days' => 0]),
+
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            return redirect()->route('agent.properties')->with('success', 'Property added successfully!');
+        } catch (\Exception $e) {
+            // Log the error if something goes wrong with the JSON or DB
+            Log::error('Property Store Error: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Failed to add property. Please check your data.');
+        }
     }
 
     public function showEditProperty($id)
@@ -333,104 +368,122 @@ class AgentAuthController extends Controller
     {
         $agent = Auth::guard('agent')->user();
 
-        $property = Property::where('id', $id)
+        // 1. Find the property and ensure this agent owns it
+        $property = DB::table('properties')
+            ->where('id', $id)
             ->where('owner_id', $agent->id)
             ->where('owner_type', 'App\Models\Agent')
-            ->firstOrFail();
+            ->first();
 
+        if (!$property) {
+            return redirect()->route('agent.properties')->with('error', 'Property not found or unauthorized.');
+        }
+
+        // 2. Validate the request (Matching your Add form)
         $request->validate([
             'title_en' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
+            'price_usd' => 'nullable|numeric|min:0',
             'property_type' => 'required|string',
             'status' => 'required|string',
             'city_en' => 'required|string',
             'district_en' => 'required|string',
             'latitude' => 'required|numeric',
             'longitude' => 'required|numeric',
-            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'area' => 'nullable|numeric',
+            'bedrooms' => 'nullable|integer',
+            'bathrooms' => 'nullable|integer',
         ]);
 
-        // Get current images
-        $currentImages = is_array($property->images) ? $property->images : json_decode($property->images, true) ?? [];
+        // 3. Handle Image Logic
+        $currentImages = json_decode($property->images, true) ?? [];
 
-        // Remove marked images
-        if (!empty($request->remove_images)) {
+        // Remove marked images from the array
+        if ($request->filled('remove_images')) {
             $removeIndices = json_decode($request->remove_images, true);
-            rsort($removeIndices);
-            foreach ($removeIndices as $index) {
-                if (isset($currentImages[$index])) {
-                    unset($currentImages[$index]);
+            if (is_array($removeIndices)) {
+                rsort($removeIndices); // Sort descending to prevent index shifting
+                foreach ($removeIndices as $index) {
+                    if (isset($currentImages[$index])) {
+                        // Optional: Delete the actual file from storage
+                        $filePath = str_replace(asset('storage/'), '', $currentImages[$index]);
+                        Storage::disk('public')->delete($filePath);
+
+                        unset($currentImages[$index]);
+                    }
                 }
+                $currentImages = array_values($currentImages); // Re-index array
             }
-            $currentImages = array_values($currentImages);
         }
 
-        // Add new images
-        // ✅ Add new images - SAME AS PROPERTY CONTROLLER
+        // Add new uploaded images
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('properties', 'public');
-                $currentImages[] = asset('storage/' . $path); // ✅ FIXED
+                $currentImages[] = asset('storage/' . $path);
             }
         }
 
-        // Calculate USD price
+        // 4. Currency Logic
         $priceIQD = $request->price;
-        $priceUSD = round($priceIQD / 1320, 2);
+        $priceUSD = $request->filled('price_usd')
+            ? $request->price_usd
+            : round($priceIQD / 1320, 2);
 
-        // Update property with correct structure
-        DB::table('properties')
-            ->where('id', $id)
-            ->update([
-                'name' => json_encode([
-                    'en' => $request->title_en,
-                    'ar' => $request->title_ar ?? '',
-                    'ku' => $request->title_ku ?? '',
-                ]),
-                'description' => json_encode([
-                    'en' => $request->description_en ?? '',
-                    'ar' => $request->description_ar ?? '',
-                    'ku' => $request->description_ku ?? '',
-                ]),
-                'type' => json_encode([
-                    'category' => $request->property_type,
-                ]),
-                'price' => json_encode([
-                    'iqd' => (float) $priceIQD,
-                    'usd' => (float) $priceUSD,
-                ]),
-                'rooms' => json_encode([
-                    'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
-                    'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
-                ]),
-                'locations' => json_encode([
-                    [
+        // 5. Execute the Update
+        try {
+            DB::table('properties')
+                ->where('id', $id)
+                ->update([
+                    'name' => json_encode([
+                        'en' => $request->title_en,
+                        'ar' => $request->title_ar ?? '',
+                        'ku' => $request->title_ku ?? '',
+                    ]),
+                    'description' => json_encode([
+                        'en' => $request->description_en ?? '',
+                        'ar' => $request->description_ar ?? '',
+                        'ku' => $request->description_ku ?? '',
+                    ]),
+                    'price' => json_encode([
+                        'iqd' => (float) $priceIQD,
+                        'usd' => (float) $priceUSD,
+                    ]),
+                    'type' => json_encode(['category' => $request->property_type]),
+                    'rooms' => json_encode([
+                        'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
+                        'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
+                    ]),
+                    'locations' => json_encode([[
                         'lat' => (float) $request->latitude,
                         'lng' => (float) $request->longitude,
-                    ]
-                ]),
-                'address_details' => json_encode([
-                    'city' => [
-                        'en' => $request->city_en,
-                        'ar' => $request->city_ar ?? '',
-                        'ku' => $request->city_ku ?? '',
-                    ],
-                    'district' => [
-                        'en' => $request->district_en,
-                        'ar' => $request->district_ar ?? '',
-                        'ku' => $request->district_ku ?? '',
-                    ],
-                ]),
-                'area' => (float) ($request->area ?? 0),
-                'images' => json_encode($currentImages),
-                'address' => $request->address ?? null,
-                'floor_number' => (int) ($request->floors ?? 0),
-                'year_built' => (int) ($request->year_built ?? null),
-                'status' => $request->status,
-                'updated_at' => now(),
-            ]);
+                    ]]),
+                    'address_details' => json_encode([
+                        'city' => [
+                            'en' => $request->city_en,
+                            'ar' => $request->city_ar ?? '',
+                            'ku' => $request->city_ku ?? '',
+                        ],
+                        'district' => [
+                            'en' => $request->district_en,
+                            'ar' => $request->district_ar ?? '',
+                            'ku' => $request->district_ku ?? '',
+                        ],
+                    ]),
+                    'area' => (float) ($request->area ?? 0),
+                    'images' => json_encode($currentImages),
+                    'address' => $request->address ?? null,
+                    'floor_number' => (int) ($request->floors ?? 0),
+                    'year_built' => (int) ($request->year_built ?? null),
+                    'status' => $request->status,
+                    'updated_at' => now(),
+                ]);
 
-        return redirect()->route('agent.properties')->with('success', 'Property updated successfully!');
+            return redirect()->route('agent.properties')->with('success', 'Property updated successfully!');
+        } catch (\Exception $e) {
+            Log::error('Property Update Error: ' . $e->getMessage());
+            return back()->with('error', 'Something went wrong: ' . $e->getMessage());
+        }
     }
 
     public function deleteProperty($id)
@@ -452,13 +505,22 @@ class AgentAuthController extends Controller
     {
         $agent = Auth::guard('agent')->user();
 
-        $currentSubscription = ModelsSubscription::where('user_id', $agent->id)
+        // 1. Get Active Subscription
+        $currentSubscription = ModelsSubscription::with('currentPlan')
+            ->where('user_id', $agent->id)
             ->where('status', 'active')
+            ->latest()
             ->first();
 
-        return view('agent.agent-subscriptions', compact('currentSubscription'));
-    }
+        // 2. Fetch Agent Plans (THIS WAS MISSING)
+        $plans = SubscriptionPlan::where('type', 'agent')
+            ->where('active', true)
+            ->orderBy('sort_order', 'asc') // or orderBy('final_price_iqd', 'asc')
+            ->get();
 
+        // 3. Pass both variables to the view
+        return view('agent.agent-subscriptions', compact('currentSubscription', 'plans'));
+    }
     // APPOINTMENTS
     public function showAppointments()
     {
@@ -830,5 +892,44 @@ class AgentAuthController extends Controller
         $agent->save();
 
         return redirect()->route('agent.profile', $agent->id)->with('success', 'Password changed successfully!');
+    }
+
+    private function validateSubscription()
+    {
+        $agent = Auth::guard('agent')->user();
+
+        // 1. Check if subscription exists
+        $subscription = ModelsSubscription::where('user_id', $agent->id)
+            ->where('status', 'active')
+            ->latest()
+            ->first();
+
+        if (!$subscription) {
+            return redirect()->route('agent.subscriptions')
+                ->with('error', 'You need an active subscription to add properties. Please subscribe.');
+        }
+
+        // 2. Check if expired
+        if ($subscription->end_date < now()) {
+            return redirect()->route('agent.subscriptions')
+                ->with('error', 'Your subscription has expired. Please renew to continue.');
+        }
+
+        // 3. Check Property Limit (If limit is 0, we assume it means Unlimited or handle differently based on your logic)
+        // Assuming > 0 is a limit. If your unlimited plan stores -1 or 0, adjust accordingly.
+        $limit = $subscription->property_activation_limit;
+
+        if ($limit > 0) {
+            $currentCount = Property::where('owner_id', $agent->id)
+                ->where('owner_type', 'App\Models\Agent')
+                ->count();
+
+            if ($currentCount >= $limit) {
+                return redirect()->route('agent.properties')
+                    ->with('error', "You have reached your limit of {$limit} properties. Please upgrade your plan.");
+            }
+        }
+
+        return null; // Passed all checks
     }
 }
