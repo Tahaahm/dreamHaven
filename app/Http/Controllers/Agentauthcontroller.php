@@ -505,21 +505,58 @@ class AgentAuthController extends Controller
 
     public function showSubscriptions()
     {
-        $agent = Auth::guard('agent')->user();
+        try {
+            $agent = Auth::guard('agent')->user();
 
-        $currentSubscription = ModelsSubscription::with('currentPlan')
-            ->where('user_id', $agent->id)
-            ->where('status', 'active')
-            ->latest()
-            ->first();
+            // 1. Log the Agent trying to view the page
+            Log::info('------------------------------------------');
+            Log::info('ShowSubscriptions: User Request', [
+                'agent_id' => $agent->id ?? 'unknown',
+                'agent_name' => $agent->agent_name ?? 'unknown'
+            ]);
 
-        // Use the scopeActive() from your model if you prefer
-        $plans = SubscriptionPlan::where('type', 'agent')
-            ->active() // This calls scopeActive from your model
-            ->orderBy('sort_order', 'asc')
-            ->get();
+            // 2. Log Current Subscription Search
+            $currentSubscription = ModelsSubscription::with('currentPlan')
+                ->where('user_id', $agent->id)
+                ->where('status', 'active')
+                ->latest()
+                ->first();
 
-        return view('agent.agent-subscriptions', compact('currentSubscription', 'plans'));
+            Log::info('ShowSubscriptions: Current Subscription Found?', [
+                'found' => $currentSubscription ? 'Yes' : 'No',
+                'plan_name' => $currentSubscription?->currentPlan?->name ?? 'N/A'
+            ]);
+
+            // 3. Build the Plans Query to inspect SQL
+            $plansQuery = SubscriptionPlan::where('type', 'agent')
+                ->active() // checking active scope
+                ->orderBy('sort_order', 'asc');
+
+            // 4. Log the exact SQL being executed
+            Log::info('ShowSubscriptions: Plans Query SQL', [
+                'sql' => $plansQuery->toSql(),
+                'bindings' => $plansQuery->getBindings()
+            ]);
+
+            // 5. Execute Query
+            $plans = $plansQuery->get();
+
+            // 6. Log the results
+            Log::info('ShowSubscriptions: Plans Results', [
+                'count' => $plans->count(),
+                'names_found' => $plans->pluck('name')->toArray(),
+                'ids_found' => $plans->pluck('id')->toArray()
+            ]);
+
+            // 7. Debug: Check for NON-active plans (To see if they exist but are hidden)
+            $hiddenPlans = SubscriptionPlan::where('type', 'agent')->where('active', 0)->count();
+            Log::info('ShowSubscriptions: DEBUG - Inactive/Hidden Plans Count', ['count' => $hiddenPlans]);
+
+            return view('agent.agent-subscriptions', compact('currentSubscription', 'plans'));
+        } catch (\Exception $e) {
+            Log::error('ShowSubscriptions: Error', ['message' => $e->getMessage()]);
+            return back()->with('error', 'Error loading subscriptions');
+        }
     }
     // APPOINTMENTS
     public function showAppointments()
