@@ -501,24 +501,24 @@ class AgentAuthController extends Controller
     }
 
     // SUBSCRIPTIONS
+    // App/Http/Controllers/AgentAuthController.php
+
     public function showSubscriptions()
     {
         $agent = Auth::guard('agent')->user();
 
-        // 1. Get Active Subscription
         $currentSubscription = ModelsSubscription::with('currentPlan')
             ->where('user_id', $agent->id)
             ->where('status', 'active')
             ->latest()
             ->first();
 
-        // 2. Fetch Agent Plans (THIS WAS MISSING)
+        // Use the scopeActive() from your model if you prefer
         $plans = SubscriptionPlan::where('type', 'agent')
-            ->where('active', true)
-            ->orderBy('sort_order', 'asc') // or orderBy('final_price_iqd', 'asc')
+            ->active() // This calls scopeActive from your model
+            ->orderBy('sort_order', 'asc')
             ->get();
 
-        // 3. Pass both variables to the view
         return view('agent.agent-subscriptions', compact('currentSubscription', 'plans'));
     }
     // APPOINTMENTS
