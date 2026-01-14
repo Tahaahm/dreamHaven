@@ -103,7 +103,9 @@ class PropertyController extends Controller
     public function search(Request $request)
     {
         try {
+            // 1. VALIDATION
             $validator = Validator::make($request->all(), [
+                'search' => 'nullable|string|max:255', // <--- IMPORTANT: Allow search param
                 'page' => 'integer|min:1',
                 'per_page' => 'integer|min:1|max:100',
                 'sort' => 'in:price_asc,price_desc,area_asc,area_desc,newest,oldest,most_viewed',
@@ -117,34 +119,33 @@ class PropertyController extends Controller
                 'furnished' => 'boolean',
                 'city' => 'string',
                 'language' => 'in:en,ar,ku',
-                'status' => 'in:cancelled,pending,approved,available,sold,rented',
                 'listing_type' => 'in:rent,sell',
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Invalid search parameters',
-                    $validator->errors(),
-                    400
-                );
+                return ApiResponse::error('Invalid search parameters', $validator->errors(), 400);
             }
 
+            // 2. QUERY BUILDER
             $query = Property::query()->active()->published();
 
-            // Apply filters
+            // 3. APPLY FILTERS (Includes the new search logic)
             $this->applySearchFilters($query, $request);
 
-            // Apply sorting
+            // 4. APPLY SORTING
             $this->applySorting($query, $request->get('sort', 'newest'), $request->get('currency', 'usd'));
 
+            // 5. PAGINATION
             $perPage = $request->get('per_page', 20);
             $properties = $query->paginate($perPage);
 
+            // 6. TRANSFORMATION
             $language = $request->get('language', 'en');
             $transformedData = collect($properties->items())->map(function ($property) use ($language) {
                 return $this->transformPropertyForSearch($property, $language);
             });
 
+            // 7. RESPONSE
             return ApiResponse::success(
                 'Properties found',
                 [
@@ -156,17 +157,8 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Property search error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-
-            return ApiResponse::error(
-                'Search failed',
-                $e->getMessage(),
-                500
-            );
+            Log::error('Property search error', ['msg' => $e->getMessage()]);
+            return ApiResponse::error('Search failed', $e->getMessage(), 500);
         }
     }
     private function getDefaultSearchPreferences()
@@ -3298,6 +3290,36 @@ class PropertyController extends Controller
     }
     private function applySearchFilters($query, $request)
     {
+        // ==========================================
+        // 1. FIXED SEARCH LOGIC (No 'location' column)
+        // ==========================================
+        if ($request->filled('search')) {
+            $searchTerm = strtolower($request->search);
+
+            $query->where(function ($q) use ($searchTerm) {
+                // Search in Name (Multilingual)
+                $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(name, '$.en'))) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(name, '$.ar'))) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(name, '$.ku'))) LIKE ?", ["%{$searchTerm}%"])
+
+                    // Search in Description (English)
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(description, '$.en'))) LIKE ?", ["%{$searchTerm}%"])
+
+                    // Search in Address Details: City (Multilingual)
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar'))) LIKE ?", ["%{$searchTerm}%"])
+
+                    // Search in Address Details: Neighborhood (Multilingual)
+                    // This replaces the broken 'location' column
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.en'))) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.ar'))) LIKE ?", ["%{$searchTerm}%"]);
+            });
+        }
+
+        // ==========================================
+        // 2. EXISTING FILTERS (Unchanged)
+        // ==========================================
+
         // Status filter
         if ($request->has('status')) {
             $query->where('status', $request->status);
@@ -3332,7 +3354,8 @@ class PropertyController extends Controller
 
         // Property type
         if ($request->has('property_type')) {
-            $query->whereRaw("JSON_EXTRACT(type, '$.category') = ?", [$request->property_type]);
+            $type = strtolower($request->property_type);
+            $query->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?", [$type]);
         }
 
         // Furnished
@@ -3340,21 +3363,16 @@ class PropertyController extends Controller
             $query->where('furnished', $request->boolean('furnished'));
         }
 
-        // City filter
+        // City filter (Specific)
         if ($request->has('city')) {
-            $city = $request->city;
+            $city = strtolower($request->city);
             $query->where(function ($q) use ($city) {
-                $q->whereRaw("JSON_EXTRACT(address_details, '$.city.en') LIKE ?", ["%{$city}%"])
-                    ->orWhereRaw("JSON_EXTRACT(address_details, '$.city.ar') LIKE ?", ["%{$city}%"])
-                    ->orWhereRaw("JSON_EXTRACT(address_details, '$.city.ku') LIKE ?", ["%{$city}%"]);
+                $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE ?", ["%{$city}%"])
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar'))) LIKE ?", ["%{$city}%"])
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku'))) LIKE ?", ["%{$city}%"]);
             });
         }
     }
-
-
-
-
-
 
     private function generateMapStatistics($mapData)
     {
