@@ -316,7 +316,7 @@ Route::prefix('v1/api/agents')->group(function () {
     Route::get('/company/{companyId}', [AgentController::class, 'getAgentsByCompany']);
     Route::get('/{id}', [AgentController::class, 'show']);
     Route::post('/users/{user_id}/convert-to-agent', [AgentController::class, 'createFromUser']);
-
+    Route::post('/login', [AgentController::class, 'login']);
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/', [AgentController::class, 'store']);
         Route::put('/{id}', [AgentController::class, 'update']);

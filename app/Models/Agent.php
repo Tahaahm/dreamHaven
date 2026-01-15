@@ -16,11 +16,11 @@ use App\Models\Support\AgentUploadedProperty;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens; // 👈 IMPORT THIS
 
 class Agent extends Authenticatable
 {
-    use HasFactory, HasUuids, Notifiable;
-
+    use HasFactory, HasUuids, Notifiable, HasApiTokens;
     protected $table = 'agents';
     public $incrementing = false;
     protected $keyType = 'string';

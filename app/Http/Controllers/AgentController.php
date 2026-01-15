@@ -50,6 +50,68 @@ class AgentController extends Controller
         );
     }
 
+    public function login(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'password' => 'required|string',
+            'device_name' => 'nullable|string', // Flutter should send this
+        ]);
+
+        if ($validator->fails()) {
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
+        }
+
+        $email = $request->email;
+        $password = $request->password;
+        $deviceName = $request->device_name ?? 'Unknown Device';
+
+        // 1️⃣ Try logging in as a normal User
+        $user = User::where('email', $email)->first();
+        if ($user && Hash::check($password, $user->password)) {
+            // Generate Sanctum Token
+            $token = $user->createToken($deviceName)->plainTextToken;
+
+            return ApiResponse::success(
+                ResponseDetails::successMessage('Logged in successfully as user'),
+                [
+                    'token' => $token,
+                    'user' => $user,
+                    'role' => 'user'
+                ],
+                ResponseDetails::CODE_SUCCESS
+            );
+        }
+
+        // 2️⃣ Try logging in as an Agent
+        $agent = Agent::where('primary_email', $email)->first();
+        if ($agent && Hash::check($password, $agent->password)) {
+            // Generate Sanctum Token
+            $token = $agent->createToken($deviceName)->plainTextToken;
+
+            return ApiResponse::success(
+                ResponseDetails::successMessage('Logged in successfully as agent'),
+                [
+                    'token' => $token,
+                    'agent' => $agent, // Flutter expects this key based on your logs
+                    'role' => 'agent'
+                ],
+                ResponseDetails::CODE_SUCCESS
+            );
+        }
+
+        // 3️⃣ Invalid Credentials
+        return ApiResponse::error(
+            'Invalid credentials',
+            ['email' => ['These credentials do not match our records.']],
+            401 // Unauthorized
+        );
+    }
+
     public function getTopRated()
     {
         $agents = Agent::orderBy('overall_rating', 'desc')->limit(10)->get();
