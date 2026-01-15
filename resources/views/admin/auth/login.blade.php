@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login - Dream Haven</title>
+    <title>Admin Login - Dream Mulk</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -84,7 +84,7 @@
                         required
                         autofocus
                         class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition @error('email') border-red-500 @enderror"
-                        placeholder="admin@dreamhaven.com"
+                        placeholder="admin@dreammulk.com"
                     >
                     @error('email')
                     <p class="mt-2 text-sm text-red-600">{{ $message }}</p>
@@ -149,7 +149,7 @@
                 Secured Admin Access Only
             </p>
             <p class="text-xs text-gray-500 mt-2">
-                &copy; {{ date('Y') }} Dream Haven. All rights reserved.
+                &copy; {{ date('Y') }} Dream Mulk. All rights reserved.
             </p>
         </div>
 
