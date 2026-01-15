@@ -2706,7 +2706,22 @@ class UserController extends Controller
                 if (!$firebaseUserExists) {
                     // Create Firebase user first with a temporary password
                     $tempPassword = Str::random(16);
-                    $firebaseResult = $this->firebaseAuth->createUserFromLaravel($user, $tempPassword);
+
+                    // --- FIX STARTS HERE ---
+                    // We clone the user and REMOVE the phone number for this specific request.
+                    // This ensures that if the phone number is already taken by another account,
+                    // it won't block the creation of this Email-based user.
+                    $userForFirebase = $user->replicate();
+                    $userForFirebase->id = $user->id; // replicat() clears ID, we need it back for logging/refs
+
+                    // Nullify common phone column names to ensure they aren't sent to Firebase
+                    $userForFirebase->phone = null;
+                    $userForFirebase->phone_number = null;
+                    $userForFirebase->mobile = null;
+
+                    // Pass the modified user object (without phone) to the creator function
+                    $firebaseResult = $this->firebaseAuth->createUserFromLaravel($userForFirebase, $tempPassword);
+                    // --- FIX ENDS HERE ---
 
                     if (!$firebaseResult['success']) {
                         return ApiResponse::error('Failed to prepare password reset', $firebaseResult['error'], 500);
