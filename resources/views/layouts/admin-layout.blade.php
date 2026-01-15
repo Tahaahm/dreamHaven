@@ -61,7 +61,7 @@
                         <i class="fas fa-shield-halved text-white text-lg"></i>
                     </div>
                     <div>
-                        <h1 class="text-lg font-bold text-white tracking-wide">Dream Haven</h1>
+                        <h1 class="text-lg font-bold text-white tracking-wide">Dream Mulk</h1>
                         <p class="text-xs text-gray-400 font-medium">Admin Panel</p>
                     </div>
                 </div>
