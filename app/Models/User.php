@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Models\Support\UserFavoriteProperty;
 use App\Models\Support\UserNotificationReference;
-use App\Services\User\UserAppointmentService;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -12,8 +11,7 @@ use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Str; // ✅ Make sure this is here
+use Illuminate\Support\Str;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -36,14 +34,13 @@ class User extends Authenticatable implements MustVerifyEmail
         'search_preferences',
         'device_tokens',
         'email_verified_at',
-        'is_active',
-
+        'last_login_at',
+        'google_id',
         'role',
         'verification_code',
-        'is_verified',
+        'is_verified', // ✅ Added is_verified to fillable
+        'remember_token',
     ];
-
-
 
     protected $hidden = [
         'password',
@@ -52,11 +49,12 @@ class User extends Authenticatable implements MustVerifyEmail
 
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'last_login_at' => 'datetime',
         'password' => 'hashed',
         'search_preferences' => 'array',
-        'is_active' => 'boolean',
-        'lat' => 'decimal:6',
-        'lng' => 'decimal:6',
+        'is_verified' => 'boolean', // ✅ Added is_verified cast
+        'lat' => 'decimal:8',
+        'lng' => 'decimal:8',
         'device_tokens' => 'array',
         'verification_code' => 'string',
     ];
@@ -87,7 +85,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function appointments(): HasMany
     {
-        return $this->hasMany(UserAppointmentService::class, 'user_id');
+        return $this->hasMany(Appointment::class, 'user_id');
     }
 
     public function favoriteProperties(): HasMany
@@ -145,6 +143,11 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function scopeVerified($query)
     {
+        return $query->where('is_verified', true);
+    }
+
+    public function scopeEmailVerified($query)
+    {
         return $query->whereNotNull('email_verified_at');
     }
 
@@ -153,6 +156,9 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->username;
     }
 
+    /**
+     * Get all FCM tokens for this user
+     */
     public function getFCMTokens(): array
     {
         $deviceTokens = $this->device_tokens ?? [];
@@ -165,5 +171,21 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return $fcmTokens;
+    }
+
+    /**
+     * Check if user is verified
+     */
+    public function isVerified(): bool
+    {
+        return $this->is_verified === true;
+    }
+
+    /**
+     * Update last login timestamp
+     */
+    public function updateLastLogin(): void
+    {
+        $this->update(['last_login_at' => now()]);
     }
 }

@@ -81,5 +81,6 @@ class Kernel extends HttpKernel
         'ensure.verified' => \App\Http\Middleware\EnsureUserIsVerified::class,
         'auth.any' => \App\Http\Middleware\AuthAnyGuard::class,
 
+
     ];
 }

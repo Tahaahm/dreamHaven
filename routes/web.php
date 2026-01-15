@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\RealEstateOfficeController;
 use App\Http\Controllers\AgentController;
@@ -12,8 +13,6 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
-use App\Http\Middleware\AgentOnly;
-use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AgentAuthController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
@@ -182,29 +181,29 @@ Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(functi
         Route::delete('/admin/users/{id}', [AuthController::class, 'deleteUser'])->name('admin.users.delete');
 
         // Entity Management
-        Route::get('/admin/entities', [AdminController::class, 'entitiesList'])->name('admin.entities.list');
-        Route::get('/admin/entity-detail/{type}/{id}', [AuthController::class, 'entityDetail'])->name('admin.entity.detail');
-        Route::post('/admin/entity-suspend/{type}/{id}', [AuthController::class, 'suspendEntity'])->name('admin.entity.suspend');
-        Route::delete('/admin/entity-delete/{type}/{id}', [AuthController::class, 'deleteEntity'])->name('admin.entity.delete');
-        Route::get('/admin/user/{id}', [AdminController::class, 'userDetail'])->name('admin.users.show');
-        Route::get('/admin/agent/{id}', [AdminController::class, 'agentDetail'])->name('admin.agents.show');
-        Route::post('/admin/entity/suspend/{id}', [AdminController::class, 'suspendEntity'])->name('admin.entity.suspend');
-        Route::delete('/admin/entity/delete/{id}', [AdminController::class, 'deleteEntity'])->name('admin.entity.delete');
+        // Route::get('/admin/entities', [AdminController::class, 'entitiesList'])->name('admin.entities.list');
+        // Route::get('/admin/entity-detail/{type}/{id}', [AuthController::class, 'entityDetail'])->name('admin.entity.detail');
+        // Route::post('/admin/entity-suspend/{type}/{id}', [AuthController::class, 'suspendEntity'])->name('admin.entity.suspend');
+        // Route::delete('/admin/entity-delete/{type}/{id}', [AuthController::class, 'deleteEntity'])->name('admin.entity.delete');
+        // Route::get('/admin/user/{id}', [AdminController::class, 'userDetail'])->name('admin.users.show');
+        // Route::get('/admin/agent/{id}', [AdminController::class, 'agentDetail'])->name('admin.agents.show');
+        // Route::post('/admin/entity/suspend/{id}', [AdminController::class, 'suspendEntity'])->name('admin.entity.suspend');
+        // Route::delete('/admin/entity/delete/{id}', [AdminController::class, 'deleteEntity'])->name('admin.entity.delete');
 
         // Property Management
-        Route::get('/admin/properties', function () {
-            if (!auth()->user() || auth()->user()->role !== 'admin') {
-                abort(403, 'Unauthorized');
-            }
-            return app(AdminController::class)->adminProperties(request());
-        })->name('admin.properties');
+        // Route::get('/admin/properties', function () {
+        //     if (!auth()->user() || auth()->user()->role !== 'admin') {
+        //         abort(403, 'Unauthorized');
+        //     }
+        //     return app(AdminController::class)->adminProperties(request());
+        // })->name('admin.properties');
 
-        Route::delete('/admin/properties/{id}', function ($id) {
-            if (!auth()->user() || auth()->user()->role !== 'admin') {
-                abort(403, 'Unauthorized');
-            }
-            return app(AdminController::class)->deleteProperty($id);
-        })->name('admin.properties.delete');
+        // Route::delete('/admin/properties/{id}', function ($id) {
+        //     if (!auth()->user() || auth()->user()->role !== 'admin') {
+        //         abort(403, 'Unauthorized');
+        //     }
+        //     return app(AdminController::class)->deleteProperty($id);
+        // })->name('admin.properties.delete');
     });
 });
 
@@ -773,3 +772,196 @@ Route::get('/agent/test', function () {
     dd('AGENT TEST ROUTE WORKS');
 });
 Route::get('/agent/{id}', [AgentAuthController::class, 'showProfile'])->name('agent.profile');
+
+
+
+///admin role
+
+
+
+// ============================================
+// ADMIN PANEL ROUTES
+// ============================================
+
+// ============================================
+// ADMIN PANEL ROUTES
+// ============================================
+
+Route::prefix('admin')->name('admin.')->group(function () {
+
+    // ========== GUEST ROUTES (Login) ==========
+    Route::middleware('guest:admin')->group(function () {
+        Route::get('/login', [AdminController::class, 'showLoginForm'])->name('login');
+        Route::post('/login', [AdminController::class, 'login'])->name('login.post');
+        Route::get('/register', [AdminController::class, 'showRegisterForm'])->name('register');
+        Route::post('/register', [AdminController::class, 'register'])->name('register.post');
+    });
+
+    // ========== AUTHENTICATED ADMIN ROUTES ==========
+    Route::middleware(['auth:admin'])->group(function () {
+
+        // Logout
+        Route::post('/logout', [AdminController::class, 'logout'])->name('logout');
+
+        // Dashboard
+        Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
+        Route::get('/stats', [AdminController::class, 'getStats'])->name('stats');
+        Route::get('/chart-data', [AdminController::class, 'getChartData'])->name('chart.data');
+
+        // ========== USERS MANAGEMENT ==========
+        Route::prefix('users')->name('users.')->group(function () {
+            Route::get('/', [AdminController::class, 'usersIndex'])->name('index');
+            Route::get('/create', [AdminController::class, 'usersCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'usersStore'])->name('store');
+            Route::get('/{id}', [AdminController::class, 'usersShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'usersEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'usersUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'usersDelete'])->name('delete');
+            Route::post('/{id}/suspend', [AdminController::class, 'usersSuspend'])->name('suspend');
+            Route::post('/{id}/activate', [AdminController::class, 'usersActivate'])->name('activate');
+
+            Route::put('/{id}/update-image', [AdminController::class, 'updateUserImage'])->name('update-image');
+        });
+
+        // ========== AGENTS MANAGEMENT ==========
+        Route::prefix('agents')->name('agents.')->group(function () {
+            Route::get('/', [AdminController::class, 'agentsIndex'])->name('index');
+            Route::get('/pending', [AdminController::class, 'agentsPending'])->name('pending');
+            Route::get('/{id}', [AdminController::class, 'agentsShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'agentsEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'agentsUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'agentsDelete'])->name('delete');
+            Route::post('/{id}/verify', [AdminController::class, 'agentsVerify'])->name('verify');
+            Route::post('/{id}/suspend', [AdminController::class, 'agentsSuspend'])->name('suspend');
+        });
+
+        // ========== REAL ESTATE OFFICES MANAGEMENT ==========
+        Route::prefix('offices')->name('offices.')->group(function () {
+            Route::get('/', [AdminController::class, 'officesIndex'])->name('index');
+            Route::get('/pending', [AdminController::class, 'officesPending'])->name('pending');
+            Route::get('/{id}', [AdminController::class, 'officesShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'officesEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'officesUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'officesDelete'])->name('delete');
+            Route::post('/{id}/verify', [AdminController::class, 'officesVerify'])->name('verify');
+            Route::post('/{id}/suspend', [AdminController::class, 'officesSuspend'])->name('suspend');
+        });
+
+        // ========== PROPERTIES MANAGEMENT ==========
+        Route::prefix('properties')->name('properties.')->group(function () {
+            Route::get('/', [AdminController::class, 'propertiesIndex'])->name('index');
+            Route::get('/pending', [AdminController::class, 'propertiesPending'])->name('pending');
+            Route::get('/{id}', [AdminController::class, 'propertiesShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'propertiesEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'propertiesUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'propertiesDelete'])->name('delete');
+            Route::post('/{id}/approve', [AdminController::class, 'propertiesApprove'])->name('approve');
+            Route::post('/{id}/reject', [AdminController::class, 'propertiesReject'])->name('reject');
+            Route::post('/{id}/toggle-active', [AdminController::class, 'propertiesToggleActive'])->name('toggle.active');
+        });
+
+        // ========== PROJECTS MANAGEMENT ==========
+        Route::prefix('projects')->name('projects.')->group(function () {
+            Route::get('/', [AdminController::class, 'projectsIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'projectsShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'projectsEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'projectsUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'projectsDelete'])->name('delete');
+            Route::post('/{id}/toggle-active', [AdminController::class, 'projectsToggleActive'])->name('toggle.active');
+        });
+
+        // ========== BANNERS MANAGEMENT ==========
+        Route::prefix('banners')->name('banners.')->group(function () {
+            Route::get('/', [AdminController::class, 'bannersIndex'])->name('index');
+            Route::get('/create', [AdminController::class, 'bannersCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'bannersStore'])->name('store');
+            Route::get('/pending', [AdminController::class, 'bannersPending'])->name('pending');
+            Route::get('/{id}', [AdminController::class, 'bannersShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'bannersEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'bannersUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'bannersDelete'])->name('delete');
+            Route::post('/{id}/approve', [AdminController::class, 'bannersApprove'])->name('approve');
+            Route::post('/{id}/reject', [AdminController::class, 'bannersReject'])->name('reject');
+            Route::post('/{id}/pause', [AdminController::class, 'bannersPause'])->name('pause');
+            Route::post('/{id}/resume', [AdminController::class, 'bannersResume'])->name('resume');
+        });
+
+        // ========== SUBSCRIPTIONS MANAGEMENT ==========
+        Route::prefix('subscriptions')->name('subscriptions.')->group(function () {
+            Route::get('/', [AdminController::class, 'subscriptionsIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'subscriptionsShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'subscriptionsEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'subscriptionsUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'subscriptionsDelete'])->name('delete');
+            Route::post('/{id}/cancel', [AdminController::class, 'subscriptionsCancel'])->name('cancel');
+            Route::post('/{id}/renew', [AdminController::class, 'subscriptionsRenew'])->name('renew');
+        });
+
+        // ========== SUBSCRIPTION PLANS MANAGEMENT ==========
+        // Inside your existing admin group...
+        Route::prefix('subscription-plans')->name('subscription-plans.')->group(function () {
+            Route::get('/', [AdminController::class, 'subscriptionPlansIndex'])->name('index');
+            Route::get('/create', [AdminController::class, 'subscriptionPlansCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'subscriptionPlansStore'])->name('store');
+            Route::get('/{id}', [AdminController::class, 'subscriptionPlansShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'subscriptionPlansEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'subscriptionPlansUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'subscriptionPlansDelete'])->name('delete');
+
+            // FIX: Changed name from 'toggle.active' to 'toggle-active'
+            Route::post('/{id}/toggle-active', [AdminController::class, 'subscriptionPlansToggleActive'])->name('toggle-active');
+        });
+
+        // ========== TRANSACTIONS ==========
+        Route::prefix('transactions')->name('transactions.')->group(function () {
+            Route::get('/', [AdminController::class, 'transactionsIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'transactionsShow'])->name('show');
+            Route::post('/{id}/approve', [AdminController::class, 'transactionsApprove'])->name('approve');
+            Route::post('/{id}/reject', [AdminController::class, 'transactionsReject'])->name('reject');
+        });
+
+        // ========== APPOINTMENTS ==========
+        Route::prefix('appointments')->name('appointments.')->group(function () {
+            Route::get('/', [AdminController::class, 'appointmentsIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'appointmentsShow'])->name('show');
+            Route::post('/{id}/cancel', [AdminController::class, 'appointmentsCancel'])->name('cancel');
+            Route::delete('/{id}', [AdminController::class, 'appointmentsDelete'])->name('delete');
+        });
+
+        // ========== SERVICE PROVIDERS ==========
+        Route::prefix('service-providers')->name('service-providers.')->group(function () {
+            Route::get('/', [AdminController::class, 'serviceProvidersIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'serviceProvidersShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'serviceProvidersEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'serviceProvidersUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'serviceProvidersDelete'])->name('delete');
+            Route::post('/{id}/verify', [AdminController::class, 'serviceProvidersVerify'])->name('verify');
+        });
+
+        // ========== REVIEWS & REPORTS ==========
+        Route::prefix('reviews')->name('reviews.')->group(function () {
+            Route::get('/', [AdminController::class, 'reviewsIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'reviewsShow'])->name('show');
+            Route::delete('/{id}', [AdminController::class, 'reviewsDelete'])->name('delete');
+            Route::post('/{id}/approve', [AdminController::class, 'reviewsApprove'])->name('approve');
+        });
+
+        Route::prefix('reports')->name('reports.')->group(function () {
+            Route::get('/', [AdminController::class, 'reportsIndex'])->name('index');
+            Route::get('/{id}', [AdminController::class, 'reportsShow'])->name('show');
+            Route::post('/{id}/resolve', [AdminController::class, 'reportsResolve'])->name('resolve');
+            Route::delete('/{id}', [AdminController::class, 'reportsDelete'])->name('delete');
+        });
+
+        // ========== SETTINGS ==========
+        Route::prefix('settings')->name('settings.')->group(function () {
+            Route::get('/', [AdminController::class, 'settingsIndex'])->name('index');
+            Route::put('/update', [AdminController::class, 'settingsUpdate'])->name('update');
+        });
+
+        // ========== PROFILE ==========
+        Route::get('/profile', [AdminController::class, 'profileShow'])->name('profile');
+        Route::put('/profile', [AdminController::class, 'profileUpdate'])->name('profile.update');
+        Route::put('/profile/password', [AdminController::class, 'profilePasswordUpdate'])->name('profile.password.update');
+    });
+});

@@ -35,11 +35,6 @@ return [
     |
     */
 
-
-
-
-
-
     'guards' => [
         'web' => [
             'driver' => 'session',
@@ -58,10 +53,12 @@ return [
             'driver' => 'session',
             'provider' => 'agents',
         ],
-
+        // ✅ ADD ADMIN GUARD
+        'admin' => [
+            'driver' => 'session',
+            'provider' => 'admins',
+        ],
     ],
-
-
 
     /*
     |--------------------------------------------------------------------------
@@ -87,9 +84,8 @@ return [
         ],
         'real_estate_offices' => [
             'driver' => 'eloquent',
-            'model' => App\Models\RealEstateOffice::class,  // If you're using RealEstateOffice model for authentication
+            'model' => App\Models\RealEstateOffice::class,
         ],
-
         'agents' => [
             'driver' => 'eloquent',
             'model' => App\Models\Agent::class,
@@ -98,7 +94,11 @@ return [
             'driver' => 'eloquent',
             'model' => App\Models\RealEstateOffice::class,
         ],
-
+        // ✅ ADD ADMIN PROVIDER
+        'admins' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Admin::class,
+        ],
     ],
 
     /*
@@ -123,6 +123,13 @@ return [
     'passwords' => [
         'users' => [
             'provider' => 'users',
+            'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
+            'expire' => 60,
+            'throttle' => 60,
+        ],
+        // ✅ ADD ADMIN PASSWORD RESET
+        'admins' => [
+            'provider' => 'admins',
             'table' => env('AUTH_PASSWORD_RESET_TOKEN_TABLE', 'password_reset_tokens'),
             'expire' => 60,
             'throttle' => 60,

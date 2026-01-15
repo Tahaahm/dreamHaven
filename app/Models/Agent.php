@@ -16,7 +16,7 @@ use App\Models\Support\AgentUploadedProperty;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens; // 👈 IMPORT THIS
+use Laravel\Sanctum\HasApiTokens;
 
 class Agent extends Authenticatable
 {
@@ -35,7 +35,7 @@ class Agent extends Authenticatable
         'subscriber_id',
         'is_verified',
         'overall_rating',
-        'Subscription_id', // Note: Ideally this should be subscription_id (lowercase) in DB
+        'subscription_id', // Note: Ideally this should be subscription_id (lowercase) in DB
         'current_plan',
         'properties_uploaded_this_month',
         'remaining_property_uploads',
@@ -84,7 +84,7 @@ class Agent extends Authenticatable
     // Fixed naming convention (camelCase) for easier access: $agent->subscription
     public function subscription(): BelongsTo
     {
-        return $this->belongsTo(Subscription::class, 'Subscription_id');
+        return $this->belongsTo(Subscription::class, 'subscription_id');
     }
 
     public function company(): BelongsTo
