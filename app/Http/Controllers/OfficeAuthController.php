@@ -54,7 +54,8 @@ class OfficeAuthController extends Controller
         if (Auth::guard('office')->attempt($credentials, $remember)) {
             $request->session()->regenerate();
 
-            return redirect()->intended(route('office.dashboard'))
+            // ✅ CHANGE THIS LINE - Remove ->intended()
+            return redirect()->route('office.dashboard')
                 ->with('success', 'Welcome back, ' . Auth::guard('office')->user()->company_name . '!');
         }
 

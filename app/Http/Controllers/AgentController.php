@@ -341,14 +341,15 @@ class AgentController extends Controller
         DB::beginTransaction();
 
         try {
-            $user = \App\Models\User::findOrFail($request->user_id);
+            $user = User::findOrFail($request->user_id);
 
+            // Check if agent already exists
             if (Agent::where('subscriber_id', $user->id)->exists()) {
                 return back()->withErrors(['user_id' => 'An agent already exists for this user.']);
             }
 
             $priority = $request->input('priority', 'user');
-            $transferData = $request->input('transfer_data', false);
+            $transferData = $request->input('transfer_data', true); // Default to true
 
             // Map user data to agent
             $userMappedData = [
@@ -358,7 +359,10 @@ class AgentController extends Controller
                 'primary_email' => $user->email,
                 'primary_phone' => $user->phone ?? null,
                 'subscriber_id' => $user->id,
-                'password' => $user->password, // preserve hashed password
+                'password' => $user->password, // Preserve hashed password
+                'city' => $user->place ?? null,
+                'latitude' => $user->lat ?? null,
+                'longitude' => $user->lng ?? null,
             ];
 
             $requestData = $request->except(['user_id', 'priority', 'transfer_data']);
@@ -375,38 +379,53 @@ class AgentController extends Controller
             $agentData['remaining_property_uploads'] = 0;
             $agentData['properties_sold'] = 0;
 
+            // Create the agent
             $agent = Agent::create($agentData);
 
+            // Transfer data if requested
+            $transferResult = null;
             if ($transferData) {
-                $this->transferUserDataToAgent($user, $agent);
+                $transferResult = $this->transferUserDataToAgent($user, $agent);
             }
 
+            // Delete user tokens and account
             $user->tokens()->delete();
             $userId = $user->id;
             $user->delete();
 
             DB::commit();
 
-            // ✅ Log in the new agent immediately
+            // Log in the new agent
             Auth::guard('agent')->login($agent);
             $request->session()->regenerate();
 
-            Log::info('User converted to agent and logged in', [
+            Log::info('User converted to agent successfully', [
                 'user_id' => $userId,
-                'agent_id' => $agent->id
+                'agent_id' => $agent->id,
+                'data_transferred' => $transferData,
+                'transfer_result' => $transferResult
             ]);
 
-            // Redirect to profile page
-            return redirect()->route('agent.office.profile', $agent->company_id)
-                ->with('success', 'Your account has been converted to an agent and you are now logged in!');
+            // Determine redirect
+            if ($agent->company_id) {
+                return redirect()->route('agent.profile', $agent->id)
+                    ->with('success', 'Successfully converted to agent! Your data has been transferred.');
+            }
+
+            return redirect()->route('agent.dashboard')
+                ->with('success', 'Successfully converted to agent! Your data has been transferred.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             Log::error('Failed to convert user to agent', [
                 'user_id' => $request->user_id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
-            return back()->withErrors(['error' => 'Failed to become an agent: ' . $e->getMessage()])->withInput();
+            return back()
+                ->withErrors(['error' => 'Failed to convert to agent: ' . $e->getMessage()])
+                ->withInput();
         }
     }
 
@@ -428,6 +447,110 @@ class AgentController extends Controller
         return view('agent.become', [
             'user' => $user
         ]);
+    }
+
+
+    // In App\Http\Controllers\AgentController.php
+
+    public function getDashboardStats(Request $request)
+    {
+        try {
+            // ✅ Get authenticated agent from Sanctum
+            $agent = $request->user(); // This gets the authenticated model (Agent or User)
+
+            // ✅ Debug logging
+            \Log::info('Dashboard Stats Request', [
+                'authenticated_user' => $agent ? get_class($agent) : 'null',
+                'user_id' => $agent ? $agent->id : 'null',
+                'is_agent' => $agent instanceof \App\Models\Agent,
+            ]);
+
+            // ✅ Verify it's an Agent model
+            if (!$agent || !($agent instanceof \App\Models\Agent)) {
+                \Log::error('Dashboard Stats: Not an agent', [
+                    'user_type' => $agent ? get_class($agent) : 'null'
+                ]);
+
+                return response()->json([
+                    'status' => false,
+                    'code' => 401,
+                    'message' => 'Unauthorized. Please login as an agent.',
+                    'data' => null
+                ], 401);
+            }
+
+            // ✅ Calculate stats
+            $stats = [
+                'total_properties' => \App\Models\Property::where('owner_id', $agent->id)
+                    ->where('owner_type', 'App\\Models\\Agent')
+                    ->count(),
+
+                'active_listings' => \App\Models\Property::where('owner_id', $agent->id)
+                    ->where('owner_type', 'App\\Models\\Agent')
+                    ->where('status', 'available')
+                    ->count(),
+
+                'total_views' => \App\Models\Property::where('owner_id', $agent->id)
+                    ->where('owner_type', 'App\\Models\\Agent')
+                    ->sum('views') ?? 0,
+
+                'properties_sold' => \App\Models\Property::where('owner_id', $agent->id)
+                    ->where('owner_type', 'App\\Models\\Agent')
+                    ->where('status', 'sold')
+                    ->count(),
+
+                'pending_appointments' => \App\Models\Appointment::where('agent_id', $agent->id)
+                    ->where('status', 'pending')
+                    ->count(),
+
+                'total_revenue' => 0.0, // Calculate based on your business logic
+                'revenue_growth' => 12.5, // Calculate based on your business logic
+            ];
+
+            // ✅ Get recent properties
+            $recentProperties = \App\Models\Property::where('owner_id', $agent->id)
+                ->where('owner_type', 'App\\Models\\Agent')
+                ->latest()
+                ->take(5)
+                ->get()
+                ->map(function ($property) {
+                    // Ensure JSON fields are properly formatted
+                    return [
+                        'id' => $property->id,
+                        'name' => is_string($property->name) ? json_decode($property->name, true) : $property->name,
+                        'description' => is_string($property->description) ? json_decode($property->description, true) : $property->description,
+                        'price' => is_string($property->price) ? json_decode($property->price, true) : $property->price,
+                        'location' => $property->location ?? '',
+                        'image' => $property->image ?? '',
+                        'images' => is_string($property->images) ? json_decode($property->images, true) : ($property->images ?? []),
+                        'type' => is_string($property->type) ? json_decode($property->type, true) : $property->type,
+                        'status' => $property->status,
+                        'created_at' => $property->created_at?->toISOString(),
+                        'updated_at' => $property->updated_at?->toISOString(),
+                    ];
+                });
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Dashboard stats retrieved successfully',
+                'data' => [
+                    'stats' => $stats,
+                    'recent_properties' => $recentProperties,
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            \Log::error('Dashboard Stats Error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'code' => 500,
+                'message' => 'Failed to retrieve dashboard stats',
+                'data' => null
+            ], 500);
+        }
     }
 
 
@@ -466,7 +589,7 @@ class AgentController extends Controller
                 'agent_id' => $agent->id
             ]);
 
-            // ✅ 1. Transfer Properties
+            // ✅ 1. Transfer Properties (Polymorphic Relationship)
             $propertiesTransferred = Property::where('owner_id', $user->id)
                 ->where('owner_type', 'App\\Models\\User')
                 ->update([
@@ -477,6 +600,7 @@ class AgentController extends Controller
             Log::info('Properties transferred', ['count' => $propertiesTransferred]);
 
             // ✅ 2. Transfer Favorites
+            $favoritesTransferred = 0;
             if (class_exists(\App\Models\Support\UserFavoriteProperty::class)) {
                 $favoritesTransferred = \App\Models\Support\UserFavoriteProperty::where('user_id', $user->id)
                     ->update(['user_id' => $agent->id]);
@@ -484,48 +608,88 @@ class AgentController extends Controller
                 Log::info('Favorites transferred', ['count' => $favoritesTransferred]);
             }
 
-            // ✅ 3. Transfer Appointments - Convert user appointments to agent appointments
+            // ✅ 3. Transfer Appointments
+            // Keep user_id but add agent_id so agent can manage these appointments
+            $appointmentsTransferred = 0;
             if (class_exists(\App\Models\Appointment::class)) {
+                // For appointments where user was the client, assign them to this new agent
                 $appointmentsTransferred = \App\Models\Appointment::where('user_id', $user->id)
+                    ->whereNull('agent_id') // Only appointments without assigned agent
                     ->update([
                         'agent_id' => $agent->id,
-                        'user_id' => null // Clear user_id since they're now an agent
                     ]);
 
-                Log::info('Appointments transferred', ['count' => $appointmentsTransferred]);
+                Log::info('Appointments assigned to agent', ['count' => $appointmentsTransferred]);
             }
 
-            // ✅ 4. Transfer User Notifications to Agent Notifications
+            // ✅ 4. Transfer Notifications
+            // Convert user notifications to agent notifications
+            $notificationsTransferred = 0;
+            if (class_exists(\App\Models\Notification::class)) {
+                $notificationsTransferred = \App\Models\Notification::where('user_id', $user->id)
+                    ->whereNull('agent_id') // Only user-specific notifications
+                    ->update([
+                        'agent_id' => $agent->id,
+                        'user_id' => null, // Clear user_id since they're now an agent
+                    ]);
+
+                Log::info('Notifications transferred to agent', ['count' => $notificationsTransferred]);
+            }
+
+            // ✅ 5. Transfer Legacy User Notification References (if exists)
+            $legacyNotificationsCount = 0;
             if (class_exists(\App\Models\Support\UserNotificationReference::class)) {
                 $userNotifications = \App\Models\Support\UserNotificationReference::where('user_id', $user->id)->get();
 
                 foreach ($userNotifications as $userNotif) {
-                    \App\Models\Support\AgentNotification::create([
+                    // Create new notification for agent
+                    \App\Models\Notification::create([
                         'agent_id' => $agent->id,
-                        'notification_id' => $userNotif->notification_id,
-                        'title' => $userNotif->title,
-                        'message' => $userNotif->message,
-                        'type' => $userNotif->type,
+                        'title' => $userNotif->title ?? 'Migrated Notification',
+                        'message' => $userNotif->message ?? '',
+                        'type' => $userNotif->type ?? 'info',
                         'is_read' => $userNotif->notification_status === 'read',
                         'read_at' => $userNotif->notification_status === 'read' ? $userNotif->notification_date : null,
-                        'created_at' => $userNotif->notification_date,
+                        'sent_at' => $userNotif->notification_date ?? now(),
+                        'created_at' => $userNotif->notification_date ?? now(),
                         'updated_at' => now(),
                     ]);
                 }
 
                 // Delete old user notifications
-                $userNotifications->each->delete();
+                $legacyNotificationsCount = $userNotifications->count();
+                \App\Models\Support\UserNotificationReference::where('user_id', $user->id)->delete();
 
-                Log::info('User notifications converted to agent notifications', ['count' => $userNotifications->count()]);
+                Log::info('Legacy user notifications migrated', ['count' => $legacyNotificationsCount]);
             }
 
+            // ✅ 6. Transfer Sessions (Optional - delete old sessions)
+            if (class_exists(\App\Models\Session::class)) {
+                \App\Models\Session::where('user_id', $user->id)->delete();
+                Log::info('User sessions cleared');
+            }
+
+            // ✅ 7. Summary Log
             Log::info('Data transfer completed successfully', [
                 'agent_id' => $agent->id,
-                'properties' => $propertiesTransferred,
-                'appointments' => $appointmentsTransferred ?? 0,
-                'favorites' => $favoritesTransferred ?? 0,
-                'notifications' => $userNotifications->count() ?? 0
+                'summary' => [
+                    'properties' => $propertiesTransferred,
+                    'favorites' => $favoritesTransferred,
+                    'appointments' => $appointmentsTransferred,
+                    'notifications' => $notificationsTransferred,
+                    'legacy_notifications' => $legacyNotificationsCount,
+                ]
             ]);
+
+            return [
+                'success' => true,
+                'transferred' => [
+                    'properties' => $propertiesTransferred,
+                    'favorites' => $favoritesTransferred,
+                    'appointments' => $appointmentsTransferred,
+                    'notifications' => $notificationsTransferred + $legacyNotificationsCount,
+                ]
+            ];
         } catch (\Exception $e) {
             Log::error('Error during data transfer', [
                 'user_id' => $user->id,
@@ -533,6 +697,8 @@ class AgentController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+
+            throw $e; // Re-throw to trigger rollback
         }
     }
     public function showProfile($id)
@@ -551,6 +717,47 @@ class AgentController extends Controller
         ])->findOrFail($id);
 
         return view('agent-profile', compact('agent'));
+    }
+
+
+    // In AgentController.php
+
+    public function getAgentProfile(Request $request)
+    {
+        try {
+            // Get authenticated agent
+            $agent = $request->user();
+
+            // Verify it's an Agent model
+            if (!$agent || !($agent instanceof \App\Models\Agent)) {
+                return response()->json([
+                    'status' => false,
+                    'code' => 401,
+                    'message' => 'Unauthorized. Please login as an agent.',
+                    'data' => null
+                ], 401);
+            }
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Agent profile retrieved successfully',
+                'data' => [
+                    'agent' => $agent
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Get Agent Profile Error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'code' => 500,
+                'message' => 'Failed to retrieve agent profile',
+                'data' => null
+            ], 500);
+        }
     }
 
     public function updateAgentProfileNew(Request $request)
@@ -600,5 +807,67 @@ class AgentController extends Controller
         ]);
 
         return redirect()->route('agent.profile.page')->with('success', 'Password updated successfully');
+    }
+
+
+    // App/Http/Controllers/AgentController.php
+
+    public function getMyProperties(Request $request)
+    {
+        // 1. Authenticate Agent
+        $agent = Auth::guard('sanctum')->user();
+
+        if (!$agent) {
+            return ApiResponse::error('Unauthorized', [], 401);
+        }
+
+        // 2. Fetch Properties
+        $properties = \App\Models\Property::where('owner_id', $agent->id)
+            ->where('owner_type', 'App\Models\Agent')
+            ->latest()
+            ->get()
+            ->map(function ($prop) {
+                // List of all fields that are cast as 'array' in your Property Model
+                $arrayFields = [
+                    'name',
+                    'description',
+                    'images',
+                    'availability',
+                    'type',
+                    'price',
+                    'rooms',
+                    'features',
+                    'amenities',
+                    'locations',
+                    'address_details',
+                    'floor_details',
+                    'construction_details',
+                    'energy_details',
+                    'virtual_tour_details',
+                    'additional_media',
+                    'view_analytics',
+                    'favorites_analytics',
+                    'legal_information',
+                    'investment_analysis',
+                    'furnishing_details',
+                    'seo_metadata',
+                    'nearby_amenities'
+                ];
+
+                // Loop through fields and ensure they are decoded
+                // (Note: Since you have $casts in your model, Laravel usually handles this automatically,
+                // but this loop guarantees safety if raw strings are ever returned)
+                foreach ($arrayFields as $field) {
+                    $prop->$field = is_string($prop->$field) ? json_decode($prop->$field) : $prop->$field;
+                }
+
+                return $prop;
+            });
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Agent properties retrieved successfully'),
+            ['properties' => $properties],
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 }

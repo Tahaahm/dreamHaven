@@ -10,11 +10,6 @@ class Authenticate
 {
     /**
      * Handle an incoming request.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \Closure  $next
-     * @param  string|null  $guard
-     * @return mixed
      */
     public function handle(Request $request, Closure $next, $guard = null)
     {
@@ -22,9 +17,17 @@ class Authenticate
             return $next($request);
         }
 
-        // ✅ Check if accessing office routes
+        // ✅ Check which route is being accessed and redirect accordingly
         if ($request->is('office') || $request->is('office/*')) {
             return redirect()->route('office.login');
+        }
+
+        if ($request->is('agent') || $request->is('agent/*')) {
+            return redirect()->route('agent.login');
+        }
+
+        if ($request->is('admin') || $request->is('admin/*')) {
+            return redirect()->route('admin.login');
         }
 
         return redirect()->route('login-page');

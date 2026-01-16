@@ -462,6 +462,114 @@ class PropertyController extends Controller
         return redirect()->route('agent.property.list')->with('success', 'Property updated successfully!');
     }
 
+    /**
+     * ✅ Dedicated Update Method for Mobile/API
+     */
+    /**
+     * ✅ Dedicated Update Method for Mobile/API (Fixed for Casts)
+     */
+    public function updateMobile(Request $request, $id)
+    {
+        try {
+            $property = Property::findOrFail($id);
+
+            // 1. Parse JSON strings (Fix for Flutter sending nested objects as strings)
+            $data = $request->all();
+            $parsedData = [];
+
+            foreach ($data as $key => $value) {
+                if (is_string($value) && $this->isJson($value)) {
+                    $parsedData[$key] = json_decode($value, true);
+                } else {
+                    $parsedData[$key] = $value;
+                }
+            }
+
+            Log::info('📱 Mobile Update Request', ['id' => $id, 'parsed_data' => $parsedData]);
+
+            // 2. Prepare Update Array
+            $updatePayload = [];
+
+            // JSON Fields: Re-encode them for the DB update
+            // Note: Since we are using ->update(), if the model casts are 'array',
+            // Laravel expects arrays, not JSON strings.
+            // However, to be safe and explicit with raw updates or specific handling:
+
+            if (isset($parsedData['name'])) $updatePayload['name'] = $parsedData['name'];
+            if (isset($parsedData['description'])) $updatePayload['description'] = $parsedData['description'];
+            if (isset($parsedData['price'])) $updatePayload['price'] = $parsedData['price'];
+            if (isset($parsedData['type'])) $updatePayload['type'] = $parsedData['type'];
+            if (isset($parsedData['rooms'])) $updatePayload['rooms'] = $parsedData['rooms'];
+            if (isset($parsedData['locations'])) $updatePayload['locations'] = $parsedData['locations'];
+            if (isset($parsedData['address_details'])) $updatePayload['address_details'] = $parsedData['address_details'];
+
+            // ✅ Images: If sending new full list, use it directly
+            if (isset($parsedData['images'])) $updatePayload['images'] = $parsedData['images'];
+
+            // Simple fields
+            if (isset($parsedData['listing_type'])) $updatePayload['listing_type'] = $parsedData['listing_type'];
+            if (isset($parsedData['area'])) $updatePayload['area'] = $parsedData['area'];
+            if (isset($parsedData['address'])) $updatePayload['address'] = $parsedData['address'];
+            if (isset($parsedData['status'])) $updatePayload['status'] = $parsedData['status'];
+
+            // Booleans
+            if (isset($parsedData['furnished'])) $updatePayload['furnished'] = $parsedData['furnished'] ? true : false;
+            if (isset($parsedData['electricity'])) $updatePayload['electricity'] = $parsedData['electricity'] ? true : false;
+            if (isset($parsedData['water'])) $updatePayload['water'] = $parsedData['water'] ? true : false;
+            if (isset($parsedData['internet'])) $updatePayload['internet'] = $parsedData['internet'] ? true : false;
+
+            // Integers
+            if (isset($parsedData['floor_number'])) $updatePayload['floor_number'] = (int)$parsedData['floor_number'];
+            if (isset($parsedData['year_built'])) $updatePayload['year_built'] = (int)$parsedData['year_built'];
+
+            // 3. Handle Image Removal Logic
+            // If the app sends specific indexes/urls to remove, we process that here.
+            // OTHERWISE, if the app sent a fresh 'images' array above, that overwrites everything.
+
+            if (isset($parsedData['images_to_remove']) && is_array($parsedData['images_to_remove']) && !empty($parsedData['images_to_remove'])) {
+
+                // ✅ CRITICAL FIX: Access directly as array (Laravel casts handles decoding)
+                $currentImages = $property->images ?? [];
+
+                // If mistakenly returned as string due to some raw query elsewhere
+                if (is_string($currentImages)) {
+                    $currentImages = json_decode($currentImages, true) ?? [];
+                }
+
+                // Remove images by Index (if integers passed) or by Value (if URL strings passed)
+                foreach ($parsedData['images_to_remove'] as $removeItem) {
+                    if (is_int($removeItem)) {
+                        unset($currentImages[$removeItem]);
+                    } else {
+                        $key = array_search($removeItem, $currentImages);
+                        if ($key !== false) unset($currentImages[$key]);
+                    }
+                }
+
+                // Re-index array keys and save
+                $updatePayload['images'] = array_values($currentImages);
+            }
+
+            // 4. Update Database
+            // Because your model has $casts = ['images' => 'array', ...],
+            // passing PHP arrays into update() is the correct way. Laravel will json_encode them automatically.
+            $property->update($updatePayload);
+
+            return ApiResponse::success(
+                'Property updated successfully',
+                $this->transformPropertyData($property->fresh()),
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Mobile update error', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            return ApiResponse::error('Failed to update property', $e->getMessage(), 500);
+        }
+    }
+
 
     /**
      * Delete property
