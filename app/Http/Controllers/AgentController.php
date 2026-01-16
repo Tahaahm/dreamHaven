@@ -153,7 +153,231 @@ class AgentController extends Controller
             ResponseDetails::CODE_SUCCESS
         );
     }
+    /**
+     * Update agent profile (including images)
+     * POST /v1/api/agents/{id} (with _method=PUT for multipart)
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            // Find the agent
+            $agent = Agent::find($id);
 
+            if (!$agent) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Agent not found'
+                ], 404);
+            }
+
+            // Check authorization
+            $user = $request->user();
+            if ($user->id !== $agent->user_id && $user->role !== 'admin') {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized to update this profile'
+                ], 403);
+            }
+
+            // Validation rules
+            $validator = Validator::make($request->all(), [
+                // Basic Info
+                'agent_name' => 'sometimes|string|max:255',
+                'primary_phone' => 'sometimes|string|max:20',
+                'whatsapp_number' => 'nullable|string|max:20',
+                'years_experience' => 'nullable|integer|min:0|max:50',
+
+                // Bio & Overview
+                'agent_bio' => 'nullable|string|max:1000',
+                'agent_overview' => 'nullable|string|max:2000',
+
+                // Professional
+                'license_number' => 'nullable|string|max:100',
+
+                // Location
+                'office_address' => 'nullable|string|max:500',
+                'district' => 'nullable|string|max:100',
+                'latitude' => 'nullable|numeric|between:-90,90',
+                'longitude' => 'nullable|numeric|between:-180,180',
+                'city_id' => 'nullable|integer|exists:branches,id',
+                'area_id' => 'nullable|integer|exists:areas,id',
+
+                // Fees
+                'commission_rate' => 'nullable|string|max:10',
+                'consultation_fee' => 'nullable|string|max:20',
+
+                // Working Hours
+                'working_hours' => 'nullable|json',
+
+                // Images
+                'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'bio_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Start transaction
+            DB::beginTransaction();
+
+            $updateData = [];
+
+            // ========== HANDLE TEXT DATA ==========
+
+            // Basic Information
+            if ($request->has('agent_name')) {
+                $updateData['agent_name'] = $request->agent_name;
+            }
+
+            if ($request->has('primary_phone')) {
+                $updateData['primary_phone'] = $request->primary_phone;
+            }
+
+            if ($request->has('whatsapp_number')) {
+                $updateData['whatsapp_number'] = $request->whatsapp_number;
+            }
+
+            if ($request->has('years_experience')) {
+                $updateData['years_experience'] = $request->years_experience;
+            }
+
+            // Bio & Overview
+            if ($request->has('agent_bio')) {
+                $updateData['agent_bio'] = $request->agent_bio;
+            }
+
+            if ($request->has('agent_overview')) {
+                $updateData['agent_overview'] = $request->agent_overview;
+            }
+
+            // Professional Details
+            if ($request->has('license_number')) {
+                $updateData['license_number'] = $request->license_number;
+            }
+
+            // Location Data
+            if ($request->has('office_address')) {
+                $updateData['office_address'] = $request->office_address;
+            }
+
+            if ($request->has('district')) {
+                $updateData['district'] = $request->district;
+            }
+
+            if ($request->has('latitude')) {
+                $updateData['latitude'] = $request->latitude;
+            }
+
+            if ($request->has('longitude')) {
+                $updateData['longitude'] = $request->longitude;
+            }
+
+            if ($request->has('city_id')) {
+                $updateData['city_id'] = $request->city_id;
+            }
+
+            if ($request->has('area_id')) {
+                $updateData['area_id'] = $request->area_id;
+            }
+
+            // Fees & Rates
+            if ($request->has('commission_rate')) {
+                $updateData['commission_rate'] = $request->commission_rate;
+            }
+
+            if ($request->has('consultation_fee')) {
+                $updateData['consultation_fee'] = $request->consultation_fee;
+            }
+
+            // Working Hours (JSON)
+            if ($request->has('working_hours')) {
+                $workingHours = $request->working_hours;
+
+                if (is_string($workingHours)) {
+                    $workingHours = json_decode($workingHours, true);
+                }
+
+                $updateData['working_hours'] = json_encode($workingHours);
+            }
+
+            // ========== HANDLE IMAGE UPLOADS ==========
+
+            // Handle Profile Image
+            if ($request->hasFile('profile_image')) {
+                // Delete old image if exists
+                if ($agent->profile_image && file_exists(public_path($agent->profile_image))) {
+                    @unlink(public_path($agent->profile_image));
+                }
+
+                // Create directory if not exists
+                $profileDir = public_path('uploads/agents/profiles');
+                if (!file_exists($profileDir)) {
+                    mkdir($profileDir, 0755, true);
+                }
+
+                // Store new image
+                $profileImage = $request->file('profile_image');
+                $profileImageName = 'agent_profile_' . $agent->id . '_' . time() . '.' . $profileImage->extension();
+                $profileImage->move($profileDir, $profileImageName);
+                $updateData['profile_image'] = '/uploads/agents/profiles/' . $profileImageName;
+            }
+
+            // Handle Bio Image
+            if ($request->hasFile('bio_image')) {
+                // Delete old image if exists
+                if ($agent->bio_image && file_exists(public_path($agent->bio_image))) {
+                    @unlink(public_path($agent->bio_image));
+                }
+
+                // Create directory if not exists
+                $bioDir = public_path('uploads/agents/bios');
+                if (!file_exists($bioDir)) {
+                    mkdir($bioDir, 0755, true);
+                }
+
+                // Store new image
+                $bioImage = $request->file('bio_image');
+                $bioImageName = 'agent_bio_' . $agent->id . '_' . time() . '.' . $bioImage->extension();
+                $bioImage->move($bioDir, $bioImageName);
+                $updateData['bio_image'] = '/uploads/agents/bios/' . $bioImageName;
+            }
+
+            // Update the agent
+            $agent->update($updateData);
+
+            // Commit transaction
+            DB::commit();
+
+            // Reload agent with relationships
+            $agent->load(['branch', 'area', 'subscription']);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Profile updated successfully',
+                'data' => [
+                    'agent' => $agent
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            Log::error('Agent Update Error: ' . $e->getMessage(), [
+                'agent_id' => $id,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => 'Server Error',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred while updating profile'
+            ], 500);
+        }
+    }
     public function getAgentsByCompany($companyId)
     {
         $agents = Agent::where('company_id', $companyId)->get();
@@ -722,6 +946,8 @@ class AgentController extends Controller
 
     // In AgentController.php
 
+    // In AgentController.php
+
     public function getAgentProfile(Request $request)
     {
         try {
@@ -738,11 +964,36 @@ class AgentController extends Controller
                 ], 401);
             }
 
+            // Load relationships including subscription
+            $agent->load([
+                'company',
+                'currentSubscription.currentPlan', // ✅ Load subscription with plan
+            ]);
+
+            // Format subscription data
+            $subscriptionData = null;
+            if ($agent->currentSubscription) {
+                $subscriptionData = [
+                    'id' => $agent->currentSubscription->id,
+                    'plan_name' => $agent->currentSubscription->currentPlan->name ?? 'Unknown Plan',
+                    'status' => $agent->currentSubscription->status,
+                    'start_date' => $agent->currentSubscription->start_date,
+                    'end_date' => $agent->currentSubscription->end_date,
+                    'property_activation_limit' => $agent->currentSubscription->property_activation_limit,
+                    'banner_activation_limit' => $agent->currentSubscription->banner_activation_limit,
+                    'is_active' => $agent->currentSubscription->status === 'active',
+                    'days_remaining' => $agent->currentSubscription->end_date
+                        ? now()->diffInDays($agent->currentSubscription->end_date, false)
+                        : null,
+                ];
+            }
+
             return response()->json([
                 'status' => true,
                 'message' => 'Agent profile retrieved successfully',
                 'data' => [
-                    'agent' => $agent
+                    'agent' => $agent,
+                    'subscription' => $subscriptionData,
                 ]
             ], 200);
         } catch (\Exception $e) {
