@@ -16,6 +16,7 @@ use App\Models\RealEstateOffice;
 use App\Models\Support\UserFavoriteProperty;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Subscription\Subscription;
+use App\Models\SubscriptionPlan;
 
 class AgentController extends Controller
 {
@@ -1109,6 +1110,10 @@ class AgentController extends Controller
 
 
 
+    /**
+     * Get Subscription Details (Current + Available Plans)
+     * API Equivalent of AgentAuthController::showSubscriptions
+     */
     public function getSubscriptionDetails(Request $request)
     {
         try {
@@ -1143,18 +1148,43 @@ class AgentController extends Controller
                 ->get();
 
             // 4. Format the response
-            $data = [
-                'current_subscription' => $currentSubscription ? [
+            $formattedSubscription = null;
+
+            if ($currentSubscription) {
+                $formattedSubscription = [
                     'id' => $currentSubscription->id,
+                    'user_id' => $currentSubscription->user_id,
+                    'plan_id' => $currentSubscription->current_plan_id,
+
+                    // Flatten plan name for convenience, but also include full plan object if needed
                     'plan_name' => $currentSubscription->currentPlan->name ?? 'Unknown',
+                    'plan' => $currentSubscription->currentPlan,
+
                     'status' => $currentSubscription->status,
-                    'start_date' => $currentSubscription->start_date,
-                    'end_date' => $currentSubscription->end_date,
+                    'start_date' => $currentSubscription->start_date->toIso8601String(),
+                    'end_date' => $currentSubscription->end_date->toIso8601String(),
+
+                    // Calculated fields
                     'days_remaining' => $currentSubscription->end_date ? now()->diffInDays($currentSubscription->end_date, false) : 0,
-                    'property_limit' => $currentSubscription->property_activation_limit,
-                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0,
+
+                    // ✅ CRITICAL: Map database columns to JSON keys expected by Flutter
+                    'property_activation_limit' => $currentSubscription->property_activation_limit, // or 'property_limit'
+                    'property_limit' => $currentSubscription->property_activation_limit, // Alias for safety
+
+                    'properties_activated_this_month' => $currentSubscription->properties_activated_this_month ?? 0,
+                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0, // Alias for Flutter
+
                     'remaining_activations' => $currentSubscription->remaining_activations ?? 0,
-                ] : null,
+                    'banner_activation_limit' => $currentSubscription->banner_activation_limit ?? 0,
+
+                    // Feature flags (assuming these exist on the plan or subscription)
+                    'can_featured_listing' => $currentSubscription->currentPlan->can_featured_listing ?? false,
+                    'can_priority_support' => $currentSubscription->currentPlan->can_priority_support ?? false,
+                ];
+            }
+
+            $data = [
+                'current_subscription' => $formattedSubscription,
                 'available_plans' => $plans
             ];
 

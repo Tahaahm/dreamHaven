@@ -315,7 +315,6 @@ Route::prefix('v1/api/agents')->group(function () {
     Route::get('/top-rated', [AgentController::class, 'getTopRated']);
     Route::get('/nearby', [AgentController::class, 'getNearbyAgents']);
     Route::get('/company/{companyId}', [AgentController::class, 'getAgentsByCompany']);
-    Route::get('/subscriptions/details', [AgentController::class, 'getSubscriptionDetails']);
 
     // ✅ AUTHENTICATED SPECIFIC ROUTES (must be before /{id})
     Route::middleware(['auth:sanctum'])->group(function () {
@@ -328,6 +327,7 @@ Route::prefix('v1/api/agents')->group(function () {
         Route::delete('/{id}', [AgentController::class, 'destroy']);
         Route::patch('/{id}/verify', [AgentController::class, 'toggleVerification']);
         Route::patch('/{id}/remove-company', [AgentController::class, 'removeFromCompany']);
+        Route::get('/subscriptions/details', [AgentController::class, 'getSubscriptionDetails']);
     });
 
     // ✅ PUBLIC ROUTES
