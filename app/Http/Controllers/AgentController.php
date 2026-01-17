@@ -1114,11 +1114,12 @@ class AgentController extends Controller
             // 1. Get Authenticated Agent
             $agent = $request->user();
 
-            if (!$agent) {
-                Log::error('API: No authenticated user');
+            // Ensure we have a valid agent
+            if (!$agent || !($agent instanceof \App\Models\Agent)) {
+                Log::error('API: Unauthorized access or not an agent');
                 return response()->json([
                     'status' => false,
-                    'message' => 'Unauthorized',
+                    'message' => 'Unauthorized. Please login as an agent.',
                     'data' => null
                 ], 401);
             }
@@ -1136,14 +1137,19 @@ class AgentController extends Controller
                 ->latest()
                 ->first();
 
+            // 3. ✅ NEW: Get Live Property Count directly here
+            // This counts how many active properties the agent currently has
+            $activePropertiesCount = \App\Models\Property::where('owner_id', $agent->id)
+                ->where('owner_type', 'App\\Models\\Agent')
+                ->count();
+
             Log::info('API: Subscription query result', [
                 'found' => $currentSubscription ? 'YES' : 'NO',
                 'subscription_id' => $currentSubscription?->id ?? 'N/A',
-                'has_plan' => $currentSubscription?->currentPlan ? 'YES' : 'NO'
+                'active_properties_count' => $activePropertiesCount
             ]);
 
-            // 3. ✅ FIX: Fetch from the CORRECT table with rich data
-            // Use the same model/table as your /subscription-plans endpoint
+            // 4. Fetch Available Plans (Rich Data)
             $plans = \App\Models\SubscriptionPlan::where('type', 'agent')
                 ->where('active', 1)
                 ->orderBy('sort_order', 'asc')
@@ -1151,7 +1157,7 @@ class AgentController extends Controller
 
             Log::info('API: Plans fetched', ['count' => $plans->count()]);
 
-            // 4. Format current subscription
+            // 5. Format current subscription
             $formattedSubscription = null;
 
             if ($currentSubscription) {
@@ -1160,6 +1166,12 @@ class AgentController extends Controller
                 if ($currentSubscription->current_plan_id) {
                     $richPlan = \App\Models\SubscriptionPlan::find($currentSubscription->current_plan_id);
                 }
+
+                // Determine the limit (prioritize rich plan data, fallback to subscription record)
+                $limit = $richPlan?->max_properties ?? $currentSubscription->property_activation_limit ?? 0;
+
+                // Calculate remaining (prevent negative numbers)
+                $remaining = max(0, $limit - $activePropertiesCount);
 
                 $formattedSubscription = [
                     'id' => $currentSubscription->id,
@@ -1178,26 +1190,24 @@ class AgentController extends Controller
                     'days_remaining' => $currentSubscription->end_date ?
                         now()->diffInDays($currentSubscription->end_date, false) : 0,
 
-                    // ✅ Use rich plan data for limits
-                    'property_activation_limit' => $richPlan?->max_properties ??
-                        $currentSubscription->property_activation_limit ?? 0,
-                    'property_limit' => $richPlan?->max_properties ??
-                        $currentSubscription->property_activation_limit ?? 0,
+                    // ✅ UPDATED: Use the calculated limit and live usage
+                    'property_activation_limit' => $limit,
+                    'property_limit' => $limit,
 
-                    'properties_activated_this_month' => $currentSubscription->properties_activated_this_month ?? 0,
-                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0,
+                    // ✅ UPDATED: Send the actual count from the properties table
+                    'properties_used' => $activePropertiesCount,
+                    'remaining_activations' => $remaining,
 
-                    'remaining_activations' => $currentSubscription->remaining_activations ?? 0,
                     'banner_activation_limit' => $currentSubscription->banner_activation_limit ?? 0,
                 ];
 
-                // Add rich plan object
+                // Add rich plan object details
                 if ($richPlan) {
                     $formattedSubscription['plan'] = [
                         'id' => $richPlan->id,
                         'name' => $richPlan->name,
                         'property_activation_limit' => $richPlan->max_properties ?? 0,
-                        'banner_activation_limit' => 0, // Not in rich plan structure
+                        'banner_activation_limit' => 0,
                         'can_featured_listing' => false,
                         'can_priority_support' => false,
                         'price' => $richPlan->final_price_iqd ?? 0,
@@ -1215,30 +1225,27 @@ class AgentController extends Controller
                 }
             }
 
-            // 5. ✅ Format plans with RICH data structure
+            // 6. Format plans with RICH data structure
             $formattedPlans = $plans->map(function ($plan) {
                 return [
                     'id' => $plan->id,
                     'name' => $plan->name ?? 'Unnamed Plan',
                     'duration' => $plan->duration_label ?? 'monthly',
 
-                    // ✅ Use the correct price field from rich data
                     'price' => (float)($plan->final_price_iqd ?? 0),
                     'original_price' => (float)($plan->original_price_iqd ?? 0),
                     'discount' => (float)($plan->discount_iqd ?? 0),
                     'discount_percentage' => (float)($plan->discount_percentage ?? 0),
 
-                    // ✅ Use max_properties instead of property_activation_limit
                     'property_activation_limit' => $plan->max_properties ?? 0,
                     'max_properties' => $plan->max_properties ?? 0,
 
-                    'banner_activation_limit' => 0, // Not in this structure
+                    'banner_activation_limit' => 0,
                     'can_featured_listing' => $plan->is_featured ?? false,
                     'can_priority_support' => false,
                     'active' => (bool)($plan->active ?? true),
                     'sort_order' => $plan->sort_order ?? 0,
 
-                    // ✅ Additional rich data
                     'description' => $plan->description ?? '',
                     'features' => $plan->features ?? [],
                     'conditions' => $plan->conditions ?? [],
