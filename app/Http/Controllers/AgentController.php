@@ -160,7 +160,7 @@ class AgentController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            // Find the agent
+            // 1. Find the agent
             $agent = Agent::find($id);
 
             if (!$agent) {
@@ -169,22 +169,43 @@ class AgentController extends Controller
                     'message' => 'Agent not found'
                 ], 404);
             }
-            Log::info('AUTH CHECK', [
-                'auth_user_id' => $user->id,
-                'agent_user_id' => $agent->user_id,
-                'user_role' => $user->role,
+
+            // 2. Get the currently authenticated user (Could be User OR Agent model)
+            $user = $request->user();
+
+            // 3. Robust Authorization Logic
+            // Check if the logged-in entity is the Agent itself
+            $isSelf = ($user->id === $agent->id) && ($user instanceof \App\Models\Agent);
+
+            // Check if the logged-in entity is the "Owner" User (using subscriber_id)
+            // We use ?? null to prevent errors if a column is missing
+            $ownerId = $agent->subscriber_id ?? $agent->user_id ?? null;
+            $isOwner = ($user->id === $ownerId) && ($user instanceof \App\Models\User);
+
+            // Check if Admin
+            $isAdmin = false;
+            if (isset($user->role) && $user->role === 'admin') {
+                $isAdmin = true;
+            }
+
+            // Log for debugging
+            Log::info('AGENT UPDATE AUTH CHECK', [
+                'request_user_id' => $user->id,
+                'target_agent_id' => $agent->id,
+                'is_self' => $isSelf,
+                'is_owner' => $isOwner,
+                'is_admin' => $isAdmin
             ]);
 
-            // Check authorization
-            $user = $request->user();
-            if ($user->id !== $agent->user_id && $user->role !== 'admin') {
+            // Gatekeeper
+            if (!$isSelf && !$isOwner && !$isAdmin) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Unauthorized to update this profile'
                 ], 403);
             }
 
-            // Validation rules
+            // 4. Validation rules
             $validator = Validator::make($request->all(), [
                 // Basic Info
                 'agent_name' => 'sometimes|string|max:255',
@@ -202,17 +223,18 @@ class AgentController extends Controller
                 // Location
                 'office_address' => 'nullable|string|max:500',
                 'district' => 'nullable|string|max:100',
-                'latitude' => 'nullable|numeric|between:-90,90',
-                'longitude' => 'nullable|numeric|between:-180,180',
-                'city_id' => 'nullable|integer|exists:branches,id',
-                'area_id' => 'nullable|integer|exists:areas,id',
+                // Accept string or numeric for lat/lng because Flutter might send "36.123" string
+                'latitude' => 'nullable',
+                'longitude' => 'nullable',
+                'city_id' => 'nullable',
+                'area_id' => 'nullable',
 
                 // Fees
                 'commission_rate' => 'nullable|string|max:10',
                 'consultation_fee' => 'nullable|string|max:20',
 
-                // Working Hours
-                'working_hours' => 'nullable|json',
+                // Working Hours (Accepts JSON string or Array)
+                'working_hours' => 'nullable',
 
                 // Images
                 'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
@@ -227,92 +249,47 @@ class AgentController extends Controller
                 ], 422);
             }
 
-            // Start transaction
+            // 5. Start transaction
             DB::beginTransaction();
 
-            $updateData = [];
+            // Prepare data for update
+            $updateData = $request->only([
+                'agent_name',
+                'primary_phone',
+                'whatsapp_number',
+                'years_experience',
+                'agent_bio',
+                'agent_overview',
+                'license_number',
+                'office_address',
+                'district',
+                'latitude',
+                'longitude',
+                'city_id',
+                'area_id',
+                'commission_rate',
+                'consultation_fee'
+            ]);
 
-            // ========== HANDLE TEXT DATA ==========
-
-            // Basic Information
-            if ($request->has('agent_name')) {
-                $updateData['agent_name'] = $request->agent_name;
-            }
-
-            if ($request->has('primary_phone')) {
-                $updateData['primary_phone'] = $request->primary_phone;
-            }
-
-            if ($request->has('whatsapp_number')) {
-                $updateData['whatsapp_number'] = $request->whatsapp_number;
-            }
-
-            if ($request->has('years_experience')) {
-                $updateData['years_experience'] = $request->years_experience;
-            }
-
-            // Bio & Overview
-            if ($request->has('agent_bio')) {
-                $updateData['agent_bio'] = $request->agent_bio;
-            }
-
-            if ($request->has('agent_overview')) {
-                $updateData['agent_overview'] = $request->agent_overview;
-            }
-
-            // Professional Details
-            if ($request->has('license_number')) {
-                $updateData['license_number'] = $request->license_number;
-            }
-
-            // Location Data
-            if ($request->has('office_address')) {
-                $updateData['office_address'] = $request->office_address;
-            }
-
-            if ($request->has('district')) {
-                $updateData['district'] = $request->district;
-            }
-
-            if ($request->has('latitude')) {
-                $updateData['latitude'] = $request->latitude;
-            }
-
-            if ($request->has('longitude')) {
-                $updateData['longitude'] = $request->longitude;
-            }
-
-            if ($request->has('city_id')) {
-                $updateData['city_id'] = $request->city_id;
-            }
-
-            if ($request->has('area_id')) {
-                $updateData['area_id'] = $request->area_id;
-            }
-
-            // Fees & Rates
-            if ($request->has('commission_rate')) {
-                $updateData['commission_rate'] = $request->commission_rate;
-            }
-
-            if ($request->has('consultation_fee')) {
-                $updateData['consultation_fee'] = $request->consultation_fee;
-            }
-
-            // Working Hours (JSON)
+            // 6. Handle Working Hours (Array vs String fix)
             if ($request->has('working_hours')) {
                 $workingHours = $request->working_hours;
 
-                if (is_string($workingHours)) {
-                    $workingHours = json_decode($workingHours, true);
+                // If it's already an array (from Flutter Map), encode it for DB
+                if (is_array($workingHours)) {
+                    $updateData['working_hours'] = json_encode($workingHours);
                 }
-
-                $updateData['working_hours'] = json_encode($workingHours);
+                // If it's a JSON string, decode then re-encode to ensure validity, or save as is
+                else if (is_string($workingHours)) {
+                    // Optional: Validate it's real JSON
+                    $decoded = json_decode($workingHours, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $updateData['working_hours'] = $workingHours;
+                    }
+                }
             }
 
-            // ========== HANDLE IMAGE UPLOADS ==========
-
-            // Handle Profile Image
+            // 7. Handle Profile Image Upload
             if ($request->hasFile('profile_image')) {
                 // Delete old image if exists
                 if ($agent->profile_image && file_exists(public_path($agent->profile_image))) {
@@ -329,10 +306,11 @@ class AgentController extends Controller
                 $profileImage = $request->file('profile_image');
                 $profileImageName = 'agent_profile_' . $agent->id . '_' . time() . '.' . $profileImage->extension();
                 $profileImage->move($profileDir, $profileImageName);
+
                 $updateData['profile_image'] = '/uploads/agents/profiles/' . $profileImageName;
             }
 
-            // Handle Bio Image
+            // 8. Handle Bio Image Upload
             if ($request->hasFile('bio_image')) {
                 // Delete old image if exists
                 if ($agent->bio_image && file_exists(public_path($agent->bio_image))) {
@@ -349,16 +327,17 @@ class AgentController extends Controller
                 $bioImage = $request->file('bio_image');
                 $bioImageName = 'agent_bio_' . $agent->id . '_' . time() . '.' . $bioImage->extension();
                 $bioImage->move($bioDir, $bioImageName);
+
                 $updateData['bio_image'] = '/uploads/agents/bios/' . $bioImageName;
             }
 
-            // Update the agent
+            // 9. Update the agent
             $agent->update($updateData);
 
-            // Commit transaction
+            // 10. Commit transaction
             DB::commit();
 
-            // Reload agent with relationships
+            // 11. Reload agent with relationships
             $agent->load(['branch', 'area', 'subscription']);
 
             return response()->json([
