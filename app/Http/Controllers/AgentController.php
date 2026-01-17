@@ -1110,10 +1110,6 @@ class AgentController extends Controller
 
 
 
-    /**
-     * Get Subscription Details (Current + Available Plans)
-     * API Equivalent of AgentAuthController::showSubscriptions
-     */
     public function getSubscriptionDetails(Request $request)
     {
         try {
@@ -1121,31 +1117,41 @@ class AgentController extends Controller
             $agent = $request->user();
 
             if (!$agent) {
-                return ApiResponse::error('Unauthorized', [], 401);
+                Log::error('API: No authenticated user');
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized',
+                    'data' => null
+                ], 401);
             }
 
             Log::info('API: Fetching subscription details', [
                 'agent_id' => $agent->id,
-                'agent_name' => $agent->agent_name
+                'agent_name' => $agent->agent_name ?? 'N/A',
+                'agent_class' => get_class($agent)
             ]);
 
             // 2. Fetch Current Active Subscription
-            // matches web: where('user_id', $agent->id)->where('status', 'active')->latest()->first();
-            $currentSubscription = Subscription::with('currentPlan')
-                ->where('user_id', $agent->id)
+            $currentSubscription = \App\Models\Subscription\Subscription::where('user_id', $agent->id)
                 ->where('status', 'active')
-                // Optional: You can check for expiration here using 'whereDate' if strictly needed,
-                // but usually the 'active' status implies it's valid.
                 ->where('end_date', '>=', now())
+                ->with('currentPlan') // Eager load the plan
                 ->latest()
                 ->first();
 
+            Log::info('API: Subscription query result', [
+                'found' => $currentSubscription ? 'YES' : 'NO',
+                'subscription_id' => $currentSubscription?->id ?? 'N/A',
+                'has_plan' => $currentSubscription?->currentPlan ? 'YES' : 'NO'
+            ]);
+
             // 3. Fetch Available Plans
-            // matches web: SubscriptionPlan::where('type', 'agent')->active()->orderBy...
-            $plans = SubscriptionPlan::where('type', 'agent')
-                ->where('active', 1) // Assuming 'active' scope does this
+            $plans = \App\Models\SubscriptionPlan::where('type', 'agent')
+                ->where('active', 1)
                 ->orderBy('sort_order', 'asc')
                 ->get();
+
+            Log::info('API: Plans fetched', ['count' => $plans->count()]);
 
             // 4. Format the response
             $formattedSubscription = null;
@@ -1156,51 +1162,110 @@ class AgentController extends Controller
                     'user_id' => $currentSubscription->user_id,
                     'plan_id' => $currentSubscription->current_plan_id,
 
-                    // Flatten plan name for convenience, but also include full plan object if needed
-                    'plan_name' => $currentSubscription->currentPlan->name ?? 'Unknown',
-                    'plan' => $currentSubscription->currentPlan,
+                    // Plan name (with fallback)
+                    'plan_name' => $currentSubscription->currentPlan?->name ?? 'Unknown Plan',
 
+                    // Status and dates
                     'status' => $currentSubscription->status,
-                    'start_date' => $currentSubscription->start_date->toIso8601String(),
-                    'end_date' => $currentSubscription->end_date->toIso8601String(),
+                    'start_date' => $currentSubscription->start_date ?
+                        $currentSubscription->start_date->toIso8601String() : null,
+                    'end_date' => $currentSubscription->end_date ?
+                        $currentSubscription->end_date->toIso8601String() : null,
 
-                    // Calculated fields
-                    'days_remaining' => $currentSubscription->end_date ? now()->diffInDays($currentSubscription->end_date, false) : 0,
+                    // Days remaining
+                    'days_remaining' => $currentSubscription->end_date ?
+                        now()->diffInDays($currentSubscription->end_date, false) : 0,
 
-                    // ✅ CRITICAL: Map database columns to JSON keys expected by Flutter
-                    'property_activation_limit' => $currentSubscription->property_activation_limit, // or 'property_limit'
-                    'property_limit' => $currentSubscription->property_activation_limit, // Alias for safety
+                    // Property limits (with safe defaults)
+                    'property_activation_limit' => $currentSubscription->property_activation_limit ?? 0,
+                    'property_limit' => $currentSubscription->property_activation_limit ?? 0, // Alias
 
                     'properties_activated_this_month' => $currentSubscription->properties_activated_this_month ?? 0,
-                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0, // Alias for Flutter
+                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0, // Alias
 
                     'remaining_activations' => $currentSubscription->remaining_activations ?? 0,
                     'banner_activation_limit' => $currentSubscription->banner_activation_limit ?? 0,
-
-                    // Feature flags (assuming these exist on the plan or subscription)
-                    'can_featured_listing' => $currentSubscription->currentPlan->can_featured_listing ?? false,
-                    'can_priority_support' => $currentSubscription->currentPlan->can_priority_support ?? false,
                 ];
+
+                // Add plan object if it exists
+                if ($currentSubscription->currentPlan) {
+                    $formattedSubscription['plan'] = [
+                        'id' => $currentSubscription->currentPlan->id,
+                        'name' => $currentSubscription->currentPlan->name,
+                        'property_activation_limit' => $currentSubscription->currentPlan->property_activation_limit ?? 0,
+                        'banner_activation_limit' => $currentSubscription->currentPlan->banner_activation_limit ?? 0,
+                        'can_featured_listing' => (bool)($currentSubscription->currentPlan->can_featured_listing ?? false),
+                        'can_priority_support' => (bool)($currentSubscription->currentPlan->can_priority_support ?? false),
+                    ];
+                } else {
+                    // No plan found, create a minimal plan object
+                    $formattedSubscription['plan'] = [
+                        'id' => null,
+                        'name' => 'Unknown Plan',
+                        'property_activation_limit' => 0,
+                        'banner_activation_limit' => 0,
+                        'can_featured_listing' => false,
+                        'can_priority_support' => false,
+                    ];
+                }
             }
+
+            // Format plans
+            $formattedPlans = $plans->map(function ($plan) {
+                return [
+                    'id' => $plan->id,
+                    'name' => $plan->name ?? 'Unnamed Plan',
+                    'duration' => $plan->duration ?? 'monthly',
+                    'price' => $plan->price ?? 0,
+                    'property_activation_limit' => $plan->property_activation_limit ?? 0,
+                    'banner_activation_limit' => $plan->banner_activation_limit ?? 0,
+                    'can_featured_listing' => (bool)($plan->can_featured_listing ?? false),
+                    'can_priority_support' => (bool)($plan->can_priority_support ?? false),
+                    'active' => (bool)($plan->active ?? true),
+                    'sort_order' => $plan->sort_order ?? 0,
+                ];
+            })->toArray();
 
             $data = [
                 'current_subscription' => $formattedSubscription,
-                'available_plans' => $plans
+                'available_plans' => $formattedPlans
             ];
 
-            return ApiResponse::success(
-                ResponseDetails::successMessage('Subscription details retrieved successfully'),
-                $data,
-                ResponseDetails::CODE_SUCCESS
-            );
-        } catch (\Exception $e) {
-            Log::error('API Subscription Error: ' . $e->getMessage());
+            Log::info('API: Response prepared successfully', [
+                'has_subscription' => $formattedSubscription !== null,
+                'plans_count' => count($formattedPlans)
+            ]);
 
-            return ApiResponse::error(
-                'Failed to load subscriptions',
-                ['error' => $e->getMessage()],
-                500
-            );
+            return response()->json([
+                'status' => true,
+                'message' => 'Subscription details retrieved successfully',
+                'data' => $data
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('API Subscription Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Return detailed error in development, generic in production
+            $errorResponse = [
+                'status' => false,
+                'message' => 'Failed to load subscriptions',
+                'data' => null
+            ];
+
+            // Add debug info if in local/dev environment
+            if (config('app.debug')) {
+                $errorResponse['debug'] = [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ];
+            }
+
+            return response()->json($errorResponse, 500);
         }
     }
 }
