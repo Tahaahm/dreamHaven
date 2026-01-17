@@ -1108,12 +1108,10 @@ class AgentController extends Controller
         );
     }
 
-
-
     public function getSubscriptionDetails(Request $request)
     {
         try {
-            // 1. Get Authenticated Agent (Sanctum)
+            // 1. Get Authenticated Agent
             $agent = $request->user();
 
             if (!$agent) {
@@ -1127,8 +1125,7 @@ class AgentController extends Controller
 
             Log::info('API: Fetching subscription details', [
                 'agent_id' => $agent->id,
-                'agent_name' => $agent->agent_name ?? 'N/A',
-                'agent_class' => get_class($agent)
+                'agent_name' => $agent->agent_name ?? 'N/A'
             ]);
 
             // 2. Fetch Current Active Subscription
@@ -1145,7 +1142,8 @@ class AgentController extends Controller
                 'has_plan' => $currentSubscription?->currentPlan ? 'YES' : 'NO'
             ]);
 
-            // 3. Fetch Available Plans
+            // 3. ✅ FIX: Fetch from the CORRECT table with rich data
+            // Use the same model/table as your /subscription-plans endpoint
             $plans = \App\Models\SubscriptionPlan::where('type', 'agent')
                 ->where('active', 1)
                 ->orderBy('sort_order', 'asc')
@@ -1153,52 +1151,59 @@ class AgentController extends Controller
 
             Log::info('API: Plans fetched', ['count' => $plans->count()]);
 
-            // 4. Format the response
+            // 4. Format current subscription
             $formattedSubscription = null;
 
             if ($currentSubscription) {
+                // Get the rich plan data if plan exists
+                $richPlan = null;
+                if ($currentSubscription->current_plan_id) {
+                    $richPlan = \App\Models\SubscriptionPlan::find($currentSubscription->current_plan_id);
+                }
+
                 $formattedSubscription = [
                     'id' => $currentSubscription->id,
                     'user_id' => $currentSubscription->user_id,
                     'plan_id' => $currentSubscription->current_plan_id,
 
-                    // Plan name (with fallback)
-                    'plan_name' => $currentSubscription->currentPlan?->name ?? 'Unknown Plan',
+                    // Use rich plan data if available
+                    'plan_name' => $richPlan?->name ?? $currentSubscription->currentPlan?->name ?? 'Unknown Plan',
 
-                    // Status and dates
                     'status' => $currentSubscription->status,
                     'start_date' => $currentSubscription->start_date ?
                         $currentSubscription->start_date->toIso8601String() : null,
                     'end_date' => $currentSubscription->end_date ?
                         $currentSubscription->end_date->toIso8601String() : null,
 
-                    // Days remaining
                     'days_remaining' => $currentSubscription->end_date ?
                         now()->diffInDays($currentSubscription->end_date, false) : 0,
 
-                    // Property limits (with safe defaults)
-                    'property_activation_limit' => $currentSubscription->property_activation_limit ?? 0,
-                    'property_limit' => $currentSubscription->property_activation_limit ?? 0, // Alias
+                    // ✅ Use rich plan data for limits
+                    'property_activation_limit' => $richPlan?->max_properties ??
+                        $currentSubscription->property_activation_limit ?? 0,
+                    'property_limit' => $richPlan?->max_properties ??
+                        $currentSubscription->property_activation_limit ?? 0,
 
                     'properties_activated_this_month' => $currentSubscription->properties_activated_this_month ?? 0,
-                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0, // Alias
+                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0,
 
                     'remaining_activations' => $currentSubscription->remaining_activations ?? 0,
                     'banner_activation_limit' => $currentSubscription->banner_activation_limit ?? 0,
                 ];
 
-                // Add plan object if it exists
-                if ($currentSubscription->currentPlan) {
+                // Add rich plan object
+                if ($richPlan) {
                     $formattedSubscription['plan'] = [
-                        'id' => $currentSubscription->currentPlan->id,
-                        'name' => $currentSubscription->currentPlan->name,
-                        'property_activation_limit' => $currentSubscription->currentPlan->property_activation_limit ?? 0,
-                        'banner_activation_limit' => $currentSubscription->currentPlan->banner_activation_limit ?? 0,
-                        'can_featured_listing' => (bool)($currentSubscription->currentPlan->can_featured_listing ?? false),
-                        'can_priority_support' => (bool)($currentSubscription->currentPlan->can_priority_support ?? false),
+                        'id' => $richPlan->id,
+                        'name' => $richPlan->name,
+                        'property_activation_limit' => $richPlan->max_properties ?? 0,
+                        'banner_activation_limit' => 0, // Not in rich plan structure
+                        'can_featured_listing' => false,
+                        'can_priority_support' => false,
+                        'price' => $richPlan->final_price_iqd ?? 0,
+                        'duration' => $richPlan->duration_label ?? 'monthly',
                     ];
                 } else {
-                    // No plan found, create a minimal plan object
                     $formattedSubscription['plan'] = [
                         'id' => null,
                         'name' => 'Unknown Plan',
@@ -1210,19 +1215,36 @@ class AgentController extends Controller
                 }
             }
 
-            // Format plans
+            // 5. ✅ Format plans with RICH data structure
             $formattedPlans = $plans->map(function ($plan) {
                 return [
                     'id' => $plan->id,
                     'name' => $plan->name ?? 'Unnamed Plan',
-                    'duration' => $plan->duration ?? 'monthly',
-                    'price' => $plan->price ?? 0,
-                    'property_activation_limit' => $plan->property_activation_limit ?? 0,
-                    'banner_activation_limit' => $plan->banner_activation_limit ?? 0,
-                    'can_featured_listing' => (bool)($plan->can_featured_listing ?? false),
-                    'can_priority_support' => (bool)($plan->can_priority_support ?? false),
+                    'duration' => $plan->duration_label ?? 'monthly',
+
+                    // ✅ Use the correct price field from rich data
+                    'price' => (float)($plan->final_price_iqd ?? 0),
+                    'original_price' => (float)($plan->original_price_iqd ?? 0),
+                    'discount' => (float)($plan->discount_iqd ?? 0),
+                    'discount_percentage' => (float)($plan->discount_percentage ?? 0),
+
+                    // ✅ Use max_properties instead of property_activation_limit
+                    'property_activation_limit' => $plan->max_properties ?? 0,
+                    'max_properties' => $plan->max_properties ?? 0,
+
+                    'banner_activation_limit' => 0, // Not in this structure
+                    'can_featured_listing' => $plan->is_featured ?? false,
+                    'can_priority_support' => false,
                     'active' => (bool)($plan->active ?? true),
                     'sort_order' => $plan->sort_order ?? 0,
+
+                    // ✅ Additional rich data
+                    'description' => $plan->description ?? '',
+                    'features' => $plan->features ?? [],
+                    'conditions' => $plan->conditions ?? [],
+                    'note' => $plan->note ?? '',
+                    'duration_months' => $plan->duration_months ?? 1,
+                    'price_per_month' => (float)($plan->price_per_month_iqd ?? 0),
                 ];
             })->toArray();
 
@@ -1249,14 +1271,12 @@ class AgentController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
-            // Return detailed error in development, generic in production
             $errorResponse = [
                 'status' => false,
                 'message' => 'Failed to load subscriptions',
                 'data' => null
             ];
 
-            // Add debug info if in local/dev environment
             if (config('app.debug')) {
                 $errorResponse['debug'] = [
                     'error' => $e->getMessage(),
