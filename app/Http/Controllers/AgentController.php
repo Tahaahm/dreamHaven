@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\RealEstateOffice;
 use App\Models\Support\UserFavoriteProperty;
 use Illuminate\Support\Facades\Hash;
+use App\Models\Subscription\Subscription;
 
 class AgentController extends Controller
 {

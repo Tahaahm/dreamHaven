@@ -13,6 +13,10 @@ use App\Models\Support\AgentNotification;
 use App\Models\Support\AgentSocialPlatform;
 use App\Models\Support\AgentSpecialization;
 use App\Models\Support\AgentUploadedProperty;
+// Import Branch and Area models if they exist in specific namespaces,
+// otherwise assume they are in App\Models
+use App\Models\Branch;
+use App\Models\Area;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -21,6 +25,7 @@ use Laravel\Sanctum\HasApiTokens;
 class Agent extends Authenticatable
 {
     use HasFactory, HasUuids, Notifiable, HasApiTokens;
+
     protected $table = 'agents';
     public $incrementing = false;
     protected $keyType = 'string';
@@ -35,7 +40,7 @@ class Agent extends Authenticatable
         'subscriber_id',
         'is_verified',
         'overall_rating',
-        'subscription_id', // Note: Ideally this should be subscription_id (lowercase) in DB
+        'subscription_id',
         'current_plan',
         'properties_uploaded_this_month',
         'remaining_property_uploads',
@@ -45,8 +50,15 @@ class Agent extends Authenticatable
         'office_address',
         'latitude',
         'longitude',
+
+        // Location Strings (Legacy/Display)
         'city',
         'district',
+
+        // Location IDs (Relationships) - ADDED THESE
+        'city_id',
+        'area_id',
+
         'properties_sold',
         'years_experience',
         'license_number',
@@ -60,31 +72,56 @@ class Agent extends Authenticatable
         'currency',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'is_verified' => 'boolean',
-            'overall_rating' => 'decimal:2',
-            'properties_uploaded_this_month' => 'integer',
-            'remaining_property_uploads' => 'integer',
-            'latitude' => 'decimal:8',
-            'longitude' => 'decimal:8',
-            'properties_sold' => 'integer',
-            'years_experience' => 'integer',
-            'working_hours' => 'array',
-            'commission_rate' => 'decimal:2',
-            'consultation_fee' => 'decimal:2',
-        ];
-    }
+    protected $casts = [
+        'is_verified' => 'boolean',
+        'overall_rating' => 'decimal:2',
+        'properties_uploaded_this_month' => 'integer',
+        'remaining_property_uploads' => 'integer',
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
+        'properties_sold' => 'integer',
+        'years_experience' => 'integer',
+        'working_hours' => 'array',
+        'commission_rate' => 'decimal:2',
+        'consultation_fee' => 'decimal:2',
+    ];
 
     // ==========================================
     // 🔗 RELATIONSHIPS
     // ==========================================
 
-    // Fixed naming convention (camelCase) for easier access: $agent->subscription
+    /**
+     * Relationship: Agent belongs to a Branch (City)
+     * Matches: $agent->load('branch')
+     */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'city_id');
+    }
+
+    /**
+     * Relationship: Agent belongs to an Area
+     * Matches: $agent->load('area')
+     */
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(Area::class, 'area_id');
+    }
+
+    /**
+     * Relationship: Agent belongs to a Subscription
+     */
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class, 'subscription_id');
+    }
+
+    /**
+     * Alias for subscription to match some controller logic calling currentSubscription
+     */
+    public function currentSubscription(): BelongsTo
+    {
+        return $this->subscription();
     }
 
     public function company(): BelongsTo
@@ -246,10 +283,5 @@ class Agent extends Authenticatable
     public function scopeByPlan($query, $plan)
     {
         return $query->where('current_plan', $plan);
-    }
-
-    public function currentSubscription(): BelongsTo
-    {
-        return $this->subscription();
     }
 }
