@@ -365,6 +365,72 @@ class AgentController extends Controller
             ], 500);
         }
     }
+
+
+    /**
+     * Get properties for a specific agent (Public Endpoint)
+     * GET /v1/api/agents/{id}/properties
+     */
+    public function getAgentProperties($id)
+    {
+        $agent = Agent::find($id);
+
+        if (!$agent) {
+            return ApiResponse::error(
+                ResponseDetails::notFoundMessage('Agent not found'),
+                null,
+                ResponseDetails::CODE_NOT_FOUND
+            );
+        }
+
+        // Fetch properties owned by this agent
+        $properties = \App\Models\Property::where('owner_id', $agent->id)
+            ->where('owner_type', 'App\\Models\\Agent')
+            ->where('status', 'available') // Only show available/active properties
+            ->latest()
+            ->get()
+            ->map(function ($prop) {
+                // Ensure JSON fields are decoded properly for the API response
+                $arrayFields = [
+                    'name',
+                    'description',
+                    'images',
+                    'availability',
+                    'type',
+                    'price',
+                    'rooms',
+                    'features',
+                    'amenities',
+                    'locations',
+                    'address_details',
+                    'floor_details',
+                    'construction_details',
+                    'energy_details',
+                    'virtual_tour_details',
+                    'additional_media',
+                    'view_analytics',
+                    'favorites_analytics',
+                    'legal_information',
+                    'investment_analysis',
+                    'furnishing_details',
+                    'seo_metadata',
+                    'nearby_amenities'
+                ];
+
+                foreach ($arrayFields as $field) {
+                    $prop->$field = is_string($prop->$field) ? json_decode($prop->$field) : $prop->$field;
+                }
+
+                return $prop;
+            });
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('Agent properties retrieved successfully'),
+            $properties, // Just return the list directly or wrapped in ['properties' => ...] based on your preference
+            ResponseDetails::CODE_SUCCESS
+        );
+    }
+
     public function getAgentsByCompany($companyId)
     {
         $agents = Agent::where('company_id', $companyId)->get();

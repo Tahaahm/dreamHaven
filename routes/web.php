@@ -336,7 +336,7 @@ Route::prefix('v1/api/agents')->group(function () {
     Route::get('/', [AgentController::class, 'index']);
     Route::post('/login', [AgentController::class, 'login']);
     Route::post('/users/{user_id}/convert-to-agent', [AgentController::class, 'createFromUser']);
-
+    Route::get('/{id}/properties', [AgentController::class, 'getAgentProperties']);
     // ✅ CATCH-ALL ROUTES LAST (must be at the end!)
     Route::get('/{id}', [AgentController::class, 'show']);
 });
