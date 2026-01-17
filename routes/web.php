@@ -328,6 +328,8 @@ Route::prefix('v1/api/agents')->group(function () {
         Route::patch('/{id}/verify', [AgentController::class, 'toggleVerification']);
         Route::patch('/{id}/remove-company', [AgentController::class, 'removeFromCompany']);
         Route::get('/subscriptions/details', [AgentController::class, 'getSubscriptionDetails']);
+        Route::get('/appointments', [AgentController::class, 'getAppointments']);
+        Route::put('/appointments/{id}/status', [AgentController::class, 'updateAppointmentStatus']);
     });
 
     // ✅ PUBLIC ROUTES

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use App\Helper\ApiResponse;
 use App\Helper\ResponseDetails;
 use App\Models\Agent;
+use App\Models\Appointment;
 use App\Models\Property;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -1293,6 +1294,76 @@ class AgentController extends Controller
             }
 
             return response()->json($errorResponse, 500);
+        }
+    }
+
+    public function getAppointments(Request $request)
+    {
+        try {
+            $agent = $request->user();
+
+            // 1. Validation: Ensure user is an Agent
+            if (!$agent || !($agent instanceof \App\Models\Agent)) {
+                return ApiResponse::error('Unauthorized access', [], 401);
+            }
+
+            // 2. Build Query
+            $query = Appointment::where('agent_id', $agent->id)
+                ->with(['user', 'property']); // Load Client (User) and Property details
+
+            // 3. Apply Filters
+            if ($request->has('status')) {
+                $query->where('status', $request->status);
+            }
+
+            // 4. Sort (Newest first)
+            $appointments = $query->orderBy('appointment_date', 'desc')
+                ->orderBy('appointment_time', 'desc')
+                ->get();
+
+            return ApiResponse::success(
+                ResponseDetails::successMessage('Agent appointments retrieved'),
+                $appointments,
+                ResponseDetails::CODE_SUCCESS
+            );
+        } catch (\Exception $e) {
+            Log::error('Agent Appointments Error: ' . $e->getMessage());
+            return ApiResponse::error('Failed to load appointments', null, 500);
+        }
+    }
+
+    /**
+     * ✅ NEW: Update Appointment Status (Confirm/Cancel/Complete)
+     */
+    public function updateAppointmentStatus(Request $request, $id)
+    {
+        try {
+            $agent = $request->user();
+
+            $appointment = Appointment::where('id', $id)
+                ->where('agent_id', $agent->id) // Security: Ensure appointment belongs to agent
+                ->first();
+
+            if (!$appointment) {
+                return ApiResponse::error('Appointment not found', null, 404);
+            }
+
+            $request->validate([
+                'status' => 'required|in:pending,confirmed,completed,cancelled'
+            ]);
+
+            $appointment->update([
+                'status' => $request->status
+            ]);
+
+            return ApiResponse::success(
+                ResponseDetails::successMessage('Status updated successfully'),
+                $appointment,
+                ResponseDetails::CODE_SUCCESS
+            );
+        } catch (\Exception $e) {
+            Log::error('Update Status Error: ' . $e->getMessage());
+            return ApiResponse::error('Failed to update status', null, 500);
         }
     }
 }
