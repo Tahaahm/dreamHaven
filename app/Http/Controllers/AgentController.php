@@ -1106,4 +1106,71 @@ class AgentController extends Controller
             ResponseDetails::CODE_SUCCESS
         );
     }
+
+
+
+    public function getSubscriptionDetails(Request $request)
+    {
+        try {
+            // 1. Get Authenticated Agent (Sanctum)
+            $agent = $request->user();
+
+            if (!$agent) {
+                return ApiResponse::error('Unauthorized', [], 401);
+            }
+
+            Log::info('API: Fetching subscription details', [
+                'agent_id' => $agent->id,
+                'agent_name' => $agent->agent_name
+            ]);
+
+            // 2. Fetch Current Active Subscription
+            // matches web: where('user_id', $agent->id)->where('status', 'active')->latest()->first();
+            $currentSubscription = Subscription::with('currentPlan')
+                ->where('user_id', $agent->id)
+                ->where('status', 'active')
+                // Optional: You can check for expiration here using 'whereDate' if strictly needed,
+                // but usually the 'active' status implies it's valid.
+                ->where('end_date', '>=', now())
+                ->latest()
+                ->first();
+
+            // 3. Fetch Available Plans
+            // matches web: SubscriptionPlan::where('type', 'agent')->active()->orderBy...
+            $plans = SubscriptionPlan::where('type', 'agent')
+                ->where('active', 1) // Assuming 'active' scope does this
+                ->orderBy('sort_order', 'asc')
+                ->get();
+
+            // 4. Format the response
+            $data = [
+                'current_subscription' => $currentSubscription ? [
+                    'id' => $currentSubscription->id,
+                    'plan_name' => $currentSubscription->currentPlan->name ?? 'Unknown',
+                    'status' => $currentSubscription->status,
+                    'start_date' => $currentSubscription->start_date,
+                    'end_date' => $currentSubscription->end_date,
+                    'days_remaining' => $currentSubscription->end_date ? now()->diffInDays($currentSubscription->end_date, false) : 0,
+                    'property_limit' => $currentSubscription->property_activation_limit,
+                    'properties_used' => $currentSubscription->properties_activated_this_month ?? 0,
+                    'remaining_activations' => $currentSubscription->remaining_activations ?? 0,
+                ] : null,
+                'available_plans' => $plans
+            ];
+
+            return ApiResponse::success(
+                ResponseDetails::successMessage('Subscription details retrieved successfully'),
+                $data,
+                ResponseDetails::CODE_SUCCESS
+            );
+        } catch (\Exception $e) {
+            Log::error('API Subscription Error: ' . $e->getMessage());
+
+            return ApiResponse::error(
+                'Failed to load subscriptions',
+                ['error' => $e->getMessage()],
+                500
+            );
+        }
+    }
 }
