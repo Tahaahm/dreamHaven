@@ -327,7 +327,7 @@ Route::prefix('v1/api/agents')->group(function () {
         Route::delete('/{id}', [AgentController::class, 'destroy']);
         Route::patch('/{id}/verify', [AgentController::class, 'toggleVerification']);
         Route::patch('/{id}/remove-company', [AgentController::class, 'removeFromCompany']);
-        Route::get('/subscriptions/details', [AgentController::class, 'getSubscriptionDetails']);
+        Route::get('/subscriptions/details', [AgentAuthController::class, 'showSubscriptions']);
     });
 
     // ✅ PUBLIC ROUTES
