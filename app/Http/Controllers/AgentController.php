@@ -169,6 +169,11 @@ class AgentController extends Controller
                     'message' => 'Agent not found'
                 ], 404);
             }
+            Log::info('AUTH CHECK', [
+                'auth_user_id' => $user->id,
+                'agent_user_id' => $agent->user_id,
+                'user_role' => $user->role,
+            ]);
 
             // Check authorization
             $user = $request->user();

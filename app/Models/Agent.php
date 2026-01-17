@@ -247,4 +247,9 @@ class Agent extends Authenticatable
     {
         return $query->where('current_plan', $plan);
     }
+
+    public function currentSubscription(): BelongsTo
+    {
+        return $this->subscription();
+    }
 }
