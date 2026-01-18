@@ -4,6 +4,7 @@
 
 @section('styles')
 <style>
+    /* --- Page Layout & Header --- */
     .page-header {
         background: linear-gradient(135deg, #303b97 0%, #1e2875 100%);
         border-radius: 16px;
@@ -40,6 +41,7 @@
         opacity: 0.9;
     }
 
+    /* --- Form Containers --- */
     .form-container {
         background: white;
         border-radius: 16px;
@@ -49,6 +51,12 @@
 
     .form-section {
         margin-bottom: 40px;
+        padding-bottom: 30px;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .form-section:last-child {
+        border-bottom: none;
     }
 
     .section-title {
@@ -68,6 +76,7 @@
         font-size: 22px;
     }
 
+    /* --- Grid System --- */
     .form-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -78,6 +87,16 @@
         grid-column: 1 / -1;
     }
 
+    @media (max-width: 768px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+        .form-container {
+            padding: 20px;
+        }
+    }
+
+    /* --- Form Elements --- */
     .form-group {
         margin-bottom: 0;
     }
@@ -95,9 +114,7 @@
         margin-left: 4px;
     }
 
-    .form-input,
-    .form-select,
-    .form-textarea {
+    .form-input, .form-select, .form-textarea {
         width: 100%;
         padding: 14px 18px;
         border: 2px solid #e5e7eb;
@@ -105,14 +122,20 @@
         font-size: 15px;
         transition: all 0.3s;
         background: white;
+        color: #1f2937;
     }
 
-    .form-input:focus,
-    .form-select:focus,
-    .form-textarea:focus {
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
         outline: none;
         border-color: #303b97;
         box-shadow: 0 0 0 4px rgba(48,59,151,0.1);
+    }
+
+    .form-input[readonly] {
+        background-color: #f8fafc;
+        color: #64748b;
+        cursor: not-allowed;
+        border-color: #e2e8f0;
     }
 
     .form-textarea {
@@ -121,6 +144,7 @@
         font-family: inherit;
     }
 
+    /* --- Language Tabs --- */
     .language-tabs {
         display: flex;
         gap: 8px;
@@ -141,6 +165,10 @@
         color: #64748b;
         border: none;
         transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
     }
 
     .language-tab.active {
@@ -151,12 +179,19 @@
 
     .language-content {
         display: none;
+        animation: fadeIn 0.3s ease;
     }
 
     .language-content.active {
         display: block;
     }
 
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* --- Map Section --- */
     .map-container {
         width: 100%;
         height: 400px;
@@ -164,6 +199,7 @@
         overflow: hidden;
         border: 2px solid #e5e7eb;
         margin-bottom: 20px;
+        position: relative;
     }
 
     #map {
@@ -172,8 +208,8 @@
     }
 
     .map-instructions {
-        background: linear-gradient(135deg, rgba(48,59,151,0.1), rgba(48,59,151,0.05));
-        border: 2px dashed #303b97;
+        background: linear-gradient(135deg, rgba(48,59,151,0.05), rgba(48,59,151,0.02));
+        border: 1px dashed #303b97;
         border-radius: 12px;
         padding: 16px;
         margin-bottom: 20px;
@@ -182,8 +218,10 @@
         gap: 12px;
         color: #303b97;
         font-weight: 600;
+        font-size: 14px;
     }
 
+    /* --- Image Upload --- */
     .image-upload-zone {
         border: 3px dashed #cbd5e1;
         border-radius: 16px;
@@ -192,6 +230,7 @@
         background: #f8fafc;
         transition: all 0.3s;
         cursor: pointer;
+        position: relative;
     }
 
     .image-upload-zone:hover {
@@ -202,6 +241,7 @@
     .image-upload-zone.dragover {
         border-color: #303b97;
         background: rgba(48,59,151,0.05);
+        transform: scale(1.01);
     }
 
     .upload-icon {
@@ -245,6 +285,12 @@
         border: 3px solid #e5e7eb;
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         background: #f3f4f6;
+        animation: scaleUp 0.3s ease;
+    }
+
+    @keyframes scaleUp {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
     }
 
     .image-preview-item img {
@@ -258,18 +304,18 @@
         position: absolute;
         top: 10px;
         right: 10px;
-        width: 36px;
-        height: 36px;
+        width: 32px;
+        height: 32px;
         background: #ef4444;
         border: none;
-        border-radius: 10px;
+        border-radius: 8px;
         color: white;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 16px;
-        transition: all 0.3s;
+        font-size: 14px;
+        transition: all 0.2s;
         box-shadow: 0 4px 12px rgba(239,68,68,0.4);
         z-index: 10;
     }
@@ -279,6 +325,7 @@
         transform: scale(1.1);
     }
 
+    /* --- Form Actions --- */
     .form-actions {
         display: flex;
         gap: 16px;
@@ -323,28 +370,6 @@
         background: #f8fafc;
         border-color: #cbd5e1;
     }
-
-    @media (max-width: 768px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .form-container {
-            padding: 24px;
-        }
-
-        .page-header {
-            padding: 24px;
-        }
-
-        .form-actions {
-            flex-direction: column;
-        }
-
-        .image-preview-grid {
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        }
-    }
 </style>
 @endsection
 
@@ -358,17 +383,18 @@
     </div>
 </div>
 
+{{-- Main Form Start --}}
 <form action="{{ route('agent.property.store') }}" method="POST" enctype="multipart/form-data" id="propertyForm">
     @csrf
 
     <div class="form-container">
-        <!-- Basic Information -->
+
         <div class="form-section">
             <h3 class="section-title">
-                <i class="fas fa-info-circle"></i>
-                Basic Information
+                <i class="fas fa-info-circle"></i> Basic Information
             </h3>
 
+            {{-- Language Switcher --}}
             <div class="language-tabs">
                 <button type="button" class="language-tab active" data-lang="en">
                     <i class="fas fa-globe"></i> English
@@ -381,17 +407,19 @@
                 </button>
             </div>
 
+            {{-- English Fields --}}
             <div class="language-content active" data-content="en">
                 <div class="form-group">
                     <label class="form-label">Property Title (English)<span class="required">*</span></label>
                     <input type="text" name="title_en" class="form-input" placeholder="e.g., Luxury Villa in Erbil" required>
                 </div>
                 <div class="form-group" style="margin-top: 20px;">
-                    <label class="form-label">Description (English)</label>
-                    <textarea name="description_en" class="form-textarea" placeholder="Describe your property in detail..."></textarea>
+                    <label class="form-label">Description (English)<span class="required">*</span></label>
+                    <textarea name="description_en" class="form-textarea" placeholder="Describe your property in detail..." required></textarea>
                 </div>
             </div>
 
+            {{-- Arabic Fields --}}
             <div class="language-content" data-content="ar">
                 <div class="form-group">
                     <label class="form-label">عنوان العقار (العربية)</label>
@@ -403,6 +431,7 @@
                 </div>
             </div>
 
+            {{-- Kurdish Fields --}}
             <div class="language-content" data-content="ku">
                 <div class="form-group">
                     <label class="form-label">ناونیشانی خانووبەرە (کوردی)</label>
@@ -414,17 +443,16 @@
                 </div>
             </div>
 
+            {{-- Core Details --}}
             <div class="form-grid" style="margin-top: 24px;">
                 <div class="form-group">
                     <label class="form-label">Price (IQD)<span class="required">*</span></label>
                     <input type="number" name="price" class="form-input" placeholder="e.g., 150000000" min="0" required>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Price (USD)</label>
                     <input type="number" name="price_usd" class="form-input" placeholder="e.g., 100000" min="0">
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Property Type<span class="required">*</span></label>
                     <select name="property_type" class="form-select" required>
@@ -437,7 +465,6 @@
                         <option value="office">🏢 Office</option>
                     </select>
                 </div>
-
                 <div class="form-group">
                     <label class="form-label">Status<span class="required">*</span></label>
                     <select name="status" class="form-select" required>
@@ -447,24 +474,43 @@
                         <option value="pending">⏳ Pending</option>
                     </select>
                 </div>
-
                 <div class="form-group">
-                    <label class="form-label">Area (m²)</label>
-                    <input type="number" name="area" class="form-input" placeholder="e.g., 250" min="0">
+                    <label class="form-label">Area (m²)<span class="required">*</span></label>
+                    <input type="number" name="area" class="form-input" placeholder="e.g., 250" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Listing Type<span class="required">*</span></label>
+                    <select name="listing_type" class="form-select" required>
+                        <option value="sell">For Sale</option>
+                        <option value="rent">For Rent</option>
+                    </select>
                 </div>
             </div>
         </div>
 
-        <!-- Location -->
         <div class="form-section">
             <h3 class="section-title">
-                <i class="fas fa-map-marker-alt"></i>
-                Location Information
+                <i class="fas fa-map-marker-alt"></i> Location Information
             </h3>
 
+            <div class="form-grid" style="margin-bottom: 24px;">
+                <div class="form-group">
+                    <label class="form-label">Select City <span class="required">*</span></label>
+                    <select id="location-city-select" class="form-select" required>
+                        <option value="">Loading cities...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Select Area/District <span class="required">*</span></label>
+                    <select id="location-area-select" class="form-select" disabled required>
+                        <option value="">Select City First</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="map-instructions">
-                <i class="fas fa-info-circle" style="font-size: 24px;"></i>
-                <span>Click on the map to select the exact location of your property. The coordinates will be filled automatically.</span>
+                <i class="fas fa-info-circle" style="font-size: 20px;"></i>
+                <span>Select a City and Area above to auto-position the map. You can also drag the pin manually.</span>
             </div>
 
             <div class="map-container">
@@ -472,103 +518,94 @@
             </div>
 
             <div class="form-grid">
+                {{-- Coordinates --}}
                 <div class="form-group">
-                    <label class="form-label">Latitude<span class="required">*</span></label>
-                    <input type="number" name="latitude" id="latitude" class="form-input" step="0.0000001" placeholder="36.1911" readonly required>
+                    <label class="form-label">Latitude <span class="required">*</span></label>
+                    <input type="number" name="latitude" id="latitude" class="form-input" step="any" readonly required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Longitude <span class="required">*</span></label>
+                    <input type="number" name="longitude" id="longitude" class="form-input" step="any" readonly required>
                 </div>
 
+                {{-- English Location Names (Auto-filled) --}}
                 <div class="form-group">
-                    <label class="form-label">Longitude<span class="required">*</span></label>
-                    <input type="number" name="longitude" id="longitude" class="form-input" step="0.0000001" placeholder="44.0091" readonly required>
+                    <label class="form-label">City (EN)</label>
+                    <input type="text" name="city_en" id="city_en" class="form-input" readonly required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">District (EN)</label>
+                    <input type="text" name="district_en" id="district_en" class="form-input" readonly required>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">City (English)<span class="required">*</span></label>
-                    <input type="text" name="city_en" class="form-input" placeholder="e.g., Erbil" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">District (English)<span class="required">*</span></label>
-                    <input type="text" name="district_en" class="form-input" placeholder="e.g., Dream City" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">City (Arabic)</label>
-                    <input type="text" name="city_ar" class="form-input" placeholder="أربيل" dir="rtl">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">District (Arabic)</label>
-                    <input type="text" name="district_ar" class="form-input" placeholder="مدينة الأحلام" dir="rtl">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">City (Kurdish)</label>
-                    <input type="text" name="city_ku" class="form-input" placeholder="هەولێر">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">District (Kurdish)</label>
-                    <input type="text" name="district_ku" class="form-input" placeholder="شاری خەون">
-                </div>
+                {{-- Hidden Multi-language fields (Auto-filled by JS) --}}
+                <input type="hidden" name="city_ar" id="city_ar">
+                <input type="hidden" name="district_ar" id="district_ar">
+                <input type="hidden" name="city_ku" id="city_ku">
+                <input type="hidden" name="district_ku" id="district_ku">
 
                 <div class="form-group form-grid-full">
-                    <label class="form-label">Full Address</label>
-                    <input type="text" name="address" class="form-input" placeholder="Enter complete street address">
+                    <label class="form-label">Full Address Details</label>
+                    <input type="text" name="address" class="form-input" placeholder="Street number, building name, floor number, landmark..." required>
                 </div>
             </div>
         </div>
 
-        <!-- Property Details -->
         <div class="form-section">
             <h3 class="section-title">
-                <i class="fas fa-home"></i>
-                Property Details
+                <i class="fas fa-home"></i> Property Details
             </h3>
-
             <div class="form-grid">
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-bed"></i> Bedrooms
-                    </label>
-                    <input type="number" name="bedrooms" class="form-input" min="0" placeholder="e.g., 3">
+                    <label class="form-label"><i class="fas fa-bed"></i> Bedrooms</label>
+                    <input type="number" name="bedrooms" class="form-input" min="0" placeholder="e.g., 3" required>
                 </div>
-
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-bath"></i> Bathrooms
-                    </label>
-                    <input type="number" name="bathrooms" class="form-input" min="0" placeholder="e.g., 2">
+                    <label class="form-label"><i class="fas fa-bath"></i> Bathrooms</label>
+                    <input type="number" name="bathrooms" class="form-input" min="0" placeholder="e.g., 2" required>
                 </div>
-
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-layer-group"></i> Floors
-                    </label>
-                    <input type="number" name="floors" class="form-input" min="0" placeholder="e.g., 2">
+                    <label class="form-label"><i class="fas fa-layer-group"></i> Floors</label>
+                    <input type="number" name="floor_number" class="form-input" min="0" placeholder="e.g., 2">
                 </div>
-
                 <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-car"></i> Parking Spaces
-                    </label>
-                    <input type="number" name="parking_spaces" class="form-input" min="0" placeholder="e.g., 1">
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">
-                        <i class="fas fa-calendar-check"></i> Year Built
-                    </label>
+                    <label class="form-label"><i class="fas fa-calendar-check"></i> Year Built</label>
                     <input type="number" name="year_built" class="form-input" min="1900" max="2100" placeholder="e.g., 2020">
                 </div>
             </div>
+
+            {{-- Amenities --}}
+            <div class="form-grid" style="margin-top: 24px;">
+                <div class="form-group">
+                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" name="furnished" value="1" style="width:20px; height:20px;">
+                        Furnished
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" name="electricity" value="1" checked style="width:20px; height:20px;">
+                        Electricity 24/7
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" name="water" value="1" checked style="width:20px; height:20px;">
+                        Water System
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" name="internet" value="1" checked style="width:20px; height:20px;">
+                        Internet/Fiber
+                    </label>
+                </div>
+            </div>
         </div>
 
-        <!-- Images -->
         <div class="form-section">
             <h3 class="section-title">
-                <i class="fas fa-images"></i>
-                Property Images
+                <i class="fas fa-images"></i> Property Images
             </h3>
 
             <div class="image-upload-zone" id="uploadZone">
@@ -576,14 +613,16 @@
                     <i class="fas fa-cloud-upload-alt"></i>
                 </div>
                 <div class="upload-text">Click to upload or drag and drop</div>
-                <div class="upload-hint">PNG, JPG, WEBP up to 5MB each (Multiple files supported)</div>
+                <div class="upload-hint">PNG, JPG, WEBP up to 5MB each (Min 1 required)</div>
+                {{-- Hidden input for file selection --}}
                 <input type="file" name="images[]" id="imageInput" accept="image/*" multiple hidden>
             </div>
 
-            <div class="image-preview-grid" id="imagePreviewGrid"></div>
+            <div class="image-preview-grid" id="imagePreviewGrid">
+                {{-- Previews will appear here via JS --}}
+            </div>
         </div>
 
-        <!-- Form Actions -->
         <div class="form-actions">
             <a href="{{ route('agent.properties') }}" class="btn btn-secondary">
                 <i class="fas fa-times"></i> Cancel
@@ -595,233 +634,263 @@
     </div>
 </form>
 
+{{-- Scripts --}}
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
 
 <script>
 let map, marker;
 
-// Initialize Google Map
+// --- 1. GOOGLE MAPS INIT ---
 function initMap() {
-    const erbil = { lat: 36.1911, lng: 44.0091 };
+    const defaultLoc = { lat: 36.1911, lng: 44.0091 }; // Erbil Default
 
     map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 12,
-        center: erbil,
+        zoom: 13,
+        center: defaultLoc,
         styles: [
-            {
-                "featureType": "water",
-                "elementType": "geometry",
-                "stylers": [{"color": "#e9e9e9"}, {"lightness": 17}]
-            },
-            {
-                "featureType": "landscape",
-                "elementType": "geometry",
-                "stylers": [{"color": "#f5f5f5"}, {"lightness": 20}]
-            }
+            { "featureType": "water", "elementType": "geometry", "stylers": [{"color": "#e9e9e9"}, {"lightness": 17}] },
+            { "featureType": "landscape", "elementType": "geometry", "stylers": [{"color": "#f5f5f5"}, {"lightness": 20}] }
         ]
     });
 
     marker = new google.maps.Marker({
-        position: erbil,
+        position: defaultLoc,
         map: map,
         draggable: true,
         animation: google.maps.Animation.DROP,
         icon: {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 12,
+            scale: 10,
             fillColor: "#303b97",
             fillOpacity: 1,
-            strokeWeight: 4,
+            strokeWeight: 3,
             strokeColor: "#ffffff"
         }
     });
 
-    // Update coordinates on marker drag
+    // Event: Update fields on drag
     google.maps.event.addListener(marker, 'dragend', function(event) {
         updateCoordinates(event.latLng.lat(), event.latLng.lng());
     });
 
-    // Update coordinates on map click
+    // Event: Update on click
     map.addListener('click', function(event) {
         marker.setPosition(event.latLng);
         updateCoordinates(event.latLng.lat(), event.latLng.lng());
     });
 
-    // Set initial coordinates
-    updateCoordinates(erbil.lat, erbil.lng);
+    // Initial setup
+    updateCoordinates(defaultLoc.lat, defaultLoc.lng);
 }
 
 function updateCoordinates(lat, lng) {
-    document.getElementById('latitude').value = lat.toFixed(7);
-    document.getElementById('longitude').value = lng.toFixed(7);
+    document.getElementById('latitude').value = lat;
+    document.getElementById('longitude').value = lng;
 }
 
-// Language tabs functionality
+function moveMapTo(lat, lng) {
+    const pos = { lat: parseFloat(lat), lng: parseFloat(lng) };
+    if (map && marker) {
+        map.panTo(pos);
+        map.setZoom(14);
+        marker.setPosition(pos);
+        updateCoordinates(lat, lng);
+    }
+}
+
+// --- 2. DYNAMIC LOCATION FETCHING ---
+document.addEventListener('DOMContentLoaded', async function() {
+    const citySelect = document.getElementById('location-city-select');
+    const areaSelect = document.getElementById('location-area-select');
+
+    // Load Cities on Page Load
+    try {
+        const response = await fetch("/v1/api/location/branches", {
+            headers: {
+                "Accept": "application/json",
+                "Accept-Language": "en" // Prevents backend Locale crash
+            }
+        });
+        const result = await response.json();
+
+        citySelect.innerHTML = '<option value="">Select City</option>';
+
+        if (result.success && result.data) {
+            const cities = result.data.sort((a, b) => a.city_name_en.localeCompare(b.city_name_en));
+            cities.forEach(city => {
+                const option = document.createElement('option');
+                option.value = city.id; // ID used to fetch areas
+                option.textContent = city.city_name_en;
+
+                // Store extra data for auto-filling inputs
+                option.dataset.lat = city.coordinates?.lat || city.latitude;
+                option.dataset.lng = city.coordinates?.lng || city.longitude;
+                option.dataset.nameEn = city.city_name_en;
+                option.dataset.nameAr = city.city_name_ar;
+                option.dataset.nameKu = city.city_name_ku;
+
+                citySelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading cities:', error);
+        citySelect.innerHTML = '<option value="">Error loading data</option>';
+    }
+
+    // Handle City Change
+    citySelect.addEventListener('change', async function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const cityId = this.value;
+
+        // Reset Areas
+        areaSelect.innerHTML = '<option value="">Loading areas...</option>';
+        areaSelect.disabled = true;
+
+        if (cityId) {
+            // Auto-fill hidden city inputs
+            document.getElementById('city_en').value = selectedOption.dataset.nameEn;
+            document.getElementById('city_ar').value = selectedOption.dataset.nameAr;
+            document.getElementById('city_ku').value = selectedOption.dataset.nameKu;
+
+            // Move Map
+            if(selectedOption.dataset.lat) {
+                moveMapTo(selectedOption.dataset.lat, selectedOption.dataset.lng);
+            }
+
+            // Fetch Areas for this City
+            try {
+                const res = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
+                    headers: { "Accept": "application/json", "Accept-Language": "en" }
+                });
+                const data = await res.json();
+
+                areaSelect.innerHTML = '<option value="">Select Area</option>';
+                areaSelect.disabled = false;
+
+                if (data.success && data.data) {
+                    const areas = data.data.sort((a, b) => a.area_name_en.localeCompare(b.area_name_en));
+                    areas.forEach(area => {
+                        const opt = document.createElement('option');
+                        opt.value = area.id;
+                        opt.textContent = area.area_name_en;
+
+                        // Store Area Data
+                        opt.dataset.lat = area.coordinates?.lat || area.latitude;
+                        opt.dataset.lng = area.coordinates?.lng || area.longitude;
+                        opt.dataset.nameEn = area.area_name_en;
+                        opt.dataset.nameAr = area.area_name_ar;
+                        opt.dataset.nameKu = area.area_name_ku;
+
+                        areaSelect.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error(err);
+                areaSelect.innerHTML = '<option value="">Error loading areas</option>';
+            }
+        } else {
+            areaSelect.innerHTML = '<option value="">Select City First</option>';
+            document.getElementById('city_en').value = '';
+        }
+    });
+
+    // Handle Area Change
+    areaSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (this.value) {
+            // Auto-fill hidden district inputs
+            document.getElementById('district_en').value = selectedOption.dataset.nameEn;
+            document.getElementById('district_ar').value = selectedOption.dataset.nameAr;
+            document.getElementById('district_ku').value = selectedOption.dataset.nameKu;
+
+            // Zoom Map to Area
+            if(selectedOption.dataset.lat) {
+                moveMapTo(selectedOption.dataset.lat, selectedOption.dataset.lng);
+                map.setZoom(15);
+            }
+        }
+    });
+});
+
+// --- 3. LANGUAGE TABS ---
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.language-tab').forEach(tab => {
         tab.addEventListener('click', function(e) {
             e.preventDefault();
             const lang = this.dataset.lang;
-
-            // Remove active class from all tabs and contents
             document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
-
-            // Add active class to clicked tab and corresponding content
             this.classList.add('active');
             document.querySelector(`[data-content="${lang}"]`).classList.add('active');
         });
     });
 });
 
-// Image upload functionality - SIMPLIFIED AND BULLETPROOF
+// --- 4. IMAGE UPLOAD LOGIC ---
 (function() {
     'use strict';
-
-    console.log('Image upload script loaded'); // Debug
-
     const uploadZone = document.getElementById('uploadZone');
     const imageInput = document.getElementById('imageInput');
     const imagePreviewGrid = document.getElementById('imagePreviewGrid');
 
-    if (!uploadZone || !imageInput || !imagePreviewGrid) {
-        console.error('Required elements not found!');
-        return;
-    }
+    if (!uploadZone || !imageInput) return;
 
     let selectedFiles = [];
 
-    // Simple click handler
-    uploadZone.onclick = function(e) {
-        console.log('Upload zone clicked');
-        imageInput.click();
-    };
+    // Trigger input
+    uploadZone.onclick = () => imageInput.click();
 
-    // File input change - THE MAIN HANDLER
-    imageInput.onchange = function(e) {
-        console.log('File input changed, files:', this.files.length);
-        handleNewFiles(this.files);
-    };
+    // Handle File Selection
+    imageInput.onchange = (e) => handleNewFiles(e.target.files);
 
-    // Drag and drop
-    uploadZone.ondragover = function(e) {
-        e.preventDefault();
-        this.classList.add('dragover');
-    };
-
-    uploadZone.ondragleave = function(e) {
-        e.preventDefault();
-        this.classList.remove('dragover');
-    };
-
-    uploadZone.ondrop = function(e) {
-        e.preventDefault();
-        this.classList.remove('dragover');
-        console.log('Files dropped:', e.dataTransfer.files.length);
-        handleNewFiles(e.dataTransfer.files);
-    };
+    // Drag & Drop effects
+    uploadZone.ondragover = (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); };
+    uploadZone.ondragleave = (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); };
+    uploadZone.ondrop = (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleNewFiles(e.dataTransfer.files); };
 
     function handleNewFiles(fileList) {
-        if (!fileList || fileList.length === 0) {
-            console.log('No files provided');
-            return;
-        }
-
-        console.log('Processing', fileList.length, 'files');
+        if (!fileList.length) return;
 
         for (let i = 0; i < fileList.length; i++) {
             const file = fileList[i];
-            console.log('File:', file.name, file.type, file.size);
+            // Basic validation
+            if (!file.type.match('image.*')) { alert(file.name + ' is not an image'); continue; }
+            if (file.size > 5 * 1024 * 1024) { alert(file.name + ' exceeds 5MB limit'); continue; }
 
-            // Validate
-            if (!file.type.match('image.*')) {
-                alert(file.name + ' is not an image');
-                continue;
-            }
-
-            if (file.size > 5 * 1024 * 1024) {
-                alert(file.name + ' is too large (max 5MB)');
-                continue;
-            }
-
-            // Add to array
             selectedFiles.push(file);
-
-            // Show preview
             showPreview(file, selectedFiles.length - 1);
         }
-
-        // Update the input
         syncInputFiles();
     }
 
     function showPreview(file, index) {
-        console.log('Creating preview for:', file.name);
-
         const reader = new FileReader();
-
         reader.onload = function(e) {
-            console.log('Preview loaded for:', file.name);
-
-            const wrapper = document.createElement('div');
-            wrapper.className = 'image-preview-item';
-            wrapper.setAttribute('data-index', index);
-
-            const img = document.createElement('img');
-            img.src = e.target.result;
-            img.alt = 'Preview';
-
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'image-remove-btn';
-            btn.innerHTML = '<i class="fas fa-times"></i>';
-            btn.onclick = function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Remove clicked for index:', index);
-                removePreview(index);
-            };
-
-            wrapper.appendChild(img);
-            wrapper.appendChild(btn);
-            imagePreviewGrid.appendChild(wrapper);
-
-            console.log('Preview added to DOM');
+            const div = document.createElement('div');
+            div.className = 'image-preview-item';
+            div.innerHTML = `
+                <img src="${e.target.result}" alt="Preview">
+                <button type="button" class="image-remove-btn" onclick="removePreview(${index}, this)">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            imagePreviewGrid.appendChild(div);
         };
-
-        reader.onerror = function(err) {
-            console.error('FileReader error:', err);
-        };
-
         reader.readAsDataURL(file);
     }
 
-    function removePreview(index) {
-        console.log('Removing file at index:', index);
-
-        // Remove from array
+    // Global function for inline onclick removal
+    window.removePreview = function(index, btn) {
         selectedFiles.splice(index, 1);
-
-        // Clear and rebuild
-        imagePreviewGrid.innerHTML = '';
-        selectedFiles.forEach((file, i) => showPreview(file, i));
-
-        // Update input
+        btn.parentElement.remove();
         syncInputFiles();
-    }
+    };
 
     function syncInputFiles() {
-        try {
-            const dt = new DataTransfer();
-            selectedFiles.forEach(f => dt.items.add(f));
-            imageInput.files = dt.files;
-            console.log('Input synced, total files:', imageInput.files.length);
-        } catch (err) {
-            console.error('Failed to sync files:', err);
-        }
+        const dt = new DataTransfer();
+        selectedFiles.forEach(f => dt.items.add(f));
+        imageInput.files = dt.files;
     }
-
-    console.log('Image upload handlers attached successfully');
 })();
 </script>
 @endsection

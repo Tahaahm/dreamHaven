@@ -7,6 +7,7 @@
     <title>Agent Registration - Dream Mulk</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* ... (Your existing styles remain unchanged) ... */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -191,14 +192,9 @@
 
             <div class="form-group">
                 <label for="city">City *</label>
+                {{-- Updated Select to rely on JS --}}
                 <select id="city" name="city" required>
-                    <option value="">Select City</option>
-                    <option value="Erbil" {{ old('city') == 'Erbil' ? 'selected' : '' }}>Erbil</option>
-                    <option value="Sulaymaniyah" {{ old('city') == 'Sulaymaniyah' ? 'selected' : '' }}>Sulaymaniyah</option>
-                    <option value="Duhok" {{ old('city') == 'Duhok' ? 'selected' : '' }}>Duhok</option>
-                    <option value="Baghdad" {{ old('city') == 'Baghdad' ? 'selected' : '' }}>Baghdad</option>
-                    <option value="Basra" {{ old('city') == 'Basra' ? 'selected' : '' }}>Basra</option>
-                    <option value="Mosul" {{ old('city') == 'Mosul' ? 'selected' : '' }}>Mosul</option>
+                    <option value="">Loading cities...</option>
                 </select>
             </div>
 
@@ -211,5 +207,52 @@
             Already have an account? <a href="{{ route('agent.login') }}">Login here</a>
         </div>
     </div>
+
+    {{-- Fetch Cities Logic --}}
+    <script>
+    document.addEventListener('DOMContentLoaded', async function() {
+        const citySelect = document.getElementById('city');
+        const oldCity = "{{ old('city') }}"; // Get old value from Laravel if validation failed
+
+        try {
+            // Fetch cities from your existing API
+            const response = await fetch("/v1/api/location/branches", {
+                headers: {
+                    "Accept": "application/json",
+                    "Accept-Language": "en" // 👈 FIX: Force simple language code to prevent backend crash
+                }
+            });
+
+            if (!response.ok) throw new Error('Failed to load cities');
+
+            const result = await response.json();
+
+            // Clear loading option
+            citySelect.innerHTML = '<option value="">Select City</option>';
+
+            if (result.success && result.data) {
+                // Sort cities alphabetically
+                const cities = result.data.sort((a, b) => a.city_name_en.localeCompare(b.city_name_en));
+
+                cities.forEach(city => {
+                    const option = document.createElement('option');
+                    // Use city name as value
+                    option.value = city.city_name_en;
+                    option.textContent = city.city_name_en;
+
+                    // Re-select old value if it exists
+                    if (oldCity && oldCity === city.city_name_en) {
+                        option.selected = true;
+                    }
+
+                    citySelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching cities:', error);
+            citySelect.innerHTML = '<option value="">Error loading cities</option>';
+        }
+    });
+    </script>
 </body>
 </html>

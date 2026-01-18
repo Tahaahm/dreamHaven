@@ -77,7 +77,7 @@
         font-size: 15px; transition: 0.3s; background: white;
     }
 
-    .luxury-input:focus, .luxury-textarea:focus {
+    .luxury-input:focus, .luxury-textarea:focus, .luxury-select:focus {
         border-color: var(--brand-primary); box-shadow: 0 0 0 4px rgba(48, 59, 151, 0.08); outline: none;
     }
 
@@ -162,6 +162,7 @@
     .btn-luxury {
         padding: 14px 32px; border-radius: 14px; font-weight: 700; font-size: 15px;
         transition: 0.3s; display: inline-flex; align-items: center; gap: 10px; border: none; cursor: pointer;
+        text-decoration: none;
     }
     .btn-save { background: var(--brand-primary); color: white; }
     .btn-save:hover { background: var(--brand-secondary); transform: translateY(-2px); }
@@ -184,6 +185,7 @@
     <form action="{{ route('agent.profile.update') }}" method="POST" enctype="multipart/form-data" id="mainProfileForm">
         @csrf
         @method('PUT')
+
         <input type="hidden" name="working_hours" id="working_hours_json">
 
         <div class="glass-card">
@@ -194,7 +196,11 @@
             <div class="upload-grid">
                 <div class="luxury-upload-box" onclick="document.getElementById('pImg').click()">
                     <div class="preview-circle" id="pPrev">
-                        @if($agent->profile_image) <img src="{{ $agent->profile_image }}"> @else <i class="fas fa-user fa-2x"></i> @endif
+                        @if($agent->profile_image)
+                            <img src="{{ $agent->profile_image }}">
+                        @else
+                            <i class="fas fa-user fa-2x"></i>
+                        @endif
                     </div>
                     <span class="input-label">Avatar Photo</span>
                     <input type="file" id="pImg" name="profile_image" accept="image/*" hidden>
@@ -202,7 +208,11 @@
 
                 <div class="luxury-upload-box" onclick="document.getElementById('bImg').click()">
                     <div class="preview-rect" id="bPrev">
-                        @if($agent->bio_image) <img src="{{ $agent->bio_image }}"> @else <i class="fas fa-image fa-2x"></i> @endif
+                        @if($agent->bio_image)
+                            <img src="{{ $agent->bio_image }}">
+                        @else
+                            <i class="fas fa-image fa-2x"></i>
+                        @endif
                     </div>
                     <span class="input-label">Cover/Portfolio Image</span>
                     <input type="file" id="bImg" name="bio_image" accept="image/*" hidden>
@@ -213,35 +223,40 @@
         <div class="glass-card">
             <div class="section-head"><i class="fas fa-id-card"></i><h3>Professional Details</h3></div>
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 25px;">
+
                 <div class="input-group">
                     <label class="input-label">Full Name</label>
                     <input type="text" name="agent_name" class="luxury-input" value="{{ $agent->agent_name }}" required>
                 </div>
+
                 <div class="input-group">
                     <label class="input-label">Primary Email <i class="fas fa-lock" style="font-size: 10px; margin-left: 5px;"></i></label>
                     <input type="email" class="luxury-input" value="{{ $agent->primary_email }}" disabled>
                 </div>
+
                 <div class="input-group">
                     <label class="input-label">Phone Number</label>
                     <input type="text" name="primary_phone" class="luxury-input" value="{{ $agent->primary_phone }}" required>
                 </div>
+
                 <div class="input-group">
                     <label class="input-label">WhatsApp Number</label>
                     <input type="text" name="whatsapp_number" class="luxury-input" value="{{ $agent->whatsapp_number }}">
                 </div>
+
+                {{-- Dynamic City Dropdown --}}
                 <div class="input-group">
                     <label class="input-label">City</label>
-                    <select name="city" class="luxury-select">
-                        <option value="Erbil" {{ $agent->city == 'Erbil' ? 'selected' : '' }}>Erbil</option>
-                        <option value="Sulaymaniyah" {{ $agent->city == 'Sulaymaniyah' ? 'selected' : '' }}>Sulaymaniyah</option>
-                        <option value="Duhok" {{ $agent->city == 'Duhok' ? 'selected' : '' }}>Duhok</option>
-                        <option value="Baghdad" {{ $agent->city == 'Baghdad' ? 'selected' : '' }}>Baghdad</option>
+                    <select name="city" id="agent-city" class="luxury-select" required>
+                        <option value="">Loading cities...</option>
                     </select>
                 </div>
+
                 <div class="input-group">
                     <label class="input-label">Years of Experience</label>
                     <input type="number" name="years_experience" class="luxury-input" value="{{ $agent->years_experience }}">
                 </div>
+
                 <div class="input-group" style="grid-column: span 2;">
                     <label class="input-label">Professional Biography</label>
                     <textarea name="agent_bio" class="luxury-textarea" rows="4">{{ $agent->agent_bio }}</textarea>
@@ -264,6 +279,7 @@
                 </div>
                 <div id="map"></div>
             </div>
+
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
                 <div class="input-group">
                     <label class="input-label">Latitude</label>
@@ -277,7 +293,7 @@
         </div>
 
         <div class="sticky-actions">
-            <a href="{{ route('agent.profile', $agent->id) }}" class="btn-luxury btn-cancel">Discard Changes</a>
+            <a href="{{ route('agent.dashboard') }}" class="btn-luxury btn-cancel">Discard Changes</a>
             <button type="submit" class="btn-luxury btn-save">
                 <i class="fas fa-check-circle"></i> Publish Updates
             </button>
@@ -288,21 +304,64 @@
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
 
 <script>
+    // --- 1. DYNAMIC CITY LOADING ---
+    document.addEventListener('DOMContentLoaded', async function() {
+        const citySelect = document.getElementById('agent-city');
+        const currentCity = "{{ $agent->city }}"; // Get saved city from DB
+
+        try {
+            // Fetch cities from API with correct headers to avoid localization crash
+            const response = await fetch("/v1/api/location/branches", {
+                headers: { "Accept": "application/json", "Accept-Language": "en" }
+            });
+            const result = await response.json();
+
+            citySelect.innerHTML = '<option value="">Select City</option>';
+
+            if (result.success && result.data) {
+                // Sort cities alphabetically
+                result.data.sort((a, b) => a.city_name_en.localeCompare(b.city_name_en));
+
+                result.data.forEach(city => {
+                    const option = document.createElement('option');
+                    // Use city name as value to match database field
+                    option.value = city.city_name_en;
+                    option.textContent = city.city_name_en;
+
+                    // Pre-select if it matches saved city
+                    if (city.city_name_en === currentCity) {
+                        option.selected = true;
+                    }
+                    citySelect.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching cities:', error);
+            citySelect.innerHTML = '<option value="">Error loading cities</option>';
+        }
+    });
+
+    // --- 2. SCHEDULE LOGIC ---
     const days = [
         {id: 'monday', n: 'Monday'}, {id: 'tuesday', n: 'Tuesday'}, {id: 'wednesday', n: 'Wednesday'},
         {id: 'thursday', n: 'Thursday'}, {id: 'friday', n: 'Friday'}, {id: 'saturday', n: 'Saturday'}, {id: 'sunday', n: 'Sunday'}
     ];
 
+    // Safely parse JSON from PHP
     const currentSchedule = @json($agent->working_hours);
 
     function initSchedule() {
         let data = {};
-        try { data = typeof currentSchedule === 'string' ? JSON.parse(currentSchedule) : (currentSchedule || {}); } catch(e){}
+        try {
+            data = typeof currentSchedule === 'string' ? JSON.parse(currentSchedule) : (currentSchedule || {});
+        } catch(e) { console.error('Schedule parse error', e); }
 
         const grid = document.getElementById('smartSchedule');
+
         days.forEach(day => {
             const val = data[day.id];
             const isOpen = val && val !== 'closed';
+            // Default hours if open
             let [start, end] = isOpen ? (typeof val === 'string' ? val.split('-') : ["09:00", "18:00"]) : ["09:00", "18:00"];
 
             const item = document.createElement('div');
@@ -333,12 +392,17 @@
         document.getElementById(`e-${id}`).disabled = !active;
     };
 
-    // --- Google Maps with Custom Style ---
+    // --- 3. GOOGLE MAPS ---
     function initMap() {
-        const myLatLng = { lat: parseFloat({{ $agent->latitude ?? 36.1911 }}), lng: parseFloat({{ $agent->longitude ?? 44.0091 }}) };
+        // Use saved lat/lng or default to Erbil
+        const initialLat = parseFloat("{{ $agent->latitude ?? 36.1911 }}");
+        const initialLng = parseFloat("{{ $agent->longitude ?? 44.0091 }}");
+        const myLatLng = { lat: initialLat, lng: initialLng };
+
         const map = new google.maps.Map(document.getElementById("map"), {
             zoom: 15,
             center: myLatLng,
+            // Clean map style
             styles: [{"featureType":"all","elementType":"geometry.fill","stylers":[{"weight":"2.00"}]},{"featureType":"all","elementType":"geometry.stroke","stylers":[{"color":"#9c9c9c"}]},{"featureType":"all","elementType":"labels.text","stylers":[{"visibility":"on"}]},{"featureType":"landscape","elementType":"all","stylers":[{"color":"#f2f2f2"}]},{"featureType":"landscape","elementType":"geometry.fill","stylers":[{"color":"#ffffff"}]},{"featureType":"landscape","elementType":"geometry.stroke","stylers":[{"color":"#afafaf"}]},{"featureType":"poi","elementType":"all","stylers":[{"visibility":"off"}]},{"featureType":"road","elementType":"all","stylers":[{"saturation":-100},{"lightness":45}]},{"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#eeeeee"}]},{"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#7b7b7b"}]},{"featureType":"road","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},{"featureType":"road.highway","elementType":"all","stylers":[{"visibility":"simplified"}]},{"featureType":"road.arterial","elementType":"labels.icon","stylers":[{"visibility":"off"}]},{"featureType":"transit","elementType":"all","stylers":[{"visibility":"off"}]},{"featureType":"water","elementType":"all","stylers":[{"color":"#46bcec"},{"visibility":"on"}]},{"featureType":"water","elementType":"geometry.fill","stylers":[{"color":"#c2c7e9"}]},{"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#070707"}]},{"featureType":"water","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]}]
         });
 
@@ -356,11 +420,13 @@
             }
         });
 
+        // Update inputs on drag end
         google.maps.event.addListener(marker, 'dragend', function(e) {
             document.getElementById('lat').value = e.latLng.lat().toFixed(7);
             document.getElementById('lng').value = e.latLng.lng().toFixed(7);
         });
 
+        // Update inputs on map click
         map.addListener('click', function(e) {
             marker.setPosition(e.latLng);
             document.getElementById('lat').value = e.latLng.lat().toFixed(7);
@@ -368,30 +434,35 @@
         });
     }
 
-    // Prepare JSON on Save
+    // --- 4. FORM SUBMIT HANDLER ---
     document.getElementById('mainProfileForm').addEventListener('submit', function() {
         const schedule = {};
         days.forEach(d => {
             if(document.getElementById(`sw-${d.id}`).checked) {
+                // Format: "09:00-18:00"
                 schedule[d.id] = document.getElementById(`s-${d.id}`).value + "-" + document.getElementById(`e-${d.id}`).value;
             } else {
                 schedule[d.id] = "closed";
             }
         });
+        // Save JSON to hidden input
         document.getElementById('working_hours_json').value = JSON.stringify(schedule);
     });
 
-    // Image Previews
+    // --- 5. IMAGE PREVIEWS ---
     function setupPrev(input, prev) {
         document.getElementById(input).addEventListener('change', function(e) {
-            const reader = new FileReader();
-            reader.onload = (ev) => document.getElementById(prev).innerHTML = `<img src="${ev.target.result}">`;
-            reader.readAsDataURL(e.target.files[0]);
+            if (e.target.files && e.target.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (ev) => document.getElementById(prev).innerHTML = `<img src="${ev.target.result}">`;
+                reader.readAsDataURL(e.target.files[0]);
+            }
         });
     }
     setupPrev('pImg', 'pPrev');
     setupPrev('bImg', 'bPrev');
 
+    // Init everything when DOM is ready
     document.addEventListener('DOMContentLoaded', initSchedule);
 </script>
 @endsection
