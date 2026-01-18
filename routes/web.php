@@ -655,7 +655,7 @@ Route::prefix('office')->name('office.')->group(function () {
         Route::get('/dashboard', [OfficeAuthController::class, 'dashboard'])->name('dashboard');
 
         Route::get('/profile', [OfficeAuthController::class, 'showProfile'])->name('profile');
-        Route::put('/profile', [OfficeAuthController::class, 'updateProfile'])->name('profile.update');
+        Route::put('/profile', [OfficeAuthController::class, 'updateProfile'])->name(name: 'profile.update');
         Route::put('/profile/password', [OfficeAuthController::class, 'updatePassword'])->name('password.update');
 
         Route::get('/properties', [OfficeAuthController::class, 'showProperties'])->name('properties');
@@ -715,7 +715,7 @@ Route::prefix('agent')->name('agent.')->group(function () {
 
         Route::get('/properties', [AgentAuthController::class, 'showProperties'])->name('properties');
         Route::get('/properties/add', [AgentAuthController::class, 'showAddProperty'])->name('property.add');
-        Route::post('/properties/add', [AgentAuthController::class, 'storeProperty'])->name('property.store');
+        Route::post('/properties/add', [AgentAuthController::class, 'storeProperty'])->name('office.property.store');
         Route::get('/properties/{id}/edit', [AgentAuthController::class, 'showEditProperty'])->name('property.edit');
         Route::put('/properties/{id}', [AgentAuthController::class, 'updateProperty'])->name('property.update');
         Route::delete('/properties/{id}', [AgentAuthController::class, 'deleteProperty'])->name('property.delete');

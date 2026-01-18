@@ -1,224 +1,405 @@
-<style>
-    /* Sidebar Container */
-    .sidebar {
-        width: 260px; /* Slightly wider for better breathing room */
-        background: #0f1116; /* Deeper, more premium dark */
-        display: flex;
-        flex-direction: column;
-        height: 100vh;
-        position: sticky;
-        top: 0;
-        border-right: 1px solid rgba(255, 255, 255, 0.05);
-        transition: all 0.3s ease;
-    }
+<!-- Mobile Toggle Button -->
+<button class="sidebar-toggle-btn" onclick="toggleSidebar()">
+    <i class="fas fa-bars"></i>
+</button>
 
-    /* Logo Section */
-    .logo {
-        padding: 32px 24px;
-        font-size: 20px;
-        font-weight: 800;
-        color: #fff;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        letter-spacing: -0.5px;
-    }
+<!-- Mobile Overlay -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
-    .logo-icon {
-        background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-    }
-
-    .logo-icon i {
-        font-size: 18px;
-        color: white;
-    }
-
-    /* Menu Section */
-    .nav-menu {
-        flex: 1;
-        padding: 0 14px;
-        overflow-y: auto;
-    }
-
-    /* Section Label */
-    .menu-label {
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        color: rgba(255, 255, 255, 0.3);
-        font-weight: 700;
-        margin: 24px 0 12px 16px;
-    }
-
-    /* Nav Items */
-    .nav-item {
-        padding: 12px 16px;
-        color: rgba(255, 255, 255, 0.5);
-        cursor: pointer;
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 14px;
-        text-decoration: none;
-        margin-bottom: 4px;
-        border-radius: 12px;
-        font-weight: 500;
-    }
-
-    .nav-item i {
-        font-size: 18px;
-        transition: transform 0.2s ease;
-    }
-
-    /* Hover State */
-    .nav-item:hover {
-        background: rgba(255, 255, 255, 0.05);
-        color: #fff;
-    }
-
-    .nav-item:hover i {
-        transform: translateX(2px);
-    }
-
-    /* Active State */
-    .nav-item.active {
-        background: rgba(99, 102, 241, 0.1);
-        color: #818cf8; /* Softer indigo for dark background */
-        position: relative;
-    }
-
-    .nav-item.active::before {
-        content: '';
-        position: absolute;
-        left: -14px;
-        top: 20%;
-        height: 60%;
-        width: 4px;
-        background: #6366f1;
-        border-radius: 0 4px 4px 0;
-        box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
-    }
-
-    .nav-item.active i {
-        color: #6366f1;
-    }
-
-    /* Badge (e.g., for subscriptions or alerts) */
-    .nav-badge {
-        margin-left: auto;
-        background: rgba(99, 102, 241, 0.2);
-        color: #818cf8;
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-size: 10px;
-        font-weight: 700;
-    }
-
-    /* Bottom Section */
-    .nav-bottom {
-        padding: 20px 14px;
-        margin-top: auto;
-        background: rgba(0, 0, 0, 0.2);
-    }
-
-    .logout-btn {
-        width: 100%;
-        background: none;
-        border: none;
-        text-align: left;
-        cursor: pointer;
-        font-family: inherit;
-        color: #f87171; /* Subtle red for logout */
-        opacity: 0.8;
-        transition: 0.2s;
-    }
-
-    .logout-btn:hover {
-        background: rgba(248, 113, 113, 0.05);
-        opacity: 1;
-    }
-
-    /* Custom Scrollbar for the menu */
-    .nav-menu::-webkit-scrollbar {
-        width: 4px;
-    }
-    .nav-menu::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.05);
-        border-radius: 10px;
-    }
-</style>
-
-<div class="sidebar">
-    <div class="logo">
-        <div class="logo-icon">
-            <i class="fas fa-layer-group"></i>
+<!-- Sidebar -->
+<div class="sidebar-nav">
+    <div class="sidebar-header">
+        <div class="logo-section">
+            <i class="fas fa-building"></i>
+            <h4>Dream Mulk</h4>
         </div>
-        <span>Dream Mulk</span>
     </div>
 
-    <div class="nav-menu">
-        <div class="menu-label">Main Menu</div>
+    <!-- Office Info Card -->
+    <div class="office-info-card">
+        <div class="office-avatar">
+            @if(auth('office')->user()->logo ?? null)
+                <img src="{{ auth('office')->user()->logo }}" alt="Office Logo">
+            @else
+                <span>{{ strtoupper(substr(auth('office')->user()->company_name ?? 'O', 0, 1)) }}</span>
+            @endif
+        </div>
+        <div class="office-details">
+            <div class="office-name">{{ auth('office')->user()->company_name ?? 'Office' }}</div>
+            <div class="office-role">
+                <span class="status-dot"></span>
+                Real Estate Office
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Links -->
+    <nav class="nav-menu">
+        <div class="nav-section-title">MAIN MENU</div>
 
         <a href="{{ route('office.dashboard') }}" class="nav-item {{ request()->routeIs('office.dashboard') ? 'active' : '' }}">
-            <i class="fas fa-th-large"></i> Dashboard
+            <i class="fas fa-chart-line"></i>
+            <span>Dashboard</span>
         </a>
 
         <a href="{{ route('office.properties') }}" class="nav-item {{ request()->routeIs('office.properties*') ? 'active' : '' }}">
-            <i class="fas fa-building"></i> Properties
+            <i class="fas fa-home"></i>
+            <span>Properties</span>
         </a>
 
         <a href="{{ route('office.projects') }}" class="nav-item {{ request()->routeIs('office.projects*') ? 'active' : '' }}">
-            <i class="fas fa-city"></i> Projects
+            <i class="fas fa-city"></i>
+            <span>Projects</span>
         </a>
 
-        <div class="menu-label">Management</div>
+        <div class="nav-section-title">MANAGEMENT</div>
 
         <a href="{{ route('office.agents') }}" class="nav-item {{ request()->routeIs('office.agents*') ? 'active' : '' }}">
-            <i class="fas fa-user-tie"></i> Agents
+            <i class="fas fa-user-tie"></i>
+            <span>Agents</span>
         </a>
 
         <a href="{{ route('office.appointments') }}" class="nav-item {{ request()->routeIs('office.appointments*') ? 'active' : '' }}">
-            <i class="fas fa-calendar-alt"></i> Calendar
+            <i class="fas fa-calendar-alt"></i>
+            <span>Calendar</span>
         </a>
 
         <a href="{{ route('office.agreements') }}" class="nav-item {{ request()->routeIs('office.agreements*') ? 'active' : '' }}">
-            <i class="fas fa-file-contract"></i> Agreements
+            <i class="fas fa-file-contract"></i>
+            <span>Agreements</span>
         </a>
 
         <a href="{{ route('office.contacts') }}" class="nav-item {{ request()->routeIs('office.contacts*') ? 'active' : '' }}">
-            <i class="fas fa-address-book"></i> Contacts
+            <i class="fas fa-address-book"></i>
+            <span>Contacts</span>
         </a>
 
-        <div class="menu-label">Growth</div>
+        <div class="nav-section-title">GROWTH</div>
 
-        <a href="{{ route('office.subscriptions') }}" class="nav-item {{ request()->routeIs('office.subscriptions*') ? 'active' : '' }}">
-            <i class="fas fa-crown"></i> Subscriptions
+        <a href="{{ route('office.subscriptions') }}" class="nav-item {{ request()->routeIs('office.subscriptions') ? 'active' : '' }}">
+            <i class="fas fa-crown"></i>
+            <span>Subscriptions</span>
             <span class="nav-badge">PRO</span>
         </a>
 
         <a href="{{ route('office.banners') }}" class="nav-item {{ request()->routeIs('office.banners*') ? 'active' : '' }}">
-            <i class="fas fa-bullhorn"></i> Banner Ads
+            <i class="fas fa-bullhorn"></i>
+            <span>Banner Ads</span>
         </a>
-    </div>
+    </nav>
 
-    <div class="nav-bottom">
+    <!-- Logout Section -->
+    <div class="sidebar-footer">
         <a href="{{ route('office.profile') }}" class="nav-item {{ request()->routeIs('office.profile') ? 'active' : '' }}">
-            <i class="fas fa-cog"></i> Settings
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
         </a>
 
-        <form action="{{ route('office.logout') }}" method="POST" style="margin: 0;">
-            @csrf<style></style>
-            <button type="submit" class="nav-item logout-btn">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </button>
+        <form id="logout-form" action="{{ route('office.logout') }}" method="POST" style="display: none;">
+            @csrf
         </form>
+        <a href="#" class="nav-item logout-btn" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </a>
     </div>
 </div>
+
+<style>
+/* Sidebar Container */
+.sidebar-nav {
+    height: 100vh;
+    width: 280px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: #000000;
+    padding: 0;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+    background: rgba(48,59,151,0.3);
+    border-radius: 10px;
+}
+
+/* Header */
+.sidebar-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.logo-section i {
+    font-size: 24px;
+    color: #303b97;
+}
+
+.sidebar-header h4 {
+    color: #ffffff;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0;
+}
+
+/* Office Info Card */
+.office-info-card {
+    background: rgba(48,59,151,0.1);
+    border: 1px solid rgba(48,59,151,0.2);
+    border-radius: 14px;
+    padding: 12px;
+    margin: 16px 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.office-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #303b97, #4a5bc5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 18px;
+    box-shadow: 0 4px 16px rgba(48,59,151,0.4);
+    overflow: hidden;
+}
+
+.office-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.office-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.office-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.office-role {
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    background: #10b981;
+    border-radius: 50%;
+    display: inline-block;
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Navigation Menu */
+.nav-menu {
+    padding: 6px 16px 16px;
+    flex: 1;
+}
+
+.nav-section-title {
+    font-size: 9px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1px;
+    margin: 14px 0 6px 12px;
+    text-transform: uppercase;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255,255,255,0.7) !important;
+    padding: 9px 12px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 3px;
+    border-radius: 10px;
+    position: relative;
+    transition: all 0.3s;
+}
+
+.nav-item i {
+    font-size: 15px;
+    width: 18px;
+    text-align: center;
+    color: rgba(255,255,255,0.7) !important;
+}
+
+/* Badge */
+.nav-badge {
+    margin-left: auto;
+    background: rgba(48,59,151,0.3);
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.nav-item:hover {
+    color: #ffffff !important;
+    background: rgba(48,59,151,0.2);
+    transform: translateX(2px);
+}
+
+.nav-item:hover i {
+    color: #ffffff !important;
+}
+
+.nav-item.active {
+    color: #ffffff !important;
+    background: #303b97 !important;
+    font-weight: 700 !important;
+    box-shadow: 0 6px 20px rgba(48,59,151,0.6) !important;
+}
+
+.nav-item.active i {
+    color: #ffffff !important;
+}
+
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 70%;
+    background: #ffffff;
+    border-radius: 0 4px 4px 0;
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+    padding: 12px 16px 16px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.logout-btn {
+    color: #ef4444 !important;
+}
+
+.logout-btn i {
+    color: #ef4444 !important;
+}
+
+.logout-btn:hover {
+    background: rgba(239,68,68,0.12) !important;
+}
+
+/* Mobile Toggle Button */
+.sidebar-toggle-btn {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: #000000;
+    color: #303b97;
+    border: 2px solid #303b97;
+    font-size: 20px;
+    width: 50px;
+    height: 50px;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    border-radius: 14px;
+    cursor: pointer;
+    z-index: 10000;
+    box-shadow: 0 4px 20px rgba(48,59,151,0.4);
+}
+
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    z-index: 9998;
+}
+
+.sidebar-overlay.show {
+    display: block;
+}
+
+/* Mobile Responsive */
+@media (max-width: 900px) {
+    .sidebar-nav {
+        transform: translateX(-300px);
+        transition: transform 0.4s;
+        z-index: 9999;
+    }
+
+    .sidebar-nav.open {
+        transform: translateX(0);
+    }
+
+    .sidebar-toggle-btn {
+        display: flex;
+    }
+}
+</style>
+
+<script>
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar-nav');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+        if (window.innerWidth <= 900) {
+            const sidebar = document.querySelector('.sidebar-nav');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.remove('open');
+            overlay.classList.remove('show');
+        }
+    });
+});
+</script>

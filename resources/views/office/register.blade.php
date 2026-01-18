@@ -6,14 +6,13 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Register Office - Dream Mulk</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
     <style>
         :root {
-            /* Your Brand Color */
             --primary: #303B97;
             --primary-hover: #252d75;
             --primary-light: rgba(48, 59, 151, 0.1);
-
             --card-bg: rgba(255, 255, 255, 0.98);
             --text-main: #1f2937;
             --text-muted: #6b7280;
@@ -21,15 +20,10 @@
             --border: #f3f4f6;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             font-family: 'Inter', sans-serif;
-            /* Gradient using your brand color */
             background: linear-gradient(135deg, var(--primary) 0%, #1a2052 100%);
             background-attachment: fixed;
             min-height: 100vh;
@@ -39,7 +33,6 @@
             padding: 40px 20px;
         }
 
-        /* Subtle background pattern */
         body::before {
             content: "";
             position: absolute;
@@ -60,10 +53,7 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
 
-        .logo-section {
-            text-align: center;
-            margin-bottom: 40px;
-        }
+        .logo-section { text-align: center; margin-bottom: 40px; }
 
         .office-badge {
             display: inline-block;
@@ -111,9 +101,7 @@
             gap: 20px;
         }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+        .form-group { margin-bottom: 20px; }
 
         .form-group label {
             display: block;
@@ -138,6 +126,7 @@
         }
 
         .form-group input:focus,
+        .form-group select:focus,
         .form-group textarea:focus {
             outline: none;
             background: #fff;
@@ -145,11 +134,9 @@
             box-shadow: 0 0 0 4px var(--primary-light);
         }
 
-        .error-message {
-            color: var(--error);
-            font-size: 12.5px;
-            font-weight: 500;
-            margin-top: 6px;
+        .form-group select:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
 
         .register-button {
@@ -220,12 +207,8 @@
         }
 
         @media (max-width: 640px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            .register-container {
-                padding: 35px 25px;
-            }
+            .form-row { grid-template-columns: 1fr; }
+            .register-container { padding: 35px 25px; }
         }
     </style>
 </head>
@@ -248,7 +231,7 @@
             </div>
         @endif
 
-        <form action="{{ route('office.register.submit') }}" method="POST">
+        <form action="{{ route('office.register.submit') }}" method="POST" id="registerForm">
             @csrf
 
             <div class="section-title">Company Information</div>
@@ -286,12 +269,18 @@
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="city">City *</label>
-                    <input type="text" id="city" name="city" value="{{ old('city') }}" required placeholder="e.g. Erbil">
+                    <label for="city-select">City *</label>
+                    <select id="city-select" required>
+                        <option value="">Loading cities...</option>
+                    </select>
+                    <input type="hidden" id="city" name="city" value="{{ old('city') }}">
                 </div>
                 <div class="form-group">
-                    <label for="district">District</label>
-                    <input type="text" id="district" name="district" value="{{ old('district') }}" placeholder="e.g. Bakhtiyari">
+                    <label for="area-select">District *</label>
+                    <select id="area-select" disabled required>
+                        <option value="">Select City First</option>
+                    </select>
+                    <input type="hidden" id="district" name="district" value="{{ old('district') }}">
                 </div>
             </div>
 
@@ -306,7 +295,7 @@
             </div>
 
             <button type="submit" class="register-button">
-                Create Office Account
+                <i class="fas fa-user-plus"></i> Create Office Account
             </button>
         </form>
 
@@ -315,8 +304,73 @@
         </div>
 
         <div class="login-link">
-            <a href="{{ route('office.login') }}">Back to Office Sign In</a>
+            <a href="{{ route('office.login') }}"><i class="fas fa-arrow-left"></i> Back to Office Sign In</a>
         </div>
     </div>
+
+    <script src="{{ asset('js/location-selector.js') }}"></script>
+    <script>
+        // Initialize LocationSelector for registration
+        let locationSelector;
+
+        window.addEventListener('DOMContentLoaded', async function() {
+            console.log('=== Registration Location Selector Initialization ===');
+
+            try {
+                // Create LocationSelector instance
+                locationSelector = new LocationSelector({
+                    citySelectId: 'city-select',
+                    areaSelectId: 'area-select',
+                    cityInputId: 'city',
+                    districtInputId: 'district'
+                });
+
+                // Initialize (loads cities and sets up event listeners)
+                await locationSelector.init();
+                console.log('✓ Location selector initialized successfully');
+
+                // Restore old values if form validation failed
+                const oldCity = "{{ old('city') }}";
+                const oldDistrict = "{{ old('district') }}";
+
+                if (oldCity && oldCity.trim() !== '') {
+                    console.log('Restoring saved city:', oldCity);
+                    const citySet = await locationSelector.setCityByName(oldCity);
+
+                    if (citySet) {
+                        console.log('✓ City restored successfully');
+
+                        // Wait for areas to load, then restore district
+                        if (oldDistrict && oldDistrict.trim() !== '') {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                            console.log('Restoring saved district:', oldDistrict);
+                            const districtSet = locationSelector.setAreaByName(oldDistrict);
+
+                            if (districtSet) {
+                                console.log('✓ District restored successfully');
+                            } else {
+                                console.warn('✗ Failed to restore district');
+                            }
+                        }
+                    } else {
+                        console.warn('✗ Failed to restore city');
+                    }
+                } else {
+                    console.log('No saved values to restore');
+                }
+
+                console.log('=== Initialization Complete ===');
+
+            } catch (error) {
+                console.error('!!! Failed to initialize location selector:', error);
+
+                // Show user-friendly error
+                const citySelect = document.getElementById('city-select');
+                if (citySelect) {
+                    citySelect.innerHTML = '<option value="">Failed to load cities - Please refresh</option>';
+                }
+            }
+        });
+    </script>
 </body>
 </html>

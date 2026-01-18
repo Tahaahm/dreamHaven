@@ -269,55 +269,69 @@ class OfficeAuthController extends Controller
 
     public function updateProfile(Request $request)
     {
-        $agent = Auth::guard('agent')->user();
+        $office = auth('office')->user();
 
         $request->validate([
-            'agent_name' => 'required|string|max:255',
-            'primary_phone' => 'required|string|max:20',
-            'whatsapp_number' => 'nullable|string|max:20',
-            'city' => 'required|string',
+            'company_name' => 'required|string|max:255',
+            'phone_number' => 'required|string|max:20',
+            'company_bio' => 'nullable|string|max:1000',
+            'about_company' => 'nullable|string',
+            'city' => 'nullable|string',
             'district' => 'nullable|string',
-            'license_number' => 'nullable|string',
+            'properties_sold' => 'nullable|integer|min:0',
             'years_experience' => 'nullable|integer|min:0',
-            'agent_bio' => 'nullable|string|max:1000',
             'office_address' => 'nullable|string',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
-            'working_hours' => 'nullable|string', // ✅ Add this
+            'availability_schedule' => 'nullable|string',
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'company_bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ]);
+
+        // Handle logo upload
+        if ($request->hasFile('logo')) {
+            if ($office->logo) {
+                $oldPath = str_replace(asset('storage/'), '', $office->logo);
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+
+            $path = $request->file('logo')->store('offices/logos', 'public');
+            $office->logo = asset('storage/' . $path);
+        }
 
         // Handle profile image upload
         if ($request->hasFile('profile_image')) {
-            if ($agent->profile_image) {
-                $oldPath = str_replace(asset('storage/'), '', $agent->profile_image);
+            if ($office->profile_image) {
+                $oldPath = str_replace(asset('storage/'), '', $office->profile_image);
                 if (Storage::disk('public')->exists($oldPath)) {
                     Storage::disk('public')->delete($oldPath);
                 }
             }
 
-            $path = $request->file('profile_image')->store('agents/profiles', 'public');
-            $agent->profile_image = asset('storage/' . $path);
+            $path = $request->file('profile_image')->store('offices/profiles', 'public');
+            $office->profile_image = asset('storage/' . $path);
         }
 
-        // Handle bio image upload
-        if ($request->hasFile('bio_image')) {
-            if ($agent->bio_image) {
-                $oldPath = str_replace(asset('storage/'), '', $agent->bio_image);
+        // Handle company bio image upload
+        if ($request->hasFile('company_bio_image')) {
+            if ($office->company_bio_image) {
+                $oldPath = str_replace(asset('storage/'), '', $office->company_bio_image);
                 if (Storage::disk('public')->exists($oldPath)) {
                     Storage::disk('public')->delete($oldPath);
                 }
             }
 
-            $path = $request->file('bio_image')->store('agents/bio', 'public');
-            $agent->bio_image = asset('storage/' . $path);
+            $path = $request->file('company_bio_image')->store('offices/bio', 'public');
+            $office->company_bio_image = asset('storage/' . $path);
         }
 
-        // ✅ Transform working hours schedule
-        if ($request->has('working_hours') && $request->working_hours) {
+        // Transform availability schedule
+        if ($request->has('availability_schedule') && $request->availability_schedule) {
             try {
-                $scheduleData = json_decode($request->working_hours, true);
+                $scheduleData = json_decode($request->availability_schedule, true);
                 $transformedSchedule = [];
                 $allDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
@@ -331,29 +345,30 @@ class OfficeAuthController extends Controller
                     }
                 }
 
-                $agent->working_hours = $transformedSchedule;
+                $office->availability_schedule = $transformedSchedule;
             } catch (\Exception $e) {
-                Log::error('Working hours transformation error: ' . $e->getMessage());
+                Log::error('Availability schedule transformation error: ' . $e->getMessage());
             }
         }
 
         // Update other fields
-        $agent->agent_name = $request->agent_name;
-        $agent->primary_phone = $request->primary_phone;
-        $agent->whatsapp_number = $request->whatsapp_number;
-        $agent->city = $request->city;
-        $agent->district = $request->district;
-        $agent->license_number = $request->license_number;
-        $agent->years_experience = $request->years_experience;
-        $agent->agent_bio = $request->agent_bio;
-        $agent->office_address = $request->office_address;
-        $agent->latitude = $request->latitude;
-        $agent->longitude = $request->longitude;
+        $office->company_name = $request->company_name;
+        $office->phone_number = $request->phone_number;
+        $office->company_bio = $request->company_bio;
+        $office->about_company = $request->about_company;
+        $office->city = $request->city;
+        $office->district = $request->district;
+        $office->properties_sold = $request->properties_sold;
+        $office->years_experience = $request->years_experience;
+        $office->office_address = $request->office_address;
+        $office->latitude = $request->latitude;
+        $office->longitude = $request->longitude;
 
-        $agent->save();
+        $office->save();
 
-        return redirect()->route('agent.profile.show', $agent->id)->with('success', 'Profile updated successfully!');
+        return redirect()->route('office.profile')->with('success', 'Profile updated successfully!');
     }
+
 
     public function updatePassword(Request $request)
     {
@@ -685,60 +700,136 @@ class OfficeAuthController extends Controller
      */
     public function storeProperty(Request $request)
     {
+        // ✅ LOG INCOMING REQUEST
+        Log::info('=== PROPERTY CREATION STARTED ===', [
+            'office_id' => auth('office')->id(),
+            'office_name' => auth('office')->user()->company_name ?? 'Unknown',
+            'request_data' => $request->except(['images', '_token']),
+            'files_count' => $request->hasFile('images') ? count($request->file('images')) : 0,
+        ]);
+
         // ✅ CHECK SUBSCRIPTION FIRST
         $validationResult = $this->validateSubscription();
         if ($validationResult) {
+            Log::warning('Subscription validation failed', [
+                'office_id' => auth('office')->id(),
+            ]);
             return $validationResult;
         }
 
-        $request->validate([
-            'name_en' => 'required|string|max:255',
-            'name_ar' => 'nullable|string|max:255',
-            'name_ku' => 'nullable|string|max:255',
-            'description_en' => 'required|string|min:10',
-            'description_ar' => 'nullable|string',
-            'description_ku' => 'nullable|string',
-            'listing_type' => 'required|in:sell,rent',
-            'property_type' => 'required|string',
-            'price_usd' => 'required|numeric|min:0',
-            'price_iqd' => 'required|numeric|min:0',
-            'bedrooms' => 'required|integer|min:0',
-            'bathrooms' => 'required|integer|min:0',
-            'area' => 'required|numeric|min:1',
-            'furnished' => 'nullable|boolean',
-            'floor_number' => 'nullable|integer|min:0',
-            'year_built' => 'nullable|integer|min:1900|max:2030',
-            'city_en' => 'required|string',
-            'district_en' => 'required|string',
-            'city_ar' => 'nullable|string',
-            'district_ar' => 'nullable|string',
-            'city_ku' => 'nullable|string',
-            'district_ku' => 'nullable|string',
-            'address' => 'nullable|string',
-            'latitude' => 'required|numeric|between:-90,90',
-            'longitude' => 'required|numeric|between:-180,180',
-            'images' => 'required|array|min:3|max:10',
-            'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:5120',
-            'electricity' => 'nullable|boolean',
-            'water' => 'nullable|boolean',
-            'internet' => 'nullable|boolean',
-        ]);
+        Log::info('Subscription validation passed');
+
+        // ✅ VALIDATE REQUEST - FIXED: Reduced min description to 5 characters
+        try {
+            $validated = $request->validate([
+                'name_en' => 'required|string|min:3|max:255',
+                'name_ar' => 'nullable|string|max:255',
+                'name_ku' => 'nullable|string|max:255',
+                'description_en' => 'required|string|min:5',  // ✅ CHANGED from 10 to 5
+                'description_ar' => 'nullable|string',
+                'description_ku' => 'nullable|string',
+                'listing_type' => 'required|in:sell,rent',
+                'property_type' => 'required|string',
+                'price_usd' => 'required|numeric|min:0',
+                'price_iqd' => 'required|numeric|min:0',
+                'bedrooms' => 'required|integer|min:0',
+                'bathrooms' => 'required|integer|min:0',
+                'area' => 'required|numeric|min:1',
+                'furnished' => 'nullable|boolean',
+                'floor_number' => 'nullable|integer|min:0',
+                'year_built' => 'nullable|integer|min:1900|max:2030',
+                'city_en' => 'required|string',
+                'district_en' => 'required|string',
+                'city_ar' => 'nullable|string',
+                'district_ar' => 'nullable|string',
+                'city_ku' => 'nullable|string',
+                'district_ku' => 'nullable|string',
+                'address' => 'nullable|string',
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+                'images' => 'required|array|min:1|max:10',
+                'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:5120',
+                'electricity' => 'nullable|boolean',
+                'water' => 'nullable|boolean',
+                'internet' => 'nullable|boolean',
+                'status' => 'nullable|in:available,sold,rented',
+            ], [
+                // ✅ CUSTOM ERROR MESSAGES
+                'name_en.required' => 'Property name is required',
+                'name_en.min' => 'Property name must be at least 3 characters',
+                'description_en.required' => 'Property description is required',
+                'description_en.min' => 'Description must be at least 5 characters',
+                'property_type.required' => 'Please select a property type',
+                'listing_type.required' => 'Please select listing type (Sale or Rent)',
+                'area.required' => 'Area is required',
+                'area.min' => 'Area must be at least 1 m²',
+                'price_usd.required' => 'Price in USD is required',
+                'price_iqd.required' => 'Price in IQD is required',
+                'bedrooms.required' => 'Number of bedrooms is required',
+                'bathrooms.required' => 'Number of bathrooms is required',
+                'city_en.required' => 'Please select a city',
+                'district_en.required' => 'Please select a district/area',
+                'latitude.required' => 'Please select location on the map',
+                'longitude.required' => 'Please select location on the map',
+                'images.required' => 'Please upload at least one property image',
+                'images.min' => 'Please upload at least one image',
+                'images.max' => 'Maximum 10 images allowed',
+                'images.*.image' => 'All uploaded files must be images',
+                'images.*.mimes' => 'Images must be jpeg, png, jpg, or gif format',
+                'images.*.max' => 'Each image must not exceed 5MB',
+            ]);
+
+            Log::info('Validation passed successfully');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation failed', [
+                'errors' => $e->errors(),
+                'messages' => $e->getMessage(),
+            ]);
+
+            return back()
+                ->withErrors($e->errors())
+                ->withInput()
+                ->with('error', 'Please check the form for errors.');
+        }
 
         try {
             $office = auth('office')->user();
+            Log::info('Office loaded', ['office_id' => $office->id]);
 
             // ✅ Upload images
             $imageUrls = [];
             if ($request->hasFile('images')) {
-                foreach ($request->file('images') as $image) {
-                    $path = $image->store('property_images', 'public');
-                    $imageUrls[] = asset('storage/' . $path);
+                Log::info('Processing images', ['count' => count($request->file('images'))]);
+
+                foreach ($request->file('images') as $index => $image) {
+                    try {
+                        $path = $image->store('property_images', 'public');
+                        $imageUrls[] = asset('storage/' . $path);
+                        Log::info("Image {$index} uploaded successfully", ['path' => $path]);
+                    } catch (\Exception $e) {
+                        Log::error("Image {$index} upload failed", [
+                            'error' => $e->getMessage(),
+                            'file_name' => $image->getClientOriginalName(),
+                            'file_size' => $image->getSize(),
+                        ]);
+                        throw $e;
+                    }
                 }
+
+                Log::info('All images uploaded', ['total' => count($imageUrls)]);
             }
+
+            // ✅ Use status from form or default to 'available'
+            $propertyStatus = $request->input('status', 'available');
+            Log::info('Property status set', ['status' => $propertyStatus]);
+
+            // ✅ Generate unique property ID
+            $propertyId = $this->generateUniquePropertyId();
+            Log::info('Property ID generated', ['id' => $propertyId]);
 
             // ✅ Build property data
             $propertyData = [
-                'id' => $this->generateUniquePropertyId(),
+                'id' => $propertyId,
                 'owner_id' => $office->id,
                 'owner_type' => 'App\\Models\\RealEstateOffice',
 
@@ -820,18 +911,18 @@ class OfficeAuthController extends Controller
                 'verified' => 0,
                 'is_active' => 1,
                 'published' => 1,
-                'status' => 'available',
+                'status' => $propertyStatus,
                 'views' => 0,
                 'favorites_count' => 0,
                 'rating' => 0,
 
                 // Availability
                 'availability' => json_encode([
-                    'status' => 'available',
+                    'status' => $propertyStatus,
                     'labels' => [
-                        'en' => 'Available',
-                        'ar' => 'متوفر',
-                        'ku' => 'بەردەست'
+                        'en' => ucfirst($propertyStatus),
+                        'ar' => $this->translateStatus($propertyStatus, 'ar'),
+                        'ku' => $this->translateStatus($propertyStatus, 'ku'),
                     ]
                 ]),
 
@@ -844,19 +935,55 @@ class OfficeAuthController extends Controller
                 'updated_at' => now(),
             ];
 
+            Log::info('Property data prepared', [
+                'id' => $propertyId,
+                'name_en' => $request->name_en,
+                'images_count' => count($imageUrls),
+            ]);
+
             // ✅ Insert property
             Property::insert($propertyData);
+            Log::info('Property inserted successfully', ['id' => $propertyId]);
 
-            // ✅ INCREMENT PROPERTY COUNT AFTER SUCCESSFUL CREATION
+            // ✅ INCREMENT PROPERTY COUNT
             $office->incrementPropertyCount();
+            Log::info('Property count incremented');
 
-            return redirect()->route('office.properties')->with('success', 'Property added successfully!');
+            Log::info('=== PROPERTY CREATION COMPLETED SUCCESSFULLY ===', [
+                'property_id' => $propertyId,
+                'office_id' => $office->id,
+            ]);
+
+            // ✅ REDIRECT WITH SUCCESS MESSAGE
+            return redirect()->route('office.properties')
+                ->with('success', '🎉 Property "' . $request->name_en . '" created successfully!');
         } catch (\Exception $e) {
-            Log::error('Property creation error: ' . $e->getMessage());
-            return back()->withErrors(['error' => 'Failed to create property. Please try again.'])->withInput();
+            Log::error('=== PROPERTY CREATION FAILED ===', [
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'stack_trace' => $e->getTraceAsString(),
+                'office_id' => auth('office')->id() ?? 'not authenticated',
+            ]);
+
+            return back()
+                ->withErrors(['error' => 'Failed to create property: ' . $e->getMessage()])
+                ->withInput()
+                ->with('error', 'Failed to create property. Please try again.');
         }
     }
 
+    // ✅ ADD THIS HELPER METHOD
+    private function translateStatus($status, $lang)
+    {
+        $translations = [
+            'available' => ['ar' => 'متوفر', 'ku' => 'بەردەست'],
+            'sold' => ['ar' => 'مباع', 'ku' => 'فرۆشراوە'],
+            'rented' => ['ar' => 'مؤجر', 'ku' => 'بەکرێدراوە'],
+        ];
+
+        return $translations[$status][$lang] ?? ucfirst($status);
+    }
 
     /**
      * ✅ Generate unique property ID
@@ -1686,63 +1813,47 @@ class OfficeAuthController extends Controller
         // Log the incoming request
         Log::info('Search request received', [
             'search' => $request->input('search'),
-            'all_params' => $request->all(),
-            'method' => $request->method(),
-            'headers' => $request->headers->all()
+            'office_id' => auth('office')->id()
         ]);
 
         try {
             $office = auth('office')->user();
             $search = trim($request->input('search', ''));
 
-            Log::info('Office authenticated', ['office_id' => $office->id]);
-
             // Validate minimum search length
-            if (strlen($search) < 3) {
+            if (strlen($search) < 1) { // Changed to 1 to allow searching for ID "1" or "5"
                 return response()->json([
                     'success' => false,
-                    'message' => 'Please enter at least 3 characters',
+                    'message' => 'Please enter a search term',
                     'agents' => []
                 ]);
             }
 
-            // First, let's check if ANY agents exist
-            $totalAgents = Agent::count();
-            Log::info('Total agents in database', ['count' => $totalAgents]);
-
-            // Check agents without company
-            $availableCount = Agent::whereNull('company_id')->count();
-            Log::info('Available agents (no company)', ['count' => $availableCount]);
-
-            // Now search with the query
+            // Search Query
             $availableAgents = Agent::where(function ($query) {
+                // 1. Ensure Agent is not already assigned to another office
                 $query->whereNull('company_id')
                     ->orWhere('company_id', '');
             })
                 ->where(function ($query) use ($search) {
-                    $query->where('agent_name', 'LIKE', "%{$search}%")
-                        ->orWhere('primary_email', 'LIKE', "%{$search}%")
-                        ->orWhere('primary_phone', 'LIKE', "%{$search}%")
-                        ->orWhere('whatsapp_number', 'LIKE', "%{$search}%")
-                        ->orWhere('license_number', 'LIKE', "%{$search}%");
+                    // 2. Search Logic: ID OR Name OR Email
+                    $query->where('id', $search)                            // Exact ID match
+                        ->orWhere('agent_name', 'LIKE', "%{$search}%")      // Partial Name match
+                        ->orWhere('primary_email', 'LIKE', "%{$search}%")   // Partial Email match
+                        ->orWhere('primary_phone', 'LIKE', "%{$search}%");  // Keep Phone for convenience
                 })
+                ->take(20) // Limit results for performance
                 ->get();
 
             Log::info('Search completed', [
-                'search_term' => $search,
-                'results_count' => $availableAgents->count(),
-                'results' => $availableAgents->toArray()
+                'term' => $search,
+                'count' => $availableAgents->count()
             ]);
 
             return response()->json([
                 'success' => true,
                 'agents' => $availableAgents,
-                'count' => $availableAgents->count(),
-                'debug' => [
-                    'search_term' => $search,
-                    'total_agents' => $totalAgents,
-                    'available_agents' => $availableCount
-                ]
+                'count' => $availableAgents->count()
             ]);
         } catch (\Exception $e) {
             Log::error('Agent search error', [
@@ -1753,8 +1864,7 @@ class OfficeAuthController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Search failed: ' . $e->getMessage(),
-                'agents' => [],
-                'error_details' => $e->getMessage()
+                'agents' => []
             ], 500);
         }
     }

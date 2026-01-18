@@ -1,44 +1,54 @@
 @extends('layouts.office-layout')
 
 @section('title', 'Profile Settings - Dream Mulk')
-@section('search-placeholder', 'Search...')
 
 @section('styles')
 <style>
-    .page-title { font-size: 32px; font-weight: 700; color: var(--text-primary); margin-bottom: 32px; }
-    .form-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px; padding: 32px; margin-bottom: 24px; }
-    .form-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 24px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1a202c; margin-bottom: 30px; }
+
+    .form-card { background: white; border: 1px solid #e5e7eb; border-radius: 14px; padding: 32px; margin-bottom: 24px; }
+    .form-title { font-size: 18px; font-weight: 700; color: #1a202c; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #303b97; display: flex; align-items: center; gap: 10px; }
+    .form-title i { color: #303b97; }
+
     .form-group { margin-bottom: 20px; }
-    .form-label { display: block; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; font-size: 14px; }
-    .form-input, .form-textarea { width: 100%; background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 12px 16px; font-size: 15px; transition: all 0.3s; font-family: inherit; }
-    .form-input:focus, .form-textarea:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
-    .form-input:read-only { background: var(--bg-hover); color: var(--text-muted); cursor: not-allowed; }
-    .form-textarea { resize: vertical; min-height: 100px; }
-    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
-    .submit-btn { background: #6366f1; color: white; padding: 12px 28px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: all 0.3s; }
-    .submit-btn:hover { background: #5558e3; transform: translateY(-1px); }
-    .alert { padding: 16px; border-radius: 8px; margin-bottom: 24px; }
-    .alert-success { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
-    .alert-error { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
-    .helper-text { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-    .schedule-grid { display: grid; gap: 16px; margin-top: 12px; }
-    .day-row { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; }
+    .form-label { display: block; font-weight: 600; color: #374151; margin-bottom: 8px; font-size: 14px; }
+    .form-input, .form-textarea, .form-select { width: 100%; background: white; border: 2px solid #e5e7eb; color: #1a202c; border-radius: 10px; padding: 12px 16px; font-size: 15px; transition: all 0.3s; font-family: inherit; }
+    .form-input:focus, .form-textarea:focus, .form-select:focus { outline: none; border-color: #303b97; box-shadow: 0 0 0 4px rgba(48,59,151,0.1); }
+    .form-input:read-only { background: #f1f5f9; color: #64748b; cursor: not-allowed; }
+    .form-textarea { resize: vertical; min-height: 120px; }
+    .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+
+    .submit-btn { background: linear-gradient(135deg, #303b97, #1e2875); color: white; padding: 12px 32px; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(48,59,151,0.3); }
+    .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(48,59,151,0.4); }
+
+    .alert { padding: 16px; border-radius: 10px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
+    .alert-success { background: #d1fae5; border: 2px solid #059669; color: #059669; font-weight: 600; }
+    .alert-error { background: #fee2e2; border: 2px solid #ef4444; color: #dc2626; }
+
+    .helper-text { font-size: 13px; color: #64748b; margin-top: 6px; }
+
+    .schedule-grid { display: grid; gap: 12px; margin-top: 12px; }
+    .day-row { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; }
     .day-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-    .day-checkbox { width: 20px; height: 20px; cursor: pointer; accent-color: #6366f1; }
-    .day-name { font-weight: 600; color: var(--text-primary); font-size: 15px; }
+    .day-checkbox { width: 20px; height: 20px; cursor: pointer; accent-color: #303b97; }
+    .day-name { font-weight: 600; color: #1a202c; font-size: 15px; }
     .time-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-left: 32px; }
     .time-input-group { display: flex; flex-direction: column; gap: 6px; }
-    .time-input-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
-    .time-input { padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
-    .time-input:disabled { opacity: 0.5; cursor: not-allowed; }
-    .image-preview { width: 150px; height: 150px; border-radius: 8px; object-fit: cover; border: 2px solid var(--border-color); margin-top: 10px; }
-    .file-input-label { display: inline-block; padding: 10px 20px; background: #6366f1; color: white; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s; margin-top: 10px; }
-    .file-input-label:hover { background: #5558e3; }
+    .time-input-label { font-size: 13px; color: #64748b; font-weight: 600; }
+    .time-input { padding: 10px 12px; border: 2px solid #e5e7eb; border-radius: 8px; background: white; color: #1a202c; font-size: 14px; }
+    .time-input:disabled { opacity: 0.5; cursor: not-allowed; background: #f1f5f9; }
+
+    .image-upload-section { background: #f8fafc; border: 2px dashed #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; }
+    .image-preview { width: 150px; height: 150px; border-radius: 12px; object-fit: cover; border: 2px solid #e5e7eb; margin: 0 auto 16px; display: block; }
+    .file-input-label { display: inline-block; padding: 10px 20px; background: #303b97; color: white; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s; }
+    .file-input-label:hover { background: #1e2875; }
     .file-input-label input[type="file"] { display: none; }
-    .map-container { width: 100%; height: 400px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); margin-top: 10px; }
+
+    .map-container { width: 100%; height: 400px; border-radius: 12px; overflow: hidden; border: 2px solid #e5e7eb; margin-top: 10px; }
     #map { width: 100%; height: 100%; }
-    .location-info { background: var(--bg-main); padding: 12px; border-radius: 8px; margin-top: 10px; border: 1px solid var(--border-color); font-size: 13px; color: var(--text-secondary); }
-    .plan-badge { display: inline-block; padding: 8px 16px; background: #6366f1; color: white; border-radius: 6px; font-weight: 600; text-transform: capitalize; }
+    .location-info { background: #eff6ff; padding: 12px; border-radius: 8px; margin-top: 10px; border: 1px solid #bfdbfe; font-size: 13px; color: #1e40af; }
+
+    .plan-badge { display: inline-block; padding: 8px 16px; background: #303b97; color: white; border-radius: 8px; font-weight: 700; text-transform: capitalize; }
 </style>
 @endsection
 
@@ -51,9 +61,11 @@
 
 @if($errors->any())
     <div class="alert alert-error">
-        @foreach($errors->all() as $error)
-            <div><i class="fas fa-exclamation-circle"></i> {{ $error }}</div>
-        @endforeach
+        <div>
+            @foreach($errors->all() as $error)
+                <div><i class="fas fa-exclamation-circle"></i> {{ $error }}</div>
+            @endforeach
+        </div>
     </div>
 @endif
 
@@ -102,51 +114,55 @@
     </div>
 
     <!-- Images -->
-<div class="form-card">
-    <h2 class="form-title"><i class="fas fa-image"></i> Images</h2>
+    <div class="form-card">
+        <h2 class="form-title"><i class="fas fa-image"></i> Company Images</h2>
 
-    <div class="form-row">
         <div class="form-group">
-            <label class="form-label">Profile Image</label>
-            @php
-                $profileImageUrl = auth('office')->user()->profile_image;
-                if ($profileImageUrl && !str_starts_with($profileImageUrl, 'http')) {
-                    $profileImageUrl = asset('storage/' . $profileImageUrl);
-                }
-            @endphp
-            <img src="{{ $profileImageUrl ?? 'https://via.placeholder.com/150/6366f1/ffffff?text=No+Image' }}"
-                 alt="Profile"
-                 class="image-preview"
-                 id="profile-preview">
-            <label class="file-input-label">
-                <i class="fas fa-upload"></i> Upload Profile Image
-                <input type="file" name="profile_image" accept="image/*" onchange="previewImage(event, 'profile-preview')">
-            </label>
+            <label class="form-label">Profile Image *</label>
+            <div class="image-upload-section">
+                @php
+                    $profileImageUrl = auth('office')->user()->profile_image;
+                    if ($profileImageUrl && !str_starts_with($profileImageUrl, 'http')) {
+                        $profileImageUrl = asset('storage/' . $profileImageUrl);
+                    }
+                @endphp
+                <img src="{{ $profileImageUrl ?? 'https://via.placeholder.com/150/303b97/ffffff?text=Profile' }}"
+                     alt="Profile"
+                     class="image-preview"
+                     id="profile-preview">
+                <label class="file-input-label">
+                    <i class="fas fa-upload"></i> Upload Profile Image
+                    <input type="file" name="profile_image" accept="image/*" onchange="previewImage(event, 'profile-preview')">
+                </label>
+                <div class="helper-text" style="margin-top: 10px;">Your company profile photo (Square image, min 400x400px)</div>
+            </div>
         </div>
 
-        <div class="form-group">
+        <div class="form-group" style="margin-top: 20px;">
             <label class="form-label">Company Bio Image</label>
-            @php
-                $bioImageUrl = auth('office')->user()->company_bio_image;
-                if ($bioImageUrl && !str_starts_with($bioImageUrl, 'http')) {
-                    $bioImageUrl = asset('storage/' . $bioImageUrl);
-                }
-            @endphp
-            <img src="{{ $bioImageUrl ?? 'https://via.placeholder.com/150/6366f1/ffffff?text=No+Image' }}"
-                 alt="Bio"
-                 class="image-preview"
-                 id="bio-preview">
-            <label class="file-input-label">
-                <i class="fas fa-upload"></i> Upload Bio Image
-                <input type="file" name="company_bio_image" accept="image/*" onchange="previewImage(event, 'bio-preview')">
-            </label>
+            <div class="image-upload-section">
+                @php
+                    $bioImageUrl = auth('office')->user()->company_bio_image;
+                    if ($bioImageUrl && !str_starts_with($bioImageUrl, 'http')) {
+                        $bioImageUrl = asset('storage/' . $bioImageUrl);
+                    }
+                @endphp
+                <img src="{{ $bioImageUrl ?? 'https://via.placeholder.com/600x200/303b97/ffffff?text=Bio+Image' }}"
+                     alt="Bio"
+                     style="width: 100%; max-width: 600px; height: 200px; object-fit: cover; border-radius: 12px; border: 2px solid #e5e7eb; margin: 0 auto 16px; display: block;"
+                     id="bio-preview">
+                <label class="file-input-label">
+                    <i class="fas fa-upload"></i> Upload Bio Image
+                    <input type="file" name="company_bio_image" accept="image/*" onchange="previewImage(event, 'bio-preview')">
+                </label>
+                <div class="helper-text" style="margin-top: 10px;">Banner image for your company page (Recommended: 1200x400px)</div>
+            </div>
         </div>
     </div>
-</div>
 
     <!-- Contact -->
     <div class="form-card">
-        <h2 class="form-title"><i class="fas fa-phone"></i> Contact</h2>
+        <h2 class="form-title"><i class="fas fa-phone"></i> Contact Information</h2>
 
         <div class="form-row">
             <div class="form-group">
@@ -155,7 +171,7 @@
                 <div class="helper-text">Email cannot be changed</div>
             </div>
             <div class="form-group">
-                <label class="form-label">Phone *</label>
+                <label class="form-label">Phone Number *</label>
                 <input type="text" name="phone_number" class="form-input" value="{{ old('phone_number', auth('office')->user()->phone_number) }}" required>
             </div>
         </div>
@@ -163,27 +179,35 @@
 
     <!-- Location -->
     <div class="form-card">
-        <h2 class="form-title"><i class="fas fa-map-marker-alt"></i> Location</h2>
+        <h2 class="form-title"><i class="fas fa-map-marker-alt"></i> Office Location</h2>
 
         <div class="form-group">
-            <label class="form-label">Address</label>
+            <label class="form-label">Office Address</label>
             <input type="text" name="office_address" class="form-input" value="{{ old('office_address', auth('office')->user()->office_address) }}">
         </div>
 
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">City</label>
-                <input type="text" name="city" class="form-input" value="{{ old('city', auth('office')->user()->city) }}">
+                <label class="form-label">City *</label>
+                <select id="city-select" class="form-select">
+                    <option value="">Select City</option>
+                </select>
+                <input type="hidden" name="city" id="city" value="{{ old('city', auth('office')->user()->city) }}">
+                <div class="helper-text">Select your office city</div>
             </div>
             <div class="form-group">
-                <label class="form-label">District</label>
-                <input type="text" name="district" class="form-input" value="{{ old('district', auth('office')->user()->district) }}">
+                <label class="form-label">Area/District *</label>
+                <select id="area-select" class="form-select" disabled>
+                    <option value="">Select City First</option>
+                </select>
+                <input type="hidden" name="district" id="district" value="{{ old('district', auth('office')->user()->district) }}">
+                <div class="helper-text">Select your office area</div>
             </div>
         </div>
 
         <div class="form-group">
-            <label class="form-label">Select Location on Map</label>
-            <div class="helper-text">Click or drag the marker to set your office location</div>
+            <label class="form-label">Set Location on Map</label>
+            <div class="helper-text">Click on the map or drag the marker to set your office location</div>
             <div class="map-container">
                 <div id="map"></div>
             </div>
@@ -196,7 +220,7 @@
         <input type="hidden" name="longitude" id="longitude" value="{{ old('longitude', auth('office')->user()->longitude ?? '44.0091') }}">
     </div>
 
-    <!-- Schedule -->
+    <!-- Working Hours -->
     <div class="form-card">
         <h2 class="form-title"><i class="fas fa-clock"></i> Working Hours</h2>
         <div class="helper-text" style="margin-bottom: 16px;">Select the days you're available and set your working hours</div>
@@ -222,9 +246,10 @@
         <div class="form-group">
             <label class="form-label">New Password *</label>
             <input type="password" name="password" class="form-input" required>
+            <div class="helper-text">Minimum 8 characters</div>
         </div>
         <div class="form-group">
-            <label class="form-label">Confirm Password *</label>
+            <label class="form-label">Confirm New Password *</label>
             <input type="password" name="password_confirmation" class="form-input" required>
         </div>
         <button type="submit" class="submit-btn"><i class="fas fa-key"></i> Change Password</button>
@@ -233,117 +258,119 @@
 @endsection
 
 @section('scripts')
+<script src="{{ asset('js/location-selector.js') }}"></script>
 <script>
     // Image preview
     function previewImage(event, previewId) {
-        const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById(previewId).src = e.target.result;
-            }
-            reader.readAsDataURL(file);
+    const file = event.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById(previewId).src = e.target.result;
         }
+        reader.readAsDataURL(file);
     }
+}
+
+    // Initialize Location Selector
+    let locationSelector;
 
     // Initialize Schedule
     function initializeSchedule() {
-        const days = [
-            {name: 'monday', label: 'Monday', defaultOpen: '09:00', defaultClose: '18:00'},
-            {name: 'tuesday', label: 'Tuesday', defaultOpen: '09:00', defaultClose: '18:00'},
-            {name: 'wednesday', label: 'Wednesday', defaultOpen: '09:00', defaultClose: '18:00'},
-            {name: 'thursday', label: 'Thursday', defaultOpen: '09:00', defaultClose: '18:00'},
-            {name: 'friday', label: 'Friday', defaultOpen: '09:00', defaultClose: '18:00'},
-            {name: 'saturday', label: 'Saturday', defaultOpen: '10:00', defaultClose: '15:00'},
-            {name: 'sunday', label: 'Sunday', defaultOpen: '10:00', defaultClose: '15:00'}
-        ];
+    const days = [
+        {name: 'monday', label: 'Monday', defaultOpen: '09:00', defaultClose: '18:00'},
+        {name: 'tuesday', label: 'Tuesday', defaultOpen: '09:00', defaultClose: '18:00'},
+        {name: 'wednesday', label: 'Wednesday', defaultOpen: '09:00', defaultClose: '18:00'},
+        {name: 'thursday', label: 'Thursday', defaultOpen: '09:00', defaultClose: '18:00'},
+        {name: 'friday', label: 'Friday', defaultOpen: '09:00', defaultClose: '18:00'},
+        {name: 'saturday', label: 'Saturday', defaultOpen: '10:00', defaultClose: '15:00'},
+        {name: 'sunday', label: 'Sunday', defaultOpen: '10:00', defaultClose: '15:00'}
+    ];
 
-        let existingSchedule = {};
-        try {
-            const scheduleData = @json(auth('office')->user()->availability_schedule);
-            if (scheduleData && typeof scheduleData === 'object') {
-                existingSchedule = scheduleData;
-            } else if (typeof scheduleData === 'string') {
-                existingSchedule = JSON.parse(scheduleData);
-            }
-        } catch(e) {
-            console.log('No existing schedule');
+    let existingSchedule = {};
+    try {
+        const scheduleData = @json(auth('office')->user()->availability_schedule);
+        if (scheduleData && typeof scheduleData === 'object') {
+            existingSchedule = scheduleData;
+        } else if (typeof scheduleData === 'string') {
+            existingSchedule = JSON.parse(scheduleData);
+        }
+    } catch(e) {
+        console.log('No existing schedule');
+    }
+
+    const scheduleGrid = document.getElementById('scheduleGrid');
+    scheduleGrid.innerHTML = ''; // Clear existing content
+
+    days.forEach(day => {
+        const daySchedule = existingSchedule[day.name];
+        const isChecked = daySchedule && (daySchedule.open || daySchedule !== 'closed') ? 'checked' : '';
+
+        let openTime = day.defaultOpen;
+        let closeTime = day.defaultClose;
+
+        if (daySchedule && typeof daySchedule === 'object') {
+            openTime = daySchedule.open || openTime;
+            closeTime = daySchedule.close || closeTime;
         }
 
-        const scheduleGrid = document.getElementById('scheduleGrid');
+        const disabled = isChecked ? '' : 'disabled';
 
-        days.forEach(day => {
-            const daySchedule = existingSchedule[day.name];
-            const isChecked = daySchedule && daySchedule !== 'closed' ? 'checked' : '';
-
-            let openTime = day.defaultOpen;
-            let closeTime = day.defaultClose;
-
-            if (daySchedule && daySchedule !== 'closed') {
-                const [open, close] = daySchedule.split('-');
-                if (open && close) {
-                    openTime = open;
-                    closeTime = close;
-                }
-            }
-
-            const disabled = isChecked ? '' : 'disabled';
-
-            const dayRow = document.createElement('div');
-            dayRow.className = 'day-row';
-            dayRow.innerHTML = `
-                <div class="day-header">
-                    <input type="checkbox" class="day-checkbox" id="${day.name}" ${isChecked} onchange="toggleDay('${day.name}')">
-                    <label for="${day.name}" class="day-name">${day.label}</label>
+        const dayRow = document.createElement('div');
+        dayRow.className = 'day-row';
+        dayRow.innerHTML = `
+            <div class="day-header">
+                <input type="checkbox" class="day-checkbox" id="${day.name}" ${isChecked} onchange="toggleDay('${day.name}')">
+                <label for="${day.name}" class="day-name">${day.label}</label>
+            </div>
+            <div class="time-inputs" id="${day.name}-times">
+                <div class="time-input-group">
+                    <label class="time-input-label">Opening Time</label>
+                    <input type="time" class="time-input" name="${day.name}_open" value="${openTime}" ${disabled}>
                 </div>
-                <div class="time-inputs" id="${day.name}-times">
-                    <div class="time-input-group">
-                        <label class="time-input-label">Opening</label>
-                        <input type="time" class="time-input" name="${day.name}_open" value="${openTime}" ${disabled}>
-                    </div>
-                    <div class="time-input-group">
-                        <label class="time-input-label">Closing</label>
-                        <input type="time" class="time-input" name="${day.name}_close" value="${closeTime}" ${disabled}>
-                    </div>
+                <div class="time-input-group">
+                    <label class="time-input-label">Closing Time</label>
+                    <input type="time" class="time-input" name="${day.name}_close" value="${closeTime}" ${disabled}>
                 </div>
-            `;
-            scheduleGrid.appendChild(dayRow);
-        });
-    }
+            </div>
+        `;
+        scheduleGrid.appendChild(dayRow);
+    });
+}
 
     // Toggle day
     function toggleDay(day) {
-        const checkbox = document.getElementById(day);
-        const openInput = document.querySelector(`input[name="${day}_open"]`);
-        const closeInput = document.querySelector(`input[name="${day}_close"]`);
+    const checkbox = document.getElementById(day);
+    const openInput = document.querySelector(`input[name="${day}_open"]`);
+    const closeInput = document.querySelector(`input[name="${day}_close"]`);
 
-        if (checkbox.checked) {
-            openInput.disabled = false;
-            closeInput.disabled = false;
-        } else {
-            openInput.disabled = true;
-            closeInput.disabled = true;
-        }
+    if (checkbox.checked) {
+        openInput.disabled = false;
+        closeInput.disabled = false;
+    } else {
+        openInput.disabled = true;
+        closeInput.disabled = true;
     }
+}
 
     // Build schedule before submit
     document.getElementById('profileForm').addEventListener('submit', function(e) {
-        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-        const schedule = {};
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const schedule = {};
 
-        days.forEach(day => {
-            const checkbox = document.getElementById(day);
-            if (checkbox && checkbox.checked) {
-                const open = document.querySelector(`input[name="${day}_open"]`)?.value;
-                const close = document.querySelector(`input[name="${day}_close"]`)?.value;
-                if (open && close) {
-                    schedule[day] = { open, close };
-                }
+    days.forEach(day => {
+        const checkbox = document.getElementById(day);
+        if (checkbox && checkbox.checked) {
+            const open = document.querySelector(`input[name="${day}_open"]`)?.value;
+            const close = document.querySelector(`input[name="${day}_close"]`)?.value;
+            if (open && close) {
+                schedule[day] = { open, close };
             }
-        });
-
-        document.getElementById('availability_schedule').value = JSON.stringify(schedule);
+        }
     });
+
+    document.getElementById('availability_schedule').value = JSON.stringify(schedule);
+});
 
     // Google Maps
     let map;
@@ -358,6 +385,9 @@
         map = new google.maps.Map(document.getElementById("map"), {
             zoom: 15,
             center: officeLocation,
+            mapTypeControl: true,
+            streetViewControl: false,
+            fullscreenControl: true,
         });
 
         marker = new google.maps.Marker({
@@ -365,6 +395,7 @@
             map: map,
             draggable: true,
             animation: google.maps.Animation.DROP,
+            title: "Office Location"
         });
 
         map.addListener('click', function(e) {
@@ -375,9 +406,7 @@
             updateLocation(e.latLng);
         });
 
-        if (currentLat !== 36.1911 || currentLng !== 44.0091) {
-            updateLocation(officeLocation);
-        }
+        updateLocation(officeLocation);
     }
 
     function placeMarker(location) {
@@ -392,15 +421,104 @@
         document.getElementById('latitude').value = lat.toFixed(8);
         document.getElementById('longitude').value = lng.toFixed(8);
         document.getElementById('location-info').innerHTML = `
-            <i class="fas fa-check-circle" style="color: #22c55e;"></i>
-            Location selected: ${lat.toFixed(6)}, ${lng.toFixed(6)}
+            <i class="fas fa-check-circle" style="color: #16a34a;"></i>
+            Location selected: Latitude ${lat.toFixed(6)}, Longitude ${lng.toFixed(6)}
         `;
     }
 
+    // Initialize location selector and find city
+   async function initializeLocationSelector() {
+    try {
+        const currentCity = "{{ old('city', auth('office')->user()->city) }}";
+        const currentDistrict = "{{ old('district', auth('office')->user()->district) }}";
+
+        console.log('=== Location Selector Initialization ===');
+        console.log('Current City:', currentCity);
+        console.log('Current District:', currentDistrict);
+
+        // Verify elements exist
+        const citySelect = document.getElementById('city-select');
+        const areaSelect = document.getElementById('area-select');
+
+        if (!citySelect) {
+            console.error('City select element not found!');
+            return;
+        }
+        if (!areaSelect) {
+            console.error('Area select element not found!');
+            return;
+        }
+
+        console.log('Elements found successfully');
+
+        // Create the location selector WITHOUT pre-selected values
+        locationSelector = new LocationSelector({
+            citySelectId: 'city-select',
+            areaSelectId: 'area-select',
+            cityInputId: 'city',
+            districtInputId: 'district'
+        });
+
+        console.log('LocationSelector instance created');
+
+        // Wait for initialization to complete
+        await locationSelector.init();
+        console.log('LocationSelector initialized, cities loaded:', locationSelector.cities.length);
+
+        // Check if cities were loaded
+        if (locationSelector.cities.length === 0) {
+            console.error('No cities loaded!');
+            return;
+        }
+
+        // Now set the city if it exists
+        if (currentCity && currentCity.trim() !== '') {
+            console.log('Attempting to set city:', currentCity);
+            const citySet = await locationSelector.setCityByName(currentCity);
+
+            if (citySet) {
+                console.log('✓ City set successfully');
+
+                // Wait a bit for areas to load
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // Now set the area if it exists
+                if (currentDistrict && currentDistrict.trim() !== '') {
+                    console.log('Attempting to set area:', currentDistrict);
+                    const areaSet = locationSelector.setAreaByName(currentDistrict);
+                    if (areaSet) {
+                        console.log('✓ Area set successfully');
+                    } else {
+                        console.warn('✗ Failed to set area');
+                    }
+                }
+            } else {
+                console.warn('✗ Failed to set city - city not found in list');
+            }
+        } else {
+            console.log('No saved city to restore');
+        }
+
+        console.log('=== Initialization Complete ===');
+
+    } catch (error) {
+        console.error('!!! Error initializing location selector:', error);
+        console.error('Error details:', error.message);
+        console.error('Stack:', error.stack);
+    }
+}
+
     // Initialize on load
-    document.addEventListener('DOMContentLoaded', function() {
+    window.addEventListener('load', async function() {
+        console.log('Page loaded, initializing...');
+
+        // Initialize schedule
         initializeSchedule();
-        initMap();
+
+        // Initialize location selector
+        await initializeLocationSelector();
+
+        console.log('Initialization complete');
     });
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
