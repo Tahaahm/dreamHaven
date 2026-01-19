@@ -1397,6 +1397,9 @@ class PropertyController extends Controller
                 );
             }
 
+            // ✅ FIX 1: Retrieve the user here
+            $user = auth('sanctum')->user();
+
             $limit = $request->get('limit', 10);
             $language = $request->get('language', 'en');
             $strategy = $request->get('strategy', 'balanced');
@@ -1406,7 +1409,13 @@ class PropertyController extends Controller
                 ->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
 
+            // Get the properties (Collection)
             $featured = $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
+
+            // ✅ FIX 2: Track impressions (Now $user is defined)
+            if ($user && $featured->isNotEmpty()) {
+                $this->interactionService->trackImpressions($user->id, $featured, 'featured');
+            }
 
             // Transform using FULL property data
             $transformedData = $featured->map(function ($property) use ($language) {
@@ -1439,7 +1448,6 @@ class PropertyController extends Controller
             );
         }
     }
-
 
 
     /**
@@ -1477,7 +1485,6 @@ class PropertyController extends Controller
             $limit = $request->get('limit', 20);
             $user = auth('sanctum')->user();
 
-            // ✅ LOG: Start
             Log::info('🎯 RECOMMENDED: Request started', [
                 'endpoint' => 'getRecommended',
                 'user_authenticated' => $user ? 'YES' : 'NO',
@@ -1485,8 +1492,8 @@ class PropertyController extends Controller
                 'limit' => $limit,
             ]);
 
+            // 1. Fetch the Properties (Logic remains the same)
             if ($user) {
-                // ✅ LOG: Using personalized recommendations
                 Log::info('👤 RECOMMENDED: Fetching personalized', [
                     'user_id' => $user->id,
                     'strategy' => 'personalized',
@@ -1506,33 +1513,17 @@ class PropertyController extends Controller
                         'error' => $e->getMessage(),
                     ]);
 
-                    // Fallback to general recommendations
+                    // Fallback query
                     $properties = Property::query()
                         ->where('is_active', true)
                         ->where('published', true)
                         ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                        ->selectRaw('
-                        *,
-                        (
-                            (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                            (CASE WHEN verified = 1 THEN 20 ELSE 0 END) +
-                            (LEAST(views, 100) * 0.15) +
-                            (LEAST(favorites_count, 50) * 0.5) +
-                            (rating * 5) +
-                            (CASE
-                                WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20
-                                WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15
-                                WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
-                                ELSE 0
-                            END)
-                        ) as recommendation_score
-                    ')
+                        ->selectRaw('*, ((CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) + (CASE WHEN verified = 1 THEN 20 ELSE 0 END) + (LEAST(views, 100) * 0.15) + (LEAST(favorites_count, 50) * 0.5) + (rating * 5) + (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20 WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15 WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)) as recommendation_score')
                         ->orderByDesc('recommendation_score')
                         ->limit($limit)
                         ->get();
                 }
             } else {
-                // ✅ LOG: Using general recommendations
                 Log::info('ℹ️ RECOMMENDED: Fetching general', [
                     'reason' => 'User not authenticated',
                     'strategy' => 'general',
@@ -1542,22 +1533,7 @@ class PropertyController extends Controller
                     ->where('is_active', true)
                     ->where('published', true)
                     ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                    ->selectRaw('
-                    *,
-                    (
-                        (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                        (CASE WHEN verified = 1 THEN 20 ELSE 0 END) +
-                        (LEAST(views, 100) * 0.15) +
-                        (LEAST(favorites_count, 50) * 0.5) +
-                        (rating * 5) +
-                        (CASE
-                            WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20
-                            WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15
-                            WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
-                            ELSE 0
-                        END)
-                    ) as recommendation_score
-                ')
+                    ->selectRaw('*, ((CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) + (CASE WHEN verified = 1 THEN 20 ELSE 0 END) + (LEAST(views, 100) * 0.15) + (LEAST(favorites_count, 50) * 0.5) + (rating * 5) + (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20 WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15 WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)) as recommendation_score')
                     ->orderByDesc('recommendation_score')
                     ->limit($limit)
                     ->get();
@@ -1568,6 +1544,16 @@ class PropertyController extends Controller
                 ]);
             }
 
+            // ✅ 2. Track Impressions (Insert logic here, before transformation)
+            if ($user && $properties->isNotEmpty()) {
+                $this->interactionService->trackImpressions(
+                    $user->id,
+                    $properties,
+                    'recommended'
+                );
+            }
+
+            // ✅ 3. Transform Data (Do this ONCE)
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
             });
@@ -1728,7 +1714,6 @@ class PropertyController extends Controller
             $days = $request->get('days', 30);
             $user = auth('sanctum')->user();
 
-            // ✅ LOG: Start
             Log::info('🆕 RECENT: Request started', [
                 'endpoint' => 'getRecent',
                 'user_authenticated' => $user ? 'YES' : 'NO',
@@ -1743,34 +1728,14 @@ class PropertyController extends Controller
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
                 ->where('created_at', '>=', now()->subDays($days));
 
-            // ✅ LOG: User exclusion logic
             if ($user) {
                 $viewedProperties = $user->recently_viewed_properties ?? [];
-                $viewedCount = count($viewedProperties);
-
-                Log::info('👤 RECENT: User viewing history', [
-                    'user_id' => $user->id,
-                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
-                    'viewed_count' => $viewedCount,
-                ]);
-
-                if ($viewedCount > 0) {
+                if (count($viewedProperties) > 0) {
                     $query->whereNotIn('id', $viewedProperties);
-                    Log::info('✅ RECENT: Exclusion applied', [
-                        'excluded_count' => $viewedCount,
-                        'reason' => 'User has viewing history',
-                    ]);
-                } else {
-                    Log::info('ℹ️ RECENT: No exclusion needed', [
-                        'reason' => 'User has no viewing history',
-                    ]);
                 }
-            } else {
-                Log::info('ℹ️ RECENT: No exclusion applied', [
-                    'reason' => 'User not authenticated',
-                ]);
             }
 
+            // ✅ EXECUTE QUERY ONCE
             $properties = $query
                 ->orderByDesc('created_at')
                 ->orderByDesc('is_boosted')
@@ -1779,10 +1744,15 @@ class PropertyController extends Controller
 
             Log::info('✅ RECENT: Success', [
                 'properties_found' => $properties->count(),
-                'date_range' => now()->subDays($days)->format('Y-m-d') . ' to ' . now()->format('Y-m-d'),
                 'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
             ]);
 
+            // ✅ TRACK IMPRESSIONS (Using the data we just fetched)
+            if ($user && $properties->isNotEmpty()) {
+                $this->interactionService->trackImpressions($user->id, $properties, 'recent');
+            }
+
+            // ✅ TRANSFORM DATA
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
             });
@@ -1930,7 +1900,6 @@ class PropertyController extends Controller
             $limit = $request->get('limit', 20);
             $user = auth('sanctum')->user();
 
-            // ✅ LOG: Start
             Log::info('🔥 POPULAR: Request started', [
                 'endpoint' => 'getPopular',
                 'user_authenticated' => $user ? 'YES' : 'NO',
@@ -1946,34 +1915,14 @@ class PropertyController extends Controller
                         ->orWhere('favorites_count', '>', 0);
                 });
 
-            // ✅ LOG: User exclusion logic
             if ($user) {
                 $viewedProperties = $user->recently_viewed_properties ?? [];
-                $viewedCount = count($viewedProperties);
-
-                Log::info('👤 POPULAR: User viewing history', [
-                    'user_id' => $user->id,
-                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
-                    'viewed_count' => $viewedCount,
-                ]);
-
-                if ($viewedCount > 0) {
+                if (count($viewedProperties) > 0) {
                     $query->whereNotIn('id', $viewedProperties);
-                    Log::info('✅ POPULAR: Exclusion applied', [
-                        'excluded_count' => $viewedCount,
-                        'reason' => 'User has viewing history',
-                    ]);
-                } else {
-                    Log::info('ℹ️ POPULAR: No exclusion needed', [
-                        'reason' => 'User has no viewing history',
-                    ]);
                 }
-            } else {
-                Log::info('ℹ️ POPULAR: No exclusion applied', [
-                    'reason' => 'User not authenticated',
-                ]);
             }
 
+            // ✅ EXECUTE QUERY ONCE
             $properties = $query
                 ->orderByRaw('(views * 0.6) + (favorites_count * 2) + (rating * 10) DESC')
                 ->limit($limit)
@@ -1984,6 +1933,12 @@ class PropertyController extends Controller
                 'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
             ]);
 
+            // ✅ TRACK IMPRESSIONS (Using the data we just fetched)
+            if ($user && $properties->isNotEmpty()) {
+                $this->interactionService->trackImpressions($user->id, $properties, 'popular');
+            }
+
+            // ✅ TRANSFORM DATA
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
             });
