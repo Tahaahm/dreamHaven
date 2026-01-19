@@ -218,21 +218,28 @@
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Assign System Plan</label>
                     <div class="relative">
                         <select name="plan_id" class="w-full px-4 py-2.5 bg-indigo-50/50 border border-indigo-200 rounded-xl text-sm font-bold text-indigo-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition cursor-pointer appearance-none">
-                            @if($office->subscription && $office->subscription->currentPlan)
-                                <option value="" selected>
-                                    Active: {{ $office->subscription->currentPlan->name }} (Expires: {{ $office->subscription->end_date ? $office->subscription->end_date->format('M d') : '-' }})
-                                </option>
-                                <option value="" disabled>──────────</option>
-                            @else
-                                <option value="" selected>-- Select a Plan --</option>
-                            @endif
 
-                            @foreach($plans as $plan)
-                                <option value="{{ $plan->id }}">
-                                    {{ $plan->name }} ({{ $plan->duration_label }}) - ${{ number_format($plan->final_price_iqd) }} IQD
-                                </option>
-                            @endforeach
-                        </select>
+    {{-- SAFE CHECK: Does subscription exist? --}}
+    @if($office->subscription && $office->subscription->currentPlan)
+        <option value="" selected>
+            Active: {{ $office->subscription->currentPlan->name }}
+            {{-- FIX: We parse the date to ensure it never crashes --}}
+            (Expires: {{ $office->subscription->end_date ? \Carbon\Carbon::parse($office->subscription->end_date)->format('M d') : 'No Expiry' }})
+        </option>
+        <option value="" disabled>──────────</option>
+    @else
+        <option value="" selected>-- Select a Plan --</option>
+    @endif
+
+    {{-- SAFE CHECK: Do plans exist? --}}
+    @if(isset($plans) && count($plans) > 0)
+        @foreach($plans as $plan)
+            <option value="{{ $plan->id }}">
+                {{ $plan->name }} - ${{ number_format($plan->final_price_iqd ?? 0) }} IQD
+            </option>
+        @endforeach
+    @endif
+</select>
                         <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                             <i class="fas fa-chevron-down text-indigo-400 text-xs"></i>
                         </div>
@@ -253,13 +260,20 @@
                         class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition" autocomplete="new-password">
                 </div>
                 <div class="flex items-center">
-                    <label class="inline-flex items-center cursor-pointer select-none">
-                        <input type="checkbox" name="is_verified" value="1" {{ $office->is_verified ? 'checked' : '' }} class="sr-only peer">
-                        <div class="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                        <span class="ms-3 text-sm font-bold text-slate-700">Verified Office</span>
-                    </label>
-                </div>
-            </div>
+    <label class="inline-flex items-center cursor-pointer select-none">
+
+        {{-- 1. ADD THIS HIDDEN INPUT --}}
+        {{-- This ensures "0" is sent if the box is unchecked --}}
+        <input type="hidden" name="is_verified" value="0">
+
+        {{-- 2. Your existing checkbox (Value 1 overwrites 0 if checked) --}}
+        <input type="checkbox" name="is_verified" value="1" {{ $office->is_verified ? 'checked' : '' }} class="sr-only peer">
+
+        {{-- 3. Visual Styling --}}
+        <div class="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+        <span class="ms-3 text-sm font-bold text-slate-700">Verified Office</span>
+    </label>
+</div>
         </div>
 
     </form>
