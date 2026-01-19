@@ -230,22 +230,19 @@ class PropertyInteractionService
                 $insertData[] = [
                     'user_id' => $userId,
                     'property_id' => $property->id,
-                    // We use 'impression' to distinguish scrolling vs actual clicking
-                    // You can change this to 'view' if you really want, but 'impression' is better analytics
                     'interaction_type' => 'impression',
                     'metadata' => json_encode([
                         'source_endpoint' => $sourceEndpoint,
                         'ip' => $ip
                     ]),
                     'created_at' => $timestamp,
-                    'updated_at' => $timestamp,
+                    // 'updated_at' => $timestamp, // ❌ DELETE OR COMMENT OUT THIS LINE
                 ];
             }
 
-            // ✅ ONE query to insert 20 rows
+            // Perform the bulk insert
             UserPropertyInteraction::insert($insertData);
         } catch (\Exception $e) {
-            // Silently fail to not break the API response
             Log::error('Failed to track impressions', [
                 'user_id' => $userId,
                 'endpoint' => $sourceEndpoint,
