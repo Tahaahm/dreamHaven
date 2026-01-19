@@ -147,9 +147,8 @@
             $isCurrentPlan = $currentSubscription && $currentSubscription->current_plan_id == $plan->id;
         @endphp
 
-        <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }} {{ $isCurrentPlan ? 'current-plan' : '' }}">
+         {{-- <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }} {{ $isCurrentPlan ? 'current-plan' : '' }}">
 
-            {{-- Badges --}}
             @if($isCurrentPlan)
                 <div class="plan-badge current"><i class="fas fa-check"></i> Current Plan</div>
             @elseif($plan->is_featured)
@@ -158,9 +157,9 @@
 
             <div class="plan-type">Agent Plan</div>
 
-            <h3 class="plan-name">{{ $plan->name }}</h3>
+            <h3 class="plan-name">{{ $plan->name }}</h3> --}}
 
-            <div class="plan-price">
+            {{-- <div class="plan-price">
                 @if($plan->discount_iqd > 0)
                     <div class="plan-price-original">{{ number_format($plan->original_price_iqd) }} IQD</div>
                 @endif
@@ -173,10 +172,9 @@
             <div class="plan-duration">
                 <i class="fas fa-clock"></i>
                 <span>{{ $plan->duration_months }} Months Duration</span>
-            </div>
+            </div> --}}
 
-            <ul class="plan-features">
-                {{-- Property Limit Feature --}}
+            {{-- <ul class="plan-features">
                 <li>
                     <i class="fas fa-check-circle"></i>
                     <span>
@@ -186,10 +184,9 @@
                             <strong>Unlimited</strong> Property Listings
                         @endif
                     </span>
-                </li>
+                </li> --}}
 
-                {{-- Other Features --}}
-                @php
+                {{-- @php
                     $features = is_array($plan->features) ? $plan->features : json_decode($plan->features, true);
                 @endphp
                 @if($features && is_array($features))
@@ -200,10 +197,10 @@
                         </li>
                     @endforeach
                 @endif
-            </ul>
+            </ul> --}}
 
             {{-- Action Button --}}
-            @if($isCurrentPlan)
+            {{-- @if($isCurrentPlan)
                 <button type="button" class="btn-subscribe current" disabled>
                     <i class="fas fa-check-circle"></i> Active Plan
                 </button>
@@ -211,9 +208,11 @@
                 <button type="button" class="btn-subscribe" disabled>
                     <i class="fas fa-lock"></i> Contact Admin to Subscribe
                 </button>
-            @endif
+            @endif --}}
 
-        </div>
+        {{-- </div> --}}
+
+
         @endforeach
     </div>
 @else

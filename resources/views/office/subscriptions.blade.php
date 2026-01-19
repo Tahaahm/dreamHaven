@@ -209,7 +209,7 @@
         @php
             $isCurrentPlan = $currentSubscription && $currentSubscription->current_plan_id == $plan->id;
         @endphp
-        <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }} {{ $isCurrentPlan ? 'current-plan' : '' }}">
+        {{-- <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }} {{ $isCurrentPlan ? 'current-plan' : '' }}">
             @if($isCurrentPlan)
                 <div class="plan-badge current">Current Plan</div>
             @elseif($plan->is_featured)
@@ -285,7 +285,7 @@
                 <i class="fas fa-info-circle"></i> Admin activation required
             </div>
 
-        </div>
+        {{-- </div> --}}
         @endforeach
     </div>
 @else
