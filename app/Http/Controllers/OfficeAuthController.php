@@ -271,6 +271,7 @@ class OfficeAuthController extends Controller
     {
         $office = auth('office')->user();
 
+        // 1. Validate all inputs
         $request->validate([
             'company_name' => 'required|string|max:255',
             'phone_number' => 'required|string|max:20',
@@ -283,26 +284,28 @@ class OfficeAuthController extends Controller
             'office_address' => 'nullable|string',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
+            // availability_schedule comes as a JSON string from the hidden input
             'availability_schedule' => 'nullable|string',
             'logo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'company_bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
         ]);
 
-        // Handle logo upload
+        // 2. Handle Logo Upload
         if ($request->hasFile('logo')) {
+            // Delete old logo if exists
             if ($office->logo) {
                 $oldPath = str_replace(asset('storage/'), '', $office->logo);
                 if (Storage::disk('public')->exists($oldPath)) {
                     Storage::disk('public')->delete($oldPath);
                 }
             }
-
+            // Store new logo
             $path = $request->file('logo')->store('offices/logos', 'public');
             $office->logo = asset('storage/' . $path);
         }
 
-        // Handle profile image upload
+        // 3. Handle Profile Image Upload
         if ($request->hasFile('profile_image')) {
             if ($office->profile_image) {
                 $oldPath = str_replace(asset('storage/'), '', $office->profile_image);
@@ -310,12 +313,11 @@ class OfficeAuthController extends Controller
                     Storage::disk('public')->delete($oldPath);
                 }
             }
-
             $path = $request->file('profile_image')->store('offices/profiles', 'public');
             $office->profile_image = asset('storage/' . $path);
         }
 
-        // Handle company bio image upload
+        // 4. Handle Company Bio Image Upload
         if ($request->hasFile('company_bio_image')) {
             if ($office->company_bio_image) {
                 $oldPath = str_replace(asset('storage/'), '', $office->company_bio_image);
@@ -323,13 +325,12 @@ class OfficeAuthController extends Controller
                     Storage::disk('public')->delete($oldPath);
                 }
             }
-
             $path = $request->file('company_bio_image')->store('offices/bio', 'public');
             $office->company_bio_image = asset('storage/' . $path);
         }
 
-        // Transform availability schedule
-        if ($request->has('availability_schedule') && $request->availability_schedule) {
+        // 5. Handle Availability Schedule (THE FIX)
+        if ($request->filled('availability_schedule')) {
             try {
                 $scheduleData = json_decode($request->availability_schedule, true);
                 $transformedSchedule = [];
@@ -337,21 +338,25 @@ class OfficeAuthController extends Controller
 
                 foreach ($allDays as $day) {
                     if (isset($scheduleData[$day]) && is_array($scheduleData[$day])) {
-                        $open = $scheduleData[$day]['open'] ?? '09:00';
-                        $close = $scheduleData[$day]['close'] ?? '18:00';
-                        $transformedSchedule[$day] = "{$open}-{$close}";
+                        // FIX: Save as an array ['open' => '..', 'close' => '..']
+                        // Do NOT convert to string "09:00-18:00" because JS needs the keys
+                        $transformedSchedule[$day] = [
+                            'open' => $scheduleData[$day]['open'] ?? '09:00',
+                            'close' => $scheduleData[$day]['close'] ?? '18:00'
+                        ];
                     } else {
                         $transformedSchedule[$day] = 'closed';
                     }
                 }
 
+                // Your model casts this to array, so we pass the array directly
                 $office->availability_schedule = $transformedSchedule;
             } catch (\Exception $e) {
                 Log::error('Availability schedule transformation error: ' . $e->getMessage());
             }
         }
 
-        // Update other fields
+        // 6. Update all other text fields
         $office->company_name = $request->company_name;
         $office->phone_number = $request->phone_number;
         $office->company_bio = $request->company_bio;
@@ -364,6 +369,7 @@ class OfficeAuthController extends Controller
         $office->latitude = $request->latitude;
         $office->longitude = $request->longitude;
 
+        // 7. Save changes
         $office->save();
 
         return redirect()->route('office.profile')->with('success', 'Profile updated successfully!');

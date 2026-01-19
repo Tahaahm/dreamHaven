@@ -509,17 +509,18 @@
 }
 
     // Initialize on load
-    window.addEventListener('load', async function() {
-        console.log('Page loaded, initializing...');
+    document.addEventListener('DOMContentLoaded', async function() {
+    console.log('DOM ready, initializing...');
 
-        // Initialize schedule
-        initializeSchedule();
+    // Initialize schedule immediately so user sees it instantly
+    initializeSchedule();
 
-        // Initialize location selector
-        await initializeLocationSelector();
+    // Initialize location selector
+    // We don't need to await this if we don't want to block other things
+    initializeLocationSelector();
 
-        console.log('Initialization complete');
-    });
+    console.log('Initialization started');
+});
 </script>
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
 @endsection

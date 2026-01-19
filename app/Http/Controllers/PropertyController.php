@@ -33,29 +33,57 @@ class PropertyController extends Controller
                 );
             }
 
-            $query = Property::active()->published();
-
-
-
             $perPage = $request->get('per_page', 20);
+            $user = auth('sanctum')->user();
+
+            // ✅ LOG: User authentication status
+            Log::info('📋 INDEX: Request started', [
+                'endpoint' => 'index',
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+                'per_page' => $perPage,
+            ]);
+
+            $query = Property::active()
+                ->published()
+                ->whereNotIn('status', ['cancelled', 'pending']);
+
+            // ✅ LOG: Check for viewed properties
+            if ($user) {
+                $viewedProperties = $user->recently_viewed_properties ?? [];
+                $viewedCount = count($viewedProperties);
+
+                Log::info('👤 INDEX: User viewing history', [
+                    'user_id' => $user->id,
+                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
+                    'viewed_count' => $viewedCount,
+                    'viewed_ids' => $viewedCount > 0 ? array_slice($viewedProperties, 0, 5) : [],
+                ]);
+
+                if ($viewedCount > 0) {
+                    $query->whereNotIn('id', $viewedProperties);
+                    Log::info('✅ INDEX: Exclusion applied', [
+                        'reason' => 'User has viewing history',
+                        'excluded_count' => $viewedCount,
+                    ]);
+                } else {
+                    Log::info('ℹ️ INDEX: No exclusion needed', [
+                        'reason' => 'User has no viewing history yet',
+                    ]);
+                }
+            } else {
+                Log::info('ℹ️ INDEX: No exclusion applied', [
+                    'reason' => 'User not authenticated',
+                ]);
+            }
 
             $properties = $query->paginate($perPage);
 
-            // Debug the SQL query
-            Log::info('Property query SQL: ' . $query->toSql());
-            Log::info('Property query bindings: ', $query->getBindings());
-
-
-            // Also log counts
-            Log::info('Total properties in DB: ' . Property::count());
-            Log::info('Active properties: ' . Property::active()->count());
-            Log::info('Published properties: ' . Property::published()->count());
-            Log::info('Active + Published: ' . Property::active()->published()->count());
-
-            $properties = Property::active()
-                ->published()
-                ->whereNotIn('status', ['cancelled', 'pending'])  // Exclude cancelled and pending
-                ->paginate($perPage);
+            Log::info('✅ INDEX: Success', [
+                'total_returned' => $properties->count(),
+                'total_available' => $properties->total(),
+                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
+            ]);
 
             $transformedData = collect($properties->items())->map(function ($property) {
                 return $this->transformPropertyData($property);
@@ -73,10 +101,11 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Property index error', [
+            Log::error('❌ INDEX: Error', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
+                'user_id' => auth('sanctum')->user()?->id,
             ]);
 
             return ApiResponse::error(
@@ -103,9 +132,8 @@ class PropertyController extends Controller
     public function search(Request $request)
     {
         try {
-            // 1. VALIDATION
             $validator = Validator::make($request->all(), [
-                'search' => 'nullable|string|max:255', // <--- IMPORTANT: Allow search param
+                'search' => 'nullable|string|max:255',
                 'page' => 'integer|min:1',
                 'per_page' => 'integer|min:1|max:100',
                 'sort' => 'in:price_asc,price_desc,area_asc,area_desc,newest,oldest,most_viewed',
@@ -126,26 +154,73 @@ class PropertyController extends Controller
                 return ApiResponse::error('Invalid search parameters', $validator->errors(), 400);
             }
 
-            // 2. QUERY BUILDER
+            $user = auth('sanctum')->user();
+            $searchTerm = $request->get('search');
+
+            // ✅ LOG: Start
+            Log::info('🔍 SEARCH: Request started', [
+                'endpoint' => 'search',
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+                'search_term' => $searchTerm,
+                'filters' => array_filter($request->only([
+                    'min_price',
+                    'max_price',
+                    'bedrooms',
+                    'property_type',
+                    'listing_type',
+                    'city'
+                ])),
+            ]);
+
             $query = Property::query()->active()->published();
 
-            // 3. APPLY FILTERS (Includes the new search logic)
-            $this->applySearchFilters($query, $request);
+            // ✅ LOG: User exclusion logic
+            if ($user) {
+                $viewedProperties = $user->recently_viewed_properties ?? [];
+                $viewedCount = count($viewedProperties);
 
-            // 4. APPLY SORTING
+                Log::info('👤 SEARCH: User viewing history', [
+                    'user_id' => $user->id,
+                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
+                    'viewed_count' => $viewedCount,
+                ]);
+
+                if ($viewedCount > 0) {
+                    $query->whereNotIn('id', $viewedProperties);
+                    Log::info('✅ SEARCH: Exclusion applied', [
+                        'excluded_count' => $viewedCount,
+                        'reason' => 'User has viewing history',
+                    ]);
+                } else {
+                    Log::info('ℹ️ SEARCH: No exclusion needed', [
+                        'reason' => 'User has no viewing history',
+                    ]);
+                }
+            } else {
+                Log::info('ℹ️ SEARCH: No exclusion applied', [
+                    'reason' => 'User not authenticated',
+                ]);
+            }
+
+            $this->applySearchFilters($query, $request);
             $this->applySorting($query, $request->get('sort', 'newest'), $request->get('currency', 'usd'));
 
-            // 5. PAGINATION
             $perPage = $request->get('per_page', 20);
             $properties = $query->paginate($perPage);
 
-            // 6. TRANSFORMATION
+            Log::info('✅ SEARCH: Success', [
+                'properties_found' => $properties->count(),
+                'total_available' => $properties->total(),
+                'search_term' => $searchTerm,
+                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
+            ]);
+
             $language = $request->get('language', 'en');
             $transformedData = collect($properties->items())->map(function ($property) use ($language) {
                 return $this->transformPropertyForSearch($property, $language);
             });
 
-            // 7. RESPONSE
             return ApiResponse::success(
                 'Properties found',
                 [
@@ -157,7 +232,14 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Property search error', ['msg' => $e->getMessage()]);
+            Log::error('❌ SEARCH: Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => auth('sanctum')->user()?->id,
+                'search_term' => $request->get('search'),
+            ]);
+
             return ApiResponse::error('Search failed', $e->getMessage(), 500);
         }
     }
@@ -192,6 +274,37 @@ class PropertyController extends Controller
 
             // Increment views
             $property->increment('views');
+
+            // ✅ Track user view if authenticated
+            $user = auth('sanctum')->user();
+
+            // ✅ ADD DEBUG LOGGING
+            Log::info('🔍 Property View Attempt', [
+                'property_id' => $id,
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+            ]);
+
+            if ($user) {
+                try {
+                    $tracked = $this->interactionService->trackView($user->id, $property->id, [
+                        'source' => request()->header('X-Source', 'app'),
+                        'user_agent' => request()->header('User-Agent'),
+                    ]);
+
+                    Log::info('✅ Tracking Result', [
+                        'success' => $tracked,
+                        'user_id' => $user->id,
+                        'property_id' => $id,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('❌ Tracking Failed', [
+                        'error' => $e->getMessage(),
+                        'user_id' => $user->id,
+                        'property_id' => $id,
+                    ]);
+                }
+            }
 
             return ApiResponse::success(
                 'Property retrieved successfully',
@@ -635,11 +748,59 @@ class PropertyController extends Controller
             $radius = $request->get('radius', 10);
             $limit = $request->get('limit', 10);
             $language = $request->get('language', 'en');
+            $user = auth('sanctum')->user();
 
-            $properties = Property::whereRaw(
+            // ✅ LOG: Start
+            Log::info('📍 NEARBY: Request started', [
+                'endpoint' => 'nearby',
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+                'coordinates' => ['lat' => $lat, 'lng' => $lng],
+                'radius_km' => $radius,
+                'limit' => $limit,
+            ]);
+
+            $query = Property::whereRaw(
                 "(6371 * acos(cos(radians(?)) * cos(radians(JSON_EXTRACT(locations, '$[0].lat'))) * cos(radians(JSON_EXTRACT(locations, '$[0].lng')) - radians(?)) + sin(radians(?)) * sin(radians(JSON_EXTRACT(locations, '$[0].lat'))))) <= ?",
                 [$lat, $lng, $lat, $radius]
-            )->where('is_active', true)->limit($limit)->get();
+            )->where('is_active', true);
+
+            // ✅ LOG: User exclusion logic
+            if ($user) {
+                $viewedProperties = $user->recently_viewed_properties ?? [];
+                $viewedCount = count($viewedProperties);
+
+                Log::info('👤 NEARBY: User viewing history', [
+                    'user_id' => $user->id,
+                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
+                    'viewed_count' => $viewedCount,
+                ]);
+
+                if ($viewedCount > 0) {
+                    $query->whereNotIn('id', $viewedProperties);
+                    Log::info('✅ NEARBY: Exclusion applied', [
+                        'excluded_count' => $viewedCount,
+                        'reason' => 'User has viewing history',
+                    ]);
+                } else {
+                    Log::info('ℹ️ NEARBY: No exclusion needed', [
+                        'reason' => 'User has no viewing history',
+                    ]);
+                }
+            } else {
+                Log::info('ℹ️ NEARBY: No exclusion applied', [
+                    'reason' => 'User not authenticated',
+                ]);
+            }
+
+            $properties = $query->limit($limit)->get();
+
+            Log::info('✅ NEARBY: Success', [
+                'properties_found' => $properties->count(),
+                'search_radius_km' => $radius,
+                'center_point' => ['lat' => $lat, 'lng' => $lng],
+                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
+            ]);
 
             $transformedData = $properties->map(function ($property) use ($language, $lat, $lng) {
                 $propertyLat = $property->locations[0]['lat'] ?? 0;
@@ -663,10 +824,12 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Nearby properties error', [
+            Log::error('❌ NEARBY: Error', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
-                'line' => $e->getLine()
+                'line' => $e->getLine(),
+                'user_id' => auth('sanctum')->user()?->id,
+                'coordinates' => ['lat' => $request->lat, 'lng' => $request->lng],
             ]);
 
             return ApiResponse::error(
@@ -676,7 +839,6 @@ class PropertyController extends Controller
             );
         }
     }
-
     /**
      * Get property statistics
      */
@@ -1298,81 +1460,132 @@ class PropertyController extends Controller
             $validator = Validator::make($request->all(), [
                 'limit' => 'integer|min:1|max:50',
                 'language' => 'in:en,ar,ku',
-                'user_lat' => 'nullable|numeric|between:-90,90',
-                'user_lng' => 'nullable|numeric|between:-180,180',
             ]);
 
             if ($validator->fails()) {
                 return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
             }
 
-            $limit = $request->get('limit', 10);
-            $language = $request->get('language', 'en');
-            $userLat = $request->get('user_lat');
-            $userLng = $request->get('user_lng');
+            $limit = $request->get('limit', 20);
+            $user = auth('sanctum')->user();
 
-            $query = Property::where('is_active', true)
-                ->where('published', true)
-                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
+            // ✅ LOG: Start
+            Log::info('🎯 RECOMMENDED: Request started', [
+                'endpoint' => 'getRecommended',
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+                'limit' => $limit,
+            ]);
 
-            // If user location provided, prioritize nearby
-            if ($userLat && $userLng) {
-                $query->select('*')
-                    ->selectRaw("
-                    (6371 * acos(
-                        cos(radians(?)) *
-                        cos(radians(JSON_EXTRACT(locations, '$[0].lat'))) *
-                        cos(radians(JSON_EXTRACT(locations, '$[0].lng')) - radians(?)) +
-                        sin(radians(?)) *
-                        sin(radians(JSON_EXTRACT(locations, '$[0].lat')))
-                    )) as distance
-                ", [$userLat, $userLng, $userLat])
-                    ->orderBy('distance', 'asc');
+            if ($user) {
+                // ✅ LOG: Using personalized recommendations
+                Log::info('👤 RECOMMENDED: Fetching personalized', [
+                    'user_id' => $user->id,
+                    'strategy' => 'personalized',
+                ]);
+
+                try {
+                    $properties = $this->interactionService->getPersonalizedRecommendations($user->id, $limit);
+
+                    Log::info('✅ RECOMMENDED: Personalized success', [
+                        'user_id' => $user->id,
+                        'properties_found' => $properties->count(),
+                        'based_on_history' => true,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('❌ RECOMMENDED: Personalized failed, falling back to general', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    // Fallback to general recommendations
+                    $properties = Property::query()
+                        ->where('is_active', true)
+                        ->where('published', true)
+                        ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                        ->selectRaw('
+                        *,
+                        (
+                            (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
+                            (CASE WHEN verified = 1 THEN 20 ELSE 0 END) +
+                            (LEAST(views, 100) * 0.15) +
+                            (LEAST(favorites_count, 50) * 0.5) +
+                            (rating * 5) +
+                            (CASE
+                                WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20
+                                WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15
+                                WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
+                                ELSE 0
+                            END)
+                        ) as recommendation_score
+                    ')
+                        ->orderByDesc('recommendation_score')
+                        ->limit($limit)
+                        ->get();
+                }
             } else {
-                // Mix of quality + recency + popularity
-                $query->selectRaw('
-                *,
-                (
-                    -- ✅ NEW: Freshness bonus (0-40 points based on age)
-                    (CASE
-                        WHEN DATEDIFF(NOW(), created_at) <= 1 THEN 40
-                        WHEN DATEDIFF(NOW(), created_at) <= 3 THEN 35
-                        WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 30
-                        WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 20
-                        WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
-                        ELSE 0
-                    END) +
+                // ✅ LOG: Using general recommendations
+                Log::info('ℹ️ RECOMMENDED: Fetching general', [
+                    'reason' => 'User not authenticated',
+                    'strategy' => 'general',
+                ]);
 
-                    -- Popularity (30 points max)
-                    (views * 0.3) +
-                    (favorites_count * 2) +
+                $properties = Property::query()
+                    ->where('is_active', true)
+                    ->where('published', true)
+                    ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                    ->selectRaw('
+                    *,
+                    (
+                        (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
+                        (CASE WHEN verified = 1 THEN 20 ELSE 0 END) +
+                        (LEAST(views, 100) * 0.15) +
+                        (LEAST(favorites_count, 50) * 0.5) +
+                        (rating * 5) +
+                        (CASE
+                            WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20
+                            WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15
+                            WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
+                            ELSE 0
+                        END)
+                    ) as recommendation_score
+                ')
+                    ->orderByDesc('recommendation_score')
+                    ->limit($limit)
+                    ->get();
 
-                    -- Quality (30 points max)
-                    (rating * 6) +
-                    (CASE WHEN verified = 1 THEN 10 ELSE 0 END) +
-                    (CASE WHEN is_boosted = 1 THEN 15 ELSE 0 END)
-
-                ) as recommendation_score
-            ')
-                    ->orderByDesc('recommendation_score');
+                Log::info('✅ RECOMMENDED: General success', [
+                    'properties_found' => $properties->count(),
+                    'strategy_used' => 'general',
+                ]);
             }
-
-            $properties = $query->limit($limit)->get();
 
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
             });
 
+            Log::info('✅ RECOMMENDED: Response ready', [
+                'total_properties' => $transformedData->count(),
+                'personalized' => $user ? true : false,
+            ]);
+
             return ApiResponse::success(
                 'Recommended properties retrieved',
                 [
                     'data' => $transformedData,
-                    'total' => $transformedData->count()
+                    'total' => $transformedData->count(),
+                    'personalized' => $user ? true : false,
                 ],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Recommended properties error', ['message' => $e->getMessage()]);
+            Log::error('❌ RECOMMENDED: Fatal error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => auth('sanctum')->user()?->id,
+            ]);
+
             return ApiResponse::error('Failed to get recommended properties', $e->getMessage(), 500);
         }
     }
@@ -1505,14 +1718,62 @@ class PropertyController extends Controller
 
             $limit = $request->get('limit', 20);
             $days = $request->get('days', 30);
+            $user = auth('sanctum')->user();
 
-            $properties = Property::where('is_active', true)
+            // ✅ LOG: Start
+            Log::info('🆕 RECENT: Request started', [
+                'endpoint' => 'getRecent',
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+                'limit' => $limit,
+                'days' => $days,
+            ]);
+
+            $query = Property::query()
+                ->where('is_active', true)
                 ->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                ->where('created_at', '>=', now()->subDays($days))
+                ->where('created_at', '>=', now()->subDays($days));
+
+            // ✅ LOG: User exclusion logic
+            if ($user) {
+                $viewedProperties = $user->recently_viewed_properties ?? [];
+                $viewedCount = count($viewedProperties);
+
+                Log::info('👤 RECENT: User viewing history', [
+                    'user_id' => $user->id,
+                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
+                    'viewed_count' => $viewedCount,
+                ]);
+
+                if ($viewedCount > 0) {
+                    $query->whereNotIn('id', $viewedProperties);
+                    Log::info('✅ RECENT: Exclusion applied', [
+                        'excluded_count' => $viewedCount,
+                        'reason' => 'User has viewing history',
+                    ]);
+                } else {
+                    Log::info('ℹ️ RECENT: No exclusion needed', [
+                        'reason' => 'User has no viewing history',
+                    ]);
+                }
+            } else {
+                Log::info('ℹ️ RECENT: No exclusion applied', [
+                    'reason' => 'User not authenticated',
+                ]);
+            }
+
+            $properties = $query
                 ->orderByDesc('created_at')
+                ->orderByDesc('is_boosted')
                 ->limit($limit)
                 ->get();
+
+            Log::info('✅ RECENT: Success', [
+                'properties_found' => $properties->count(),
+                'date_range' => now()->subDays($days)->format('Y-m-d') . ' to ' . now()->format('Y-m-d'),
+                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
+            ]);
 
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
@@ -1528,8 +1789,75 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Recent properties error', ['message' => $e->getMessage()]);
+            Log::error('❌ RECENT: Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => auth('sanctum')->user()?->id,
+            ]);
+
             return ApiResponse::error('Failed to get recent properties', $e->getMessage(), 500);
+        }
+    }
+
+    public function getRecentlyViewed(Request $request)
+    {
+        try {
+            $user = auth('sanctum')->user();
+
+            if (!$user) {
+                return ApiResponse::error('Authentication required', null, 401);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'limit' => 'integer|min:1|max:50',
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
+            }
+
+            $limit = $request->get('limit', 20);
+
+            $properties = $this->interactionService->getRecentlyViewed($user->id, $limit);
+
+            $transformedData = $properties->map(function ($property) {
+                return $this->transformPropertyData($property);
+            });
+
+            return ApiResponse::success(
+                'Recently viewed properties retrieved',
+                [
+                    'data' => $transformedData,
+                    'total' => $transformedData->count(),
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Recently viewed error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to get recently viewed properties', $e->getMessage(), 500);
+        }
+    }
+
+    public function getMyViewingStats(Request $request)
+    {
+        try {
+            $user = auth('sanctum')->user();
+
+            if (!$user) {
+                return ApiResponse::error('Authentication required', null, 401);
+            }
+
+            $stats = $user->getViewingStatistics();
+
+            return ApiResponse::success(
+                'Viewing statistics retrieved',
+                $stats,
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Viewing stats error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to get viewing statistics', $e->getMessage(), 500);
         }
     }
     /**
@@ -1592,17 +1920,61 @@ class PropertyController extends Controller
             }
 
             $limit = $request->get('limit', 20);
+            $user = auth('sanctum')->user();
 
-            $properties = Property::where('is_active', true)
+            // ✅ LOG: Start
+            Log::info('🔥 POPULAR: Request started', [
+                'endpoint' => 'getPopular',
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+                'limit' => $limit,
+            ]);
+
+            $query = Property::where('is_active', true)
                 ->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
                 ->where(function ($q) {
                     $q->where('views', '>', 0)
                         ->orWhere('favorites_count', '>', 0);
-                })
+                });
+
+            // ✅ LOG: User exclusion logic
+            if ($user) {
+                $viewedProperties = $user->recently_viewed_properties ?? [];
+                $viewedCount = count($viewedProperties);
+
+                Log::info('👤 POPULAR: User viewing history', [
+                    'user_id' => $user->id,
+                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
+                    'viewed_count' => $viewedCount,
+                ]);
+
+                if ($viewedCount > 0) {
+                    $query->whereNotIn('id', $viewedProperties);
+                    Log::info('✅ POPULAR: Exclusion applied', [
+                        'excluded_count' => $viewedCount,
+                        'reason' => 'User has viewing history',
+                    ]);
+                } else {
+                    Log::info('ℹ️ POPULAR: No exclusion needed', [
+                        'reason' => 'User has no viewing history',
+                    ]);
+                }
+            } else {
+                Log::info('ℹ️ POPULAR: No exclusion applied', [
+                    'reason' => 'User not authenticated',
+                ]);
+            }
+
+            $properties = $query
                 ->orderByRaw('(views * 0.6) + (favorites_count * 2) + (rating * 10) DESC')
                 ->limit($limit)
                 ->get();
+
+            Log::info('✅ POPULAR: Success', [
+                'properties_found' => $properties->count(),
+                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
+            ]);
 
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
@@ -1617,7 +1989,13 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Popular properties error', ['message' => $e->getMessage()]);
+            Log::error('❌ POPULAR: Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'user_id' => auth('sanctum')->user()?->id,
+            ]);
+
             return ApiResponse::error('Failed to get popular properties', $e->getMessage(), 500);
         }
     }

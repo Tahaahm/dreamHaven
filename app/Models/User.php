@@ -38,8 +38,11 @@ class User extends Authenticatable implements MustVerifyEmail
         'google_id',
         'role',
         'verification_code',
-        'is_verified', // ✅ Added is_verified to fillable
+        'is_verified',
         'remember_token',
+        // ✅ NEW: Property interaction tracking fields
+        'recently_viewed_properties',
+        'last_activity_at',
     ];
 
     protected $hidden = [
@@ -52,17 +55,21 @@ class User extends Authenticatable implements MustVerifyEmail
         'last_login_at' => 'datetime',
         'password' => 'hashed',
         'search_preferences' => 'array',
-        'is_verified' => 'boolean', // ✅ Added is_verified cast
+        'is_verified' => 'boolean',
         'lat' => 'decimal:8',
         'lng' => 'decimal:8',
         'device_tokens' => 'array',
         'verification_code' => 'string',
+        // ✅ NEW: Property interaction tracking casts
+        'recently_viewed_properties' => 'array',
+        'last_activity_at' => 'datetime',
     ];
 
     protected $dates = [
         'deleted_at',
         'email_verified_at',
         'last_login_at',
+        'last_activity_at', // ✅ NEW
     ];
 
     // ===== UUID Generation =====
@@ -116,6 +123,20 @@ class User extends Authenticatable implements MustVerifyEmail
     public function systemNotifications(): HasMany
     {
         return $this->hasMany(Notification::class, 'user_id');
+    }
+
+    // ✅ NEW: Property interaction tracking relationships
+    public function propertyInteractions(): HasMany
+    {
+        return $this->hasMany(UserPropertyInteraction::class, 'user_id');
+    }
+
+    public function recentPropertyViews(): HasMany
+    {
+        return $this->hasMany(UserPropertyInteraction::class, 'user_id')
+            ->where('interaction_type', 'view')
+            ->orderBy('created_at', 'desc')
+            ->limit(50);
     }
 
     // ===== HELPER METHODS =====
@@ -187,5 +208,128 @@ class User extends Authenticatable implements MustVerifyEmail
     public function updateLastLogin(): void
     {
         $this->update(['last_login_at' => now()]);
+    }
+
+    // ===== ✅ NEW: PROPERTY INTERACTION HELPER METHODS =====
+
+    /**
+     * Get recently viewed property IDs
+     */
+    public function getRecentlyViewedPropertyIds(): array
+    {
+        return $this->recently_viewed_properties ?? [];
+    }
+
+    /**
+     * Check if user has recently viewed a specific property
+     */
+    public function hasRecentlyViewed(string $propertyId): bool
+    {
+        $recentlyViewed = $this->recently_viewed_properties ?? [];
+        return in_array($propertyId, $recentlyViewed);
+    }
+
+    /**
+     * Get count of recently viewed properties
+     */
+    public function getRecentlyViewedCount(): int
+    {
+        return count($this->recently_viewed_properties ?? []);
+    }
+
+    /**
+     * Add a property to recently viewed (manual method)
+     * Note: Usually handled by PropertyInteractionService
+     */
+    public function addToRecentlyViewed(string $propertyId): void
+    {
+        $recentlyViewed = $this->recently_viewed_properties ?? [];
+
+        // Remove if already exists
+        $recentlyViewed = array_filter($recentlyViewed, fn($id) => $id !== $propertyId);
+
+        // Add to beginning
+        array_unshift($recentlyViewed, $propertyId);
+
+        // Keep only last 50
+        $recentlyViewed = array_slice($recentlyViewed, 0, 50);
+
+        $this->update([
+            'recently_viewed_properties' => $recentlyViewed,
+            'last_activity_at' => now(),
+        ]);
+    }
+
+    /**
+     * Clear recently viewed properties
+     */
+    public function clearRecentlyViewed(): void
+    {
+        $this->update([
+            'recently_viewed_properties' => [],
+        ]);
+    }
+
+    /**
+     * Update last activity timestamp
+     */
+    public function updateLastActivity(): void
+    {
+        $this->update(['last_activity_at' => now()]);
+    }
+
+    /**
+     * Check if user has been active recently (within last N days)
+     */
+    public function hasRecentActivity(int $days = 7): bool
+    {
+        if (!$this->last_activity_at) {
+            return false;
+        }
+
+        return $this->last_activity_at->greaterThanOrEqualTo(now()->subDays($days));
+    }
+
+    /**
+     * Get user's property viewing statistics
+     */
+    public function getViewingStatistics(): array
+    {
+        return [
+            'total_views' => $this->propertyInteractions()
+                ->where('interaction_type', 'view')
+                ->count(),
+            'unique_properties_viewed' => $this->propertyInteractions()
+                ->where('interaction_type', 'view')
+                ->distinct('property_id')
+                ->count('property_id'),
+            'views_last_7_days' => $this->propertyInteractions()
+                ->where('interaction_type', 'view')
+                ->where('created_at', '>=', now()->subDays(7))
+                ->count(),
+            'views_last_30_days' => $this->propertyInteractions()
+                ->where('interaction_type', 'view')
+                ->where('created_at', '>=', now()->subDays(30))
+                ->count(),
+            'recently_viewed_count' => $this->getRecentlyViewedCount(),
+            'last_activity' => $this->last_activity_at?->diffForHumans(),
+        ];
+    }
+
+    /**
+     * Scope: Users with recent activity
+     */
+    public function scopeActiveWithinDays($query, int $days = 7)
+    {
+        return $query->where('last_activity_at', '>=', now()->subDays($days));
+    }
+
+    /**
+     * Scope: Users who have viewed properties recently
+     */
+    public function scopeWithRecentViews($query)
+    {
+        return $query->whereNotNull('recently_viewed_properties')
+            ->whereRaw('JSON_LENGTH(recently_viewed_properties) > 0');
     }
 }

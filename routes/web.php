@@ -391,6 +391,10 @@ Route::prefix('v1/api/properties')->group(function () {
     // ============================================
     Route::middleware(['auth:sanctum'])->group(function () {
 
+        // ✅ NEW: Property Interaction Tracking Routes
+        Route::get('/recently-viewed', [PropertyController::class, 'getRecentlyViewed']);
+        Route::get('/my-viewing-stats', [PropertyController::class, 'getMyViewingStats']);
+
         Route::put('/update/mobile/{id}', [PropertyController::class, 'updateMobile']);
         Route::patch('/update/mobile/{id}', [PropertyController::class, 'updateMobile']);
 
