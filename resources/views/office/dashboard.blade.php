@@ -181,10 +181,10 @@
                     <a href="{{ route('office.property.edit', $property->id) }}" class="property-card">
                         <div class="property-image-wrapper">
                             <img src="{{ $firstImage }}" alt="{{ $name }}" class="property-image">
-                            <div class="property-views-badge">
+                            {{-- <div class="property-views-badge">
                                 <i class="fas fa-eye"></i>
                                 {{ number_format($property->views ?? 0) }}
-                            </div>
+                            </div> --}}
                         </div>
 
                         <div class="property-details">

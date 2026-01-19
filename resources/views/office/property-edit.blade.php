@@ -837,16 +837,16 @@
                 @endif
 
                 <div class="stats-grid">
-                    <div class="stat-item">
+                    {{-- <div class="stat-item">
                         <div class="stat-icon"><i class="fas fa-eye"></i></div>
                         <div class="stat-value">{{ number_format($property->views ?? 0) }}</div>
                         <div class="stat-label">Views</div>
-                    </div>
-                    <div class="stat-item">
+                    </div> --}}
+                    {{-- <div class="stat-item">
                         <div class="stat-icon"><i class="fas fa-heart"></i></div>
                         <div class="stat-value">{{ number_format($property->favorites_count ?? 0) }}</div>
                         <div class="stat-label">Favorites</div>
-                    </div>
+                    </div> --}}
                     <div class="stat-item">
                         <div class="stat-icon"><i class="fas fa-star"></i></div>
                         <div class="stat-value">{{ number_format($property->rating ?? 0, 1) }}</div>
