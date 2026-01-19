@@ -14,9 +14,17 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use App\Services\PropertyInteractionService; // <--- ADD THIS
 
 class PropertyController extends Controller
 {
+
+    protected $interactionService;
+
+    public function __construct(PropertyInteractionService $interactionService)
+    {
+        $this->interactionService = $interactionService;
+    }
     public function index(Request $request)
     {
         try {
