@@ -38,11 +38,15 @@
         border-radius: 14px;
         overflow: hidden;
         transition: all 0.3s;
+        /* Added cursor pointer to indicate clickability */
+        cursor: pointer;
+        position: relative;
     }
 
     .property-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 12px 40px rgba(48,59,151,0.15);
+        border-color: #303b97;
     }
 
     .property-image {
@@ -67,6 +71,7 @@
         font-weight: 600;
         background: white;
         color: #22c55e;
+        z-index: 2; /* Ensure it sits above image */
     }
 
     .property-status.sold {
@@ -120,6 +125,9 @@
     .property-actions {
         display: flex;
         gap: 8px;
+        /* Ensure actions sit on top */
+        position: relative;
+        z-index: 5;
     }
 
     .btn-edit {
@@ -220,58 +228,70 @@
 @if($properties && $properties->count() > 0)
     <div class="properties-grid">
       @foreach($properties as $property)
-<div class="property-card">
-    @if($property->images && count($property->images) > 0)
-        <img src="{{ $property->images[0] }}" alt="{{ $property->name['en'] ?? 'Property' }}" class="property-image" style="object-fit: cover;">
-    @else
-        <div class="property-image">
-            <i class="fas fa-home"></i>
-        </div>
-    @endif
+        {{--
+            1. Added onclick event to redirect to edit page
+            2. Added style="cursor: pointer" via CSS class
+        --}}
+        <div class="property-card" onclick="window.location.href='{{ route('agent.property.edit', $property->id) }}'">
 
-    <div class="property-status {{ $property->status == 'sold' ? 'sold' : '' }}">
-        {{ ucfirst($property->status ?? 'available') }}
-    </div>
+            @if($property->images && count($property->images) > 0)
+                <img src="{{ $property->images[0] }}" alt="{{ $property->name['en'] ?? 'Property' }}" class="property-image" style="object-fit: cover;">
+            @else
+                <div class="property-image">
+                    <i class="fas fa-home"></i>
+                </div>
+            @endif
 
-    <div class="property-content">
-        <div class="property-title">{{ $property->name['en'] ?? 'Untitled Property' }}</div>
-
-        <div class="property-location">
-            <i class="fas fa-map-marker-alt"></i>
-            {{ $property->address_details['city']['en'] ?? 'Unknown' }}, {{ $property->address_details['district']['en'] ?? '' }}
-        </div>
-
-        <div class="property-price">
-            {{ number_format($property->price['iqd'] ?? 0) }} IQD
-        </div>
-
-        <div class="property-features">
-            <div class="feature">
-                <i class="fas fa-bed"></i> {{ $property->rooms['bedroom']['count'] ?? 0 }}
+            <div class="property-status {{ $property->status == 'sold' ? 'sold' : '' }}">
+                {{ ucfirst($property->status ?? 'available') }}
             </div>
-            <div class="feature">
-                <i class="fas fa-bath"></i> {{ $property->rooms['bathroom']['count'] ?? 0 }}
-            </div>
-            <div class="feature">
-                <i class="fas fa-ruler-combined"></i> {{ $property->area ?? 0 }}m²
-            </div>
-        </div>
 
-        <div class="property-actions">
-            <a href="{{ route('agent.property.edit', $property->id) }}" class="btn-edit">
-                <i class="fas fa-edit"></i> Edit
-            </a>
-            <form action="{{ route('agent.property.delete', $property->id) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete this property?')">
-                @csrf
-                @method('DELETE')
-                <button type="submit" class="btn-delete">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </form>
+            <div class="property-content">
+                <div class="property-title">{{ $property->name['en'] ?? 'Untitled Property' }}</div>
+
+                <div class="property-location">
+                    <i class="fas fa-map-marker-alt"></i>
+                    {{ $property->address_details['city']['en'] ?? 'Unknown' }}, {{ $property->address_details['district']['en'] ?? '' }}
+                </div>
+
+                <div class="property-price">
+                    ${{ number_format($property->price['usd'] ?? 0) }}
+                </div>
+
+                <div class="property-features">
+                    <div class="feature">
+                        <i class="fas fa-bed"></i> {{ $property->rooms['bedroom']['count'] ?? 0 }}
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-bath"></i> {{ $property->rooms['bathroom']['count'] ?? 0 }}
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-ruler-combined"></i> {{ $property->area ?? 0 }}m²
+                    </div>
+                </div>
+
+                <div class="property-actions">
+                    {{-- Edit Button (Technically redundant now, but good for UX) --}}
+                    <a href="{{ route('agent.property.edit', $property->id) }}" class="btn-edit">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+
+                    {{--
+                        IMPORTANT:
+                        Added onclick="event.stopPropagation()" to the FORM.
+                        This prevents the card's onclick (redirect) from firing when you click Delete.
+                    --}}
+                    <form action="{{ route('agent.property.delete', $property->id) }}" method="POST" style="margin: 0;" onsubmit="return confirm('Are you sure you want to delete this property?')" onclick="event.stopPropagation()">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn-delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
-@endforeach
+      @endforeach
     </div>
 
     <div style="margin-top: 32px;">

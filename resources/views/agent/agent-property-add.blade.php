@@ -192,6 +192,14 @@
     }
 
     /* --- Map Section --- */
+    .map-wrapper {
+        transition: all 0.3s ease;
+    }
+
+    .map-wrapper.hidden {
+        display: none;
+    }
+
     .map-container {
         width: 100%;
         height: 400px;
@@ -445,14 +453,16 @@
 
             {{-- Core Details --}}
             <div class="form-grid" style="margin-top: 24px;">
+                {{-- PRICE SECTIONS: SEPARATE & REQUIRED --}}
                 <div class="form-group">
                     <label class="form-label">Price (IQD)<span class="required">*</span></label>
                     <input type="number" name="price" class="form-input" placeholder="e.g., 150000000" min="0" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Price (USD)</label>
-                    <input type="number" name="price_usd" class="form-input" placeholder="e.g., 100000" min="0">
+                    <label class="form-label">Price (USD)<span class="required">*</span></label>
+                    <input type="number" name="price_usd" class="form-input" placeholder="e.g., 100000" min="0" required>
                 </div>
+
                 <div class="form-group">
                     <label class="form-label">Property Type<span class="required">*</span></label>
                     <select name="property_type" class="form-select" required>
@@ -493,6 +503,7 @@
                 <i class="fas fa-map-marker-alt"></i> Location Information
             </h3>
 
+            {{-- City and Area are ALWAYS required for filtering --}}
             <div class="form-grid" style="margin-bottom: 24px;">
                 <div class="form-group">
                     <label class="form-label">Select City <span class="required">*</span></label>
@@ -508,26 +519,40 @@
                 </div>
             </div>
 
-            <div class="map-instructions">
-                <i class="fas fa-info-circle" style="font-size: 20px;"></i>
-                <span>Select a City and Area above to auto-position the map. You can also drag the pin manually.</span>
+            {{-- MAP TOGGLE SWITCH --}}
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label class="form-label" style="display:flex; align-items:center; gap:12px; cursor:pointer; font-size: 16px;">
+                    <input type="checkbox" name="has_map" id="has_map_toggle" value="1" checked style="width:20px; height:20px; accent-color: #303b97;">
+                    <i class="fas fa-map-marked-alt" style="color:#303b97;"></i> Pin Location on Map
+                </label>
             </div>
 
-            <div class="map-container">
-                <div id="map"></div>
+            {{-- WRAPPER FOR MAP CONTENT --}}
+            <div id="map_content_wrapper" class="map-wrapper">
+                <div class="map-instructions">
+                    <i class="fas fa-info-circle" style="font-size: 20px;"></i>
+                    <span>Select a City and Area above to auto-position the map. You can also drag the pin manually.</span>
+                </div>
+
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+
+                <div class="form-grid">
+                    {{-- Coordinates --}}
+                    <div class="form-group">
+                        <label class="form-label">Latitude <span class="required">*</span></label>
+                        <input type="number" name="latitude" id="latitude" class="form-input" step="any" readonly required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Longitude <span class="required">*</span></label>
+                        <input type="number" name="longitude" id="longitude" class="form-input" step="any" readonly required>
+                    </div>
+                </div>
             </div>
+            {{-- END MAP WRAPPER --}}
 
-            <div class="form-grid">
-                {{-- Coordinates --}}
-                <div class="form-group">
-                    <label class="form-label">Latitude <span class="required">*</span></label>
-                    <input type="number" name="latitude" id="latitude" class="form-input" step="any" readonly required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Longitude <span class="required">*</span></label>
-                    <input type="number" name="longitude" id="longitude" class="form-input" step="any" readonly required>
-                </div>
-
+            <div class="form-grid" style="margin-top: 24px;">
                 {{-- English Location Names (Auto-filled) --}}
                 <div class="form-group">
                     <label class="form-label">City (EN)</label>
@@ -545,7 +570,7 @@
                 <input type="hidden" name="district_ku" id="district_ku">
 
                 <div class="form-group form-grid-full">
-                    <label class="form-label">Full Address Details</label>
+                    <label class="form-label">Full Address Details <span class="required">*</span></label>
                     <input type="text" name="address" class="form-input" placeholder="Street number, building name, floor number, landmark..." required>
                 </div>
             </div>
@@ -752,8 +777,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             document.getElementById('city_ar').value = selectedOption.dataset.nameAr;
             document.getElementById('city_ku').value = selectedOption.dataset.nameKu;
 
-            // Move Map
-            if(selectedOption.dataset.lat) {
+            // Move Map (only if map is visible/initialized)
+            if(selectedOption.dataset.lat && map) {
                 moveMapTo(selectedOption.dataset.lat, selectedOption.dataset.lng);
             }
 
@@ -803,8 +828,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             document.getElementById('district_ar').value = selectedOption.dataset.nameAr;
             document.getElementById('district_ku').value = selectedOption.dataset.nameKu;
 
-            // Zoom Map to Area
-            if(selectedOption.dataset.lat) {
+            // Zoom Map to Area (only if map is visible)
+            if(selectedOption.dataset.lat && map) {
                 moveMapTo(selectedOption.dataset.lat, selectedOption.dataset.lng);
                 map.setZoom(15);
             }
@@ -812,7 +837,44 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 });
 
-// --- 3. LANGUAGE TABS ---
+// --- 3. MAP TOGGLE LOGIC ---
+document.addEventListener('DOMContentLoaded', function() {
+    const mapToggle = document.getElementById('has_map_toggle');
+    const mapWrapper = document.getElementById('map_content_wrapper');
+    const latInput = document.getElementById('latitude');
+    const lngInput = document.getElementById('longitude');
+
+    function toggleMap() {
+        if (mapToggle.checked) {
+            // Show Map
+            mapWrapper.classList.remove('hidden');
+            latInput.setAttribute('required', 'required');
+            lngInput.setAttribute('required', 'required');
+
+            // Resize trigger for Google Maps (prevents gray box)
+            if(map) {
+                setTimeout(() => {
+                    google.maps.event.trigger(map, "resize");
+                    map.setCenter(marker.getPosition());
+                }, 100);
+            }
+        } else {
+            // Hide Map
+            mapWrapper.classList.add('hidden');
+            latInput.removeAttribute('required');
+            lngInput.removeAttribute('required');
+
+            // Clear values (optional, but ensures cleaner submission)
+            latInput.value = '';
+            lngInput.value = '';
+        }
+    }
+
+    mapToggle.addEventListener('change', toggleMap);
+    toggleMap(); // Run on load
+});
+
+// --- 4. LANGUAGE TABS ---
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.language-tab').forEach(tab => {
         tab.addEventListener('click', function(e) {
@@ -826,7 +888,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// --- 4. IMAGE UPLOAD LOGIC ---
+// --- 5. IMAGE UPLOAD LOGIC ---
 (function() {
     'use strict';
     const uploadZone = document.getElementById('uploadZone');

@@ -361,7 +361,6 @@
         </div>
     </form>
 </div>
-
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
 
 <script>
@@ -398,26 +397,34 @@
         }
     });
 
-    // --- 2. SCHEDULE LOGIC ---
+    // --- 2. SCHEDULE LOGIC (FIXED) ---
     const days = [
         {id: 'monday', n: 'Monday'}, {id: 'tuesday', n: 'Tuesday'}, {id: 'wednesday', n: 'Wednesday'},
         {id: 'thursday', n: 'Thursday'}, {id: 'friday', n: 'Friday'}, {id: 'saturday', n: 'Saturday'}, {id: 'sunday', n: 'Sunday'}
     ];
 
-    const currentSchedule = @json($agent->working_hours);
+    // Handle potential double-encoding or null values safely
+    const rawSchedule = {!! json_encode($agent->working_hours) !!};
+    let currentSchedule = {};
+
+    if (typeof rawSchedule === 'string') {
+        try {
+            currentSchedule = JSON.parse(rawSchedule);
+        } catch (e) { currentSchedule = {}; }
+    } else if (typeof rawSchedule === 'object' && rawSchedule !== null) {
+        currentSchedule = rawSchedule;
+    }
 
     function initSchedule() {
-        let data = {};
-        try {
-            data = typeof currentSchedule === 'string' ? JSON.parse(currentSchedule) : (currentSchedule || {});
-        } catch(e) { console.error('Schedule parse error', e); }
-
         const grid = document.getElementById('smartSchedule');
+        grid.innerHTML = ''; // Clear existing to prevent duplicates
 
         days.forEach(day => {
-            const val = data[day.id];
+            const val = currentSchedule[day.id];
+            // Check if open (exists and not 'closed')
             const isOpen = val && val !== 'closed';
-            let [start, end] = isOpen ? (typeof val === 'string' ? val.split('-') : ["09:00", "18:00"]) : ["09:00", "18:00"];
+            // Default times or saved times
+            let [start, end] = isOpen ? val.split('-') : ["09:00", "18:00"];
 
             const item = document.createElement('div');
             item.className = `schedule-item ${isOpen ? 'is-active' : ''}`;
@@ -447,7 +454,29 @@
         document.getElementById(`e-${id}`).disabled = !active;
     };
 
-    // --- 3. GOOGLE MAPS ---
+    // --- 3. FORM SUBMIT HANDLER (FIXED) ---
+    document.getElementById('mainProfileForm').addEventListener('submit', function(e) {
+        // Prevent default temporarily to debug if needed, but here we just process data
+        const schedule = {};
+        days.forEach(d => {
+            const sw = document.getElementById(`sw-${d.id}`);
+            if(sw && sw.checked) {
+                const start = document.getElementById(`s-${d.id}`).value;
+                const end = document.getElementById(`e-${d.id}`).value;
+                schedule[d.id] = `${start}-${end}`;
+            } else {
+                schedule[d.id] = "closed";
+            }
+        });
+
+        // Populate the hidden input with the JSON string
+        const jsonStr = JSON.stringify(schedule);
+        document.getElementById('working_hours_json').value = jsonStr;
+
+        console.log("Submitting Schedule:", jsonStr); // For debugging
+    });
+
+    // --- 4. GOOGLE MAPS ---
     function initMap() {
         const initialLat = parseFloat("{{ old('latitude', $agent->latitude ?? 36.1911) }}");
         const initialLng = parseFloat("{{ old('longitude', $agent->longitude ?? 44.0091) }}");
@@ -456,7 +485,7 @@
         const map = new google.maps.Map(document.getElementById("map"), {
             zoom: 15,
             center: myLatLng,
-            styles: [{"featureType":"all","elementType":"geometry.fill","stylers":[{"weight":"2.00"}]},{"featureType":"all","elementType":"geometry.stroke","stylers":[{"color":"#9c9c9c"}]},{"featureType":"all","elementType":"labels.text","stylers":[{"visibility":"on"}]},{"featureType":"landscape","elementType":"all","stylers":[{"color":"#f2f2f2"}]},{"featureType":"landscape","elementType":"geometry.fill","stylers":[{"color":"#ffffff"}]},{"featureType":"landscape","elementType":"geometry.stroke","stylers":[{"color":"#afafaf"}]},{"featureType":"poi","elementType":"all","stylers":[{"visibility":"off"}]},{"featureType":"road","elementType":"all","stylers":[{"saturation":-100},{"lightness":45}]},{"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#eeeeee"}]},{"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#7b7b7b"}]},{"featureType":"road","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]},{"featureType":"road.highway","elementType":"all","stylers":[{"visibility":"simplified"}]},{"featureType":"road.arterial","elementType":"labels.icon","stylers":[{"visibility":"off"}]},{"featureType":"transit","elementType":"all","stylers":[{"visibility":"off"}]},{"featureType":"water","elementType":"all","stylers":[{"color":"#46bcec"},{"visibility":"on"}]},{"featureType":"water","elementType":"geometry.fill","stylers":[{"color":"#c2c7e9"}]},{"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#070707"}]},{"featureType":"water","elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"}]}]
+            styles: [{"featureType":"water","elementType":"geometry.fill","stylers":[{"color":"#c2c7e9"}]}] // Simplified style
         });
 
         const marker = new google.maps.Marker({
@@ -473,44 +502,34 @@
             }
         });
 
-        google.maps.event.addListener(marker, 'dragend', function(e) {
-            document.getElementById('lat').value = e.latLng.lat().toFixed(7);
-            document.getElementById('lng').value = e.latLng.lng().toFixed(7);
-        });
+        const updateInputs = (latLng) => {
+            document.getElementById('lat').value = latLng.lat().toFixed(7);
+            document.getElementById('lng').value = latLng.lng().toFixed(7);
+        };
 
-        map.addListener('click', function(e) {
+        google.maps.event.addListener(marker, 'dragend', (e) => updateInputs(e.latLng));
+        map.addListener('click', (e) => {
             marker.setPosition(e.latLng);
-            document.getElementById('lat').value = e.latLng.lat().toFixed(7);
-            document.getElementById('lng').value = e.latLng.lng().toFixed(7);
+            updateInputs(e.latLng);
         });
     }
 
-    // --- 4. FORM SUBMIT HANDLER ---
-    document.getElementById('mainProfileForm').addEventListener('submit', function() {
-        const schedule = {};
-        days.forEach(d => {
-            if(document.getElementById(`sw-${d.id}`).checked) {
-                schedule[d.id] = document.getElementById(`s-${d.id}`).value + "-" + document.getElementById(`e-${d.id}`).value;
-            } else {
-                schedule[d.id] = "closed";
-            }
-        });
-        document.getElementById('working_hours_json').value = JSON.stringify(schedule);
-    });
-
     // --- 5. IMAGE PREVIEWS ---
     function setupPrev(input, prev) {
-        document.getElementById(input).addEventListener('change', function(e) {
-            if (e.target.files && e.target.files[0]) {
-                const reader = new FileReader();
-                reader.onload = (ev) => document.getElementById(prev).innerHTML = `<img src="${ev.target.result}">`;
-                reader.readAsDataURL(e.target.files[0]);
-            }
-        });
+        const fileInput = document.getElementById(input);
+        if(fileInput) {
+            fileInput.addEventListener('change', function(e) {
+                if (e.target.files && e.target.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => document.getElementById(prev).innerHTML = `<img src="${ev.target.result}">`;
+                    reader.readAsDataURL(e.target.files[0]);
+                }
+            });
+        }
     }
     setupPrev('pImg', 'pPrev');
     setupPrev('bImg', 'bPrev');
 
+    // Init everything
     document.addEventListener('DOMContentLoaded', initSchedule);
 </script>
-@endsection

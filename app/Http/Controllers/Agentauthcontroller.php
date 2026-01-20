@@ -184,61 +184,71 @@ class AgentAuthController extends Controller
 
     public function storeProperty(Request $request)
     {
-
+        // 1. Validate Subscription
         $validationRedirect = $this->validateSubscription();
         if ($validationRedirect) {
             return $validationRedirect;
         }
-        // 1. Get the authenticated Agent
+
         $agent = Auth::guard('agent')->user();
 
         // 2. Validate the request
-        // We added 'price_usd', 'title_ar', 'title_ku', and more to ensure everything is caught
         $request->validate([
-            'title_en' => 'required|string|max:255',
-            'title_ar' => 'nullable|string|max:255',
-            'title_ku' => 'nullable|string|max:255',
+            'title_en'       => 'required|string|max:255',
+            'title_ar'       => 'nullable|string|max:255',
+            'title_ku'       => 'nullable|string|max:255',
             'description_en' => 'nullable|string',
             'description_ar' => 'nullable|string',
             'description_ku' => 'nullable|string',
-            'price' => 'required|numeric|min:0',
-            'price_usd' => 'nullable|numeric|min:0', // Manual USD input
-            'property_type' => 'required|string',
-            'status' => 'required|string',
-            'city_en' => 'required|string',
-            'district_en' => 'required|string',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'area' => 'nullable|numeric',
-            'bedrooms' => 'nullable|integer',
-            'bathrooms' => 'nullable|integer',
-            'floors' => 'nullable|integer',
-            'year_built' => 'nullable|integer',
-            'images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+
+            // Prices
+            'price'          => 'required|numeric|min:0',
+            'price_usd'      => 'required|numeric|min:0',
+
+            'property_type'  => 'required|string',
+            'status'         => 'required|string',
+            'city_en'        => 'required|string',
+            'district_en'    => 'required|string',
+
+            // Map Validation
+            'has_map'        => 'nullable|boolean',
+            'latitude'       => 'required_if:has_map,1|nullable|numeric',
+            'longitude'      => 'required_if:has_map,1|nullable|numeric',
+
+            'area'           => 'nullable|numeric',
+            'bedrooms'       => 'nullable|integer',
+            'bathrooms'      => 'nullable|integer',
+            'floors'         => 'nullable|integer',
+            'year_built'     => 'nullable|integer',
+            'images.*'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
         // 3. Handle image uploads
         $imagePaths = [];
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
-                // Stores in storage/app/public/properties
                 $path = $image->store('properties', 'public');
-                // Generates a full URL for the Flutter app to consume
                 $imagePaths[] = asset('storage/' . $path);
             }
         }
 
-        // 4. Currency Logic
-        $priceIQD = $request->price;
-        // If the user didn't provide a USD price, calculate it using the 1320 rate
-        $priceUSD = $request->filled('price_usd')
-            ? $request->price_usd
-            : round($priceIQD / 1320, 2);
-
-        // 5. Generate unique property ID (prop_YYYY_MM_DD_xxxxx)
+        // 4. Generate ID
         do {
             $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
         } while (DB::table('properties')->where('id', $propertyId)->exists());
+
+        // 5. Prepare Location Data
+        // FIX: Default to "[]" (empty JSON array) because database does not allow NULL
+        $locationsJson = json_encode([]);
+
+        if ($request->boolean('has_map') && $request->filled('latitude') && $request->filled('longitude')) {
+            $locationsJson = json_encode([
+                [
+                    'lat' => (float) $request->latitude,
+                    'lng' => (float) $request->longitude,
+                ]
+            ]);
+        }
 
         // 6. Database Insertion
         try {
@@ -247,46 +257,35 @@ class AgentAuthController extends Controller
                 'owner_id' => $agent->id,
                 'owner_type' => 'App\Models\Agent',
 
-                // Multi-language Name
                 'name' => json_encode([
                     'en' => $request->title_en,
                     'ar' => $request->title_ar ?? '',
                     'ku' => $request->title_ku ?? '',
                 ]),
 
-                // Multi-language Description
                 'description' => json_encode([
                     'en' => $request->description_en ?? '',
                     'ar' => $request->description_ar ?? '',
                     'ku' => $request->description_ku ?? '',
                 ]),
 
-                // Property Category
                 'type' => json_encode([
                     'category' => $request->property_type,
                 ]),
 
-                // Structured Price (Crucial for Flutter)
                 'price' => json_encode([
-                    'iqd' => (float) $priceIQD,
-                    'usd' => (float) $priceUSD,
+                    'iqd' => (float) $request->price,
+                    'usd' => (float) $request->price_usd,
                 ]),
 
-                // Room details
                 'rooms' => json_encode([
                     'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
                     'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
                 ]),
 
-                // Map Coordinates
-                'locations' => json_encode([
-                    [
-                        'lat' => (float) $request->latitude,
-                        'lng' => (float) $request->longitude,
-                    ]
-                ]),
+                // FIX: Using the variable that is guaranteed to be a string "[]" or valid JSON
+                'locations' => $locationsJson,
 
-                // Detailed Address Structure
                 'address_details' => json_encode([
                     'city' => [
                         'en' => $request->city_en,
@@ -300,19 +299,18 @@ class AgentAuthController extends Controller
                     ],
                 ]),
 
-                // Static/Standard Fields
                 'listing_type' => 'sell',
                 'area' => (float) ($request->area ?? 0),
-                'furnished' => 0,
-                'electricity' => 1,
-                'water' => 1,
-                'internet' => 0,
+                'furnished' => $request->boolean('furnished') ? 1 : 0,
+                'electricity' => $request->boolean('electricity') ? 1 : 0,
+                'water' => $request->boolean('water') ? 1 : 0,
+                'internet' => $request->boolean('internet') ? 1 : 0,
                 'images' => json_encode($imagePaths),
                 'address' => $request->address ?? null,
                 'floor_number' => (int) ($request->floors ?? 0),
                 'year_built' => (int) ($request->year_built ?? null),
 
-                // Default JSON fields to prevent null errors in the app
+                // Defaults
                 'features' => json_encode([]),
                 'amenities' => json_encode([]),
                 'furnishing_details' => json_encode(['status' => 'unfurnished']),
@@ -330,7 +328,6 @@ class AgentAuthController extends Controller
                     ]
                 ]),
 
-                // System & Metadata
                 'verified' => 0,
                 'is_active' => 1,
                 'published' => 1,
@@ -348,9 +345,8 @@ class AgentAuthController extends Controller
 
             return redirect()->route('agent.properties')->with('success', 'Property added successfully!');
         } catch (\Exception $e) {
-            // Log the error if something goes wrong with the JSON or DB
             Log::error('Property Store Error: ' . $e->getMessage());
-            return back()->withInput()->with('error', 'Failed to add property. Please check your data.');
+            return back()->withInput()->with('error', 'Failed to add property. ' . $e->getMessage());
         }
     }
 
@@ -366,11 +362,13 @@ class AgentAuthController extends Controller
         return view('agent.agent-property-edit', compact('property'));
     }
 
+    // ... inside AgentAuthController class
+
     public function updateProperty(Request $request, $id)
     {
         $agent = Auth::guard('agent')->user();
 
-        // 1. Find the property and ensure this agent owns it
+        // 1. Find Property
         $property = DB::table('properties')
             ->where('id', $id)
             ->where('owner_id', $agent->id)
@@ -381,44 +379,58 @@ class AgentAuthController extends Controller
             return redirect()->route('agent.properties')->with('error', 'Property not found or unauthorized.');
         }
 
-        // 2. Validate the request (Matching your Add form)
+        // 2. Validate (Updated to match Add Property logic)
         $request->validate([
-            'title_en' => 'required|string|max:255',
-            'price' => 'required|numeric|min:0',
-            'price_usd' => 'nullable|numeric|min:0',
-            'property_type' => 'required|string',
-            'status' => 'required|string',
-            'city_en' => 'required|string',
-            'district_en' => 'required|string',
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
-            'area' => 'nullable|numeric',
-            'bedrooms' => 'nullable|integer',
-            'bathrooms' => 'nullable|integer',
+            'title_en'       => 'required|string|max:255',
+            'title_ar'       => 'nullable|string|max:255',
+            'title_ku'       => 'nullable|string|max:255',
+            'description_en' => 'nullable|string',
+            'description_ar' => 'nullable|string',
+            'description_ku' => 'nullable|string',
+
+            // Prices: Both Required & Manual
+            'price'          => 'required|numeric|min:0', // IQD
+            'price_usd'      => 'required|numeric|min:0', // USD
+
+            'property_type'  => 'required|string',
+            'status'         => 'required|string',
+            'city_en'        => 'required|string',
+            'district_en'    => 'required|string',
+
+            // Map Logic
+            'has_map'        => 'nullable|boolean',
+            'latitude'       => 'required_if:has_map,1|nullable|numeric',
+            'longitude'      => 'required_if:has_map,1|nullable|numeric',
+
+            'area'           => 'nullable|numeric',
+            'bedrooms'       => 'nullable|integer',
+            'bathrooms'      => 'nullable|integer',
+            'floors'         => 'nullable|integer',
+            'year_built'     => 'nullable|integer',
+            'images.*'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
-        // 3. Handle Image Logic
+        // 3. Handle Images (Remove deleted, Add new)
         $currentImages = json_decode($property->images, true) ?? [];
 
-        // Remove marked images from the array
+        // Remove images marked for deletion
         if ($request->filled('remove_images')) {
             $removeIndices = json_decode($request->remove_images, true);
             if (is_array($removeIndices)) {
-                rsort($removeIndices); // Sort descending to prevent index shifting
+                rsort($removeIndices);
                 foreach ($removeIndices as $index) {
                     if (isset($currentImages[$index])) {
-                        // Optional: Delete the actual file from storage
+                        // Optional: Delete physical file
                         $filePath = str_replace(asset('storage/'), '', $currentImages[$index]);
                         Storage::disk('public')->delete($filePath);
-
                         unset($currentImages[$index]);
                     }
                 }
-                $currentImages = array_values($currentImages); // Re-index array
+                $currentImages = array_values($currentImages);
             }
         }
 
-        // Add new uploaded images
+        // Add new images
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('properties', 'public');
@@ -426,13 +438,16 @@ class AgentAuthController extends Controller
             }
         }
 
-        // 4. Currency Logic
-        $priceIQD = $request->price;
-        $priceUSD = $request->filled('price_usd')
-            ? $request->price_usd
-            : round($priceIQD / 1320, 2);
+        // 4. Map Logic (Empty JSON if disabled)
+        $locationsJson = json_encode([]);
+        if ($request->boolean('has_map') && $request->filled('latitude') && $request->filled('longitude')) {
+            $locationsJson = json_encode([[
+                'lat' => (float) $request->latitude,
+                'lng' => (float) $request->longitude,
+            ]]);
+        }
 
-        // 5. Execute the Update
+        // 5. Update Database
         try {
             DB::table('properties')
                 ->where('id', $id)
@@ -447,19 +462,18 @@ class AgentAuthController extends Controller
                         'ar' => $request->description_ar ?? '',
                         'ku' => $request->description_ku ?? '',
                     ]),
+                    // Update Prices (Manual USD)
                     'price' => json_encode([
-                        'iqd' => (float) $priceIQD,
-                        'usd' => (float) $priceUSD,
+                        'iqd' => (float) $request->price,
+                        'usd' => (float) $request->price_usd,
                     ]),
                     'type' => json_encode(['category' => $request->property_type]),
                     'rooms' => json_encode([
                         'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
                         'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
                     ]),
-                    'locations' => json_encode([[
-                        'lat' => (float) $request->latitude,
-                        'lng' => (float) $request->longitude,
-                    ]]),
+                    // Update Location (Empty or Coordinates)
+                    'locations' => $locationsJson,
                     'address_details' => json_encode([
                         'city' => [
                             'en' => $request->city_en,
@@ -478,6 +492,10 @@ class AgentAuthController extends Controller
                     'floor_number' => (int) ($request->floors ?? 0),
                     'year_built' => (int) ($request->year_built ?? null),
                     'status' => $request->status,
+                    'furnished' => $request->boolean('furnished') ? 1 : 0,
+                    'electricity' => $request->boolean('electricity') ? 1 : 0,
+                    'water' => $request->boolean('water') ? 1 : 0,
+                    'internet' => $request->boolean('internet') ? 1 : 0,
                     'updated_at' => now(),
                 ]);
 
@@ -863,201 +881,86 @@ class AgentAuthController extends Controller
 
     public function updateProfile(Request $request)
     {
-        Log::info('UPDATE PROFILE STARTED');
-
         $agent = Auth::guard('agent')->user();
 
-        Log::info('Agent Retrieved', [
-            'agent_id' => $agent->id,
-            'agent_name' => $agent->agent_name,
-        ]);
-
-        Log::info('Request Data Received', [
-            'agent_name' => $request->agent_name,
-            'primary_phone' => $request->primary_phone,
-            'whatsapp_number' => $request->whatsapp_number,
-            'city' => $request->city,
-            'district' => $request->district,
-            'license_number' => $request->license_number,
-            'years_experience' => $request->years_experience,
-            'has_profile_image' => $request->hasFile('profile_image'),
-            'has_bio_image' => $request->hasFile('bio_image'),
-        ]);
-
-        // Validate input
-        $validated = $request->validate([
+        $request->validate([
             'agent_name' => 'required|string|max:255',
             'primary_phone' => 'required|string|max:20',
             'whatsapp_number' => 'nullable|string|max:20',
             'city' => 'required|string',
-            'district' => 'required|string|max:255',
+            'district' => 'nullable|string',
             'license_number' => 'nullable|string',
             'years_experience' => 'nullable|integer|min:0',
             'agent_bio' => 'nullable|string|max:1000',
             'office_address' => 'nullable|string',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            'working_hours' => 'nullable|json',
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120', // Increased max size to 5MB
+            'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+            'working_hours' => 'nullable', // Removed 'json' rule to avoid conflict if sent as array
         ]);
 
-        Log::info('Validation Passed', ['validated_data' => $validated]);
-
         try {
-            // Start database transaction
-            DB::beginTransaction();
-
-            // Handle profile image upload
+            // --- 1. PROFILE IMAGE FIX ---
             if ($request->hasFile('profile_image')) {
-                Log::info('Processing Profile Image');
-
-                // Delete old image if exists
-                if ($agent->profile_image) {
-                    $oldPath = str_replace([
-                        asset('storage') . '/',
-                        url('storage') . '/',
-                        'storage/'
-                    ], '', $agent->profile_image);
-
-                    Log::info('Deleting old profile image', ['path' => $oldPath]);
-
-                    if (Storage::disk('public')->exists($oldPath)) {
-                        Storage::disk('public')->delete($oldPath);
-                        Log::info('Old profile image deleted');
-                    }
-                }
-
-                // Store new image and save ONLY the relative path
-                $path = $request->file('profile_image')->store('agents/profiles', 'public');
-                $agent->profile_image = $path;
-
-                Log::info('New profile image stored', [
-                    'path' => $path,
-                    'saved_as' => $agent->profile_image
-                ]);
-            }
-
-            // Handle bio image upload
-            if ($request->hasFile('bio_image')) {
-                Log::info('Processing Bio Image');
-
                 // Delete old image
-                if ($agent->bio_image) {
-                    $oldPath = str_replace([
-                        asset('storage') . '/',
-                        url('storage') . '/',
-                        'storage/'
-                    ], '', $agent->bio_image);
-
-                    Log::info('Deleting old bio image', ['path' => $oldPath]);
-
+                if ($agent->profile_image) {
+                    // Handle cases where 'storage/' might already be in the DB from previous bugs
+                    $oldPath = str_replace('storage/', '', $agent->profile_image);
                     if (Storage::disk('public')->exists($oldPath)) {
                         Storage::disk('public')->delete($oldPath);
-                        Log::info('Old bio image deleted');
                     }
                 }
-
-                // Store new image
-                $path = $request->file('bio_image')->store('agents/bio', 'public');
-                $agent->bio_image = $path;
-
-                Log::info('New bio image stored', [
-                    'path' => $path,
-                    'saved_as' => $agent->bio_image
-                ]);
+                // Store ONLY the relative path (e.g., 'agents/profiles/photo.jpg')
+                $agent->profile_image = $request->file('profile_image')->store('agents/profiles', 'public');
             }
 
-            Log::info('Updating Basic Fields');
-
-            // Update all fields from validated data
-            $agent->agent_name = $validated['agent_name'];
-            $agent->primary_phone = $validated['primary_phone'];
-            $agent->whatsapp_number = $validated['whatsapp_number'] ?? null;
-            $agent->city = $validated['city'];
-            $agent->district = $validated['district'];
-            $agent->license_number = $validated['license_number'] ?? null;
-            $agent->years_experience = $validated['years_experience'] ?? null;
-            $agent->agent_bio = $validated['agent_bio'] ?? null;
-            $agent->office_address = $validated['office_address'] ?? null;
-            $agent->latitude = $validated['latitude'] ?? null;
-            $agent->longitude = $validated['longitude'] ?? null;
-
-            Log::info('City and District Updated', [
-                'city' => $agent->city,
-                'district' => $agent->district
-            ]);
-
-            // Handle working hours
-            if ($request->has('working_hours')) {
-                Log::info('Saving Working Hours', [
-                    'working_hours' => $request->working_hours
-                ]);
-                $agent->working_hours = $request->working_hours;
+            // --- 2. BIO IMAGE FIX ---
+            if ($request->hasFile('bio_image')) {
+                if ($agent->bio_image) {
+                    $oldPath = str_replace('storage/', '', $agent->bio_image);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
+                $agent->bio_image = $request->file('bio_image')->store('agents/bio', 'public');
             }
 
-            // Check if anything changed
-            Log::info('Model Dirty Check', [
-                'is_dirty' => $agent->isDirty(),
-                'dirty_fields' => $agent->getDirty(),
-            ]);
+            // Update basic fields
+            $agent->agent_name = $request->agent_name;
+            $agent->primary_phone = $request->primary_phone;
+            $agent->whatsapp_number = $request->whatsapp_number;
+            $agent->city = $request->city;
+            $agent->district = $request->district;
+            $agent->license_number = $request->license_number;
+            $agent->years_experience = $request->years_experience;
+            $agent->agent_bio = $request->agent_bio;
+            $agent->office_address = $request->office_address;
+            $agent->latitude = $request->latitude;
+            $agent->longitude = $request->longitude;
 
-            // Save the model
-            $saveResult = $agent->save();
+            // --- 3. WORKING HOURS FIX ---
+            // We decode the JSON string from the form into an array before saving.
+            // This ensures Laravel casts it correctly if your model has 'working_hours' => 'array'
+            if ($request->filled('working_hours')) {
+                $agent->working_hours = json_decode($request->working_hours, true);
+            }
 
-            Log::info('Save Operation Result', [
-                'success' => $saveResult,
-                'agent_id' => $agent->id,
-            ]);
+            $agent->save();
 
-            // Verify the save worked by fetching fresh data
-            $freshAgent = Agent::find($agent->id);
-
-            Log::info('Fresh Data from Database', [
-                'agent_name' => $freshAgent->agent_name,
-                'city' => $freshAgent->city,
-                'district' => $freshAgent->district,
-                'years_experience' => $freshAgent->years_experience,
-                'profile_image' => $freshAgent->profile_image,
-                'bio_image' => $freshAgent->bio_image,
-                'working_hours' => $freshAgent->working_hours,
-            ]);
-
-            // Commit the transaction
-            DB::commit();
-            Log::info('Transaction Committed');
-
-            // CRITICAL: Force refresh the authenticated user
-            Auth::guard('agent')->setUser($freshAgent);
-
-            Log::info('Auth Guard Refreshed');
-
-            // Verify auth guard has latest data
-            $authAgent = Auth::guard('agent')->user();
-            Log::info('Auth Agent After Refresh', [
-                'agent_name' => $authAgent->agent_name,
-                'city' => $authAgent->city,
-                'district' => $authAgent->district,
-                'profile_image' => $authAgent->profile_image,
-            ]);
-
-            Log::info('UPDATE PROFILE SUCCESS');
+            // Refresh Auth to show new images immediately
+            Auth::guard('agent')->setUser($agent->fresh());
 
             return redirect()->route('agent.profile', $agent->id)
                 ->with('success', 'Profile updated successfully!');
-        } catch (\Exception $e) {
-            // Rollback on error
-            DB::rollBack();
-
-            Log::error('UPDATE PROFILE FAILED');
-            Log::error('Error Details', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+        } catch (Exception $e) {
+            Log::error('Agent profile update failed', [
+                'agent_id' => $agent->id,
+                'error' => $e->getMessage()
             ]);
 
             return back()->withInput()
-                ->with('error', 'Failed to update profile: ' . $e->getMessage());
+                ->with('error', 'Failed to update profile. ' . $e->getMessage());
         }
     }
 
