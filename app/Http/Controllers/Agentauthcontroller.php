@@ -863,18 +863,16 @@ class AgentAuthController extends Controller
 
     public function updateProfile(Request $request)
     {
-        Log::info('==================== UPDATE PROFILE STARTED ====================');
+        Log::info('UPDATE PROFILE STARTED');
 
         $agent = Auth::guard('agent')->user();
 
-        Log::info('1. Agent Retrieved from Auth', [
+        Log::info('Agent Retrieved', [
             'agent_id' => $agent->id,
             'agent_name' => $agent->agent_name,
-            'current_profile_image' => $agent->profile_image,
-            'current_bio_image' => $agent->bio_image,
         ]);
 
-        Log::info('2. Request Data Received', [
+        Log::info('Request Data Received', [
             'agent_name' => $request->agent_name,
             'primary_phone' => $request->primary_phone,
             'whatsapp_number' => $request->whatsapp_number,
@@ -882,21 +880,17 @@ class AgentAuthController extends Controller
             'district' => $request->district,
             'license_number' => $request->license_number,
             'years_experience' => $request->years_experience,
-            'agent_bio' => $request->agent_bio,
-            'office_address' => $request->office_address,
-            'latitude' => $request->latitude,
-            'longitude' => $request->longitude,
-            'working_hours' => $request->working_hours,
             'has_profile_image' => $request->hasFile('profile_image'),
             'has_bio_image' => $request->hasFile('bio_image'),
         ]);
 
-        $request->validate([
+        // Validate input
+        $validated = $request->validate([
             'agent_name' => 'required|string|max:255',
             'primary_phone' => 'required|string|max:20',
             'whatsapp_number' => 'nullable|string|max:20',
             'city' => 'required|string',
-            'district' => 'nullable|string',
+            'district' => 'required|string|max:255',
             'license_number' => 'nullable|string',
             'years_experience' => 'nullable|integer|min:0',
             'agent_bio' => 'nullable|string|max:1000',
@@ -908,162 +902,158 @@ class AgentAuthController extends Controller
             'working_hours' => 'nullable|json',
         ]);
 
-        Log::info('3. Validation Passed ✓');
+        Log::info('Validation Passed', ['validated_data' => $validated]);
 
         try {
-            // ✅ FIX: Handle profile image upload - STORE RELATIVE PATH ONLY
+            // Start database transaction
+            DB::beginTransaction();
+
+            // Handle profile image upload
             if ($request->hasFile('profile_image')) {
-                Log::info('4. Profile Image Upload Started');
+                Log::info('Processing Profile Image');
 
                 // Delete old image if exists
                 if ($agent->profile_image) {
-                    $oldPath = str_replace(asset('storage/'), '', $agent->profile_image);
-                    Log::info('4a. Deleting old profile image', ['old_path' => $oldPath]);
+                    $oldPath = str_replace([
+                        asset('storage') . '/',
+                        url('storage') . '/',
+                        'storage/'
+                    ], '', $agent->profile_image);
+
+                    Log::info('Deleting old profile image', ['path' => $oldPath]);
 
                     if (Storage::disk('public')->exists($oldPath)) {
                         Storage::disk('public')->delete($oldPath);
-                        Log::info('4b. Old profile image deleted successfully');
-                    } else {
-                        Log::warning('4b. Old profile image not found in storage');
+                        Log::info('Old profile image deleted');
                     }
                 }
 
-                // Store new image - ONLY save the path, not the full URL
+                // Store new image and save ONLY the relative path
                 $path = $request->file('profile_image')->store('agents/profiles', 'public');
-                $agent->profile_image = 'storage/' . $path; // ✅ Relative path
+                $agent->profile_image = $path;
 
-                Log::info('4c. New profile image stored', [
-                    'stored_path' => $path,
-                    'saved_to_db' => $agent->profile_image,
+                Log::info('New profile image stored', [
+                    'path' => $path,
+                    'saved_as' => $agent->profile_image
                 ]);
             }
 
-            // ✅ FIX: Handle bio image upload - STORE RELATIVE PATH ONLY
+            // Handle bio image upload
             if ($request->hasFile('bio_image')) {
-                Log::info('5. Bio Image Upload Started');
+                Log::info('Processing Bio Image');
 
-                // Delete old image if exists
+                // Delete old image
                 if ($agent->bio_image) {
-                    $oldPath = str_replace(asset('storage/'), '', $agent->bio_image);
-                    Log::info('5a. Deleting old bio image', ['old_path' => $oldPath]);
+                    $oldPath = str_replace([
+                        asset('storage') . '/',
+                        url('storage') . '/',
+                        'storage/'
+                    ], '', $agent->bio_image);
+
+                    Log::info('Deleting old bio image', ['path' => $oldPath]);
 
                     if (Storage::disk('public')->exists($oldPath)) {
                         Storage::disk('public')->delete($oldPath);
-                        Log::info('5b. Old bio image deleted successfully');
-                    } else {
-                        Log::warning('5b. Old bio image not found in storage');
+                        Log::info('Old bio image deleted');
                     }
                 }
 
-                // Store new image - ONLY save the path
+                // Store new image
                 $path = $request->file('bio_image')->store('agents/bio', 'public');
-                $agent->bio_image = 'storage/' . $path; // ✅ Relative path
+                $agent->bio_image = $path;
 
-                Log::info('5c. New bio image stored', [
-                    'stored_path' => $path,
-                    'saved_to_db' => $agent->bio_image,
+                Log::info('New bio image stored', [
+                    'path' => $path,
+                    'saved_as' => $agent->bio_image
                 ]);
             }
 
-            Log::info('6. Updating Basic Fields');
+            Log::info('Updating Basic Fields');
 
-            // Store OLD values before update
-            $oldValues = [
-                'agent_name' => $agent->agent_name,
-                'primary_phone' => $agent->primary_phone,
-                'whatsapp_number' => $agent->whatsapp_number,
+            // Update all fields from validated data
+            $agent->agent_name = $validated['agent_name'];
+            $agent->primary_phone = $validated['primary_phone'];
+            $agent->whatsapp_number = $validated['whatsapp_number'] ?? null;
+            $agent->city = $validated['city'];
+            $agent->district = $validated['district'];
+            $agent->license_number = $validated['license_number'] ?? null;
+            $agent->years_experience = $validated['years_experience'] ?? null;
+            $agent->agent_bio = $validated['agent_bio'] ?? null;
+            $agent->office_address = $validated['office_address'] ?? null;
+            $agent->latitude = $validated['latitude'] ?? null;
+            $agent->longitude = $validated['longitude'] ?? null;
+
+            Log::info('City and District Updated', [
                 'city' => $agent->city,
-                'district' => $agent->district,
-                'years_experience' => $agent->years_experience,
-                'working_hours' => $agent->working_hours,
-            ];
+                'district' => $agent->district
+            ]);
 
-            Log::info('6a. OLD Values', $oldValues);
-
-            // Update basic fields
-            $agent->agent_name = $request->agent_name;
-            $agent->primary_phone = $request->primary_phone;
-            $agent->whatsapp_number = $request->whatsapp_number;
-            $agent->city = $request->city;
-            $agent->district = $request->district;
-            $agent->license_number = $request->license_number;
-            $agent->years_experience = $request->years_experience;
-            $agent->agent_bio = $request->agent_bio;
-            $agent->office_address = $request->office_address;
-            $agent->latitude = $request->latitude;
-            $agent->longitude = $request->longitude;
-
-            // ✅ Save Working Hours
+            // Handle working hours
             if ($request->has('working_hours')) {
-                Log::info('7. Working Hours Detected', [
-                    'working_hours_json' => $request->working_hours
+                Log::info('Saving Working Hours', [
+                    'working_hours' => $request->working_hours
                 ]);
                 $agent->working_hours = $request->working_hours;
             }
 
-            // Store NEW values before save
-            $newValues = [
-                'agent_name' => $agent->agent_name,
-                'primary_phone' => $agent->primary_phone,
-                'whatsapp_number' => $agent->whatsapp_number,
-                'city' => $agent->city,
-                'district' => $agent->district,
-                'years_experience' => $agent->years_experience,
-                'working_hours' => $agent->working_hours,
-            ];
-
-            Log::info('6b. NEW Values (Before Save)', $newValues);
-
-            // Check if model is dirty (has changes)
-            Log::info('8. Model Dirty Check', [
+            // Check if anything changed
+            Log::info('Model Dirty Check', [
                 'is_dirty' => $agent->isDirty(),
                 'dirty_fields' => $agent->getDirty(),
             ]);
 
-            // ✅ FIX: Save and refresh the authenticated user
+            // Save the model
             $saveResult = $agent->save();
 
-            Log::info('9. Save Operation Result', [
-                'save_success' => $saveResult,
+            Log::info('Save Operation Result', [
+                'success' => $saveResult,
                 'agent_id' => $agent->id,
             ]);
 
-            // Verify data was actually saved
+            // Verify the save worked by fetching fresh data
             $freshAgent = Agent::find($agent->id);
-            Log::info('10. Fresh Agent Data from DB', [
+
+            Log::info('Fresh Data from Database', [
                 'agent_name' => $freshAgent->agent_name,
-                'primary_phone' => $freshAgent->primary_phone,
                 'city' => $freshAgent->city,
+                'district' => $freshAgent->district,
                 'years_experience' => $freshAgent->years_experience,
-                'working_hours' => $freshAgent->working_hours,
                 'profile_image' => $freshAgent->profile_image,
                 'bio_image' => $freshAgent->bio_image,
+                'working_hours' => $freshAgent->working_hours,
             ]);
 
-            // ✅ CRITICAL: Refresh the auth guard to reflect changes immediately
-            Auth::guard('agent')->setUser($agent->fresh());
+            // Commit the transaction
+            DB::commit();
+            Log::info('Transaction Committed');
 
-            Log::info('11. Auth Guard Refreshed');
+            // CRITICAL: Force refresh the authenticated user
+            Auth::guard('agent')->setUser($freshAgent);
 
+            Log::info('Auth Guard Refreshed');
+
+            // Verify auth guard has latest data
             $authAgent = Auth::guard('agent')->user();
-            Log::info('12. Auth Agent After Refresh', [
+            Log::info('Auth Agent After Refresh', [
                 'agent_name' => $authAgent->agent_name,
                 'city' => $authAgent->city,
-                'working_hours' => $authAgent->working_hours,
+                'district' => $authAgent->district,
+                'profile_image' => $authAgent->profile_image,
             ]);
 
-            Log::info('==================== UPDATE PROFILE SUCCESS ====================');
+            Log::info('UPDATE PROFILE SUCCESS');
 
             return redirect()->route('agent.profile', $agent->id)
                 ->with('success', 'Profile updated successfully!');
         } catch (\Exception $e) {
-            Log::error('==================== UPDATE PROFILE FAILED ====================');
+            // Rollback on error
+            DB::rollBack();
+
+            Log::error('UPDATE PROFILE FAILED');
             Log::error('Error Details', [
-                'agent_id' => $agent->id,
-                'error_message' => $e->getMessage(),
-                'error_file' => $e->getFile(),
-                'error_line' => $e->getLine(),
-                'stack_trace' => $e->getTraceAsString(),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
 
             return back()->withInput()
