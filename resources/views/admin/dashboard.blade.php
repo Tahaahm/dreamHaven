@@ -130,22 +130,22 @@
                 <div class="divide-y divide-slate-50">
                     @forelse($recent_properties as $property)
                         @php
-                            // --- DATA SAFE EXTRACTION ---
 
-                            // 1. Name
                             $rawName = $property->name;
                             $pName = is_array($rawName) ? ($rawName['en'] ?? 'Property') : (json_decode($rawName)->en ?? $property->name);
 
-                            // 2. Price (Logic to find IQD or Amount)
+                            // 2. Price (Logic to find USD)
                             $rawPrice = $property->price;
                             $pPrice = 0;
 
                             if (is_array($rawPrice)) {
-                                $pPrice = $rawPrice['iqd'] ?? $rawPrice['amount'] ?? 0;
+                                // Try 'usd' first
+                                $pPrice = $rawPrice['usd'] ?? $rawPrice['amount'] ?? 0;
                             } elseif (is_string($rawPrice)) {
                                 $decoded = json_decode($rawPrice, true);
                                 if (is_array($decoded)) {
-                                    $pPrice = $decoded['iqd'] ?? $decoded['amount'] ?? 0;
+                                    // Try 'usd' first
+                                    $pPrice = $decoded['usd'] ?? $decoded['amount'] ?? 0;
                                 } elseif (is_numeric($rawPrice)) {
                                     $pPrice = $rawPrice;
                                 }
@@ -182,9 +182,10 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex justify-between items-center mb-1">
                                     <h4 class="font-bold text-slate-900 truncate pr-4 text-sm group-hover:text-indigo-600 transition">{{ $pName }}</h4>
-                                    {{-- PRICE DISPLAY FIX --}}
+
+                                    {{-- UPDATED PRICE DISPLAY TO SHOW USD --}}
                                     <span class="font-black text-slate-900 text-sm whitespace-nowrap">
-                                        {{ number_format($pPrice) }} <span class="text-[10px] text-slate-400 font-bold">IQD</span>
+                                        ${{ number_format($pPrice) }} <span class="text-[10px] text-slate-400 font-bold">USD</span>
                                     </span>
                                 </div>
                                 <div class="flex items-center gap-3 mt-1">
@@ -251,10 +252,6 @@
                             <p class="text-[10px] text-slate-400 font-medium">{{ $user->created_at->format('M d') }}</p>
                         </div>
                         <div>
-                            {{--
-                                STATUS BADGE LOGIC FIX:
-                                If user has is_active=1 OR is_verified=1, consider them ACTIVE.
-                            --}}
                              <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase {{ ($user->is_active || $user->is_verified) ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700' }}">
                                 {{ ($user->is_active || $user->is_verified) ? 'Active' : 'Inactive' }}
                             </span>

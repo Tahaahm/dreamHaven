@@ -11,7 +11,7 @@
     =========================================================
 --}}
 @php
-    // Helper function
+    // Helper function to safely convert values to string
     $safeString = function($val) {
         return is_array($val) ? '' : (string)($val ?? '');
     };
@@ -28,27 +28,31 @@
     $descAr = is_array($rawDesc) ? ($rawDesc['ar'] ?? '') : '';
     $descKu = is_array($rawDesc) ? ($rawDesc['ku'] ?? '') : '';
 
-    // 3. Price - FIXED: Handle BOTH formats (app format AND admin format)
+    // 3. Price - UPDATED: Extract BOTH USD and IQD
     $rawPrice = $property->price;
-    $priceAmount = 0;
-    $priceCurrency = 'USD';
+    $priceIQD = 0;
+    $priceUSD = 0;
 
     // Parse price if it's a string
     $priceData = is_string($rawPrice) ? json_decode($rawPrice, true) : $rawPrice;
 
-    // Check if it's app format: ['iqd' => xxx, 'usd' => xxx]
-    if (is_array($priceData) && isset($priceData['iqd'])) {
-        $priceAmount = $priceData['iqd']; // Prioritize IQD
-        $priceCurrency = 'IQD';
-    }
-    // Check if it's admin format: ['amount' => xxx, 'currency' => 'USD/IQD']
-    elseif (is_array($priceData) && isset($priceData['amount'])) {
-        $priceAmount = $priceData['amount'];
-        $priceCurrency = $priceData['currency'] ?? 'USD';
-    }
-    // Fallback: treat as direct number
-    elseif (is_numeric($priceData)) {
-        $priceAmount = $priceData;
+    if (is_array($priceData)) {
+        // Direct extraction
+        $priceIQD = $priceData['iqd'] ?? 0;
+        $priceUSD = $priceData['usd'] ?? 0;
+
+        // Fallback for older data formats (single amount)
+        if ($priceIQD == 0 && $priceUSD == 0 && isset($priceData['amount'])) {
+            $currency = $priceData['currency'] ?? 'USD';
+            if ($currency === 'USD') {
+                $priceUSD = $priceData['amount'];
+            } else {
+                $priceIQD = $priceData['amount'];
+            }
+        }
+    } elseif (is_numeric($priceData)) {
+        // If it's just a number, assume IQD (or you can change logic)
+        $priceIQD = $priceData;
     }
 
     // 4. Type
@@ -65,12 +69,24 @@
     // 6. Rooms
     $rawRooms = is_array($property->rooms) ? $property->rooms : [];
     $roomBed = $rawRooms['bedroom'] ?? 0;
+    if(is_array($roomBed)) $roomBed = $roomBed['count'] ?? 0;
+
     $roomBath = $rawRooms['bathroom'] ?? 0;
+    if(is_array($roomBath)) $roomBath = $roomBath['count'] ?? 0;
+
     $roomLiving = $rawRooms['living_room'] ?? 0;
+    if(is_array($roomLiving)) $roomLiving = $roomLiving['count'] ?? 0;
 
     // 7. Location
     $rawLocs = $property->locations;
-    $firstLoc = (is_array($rawLocs) && !empty($rawLocs)) ? ($rawLocs[0] ?? $rawLocs) : [];
+    $firstLoc = [];
+    if (is_array($rawLocs)) {
+        if (isset($rawLocs['lat'])) {
+            $firstLoc = $rawLocs;
+        } elseif (isset($rawLocs[0])) {
+            $firstLoc = $rawLocs[0];
+        }
+    }
     $lat = $firstLoc['lat'] ?? 0;
     $lng = $firstLoc['lng'] ?? 0;
 
@@ -155,7 +171,6 @@
     $ownerName = '';
     $ownerEmail = '';
     $ownerPhone = '';
-    $ownerType = '';
     $ownerBadge = '';
     $ownerBadgeColor = '';
 
@@ -164,21 +179,18 @@
             $ownerName = $owner->username ?? 'N/A';
             $ownerEmail = $owner->email ?? 'N/A';
             $ownerPhone = $owner->phone ?? 'N/A';
-            $ownerType = 'Individual User';
             $ownerBadge = 'User';
             $ownerBadgeColor = 'bg-blue-100 text-blue-700';
         } elseif ($property->owner_type === 'App\Models\Agent') {
             $ownerName = $owner->agent_name ?? 'N/A';
             $ownerEmail = $owner->primary_email ?? 'N/A';
             $ownerPhone = $owner->primary_phone ?? 'N/A';
-            $ownerType = 'Real Estate Agent';
             $ownerBadge = 'Agent';
             $ownerBadgeColor = 'bg-emerald-100 text-emerald-700';
         } elseif ($property->owner_type === 'App\Models\RealEstateOffice') {
             $ownerName = $owner->company_name ?? 'N/A';
             $ownerEmail = $owner->email_address ?? 'N/A';
             $ownerPhone = $owner->phone_number ?? 'N/A';
-            $ownerType = 'Real Estate Office';
             $ownerBadge = 'Office';
             $ownerBadgeColor = 'bg-purple-100 text-purple-700';
         }
@@ -280,6 +292,7 @@
             'analytics' => ['icon' => 'fa-chart-pie', 'label' => 'Analytics']
         ] as $key => $tab)
             <button
+                type="button"
                 @click="activeTab = '{{ $key }}'"
                 :class="activeTab === '{{ $key }}' ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'"
                 class="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap">
@@ -316,11 +329,7 @@
                             <span>Title (English)</span>
                             <span class="text-red-500">*</span>
                         </label>
-                        <input
-                            type="text"
-                            name="name[en]"
-                            value="{{ $safeString($nameEn) }}"
-                            required
+                        <input type="text" name="name[en]" value="{{ $safeString($nameEn) }}" required
                             class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-lg font-semibold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none"
                             placeholder="Enter property title in English">
                     </div>
@@ -332,26 +341,18 @@
                                 <i class="fas fa-flag text-emerald-500"></i>
                                 <span>Title (Arabic)</span>
                             </label>
-                            <input
-                                type="text"
-                                name="name[ar]"
-                                value="{{ $safeString($nameAr) }}"
+                            <input type="text" name="name[ar]" value="{{ $safeString($nameAr) }}"
                                 class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-lg font-semibold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none text-right"
-                                dir="rtl"
-                                placeholder="أدخل عنوان العقار بالعربية">
+                                dir="rtl" placeholder="أدخل عنوان العقار بالعربية">
                         </div>
                         <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
                             <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
                                 <i class="fas fa-flag text-amber-500"></i>
                                 <span>Title (Kurdish)</span>
                             </label>
-                            <input
-                                type="text"
-                                name="name[ku]"
-                                value="{{ $safeString($nameKu) }}"
+                            <input type="text" name="name[ku]" value="{{ $safeString($nameKu) }}"
                                 class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-lg font-semibold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none text-right"
-                                dir="rtl"
-                                placeholder="ناونیشانی موڵک بە کوردی بنووسە">
+                                dir="rtl" placeholder="ناونیشانی موڵک بە کوردی بنووسە">
                         </div>
                     </div>
                 </div>
@@ -376,9 +377,7 @@
                             <i class="fas fa-flag text-blue-500"></i>
                             <span>Description (English)</span>
                         </label>
-                        <textarea
-                            name="description[en]"
-                            rows="5"
+                        <textarea name="description[en]" rows="5"
                             class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none resize-none leading-relaxed"
                             placeholder="Describe the property in detail...">{{ $safeString($descEn) }}</textarea>
                     </div>
@@ -390,30 +389,26 @@
                                 <i class="fas fa-flag text-emerald-500"></i>
                                 <span>Description (Arabic)</span>
                             </label>
-                            <textarea
-                                name="description[ar]"
-                                rows="5"
+                            <textarea name="description[ar]" rows="5"
                                 class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none resize-none leading-relaxed text-right"
-                                dir="rtl"
-                                placeholder="وصف العقار بالتفصيل...">{{ $safeString($descAr) }}</textarea>
+                                dir="rtl" placeholder="وصف العقار بالتفصيل...">{{ $safeString($descAr) }}</textarea>
                         </div>
                         <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
                             <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
                                 <i class="fas fa-flag text-amber-500"></i>
                                 <span>Description (Kurdish)</span>
                             </label>
-                            <textarea
-                                name="description[ku]"
-                                rows="5"
+                            <textarea name="description[ku]" rows="5"
                                 class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none resize-none leading-relaxed text-right"
-                                dir="rtl"
-                                placeholder="وردەکاری موڵکەکە بە کوردی بنووسە...">{{ $safeString($descKu) }}</textarea>
+                                dir="rtl" placeholder="وردەکاری موڵکەکە بە کوردی بنووسە...">{{ $safeString($descKu) }}</textarea>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            {{-- Pricing & Classification Grid --}}
+        {{-- ================= TAB 2: DETAILS (Pricing & Class) ================= --}}
+        <div x-show="activeTab === 'details'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
 
                 {{-- Pricing Card --}}
@@ -424,45 +419,50 @@
                         </div>
                         <div>
                             <h2 class="text-2xl font-black text-emerald-900">Pricing</h2>
-                            <p class="text-sm text-emerald-700 font-medium">Set property price and currency</p>
+                            <p class="text-sm text-emerald-700 font-medium">Set property price</p>
                         </div>
                     </div>
 
                     <div class="bg-white rounded-2xl p-6 border-2 border-emerald-200">
-                        <label class="block text-sm font-bold text-slate-700 mb-3">
-                            <i class="fas fa-money-bill-wave text-emerald-500 mr-1"></i>
-                            Price Amount
-                        </label>
-                        <div class="flex gap-3 mb-3">
-                            <div class="flex-1">
-                                <input
-                                    type="number"
-                                    name="price"
-                                    value="{{ $safeString($priceAmount) }}"
-                                    step="0.01"
-                                    required
-                                    class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-2xl font-black text-emerald-600 placeholder-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all duration-200 outline-none"
-                                    placeholder="0.00">
+
+                        {{-- UPDATED: Dual Inputs for USD and IQD --}}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-3">
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-3">
+                                    <i class="fas fa-money-bill text-emerald-500 mr-1"></i>
+                                    Price (USD)
+                                </label>
+                                <div class="relative">
+                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600 font-bold">$</span>
+                                    <input
+                                        type="number"
+                                        name="price_usd"
+                                        value="{{ $safeString($priceUSD) }}"
+                                        step="0.01"
+                                        required
+                                        class="w-full pl-8 pr-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-xl font-bold text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all duration-200 outline-none"
+                                        placeholder="0.00">
+                                </div>
                             </div>
-                            <select
-                                name="price_currency"
-                                class="w-28 px-4 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-lg font-black text-slate-700 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all duration-200 outline-none cursor-pointer">
-                                <option value="USD" {{ $priceCurrency == 'USD' ? 'selected' : '' }}>USD</option>
-                                <option value="IQD" {{ $priceCurrency == 'IQD' ? 'selected' : '' }}>IQD</option>
-                            </select>
+                            <div>
+                                <label class="block text-sm font-bold text-slate-700 mb-3">
+                                    <i class="fas fa-coins text-emerald-500 mr-1"></i>
+                                    Price (IQD)
+                                </label>
+                                <div class="relative">
+                                    <input
+                                        type="number"
+                                        name="price"
+                                        value="{{ $safeString($priceIQD) }}"
+                                        step="0.01"
+                                        required
+                                        class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-xl font-bold text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all duration-200 outline-none"
+                                        placeholder="0">
+                                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">IQD</span>
+                                </div>
+                            </div>
                         </div>
 
-                        {{-- Display current price --}}
-                        <div class="bg-emerald-50 rounded-lg px-4 py-3 border border-emerald-100">
-                            <p class="text-xs font-bold text-emerald-700 uppercase tracking-wide mb-1">Current Price</p>
-                            <p class="text-xl font-black text-emerald-900">
-                                @if($priceCurrency == 'IQD')
-                                    {{ number_format((float)$priceAmount) }} <span class="text-sm font-bold text-emerald-600">IQD</span>
-                                @else
-                                    ${{ number_format((float)$priceAmount, 2) }}
-                                @endif
-                            </p>
-                        </div>
                     </div>
                 </div>
 
@@ -542,120 +542,13 @@
                 </div>
             </div>
 
-            {{-- Location & Address Section --}}
-            <div class="bg-white rounded-3xl border-2 border-slate-200 shadow-sm p-8">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="w-12 h-12 bg-gradient-to-br from-rose-500 to-rose-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                        <i class="fas fa-map-marker-alt text-xl"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-2xl font-black text-slate-900">Location & Address</h2>
-                        <p class="text-sm text-slate-500 font-medium">Property location and geographic details</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {{-- Address Details --}}
-                    <div class="space-y-6">
-                        <h3 class="text-lg font-black text-slate-700 flex items-center gap-2">
-                            <i class="fas fa-location-dot text-rose-500"></i>
-                            Address Information
-                        </h3>
-
-                        <div class="grid grid-cols-2 gap-5">
-                            <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-5 border border-slate-200">
-                                <label class="block text-xs font-bold text-slate-600 uppercase mb-2 tracking-wide">
-                                    <i class="fas fa-city mr-1"></i> City
-                                </label>
-                                <input
-                                    type="text"
-                                    name="address_details[city][en]"
-                                    value="{{ $safeString($cityVal) }}"
-                                    class="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-base font-bold text-slate-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all duration-200 outline-none"
-                                    placeholder="e.g., Erbil">
-                            </div>
-                            <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-5 border border-slate-200">
-                                <label class="block text-xs font-bold text-slate-600 uppercase mb-2 tracking-wide">
-                                    <i class="fas fa-map-pin mr-1"></i> District
-                                </label>
-                                <input
-                                    type="text"
-                                    name="address_details[district][en]"
-                                    value="{{ $safeString($distVal) }}"
-                                    class="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-base font-bold text-slate-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all duration-200 outline-none"
-                                    placeholder="e.g., Dream City">
-                            </div>
-                        </div>
-
-                        <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
-                            <label class="block text-xs font-bold text-slate-600 uppercase mb-3 tracking-wide">
-                                <i class="fas fa-home mr-1"></i> Full Address
-                            </label>
-                            <textarea
-                                name="address"
-                                rows="4"
-                                class="w-full px-4 py-3 bg-white border-2 border-slate-200 rounded-xl text-base font-medium text-slate-800 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all duration-200 outline-none resize-none leading-relaxed"
-                                placeholder="Enter complete street address...">{{ $safeString($fullAddr) }}</textarea>
-                        </div>
-                    </div>
-
-                    {{-- GPS Coordinates --}}
-                    <div class="bg-gradient-to-br from-rose-50 to-white rounded-2xl p-8 border-2 border-rose-200">
-                        <h3 class="text-lg font-black text-rose-900 flex items-center gap-2 mb-6">
-                            <i class="fas fa-globe-americas text-rose-500"></i>
-                            GPS Coordinates
-                        </h3>
-
-                        <div class="space-y-5">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-600 uppercase mb-2 tracking-wide">
-                                    <i class="fas fa-arrow-up mr-1"></i> Latitude
-                                </label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    name="locations[0][lat]"
-                                    value="{{ $safeString($lat) }}"
-                                    class="w-full px-4 py-3 bg-white border-2 border-rose-200 rounded-xl text-base font-mono font-bold text-slate-700 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all duration-200 outline-none"
-                                    placeholder="36.191113">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-600 uppercase mb-2 tracking-wide">
-                                    <i class="fas fa-arrow-right mr-1"></i> Longitude
-                                </label>
-                                <input
-                                    type="number"
-                                    step="any"
-                                    name="locations[0][lng]"
-                                    value="{{ $safeString($lng) }}"
-                                    class="w-full px-4 py-3 bg-white border-2 border-rose-200 rounded-xl text-base font-mono font-bold text-slate-700 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 transition-all duration-200 outline-none"
-                                    placeholder="44.009167">
-                            </div>
-
-                            @if($lat && $lng)
-
-                                target="_blank"
-                                href="https://www.google.com/maps/search/?api=1&query={{ $lat }},{{ $lng }}"
-                                class="flex items-center justify-center gap-2 w-full px-5 py-3 bg-gradient-to-r from-rose-600 to-rose-700 text-white font-bold rounded-xl shadow-lg shadow-rose-200 hover:shadow-xl hover:shadow-rose-300 hover:-translate-y-0.5 transition-all duration-200">
-                                <i class="fas fa-external-link-alt"></i>
-                                <span>View on Google Maps</span>
-                            </a>
-                            @endif
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-       <div x-show="activeTab === 'details'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
+            {{-- Room Counts & Features --}}
             <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-
-                {{-- Room Counts --}}
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                     @foreach([
-                        ['label' => 'Bedrooms', 'name' => 'rooms[bedroom]', 'val' => $roomBed, 'icon' => 'fa-bed'],
-                        ['label' => 'Bathrooms', 'name' => 'rooms[bathroom]', 'val' => $roomBath, 'icon' => 'fa-bath'],
-                        ['label' => 'Living Rooms', 'name' => 'rooms[living_room]', 'val' => $roomLiving, 'icon' => 'fa-couch'],
+                        ['label' => 'Bedrooms', 'name' => 'rooms[bedroom][count]', 'val' => $roomBed, 'icon' => 'fa-bed'],
+                        ['label' => 'Bathrooms', 'name' => 'rooms[bathroom][count]', 'val' => $roomBath, 'icon' => 'fa-bath'],
+                        ['label' => 'Living Rooms', 'name' => 'rooms[living_room][count]', 'val' => $roomLiving, 'icon' => 'fa-couch'],
                         ['label' => 'Floor No.', 'name' => 'floor_number', 'val' => $property->floor_number, 'icon' => 'fa-layer-group'],
                     ] as $field)
                     <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-indigo-200 transition group">
@@ -666,42 +559,24 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-10 border-t border-slate-100 pt-8">
-
-                    {{-- Features & Amenities --}}
                     <div class="space-y-6">
                         <h4 class="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4">Features & Amenities</h4>
-
                         <div>
                             <label class="input-label">Amenities (Comma Separated)</label>
                             <input type="text" name="amenities" value="{{ $safeString($amenitiesString) }}" class="input-modern" placeholder="Pool, Gym, WiFi...">
                         </div>
-
                         <div>
                             <label class="input-label">Features (Comma Separated)</label>
                             <input type="text" name="features" value="{{ $safeString($featuresString) }}" class="input-modern" placeholder="Balcony, View, Corner unit...">
                         </div>
-
                         <div>
                             <label class="input-label">Nearby Amenities</label>
                             <input type="text" name="nearby_amenities" value="{{ $safeString($nearbyString) }}" class="input-modern" placeholder="School, Mall, Park...">
                         </div>
-
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="input-label">Total Floors</label>
-                                <input type="number" name="floor_details[total_floors]" value="{{ $safeString($totalFloors) }}" class="input-modern">
-                            </div>
-                            <div>
-                                <label class="input-label">Floor Position</label>
-                                <input type="text" name="floor_details[position]" value="{{ $safeString($floorPosition) }}" class="input-modern" placeholder="e.g. Top">
-                            </div>
-                        </div>
                     </div>
 
-                    {{-- Furnishing & Utilities --}}
                     <div class="bg-slate-50 rounded-2xl p-8 border border-slate-100 h-full">
                         <h4 class="text-sm font-bold text-slate-400 uppercase mb-6 tracking-wide">Furnishing & Utilities</h4>
-
                         <div class="grid grid-cols-1 gap-6 mb-6">
                              <div>
                                 <label class="input-label">Furnishing Level</label>
@@ -718,7 +593,6 @@
                                 <input type="text" name="furnishing_details[items]" value="{{ $safeString($furnishingItems) }}" class="input-modern" placeholder="Sofa, Bed, TV...">
                             </div>
                         </div>
-
                         <div class="space-y-4">
                             @foreach(['furnished' => 'Furnished', 'electricity' => 'Electricity', 'water' => 'Water Connection', 'internet' => 'Internet Available'] as $key => $label)
                             <label class="flex items-center justify-between cursor-pointer group">
@@ -735,7 +609,7 @@
             </div>
         </div>
 
-        {{-- ================= TAB 3: LOCATION (KEEP AS IS) ================= --}}
+        {{-- ================= TAB 3: LOCATION ================= --}}
         <div x-show="activeTab === 'location'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
             <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
                 <div>
@@ -770,20 +644,20 @@
                             <input type="number" step="any" name="locations[0][lng]" value="{{ $safeString($lng) }}" class="input-modern font-mono">
                         </div>
                         <div class="pt-4">
+                             @if($lat && $lng)
                              <a target="_blank" href="https://www.google.com/maps/search/?api=1&query={{ $lat }},{{ $lng }}" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:text-indigo-600 hover:border-indigo-200 transition shadow-sm">
                                 <i class="fas fa-external-link-alt"></i> Verify on Google Maps
                              </a>
+                             @endif
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- ================= TAB 4: CONSTRUCTION (KEEP AS IS) ================= --}}
+        {{-- ================= TAB 4: CONSTRUCTION ================= --}}
         <div x-show="activeTab === 'construction'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
             <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
-
-                {{-- Construction --}}
                 <div>
                     <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-hard-hat text-amber-500"></i> Build Info</h3>
                     <div class="grid grid-cols-2 gap-5 mb-5">
@@ -812,7 +686,6 @@
                     </div>
                 </div>
 
-                {{-- Energy --}}
                 <div class="bg-emerald-50/50 rounded-2xl p-8 border border-emerald-100">
                     <h3 class="text-lg font-black text-emerald-800 mb-6 flex items-center gap-2"><i class="fas fa-leaf text-emerald-500"></i> Energy Efficiency</h3>
                     <div class="space-y-5">
@@ -837,15 +710,12 @@
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
 
-        {{-- ================= TAB 5: MEDIA (KEEP AS IS) ================= --}}
+        {{-- ================= TAB 5: MEDIA ================= --}}
         <div x-show="activeTab === 'media'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
             <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-8">
-
-                {{-- Existing Images --}}
                 <div>
                     <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wide mb-4">Gallery</h3>
                     <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-4">
@@ -871,13 +741,11 @@
                     </div>
                 </div>
 
-                {{-- Upload New --}}
                 <div class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-8 text-center">
                     <label class="block text-xs font-bold text-indigo-900 uppercase mb-3">Upload New Photos</label>
                     <input type="file" name="images[]" multiple class="block w-full max-w-lg mx-auto text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 transition cursor-pointer bg-white rounded-xl border border-indigo-200 shadow-sm">
                 </div>
 
-                {{-- Links --}}
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="input-label">360° Virtual Tour URL</label>
@@ -897,11 +765,9 @@
             </div>
         </div>
 
-        {{-- ================= TAB 6: AVAILABILITY & STATUS (KEEP AS IS) ================= --}}
+        {{-- ================= TAB 6: AVAILABILITY & STATUS ================= --}}
         <div x-show="activeTab === 'availability'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                {{-- Status Card --}}
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 h-fit">
                     <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-toggle-on text-emerald-500"></i> Availability</h3>
 
@@ -938,7 +804,6 @@
                     </div>
                 </div>
 
-                {{-- Boost Card --}}
                 <div class="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl shadow-lg p-8 text-white relative overflow-hidden">
                     <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
 
@@ -969,7 +834,7 @@
             </div>
         </div>
 
-        {{-- ================= TAB 7: SEO (KEEP AS IS) ================= --}}
+        {{-- ================= TAB 7: SEO ================= --}}
          <div x-show="activeTab === 'seo'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
             <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 max-w-4xl">
                  <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-search text-indigo-500"></i> SEO & Metadata</h3>
@@ -991,8 +856,7 @@
             </div>
          </div>
 
-
-        {{-- ================= TAB 8: ANALYTICS (KEEP AS IS) ================= --}}
+        {{-- ================= TAB 8: ANALYTICS ================= --}}
         <div x-show="activeTab === 'analytics'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 @foreach([

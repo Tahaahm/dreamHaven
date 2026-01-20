@@ -100,46 +100,36 @@
                         <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">Listing Details</th>
                         <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">Owner / Source</th>
                         <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">Category</th>
-                        <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">Price</th>
+                        <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">Price (USD)</th>
                         <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] text-center">Stats</th>
                         <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] text-center">Status</th>
                         <th class="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.1em] text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-50">
-                   @forelse($properties as $property)
+                    @forelse($properties as $property)
     @php
-        // Safe Data Extraction Logic
+        // --- SAFE DATA EXTRACTION ---
         $nameData = is_string($property->name) ? json_decode($property->name, true) : $property->name;
         $propName = is_array($nameData) ? ($nameData['en'] ?? 'Property') : $nameData;
 
-        // ✅ FIXED: Handle BOTH price formats (app format AND admin format)
+        // --- PRICE EXTRACTION (USD PRIORITY) ---
         $priceData = is_string($property->price) ? json_decode($property->price, true) : $property->price;
+        $priceVal = 0;
 
-        // Check if it's app format: ['iqd' => xxx, 'usd' => xxx]
-        if (is_array($priceData) && isset($priceData['iqd'])) {
-            $priceVal = $priceData['iqd']; // Prioritize IQD
-            $currency = 'IQD';
-        }
-        // Check if it's admin format: ['amount' => xxx, 'currency' => 'USD/IQD']
-        elseif (is_array($priceData) && isset($priceData['amount'])) {
-            $priceVal = $priceData['amount'];
-            $currency = $priceData['currency'] ?? 'USD';
-        }
-        // Fallback: treat as direct number
-        else {
-            $priceVal = is_numeric($priceData) ? $priceData : 0;
-            $currency = 'USD';
+        if (is_array($priceData)) {
+            // Prioritize 'usd', fall back to 'amount' (which assumes base currency), then 'iqd' if desperate
+            $priceVal = $priceData['usd'] ?? $priceData['amount'] ?? 0;
+        } elseif (is_numeric($priceData)) {
+            $priceVal = $priceData;
         }
 
         $imageData = is_string($property->images) ? json_decode($property->images, true) : $property->images;
         $firstImage = is_array($imageData) ? ($imageData[0] ?? null) : null;
 
-        // ✅ FIXED: Extract type safely
         $typeData = is_string($property->type) ? json_decode($property->type, true) : $property->type;
         $typeCategory = is_array($typeData) ? ($typeData['category'] ?? 'N/A') : ($typeData ?? 'N/A');
 
-        // ✅ FIXED: Extract address details safely
         $addressData = is_string($property->address_details) ? json_decode($property->address_details, true) : $property->address_details;
         $cityData = is_array($addressData) && isset($addressData['city']) ? $addressData['city'] : null;
         $cityName = is_array($cityData) ? ($cityData['en'] ?? 'Unknown Location') : ($cityData ?? 'Unknown Location');
@@ -196,14 +186,11 @@
             </div>
         </td>
 
-        {{-- Price - NOW SHOWS IQD --}}
+        {{-- Price (USD) --}}
         <td class="px-6 py-4">
             <p class="text-sm font-black text-slate-900">
-                @if($currency == 'IQD')
-                    {{ number_format((float)$priceVal) }} <span class="text-xs font-bold text-slate-500">IQD</span>
-                @else
-                    ${{ number_format((float)$priceVal) }}
-                @endif
+                ${{ number_format((float)$priceVal) }}
+                <span class="text-[10px] text-slate-400 font-bold ml-1">USD</span>
             </p>
         </td>
 
@@ -270,20 +257,20 @@
             </div>
         </td>
     </tr>
-@empty
-                        <tr>
-                            <td colspan="7" class="px-6 py-16 text-center">
-                                <div class="max-w-xs mx-auto">
-                                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-                                        <i class="fas fa-search text-2xl"></i>
-                                    </div>
-                                    <h3 class="text-slate-900 font-bold">No properties found</h3>
-                                    <p class="text-slate-500 text-sm mt-1 mb-4">No listings match your current filters.</p>
-                                    <a href="{{ route('admin.properties.index') }}" class="text-indigo-600 font-bold text-sm hover:underline">Clear Filters</a>
-                                </div>
-                            </td>
-                        </tr>
-                    @endforelse
+    @empty
+        <tr>
+            <td colspan="7" class="px-6 py-16 text-center">
+                <div class="max-w-xs mx-auto">
+                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+                        <i class="fas fa-search text-2xl"></i>
+                    </div>
+                    <h3 class="text-slate-900 font-bold">No properties found</h3>
+                    <p class="text-slate-500 text-sm mt-1 mb-4">No listings match your current filters.</p>
+                    <a href="{{ route('admin.properties.index') }}" class="text-indigo-600 font-bold text-sm hover:underline">Clear Filters</a>
+                </div>
+            </td>
+        </tr>
+    @endforelse
                 </tbody>
             </table>
         </div>

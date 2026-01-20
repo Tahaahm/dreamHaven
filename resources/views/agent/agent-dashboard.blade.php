@@ -626,7 +626,7 @@
 
                 <div class="property-content">
                     <div class="property-price">
-                        {{ number_format($property->price['iqd'] ?? 0) }} IQD
+                        ${{ number_format($property->price['usd'] ?? 0) }}
                         <span class="property-price-usd">${{ number_format($property->price['usd'] ?? 0) }}</span>
                     </div>
 
