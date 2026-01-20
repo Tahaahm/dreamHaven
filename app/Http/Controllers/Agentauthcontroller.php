@@ -94,6 +94,9 @@ class AgentAuthController extends Controller
     {
         $agent = Auth::guard('agent')->user();
 
+        // ✅ FIX: Refresh agent to ensure latest data
+        $agent->refresh();
+
         $totalProperties = Property::where('owner_id', $agent->id)
             ->where('owner_type', 'App\Models\Agent')
             ->count();
@@ -103,7 +106,6 @@ class AgentAuthController extends Controller
             ->where('status', 'available')
             ->count();
 
-        // Calculate total views
         $totalViews = Property::where('owner_id', $agent->id)
             ->where('owner_type', 'App\Models\Agent')
             ->sum('views');
@@ -115,6 +117,7 @@ class AgentAuthController extends Controller
             'new_this_month' => Property::where('owner_id', $agent->id)
                 ->where('owner_type', 'App\Models\Agent')
                 ->whereMonth('created_at', now()->month)
+                ->whereYear('created_at', now()->year) // ✅ Added year check
                 ->count(),
             'total_views' => $totalViews,
             'views_this_week' => Property::where('owner_id', $agent->id)
@@ -138,7 +141,6 @@ class AgentAuthController extends Controller
             ->take(6)
             ->get()
             ->map(function ($property) {
-                // Decode JSON fields
                 $property->name = is_string($property->name) ? json_decode($property->name, true) : $property->name;
                 $property->price = is_string($property->price) ? json_decode($property->price, true) : $property->price;
                 $property->images = is_string($property->images) ? json_decode($property->images, true) : $property->images;
@@ -148,7 +150,7 @@ class AgentAuthController extends Controller
                 return $property;
             });
 
-        return view('agent.agent-dashboard', compact('stats', 'recentProperties'));
+        return view('agent.agent-dashboard', compact('stats', 'recentProperties', 'agent'));
     }
 
     // PROPERTIES
@@ -827,6 +829,29 @@ class AgentAuthController extends Controller
             abort(403, 'Unauthorized');
         }
 
+        // ✅ FIX: Refresh agent from database to get latest data
+        $agent->refresh();
+
+        // ✅ FIX: Calculate statistics using Query Builder instead of relationship
+        $totalProperties = Property::where('owner_id', $agent->id)
+            ->where('owner_type', 'App\Models\Agent')
+            ->count();
+
+        $activeProperties = Property::where('owner_id', $agent->id)
+            ->where('owner_type', 'App\Models\Agent')
+            ->where('status', 'available')
+            ->count();
+
+        $soldProperties = Property::where('owner_id', $agent->id)
+            ->where('owner_type', 'App\Models\Agent')
+            ->where('status', 'sold')
+            ->count();
+
+        // Add calculated stats to agent object
+        $agent->total_properties = $totalProperties;
+        $agent->active_properties = $activeProperties;
+        $agent->properties_sold = $soldProperties;
+
         return view('agent.agent-profile', compact('agent'));
     }
 
@@ -854,55 +879,75 @@ class AgentAuthController extends Controller
             'longitude' => 'nullable|numeric',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
             'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-            'working_hours' => 'nullable|json', // ✅ Added validation for the JSON string
+            'working_hours' => 'nullable|json',
         ]);
 
-        // ✅ Handle profile image upload
-        if ($request->hasFile('profile_image')) {
-            if ($agent->profile_image) {
-                $oldPath = str_replace(asset('storage/'), '', $agent->profile_image);
-                if (Storage::disk('public')->exists($oldPath)) {
-                    Storage::disk('public')->delete($oldPath);
+        try {
+            // ✅ FIX: Handle profile image upload - STORE RELATIVE PATH ONLY
+            if ($request->hasFile('profile_image')) {
+                // Delete old image if exists
+                if ($agent->profile_image) {
+                    $oldPath = str_replace(asset('storage/'), '', $agent->profile_image);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
                 }
+                // Store new image - ONLY save the path, not the full URL
+                $path = $request->file('profile_image')->store('agents/profiles', 'public');
+                $agent->profile_image = 'storage/' . $path; // ✅ Relative path
             }
-            $path = $request->file('profile_image')->store('agents/profiles', 'public');
-            $agent->profile_image = asset('storage/' . $path);
-        }
 
-        // ✅ Handle bio image upload
-        if ($request->hasFile('bio_image')) {
-            if ($agent->bio_image) {
-                $oldPath = str_replace(asset('storage/'), '', $agent->bio_image);
-                if (Storage::disk('public')->exists($oldPath)) {
-                    Storage::disk('public')->delete($oldPath);
+            // ✅ FIX: Handle bio image upload - STORE RELATIVE PATH ONLY
+            if ($request->hasFile('bio_image')) {
+                // Delete old image if exists
+                if ($agent->bio_image) {
+                    $oldPath = str_replace(asset('storage/'), '', $agent->bio_image);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
                 }
+                // Store new image - ONLY save the path
+                $path = $request->file('bio_image')->store('agents/bio', 'public');
+                $agent->bio_image = 'storage/' . $path; // ✅ Relative path
             }
-            $path = $request->file('bio_image')->store('agents/bio', 'public');
-            $agent->bio_image = asset('storage/' . $path);
+
+            // Update basic fields
+            $agent->agent_name = $request->agent_name;
+            $agent->primary_phone = $request->primary_phone;
+            $agent->whatsapp_number = $request->whatsapp_number;
+            $agent->city = $request->city;
+            $agent->district = $request->district;
+            $agent->license_number = $request->license_number;
+            $agent->years_experience = $request->years_experience;
+            $agent->agent_bio = $request->agent_bio;
+            $agent->office_address = $request->office_address;
+            $agent->latitude = $request->latitude;
+            $agent->longitude = $request->longitude;
+
+            // ✅ Save Working Hours
+            if ($request->has('working_hours')) {
+                $agent->working_hours = $request->working_hours;
+            }
+
+            // ✅ FIX: Save and refresh the authenticated user
+            $agent->save();
+
+            // ✅ CRITICAL: Refresh the auth guard to reflect changes immediately
+            Auth::guard('agent')->setUser($agent->fresh());
+
+            Log::info('Agent profile updated successfully', ['agent_id' => $agent->id]);
+
+            return redirect()->route('agent.profile', $agent->id)
+                ->with('success', 'Profile updated successfully!');
+        } catch (Exception $e) {
+            Log::error('Agent profile update failed', [
+                'agent_id' => $agent->id,
+                'error' => $e->getMessage()
+            ]);
+
+            return back()->withInput()
+                ->with('error', 'Failed to update profile. Please try again.');
         }
-
-        // Update basic fields
-        $agent->agent_name = $request->agent_name;
-        $agent->primary_phone = $request->primary_phone;
-        $agent->whatsapp_number = $request->whatsapp_number;
-        $agent->city = $request->city;
-        $agent->district = $request->district;
-        $agent->license_number = $request->license_number;
-        $agent->years_experience = $request->years_experience;
-        $agent->agent_bio = $request->agent_bio;
-        $agent->office_address = $request->office_address;
-        $agent->latitude = $request->latitude;
-        $agent->longitude = $request->longitude;
-
-        // ✅ THE MISSING PIECE: Save Working Hours
-        if ($request->has('working_hours')) {
-            // We store it as a JSON string directly into the database column
-            $agent->working_hours = $request->working_hours;
-        }
-
-        $agent->save();
-
-        return redirect()->route('agent.profile', $agent->id)->with('success', 'Profile and Working Hours updated successfully!');
     }
 
     public function showChangePassword()
