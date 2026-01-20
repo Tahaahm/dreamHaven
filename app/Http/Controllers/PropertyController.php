@@ -28,70 +28,31 @@ class PropertyController extends Controller
     public function index(Request $request)
     {
         try {
-            $validator = Validator::make($request->all(), [
-                'page' => 'integer|min:1',
-                'per_page' => 'integer|min:1|max:100',
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Invalid pagination parameters',
-                    $validator->errors(),
-                    400
-                );
-            }
-
             $perPage = $request->get('per_page', 20);
             $user = auth('sanctum')->user();
-
-            // ✅ LOG: User authentication status
-            Log::info('📋 INDEX: Request started', [
-                'endpoint' => 'index',
-                'user_authenticated' => $user ? 'YES' : 'NO',
-                'user_id' => $user?->id,
-                'per_page' => $perPage,
-            ]);
 
             $query = Property::active()
                 ->published()
                 ->whereNotIn('status', ['cancelled', 'pending']);
 
-            // ✅ LOG: Check for viewed properties
+            // Apply user exclusion for viewed properties
             if ($user) {
                 $viewedProperties = $user->recently_viewed_properties ?? [];
-                $viewedCount = count($viewedProperties);
-
-                Log::info('👤 INDEX: User viewing history', [
-                    'user_id' => $user->id,
-                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
-                    'viewed_count' => $viewedCount,
-                    'viewed_ids' => $viewedCount > 0 ? array_slice($viewedProperties, 0, 5) : [],
-                ]);
-
-                if ($viewedCount > 0) {
+                if (count($viewedProperties) > 0) {
                     $query->whereNotIn('id', $viewedProperties);
-                    Log::info('✅ INDEX: Exclusion applied', [
-                        'reason' => 'User has viewing history',
-                        'excluded_count' => $viewedCount,
-                    ]);
-                } else {
-                    Log::info('ℹ️ INDEX: No exclusion needed', [
-                        'reason' => 'User has no viewing history yet',
-                    ]);
                 }
-            } else {
-                Log::info('ℹ️ INDEX: No exclusion applied', [
-                    'reason' => 'User not authenticated',
-                ]);
             }
 
             $properties = $query->paginate($perPage);
 
-            Log::info('✅ INDEX: Success', [
-                'total_returned' => $properties->count(),
-                'total_available' => $properties->total(),
-                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
-            ]);
+            // ✅ TRACK IMPRESSIONS - Track what we show on the main feed
+            if ($user && $properties->isNotEmpty()) {
+                $this->interactionService->trackImpressions(
+                    $user->id,
+                    collect($properties->items()),
+                    'index'
+                );
+            }
 
             $transformedData = collect($properties->items())->map(function ($property) {
                 return $this->transformPropertyData($property);
@@ -103,26 +64,15 @@ class PropertyController extends Controller
                     'data' => $transformedData,
                     'total' => $properties->total(),
                     'current_page' => $properties->currentPage(),
-                    'per_page' => $properties->perPage(),
-                    'last_page' => $properties->lastPage(),
                 ],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('❌ INDEX: Error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'user_id' => auth('sanctum')->user()?->id,
-            ]);
-
-            return ApiResponse::error(
-                'Failed to retrieve properties',
-                $e->getMessage(),
-                500
-            );
+            Log::error('Index error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to retrieve properties', $e->getMessage(), 500);
         }
     }
+
 
 
     // in PropertyController.php
@@ -140,93 +90,38 @@ class PropertyController extends Controller
     public function search(Request $request)
     {
         try {
-            $validator = Validator::make($request->all(), [
-                'search' => 'nullable|string|max:255',
-                'page' => 'integer|min:1',
-                'per_page' => 'integer|min:1|max:100',
-                'sort' => 'in:price_asc,price_desc,area_asc,area_desc,newest,oldest,most_viewed',
-                'min_price' => 'numeric|min:0',
-                'max_price' => 'numeric|min:0',
-                'currency' => 'in:USD,IQD',
-                'bedrooms' => 'integer|min:0|max:20',
-                'property_type' => 'string',
-                'min_area' => 'numeric|min:0',
-                'max_area' => 'numeric|min:0',
-                'furnished' => 'boolean',
-                'city' => 'string',
-                'language' => 'in:en,ar,ku',
-                'listing_type' => 'in:rent,sell',
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error('Invalid search parameters', $validator->errors(), 400);
-            }
-
-            $user = auth('sanctum')->user();
             $searchTerm = $request->get('search');
-
-            // ✅ LOG: Start
-            Log::info('🔍 SEARCH: Request started', [
-                'endpoint' => 'search',
-                'user_authenticated' => $user ? 'YES' : 'NO',
-                'user_id' => $user?->id,
-                'search_term' => $searchTerm,
-                'filters' => array_filter($request->only([
-                    'min_price',
-                    'max_price',
-                    'bedrooms',
-                    'property_type',
-                    'listing_type',
-                    'city'
-                ])),
-            ]);
+            $user = auth('sanctum')->user();
 
             $query = Property::query()->active()->published();
 
-            // ✅ LOG: User exclusion logic
+            // Apply user exclusion for viewed properties
             if ($user) {
                 $viewedProperties = $user->recently_viewed_properties ?? [];
-                $viewedCount = count($viewedProperties);
-
-                Log::info('👤 SEARCH: User viewing history', [
-                    'user_id' => $user->id,
-                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
-                    'viewed_count' => $viewedCount,
-                ]);
-
-                if ($viewedCount > 0) {
+                if (count($viewedProperties) > 0) {
                     $query->whereNotIn('id', $viewedProperties);
-                    Log::info('✅ SEARCH: Exclusion applied', [
-                        'excluded_count' => $viewedCount,
-                        'reason' => 'User has viewing history',
-                    ]);
-                } else {
-                    Log::info('ℹ️ SEARCH: No exclusion needed', [
-                        'reason' => 'User has no viewing history',
-                    ]);
                 }
-            } else {
-                Log::info('ℹ️ SEARCH: No exclusion applied', [
-                    'reason' => 'User not authenticated',
-                ]);
             }
 
-            $this->applySearchFilters($query, $request);
+            // ✅ IMPROVED MULTILINGUAL SEARCH (English, Arabic, Kurdish)
+            $this->applyMultilingualSearchFilters($query, $request);
             $this->applySorting($query, $request->get('sort', 'newest'), $request->get('currency', 'usd'));
 
             $perPage = $request->get('per_page', 20);
             $properties = $query->paginate($perPage);
 
-            Log::info('✅ SEARCH: Success', [
-                'properties_found' => $properties->count(),
-                'total_available' => $properties->total(),
-                'search_term' => $searchTerm,
-                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
-            ]);
+            // ✅ TRACK IMPRESSIONS - Track search results
+            if ($user && $properties->isNotEmpty()) {
+                $this->interactionService->trackImpressions(
+                    $user->id,
+                    collect($properties->items()),
+                    'search',
+                    ['search_term' => $searchTerm]
+                );
+            }
 
-            $language = $request->get('language', 'en');
-            $transformedData = collect($properties->items())->map(function ($property) use ($language) {
-                return $this->transformPropertyForSearch($property, $language);
+            $transformedData = collect($properties->items())->map(function ($property) {
+                return $this->transformPropertyData($property);
             });
 
             return ApiResponse::success(
@@ -234,20 +129,12 @@ class PropertyController extends Controller
                 [
                     'data' => $transformedData,
                     'total' => $properties->total(),
-                    'current_page' => $properties->currentPage(),
-                    'per_page' => $properties->perPage(),
+                    'search_term' => $searchTerm,
                 ],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('❌ SEARCH: Error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'user_id' => auth('sanctum')->user()?->id,
-                'search_term' => $request->get('search'),
-            ]);
-
+            Log::error('Search error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Search failed', $e->getMessage(), 500);
         }
     }
@@ -266,52 +153,119 @@ class PropertyController extends Controller
         ];
     }
 
+    private function applyMultilingualSearchFilters($query, $request)
+    {
+        // 1. SEARCH TERM (Multilingual)
+        if ($request->filled('search')) {
+            $searchTerm = $request->search;
 
+            $query->where(function ($q) use ($searchTerm) {
+                // Search in Name (EN, AR, KU)
+                $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(name, '$.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ar')) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ku')) LIKE ?", ["%{$searchTerm}%"])
+
+                    // Search in Description (EN, AR, KU)
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(description, '$.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(description, '$.ar')) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(description, '$.ku')) LIKE ?", ["%{$searchTerm}%"])
+
+                    // Search in City (EN, AR, KU)
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar')) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku')) LIKE ?", ["%{$searchTerm}%"])
+
+                    // Search in Neighborhood (EN, AR, KU)
+                    ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.ar')) LIKE ?", ["%{$searchTerm}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.ku')) LIKE ?", ["%{$searchTerm}%"])
+
+                    // Search in Address (plain text)
+                    ->orWhere('address', 'LIKE', "%{$searchTerm}%");
+            });
+        }
+
+        // 2. LISTING TYPE
+        if ($request->has('listing_type')) {
+            $query->where('listing_type', $request->listing_type);
+        }
+
+        // 3. PRICE FILTERS
+        $currency = strtolower($request->get('currency', 'usd'));
+        if ($request->has('min_price')) {
+            $query->whereRaw("JSON_EXTRACT(price, '$.{$currency}') >= ?", [$request->min_price]);
+        }
+        if ($request->has('max_price')) {
+            $query->whereRaw("JSON_EXTRACT(price, '$.{$currency}') <= ?", [$request->max_price]);
+        }
+
+        // 4. BEDROOMS
+        if ($request->has('bedrooms')) {
+            $query->whereRaw("JSON_EXTRACT(rooms, '$.bedroom.count') = ?", [$request->bedrooms]);
+        }
+
+        // 5. BATHROOMS
+        if ($request->has('bathrooms')) {
+            $query->whereRaw("JSON_EXTRACT(rooms, '$.bathroom.count') = ?", [$request->bathrooms]);
+        }
+
+        // 6. AREA FILTERS
+        if ($request->has('min_area')) {
+            $query->where('area', '>=', $request->min_area);
+        }
+        if ($request->has('max_area')) {
+            $query->where('area', '<=', $request->max_area);
+        }
+
+        // 7. PROPERTY TYPE
+        if ($request->has('property_type')) {
+            $type = strtolower($request->property_type);
+            $query->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?", [$type]);
+        }
+
+        // 8. FURNISHED
+        if ($request->has('furnished')) {
+            $query->where('furnished', $request->boolean('furnished'));
+        }
+
+        // 9. CITY FILTER (Multilingual)
+        if ($request->has('city')) {
+            $city = $request->city;
+            $query->where(function ($q) use ($city) {
+                $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE LOWER(?)", ["%{$city}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar')) LIKE ?", ["%{$city}%"])
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku')) LIKE ?", ["%{$city}%"]);
+            });
+        }
+
+        // 10. UTILITIES
+        if ($request->has('electricity')) {
+            $query->where('electricity', $request->boolean('electricity'));
+        }
+        if ($request->has('water')) {
+            $query->where('water', $request->boolean('water'));
+        }
+        if ($request->has('internet')) {
+            $query->where('internet', $request->boolean('internet'));
+        }
+    }
     public function show($id)
     {
         try {
             $property = Property::find($id);
-
             if (!$property) {
-                return ApiResponse::error(
-                    'Property not found',
-                    ['id' => $id],
-                    404
-                );
+                return ApiResponse::error('Property not found', ['id' => $id], 404);
             }
 
-            // Increment views
             $property->increment('views');
-
-            // ✅ Track user view if authenticated
             $user = auth('sanctum')->user();
 
-            // ✅ ADD DEBUG LOGGING
-            Log::info('🔍 Property View Attempt', [
-                'property_id' => $id,
-                'user_authenticated' => $user ? 'YES' : 'NO',
-                'user_id' => $user?->id,
-            ]);
-
+            // ✅ TRACK VIEW (Insert to property_views table)
             if ($user) {
-                try {
-                    $tracked = $this->interactionService->trackView($user->id, $property->id, [
-                        'source' => request()->header('X-Source', 'app'),
-                        'user_agent' => request()->header('User-Agent'),
-                    ]);
-
-                    Log::info('✅ Tracking Result', [
-                        'success' => $tracked,
-                        'user_id' => $user->id,
-                        'property_id' => $id,
-                    ]);
-                } catch (\Exception $e) {
-                    Log::error('❌ Tracking Failed', [
-                        'error' => $e->getMessage(),
-                        'user_id' => $user->id,
-                        'property_id' => $id,
-                    ]);
-                }
+                $this->interactionService->trackView($user->id, $property->id, [
+                    'source' => request()->header('X-Source', 'app'),
+                    'user_agent' => request()->header('User-Agent'),
+                ]);
             }
 
             return ApiResponse::success(
@@ -320,18 +274,8 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Property show error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'property_id' => $id
-            ]);
-
-            return ApiResponse::error(
-                'Failed to retrieve property',
-                $e->getMessage(),
-                500
-            );
+            Log::error('Property show error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to retrieve property', $e->getMessage(), 500);
         }
     }
     public function create()
@@ -735,89 +679,44 @@ class PropertyController extends Controller
     public function nearby(Request $request)
     {
         try {
-            $validator = Validator::make($request->all(), [
-                'lat' => 'required|numeric|between:-90,90',
-                'lng' => 'required|numeric|between:-180,180',
-                'radius' => 'integer|min:1|max:100',
-                'limit' => 'integer|min:1|max:50',
-                'language' => 'in:en,ar,ku'
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Invalid parameters for nearby search',
-                    $validator->errors(),
-                    400
-                );
-            }
-
             $lat = $request->lat;
             $lng = $request->lng;
             $radius = $request->get('radius', 10);
             $limit = $request->get('limit', 10);
-            $language = $request->get('language', 'en');
             $user = auth('sanctum')->user();
-
-            // ✅ LOG: Start
-            Log::info('📍 NEARBY: Request started', [
-                'endpoint' => 'nearby',
-                'user_authenticated' => $user ? 'YES' : 'NO',
-                'user_id' => $user?->id,
-                'coordinates' => ['lat' => $lat, 'lng' => $lng],
-                'radius_km' => $radius,
-                'limit' => $limit,
-            ]);
 
             $query = Property::whereRaw(
                 "(6371 * acos(cos(radians(?)) * cos(radians(JSON_EXTRACT(locations, '$[0].lat'))) * cos(radians(JSON_EXTRACT(locations, '$[0].lng')) - radians(?)) + sin(radians(?)) * sin(radians(JSON_EXTRACT(locations, '$[0].lat'))))) <= ?",
                 [$lat, $lng, $lat, $radius]
             )->where('is_active', true);
 
-            // ✅ LOG: User exclusion logic
+            // Apply user exclusion for viewed properties
             if ($user) {
                 $viewedProperties = $user->recently_viewed_properties ?? [];
-                $viewedCount = count($viewedProperties);
-
-                Log::info('👤 NEARBY: User viewing history', [
-                    'user_id' => $user->id,
-                    'has_viewed_properties' => $viewedCount > 0 ? 'YES' : 'NO',
-                    'viewed_count' => $viewedCount,
-                ]);
-
-                if ($viewedCount > 0) {
+                if (count($viewedProperties) > 0) {
                     $query->whereNotIn('id', $viewedProperties);
-                    Log::info('✅ NEARBY: Exclusion applied', [
-                        'excluded_count' => $viewedCount,
-                        'reason' => 'User has viewing history',
-                    ]);
-                } else {
-                    Log::info('ℹ️ NEARBY: No exclusion needed', [
-                        'reason' => 'User has no viewing history',
-                    ]);
                 }
-            } else {
-                Log::info('ℹ️ NEARBY: No exclusion applied', [
-                    'reason' => 'User not authenticated',
-                ]);
             }
 
             $properties = $query->limit($limit)->get();
 
-            Log::info('✅ NEARBY: Success', [
-                'properties_found' => $properties->count(),
-                'search_radius_km' => $radius,
-                'center_point' => ['lat' => $lat, 'lng' => $lng],
-                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
-            ]);
+            // ✅ TRACK IMPRESSIONS - Track nearby search results
+            if ($user && $properties->isNotEmpty()) {
+                $this->interactionService->trackImpressions(
+                    $user->id,
+                    $properties,
+                    'nearby',
+                    ['lat' => $lat, 'lng' => $lng, 'radius' => $radius]
+                );
+            }
 
-            $transformedData = $properties->map(function ($property) use ($language, $lat, $lng) {
+            $transformedData = $properties->map(function ($property) use ($lat, $lng) {
                 $propertyLat = $property->locations[0]['lat'] ?? 0;
                 $propertyLng = $property->locations[0]['lng'] ?? 0;
                 $distance = $this->calculateDistance($lat, $lng, $propertyLat, $propertyLng);
 
-                $data = $this->transformPropertyForSearch($property, $language);
+                $data = $this->transformPropertyData($property);
                 $data['distance_km'] = round($distance, 2);
-
                 return $data;
             });
 
@@ -825,26 +724,14 @@ class PropertyController extends Controller
                 'Nearby properties found',
                 [
                     'data' => $transformedData,
+                    'total' => $transformedData->count(),
                     'search_center' => ['lat' => $lat, 'lng' => $lng],
-                    'radius_km' => $radius,
-                    'total_found' => $transformedData->count()
                 ],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('❌ NEARBY: Error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'user_id' => auth('sanctum')->user()?->id,
-                'coordinates' => ['lat' => $request->lat, 'lng' => $request->lng],
-            ]);
-
-            return ApiResponse::error(
-                'Failed to find nearby properties',
-                $e->getMessage(),
-                500
-            );
+            Log::error('Nearby error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to find nearby properties', $e->getMessage(), 500);
         }
     }
     /**
@@ -1380,74 +1267,7 @@ class PropertyController extends Controller
 
 
 
-    public function getFeatured(Request $request)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'limit' => 'integer|min:1|max:50',
-                'language' => 'in:en,ar,ku',
-                'strategy' => 'in:balanced,premium,engagement,recent'
-            ]);
 
-            if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Invalid parameters',
-                    $validator->errors(),
-                    400
-                );
-            }
-
-            // ✅ FIX 1: Retrieve the user here
-            $user = auth('sanctum')->user();
-
-            $limit = $request->get('limit', 10);
-            $language = $request->get('language', 'en');
-            $strategy = $request->get('strategy', 'balanced');
-
-            // Base query
-            $baseQuery = Property::where('is_active', true)
-                ->where('published', true)
-                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
-
-            // Get the properties (Collection)
-            $featured = $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
-
-            // ✅ FIX 2: Track impressions (Now $user is defined)
-            if ($user && $featured->isNotEmpty()) {
-                $this->interactionService->trackImpressions($user->id, $featured, 'featured');
-            }
-
-            // Transform using FULL property data
-            $transformedData = $featured->map(function ($property) use ($language) {
-                $propertyData = $this->transformPropertyData($property);
-                $propertyData['featured_reason'] = $this->getFeaturedReason($property);
-                $propertyData['featured_score'] = $this->calculateFeaturedScore($property);
-                return $propertyData;
-            });
-
-            return ApiResponse::success(
-                'Featured properties retrieved',
-                [
-                    'data' => $transformedData,
-                    'total' => $transformedData->count(),
-                    'strategy' => $strategy
-                ],
-                200
-            );
-        } catch (\Exception $e) {
-            Log::error('Featured properties error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine()
-            ]);
-
-            return ApiResponse::error(
-                'Failed to get featured properties',
-                $e->getMessage(),
-                500
-            );
-        }
-    }
 
 
     /**
@@ -1473,78 +1293,33 @@ class PropertyController extends Controller
     public function getRecommended(Request $request)
     {
         try {
-            $validator = Validator::make($request->all(), [
-                'limit' => 'integer|min:1|max:50',
-                'language' => 'in:en,ar,ku',
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
-            }
-
             $limit = $request->get('limit', 20);
             $user = auth('sanctum')->user();
 
-            Log::info('🎯 RECOMMENDED: Request started', [
-                'endpoint' => 'getRecommended',
-                'user_authenticated' => $user ? 'YES' : 'NO',
-                'user_id' => $user?->id,
-                'limit' => $limit,
-            ]);
-
-            // 1. Fetch the Properties (Logic remains the same)
             if ($user) {
-                Log::info('👤 RECOMMENDED: Fetching personalized', [
-                    'user_id' => $user->id,
-                    'strategy' => 'personalized',
-                ]);
-
                 try {
                     $properties = $this->interactionService->getPersonalizedRecommendations($user->id, $limit);
-
-                    Log::info('✅ RECOMMENDED: Personalized success', [
-                        'user_id' => $user->id,
-                        'properties_found' => $properties->count(),
-                        'based_on_history' => true,
-                    ]);
                 } catch (\Exception $e) {
-                    Log::error('❌ RECOMMENDED: Personalized failed, falling back to general', [
-                        'user_id' => $user->id,
-                        'error' => $e->getMessage(),
-                    ]);
-
-                    // Fallback query
+                    // Fallback to general recommendations
                     $properties = Property::query()
                         ->where('is_active', true)
                         ->where('published', true)
                         ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                        ->selectRaw('*, ((CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) + (CASE WHEN verified = 1 THEN 20 ELSE 0 END) + (LEAST(views, 100) * 0.15) + (LEAST(favorites_count, 50) * 0.5) + (rating * 5) + (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20 WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15 WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)) as recommendation_score')
-                        ->orderByDesc('recommendation_score')
+                        ->orderByDesc('created_at')
                         ->limit($limit)
                         ->get();
                 }
             } else {
-                Log::info('ℹ️ RECOMMENDED: Fetching general', [
-                    'reason' => 'User not authenticated',
-                    'strategy' => 'general',
-                ]);
-
                 $properties = Property::query()
                     ->where('is_active', true)
                     ->where('published', true)
                     ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                    ->selectRaw('*, ((CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) + (CASE WHEN verified = 1 THEN 20 ELSE 0 END) + (LEAST(views, 100) * 0.15) + (LEAST(favorites_count, 50) * 0.5) + (rating * 5) + (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 20 WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15 WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)) as recommendation_score')
-                    ->orderByDesc('recommendation_score')
+                    ->orderByDesc('created_at')
                     ->limit($limit)
                     ->get();
-
-                Log::info('✅ RECOMMENDED: General success', [
-                    'properties_found' => $properties->count(),
-                    'strategy_used' => 'general',
-                ]);
             }
 
-            // ✅ 2. Track Impressions (Insert logic here, before transformation)
+            // ✅ TRACK IMPRESSIONS - Track recommended properties
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions(
                     $user->id,
@@ -1553,15 +1328,9 @@ class PropertyController extends Controller
                 );
             }
 
-            // ✅ 3. Transform Data (Do this ONCE)
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
             });
-
-            Log::info('✅ RECOMMENDED: Response ready', [
-                'total_properties' => $transformedData->count(),
-                'personalized' => $user ? true : false,
-            ]);
 
             return ApiResponse::success(
                 'Recommended properties retrieved',
@@ -1573,13 +1342,7 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('❌ RECOMMENDED: Fatal error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'user_id' => auth('sanctum')->user()?->id,
-            ]);
-
+            Log::error('Recommended error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get recommended properties', $e->getMessage(), 500);
         }
     }
@@ -1965,6 +1728,49 @@ class PropertyController extends Controller
     /**
      * Get human-readable reason why property is featured
      */
+    public function getFeatured(Request $request)
+    {
+        try {
+            $limit = $request->get('limit', 10);
+            $user = auth('sanctum')->user();
+            $strategy = $request->get('strategy', 'balanced');
+
+            $baseQuery = Property::where('is_active', true)
+                ->where('published', true)
+                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
+
+            $featured = $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
+
+            // ✅ TRACK IMPRESSIONS - Track featured properties
+            if ($user && $featured->isNotEmpty()) {
+                $this->interactionService->trackImpressions(
+                    $user->id,
+                    $featured,
+                    'featured'
+                );
+            }
+
+            $transformedData = $featured->map(function ($property) {
+                $propertyData = $this->transformPropertyData($property);
+                $propertyData['featured_reason'] = $this->getFeaturedReason($property);
+                return $propertyData;
+            });
+
+            return ApiResponse::success(
+                'Featured properties retrieved',
+                [
+                    'data' => $transformedData,
+                    'total' => $transformedData->count(),
+                    'strategy' => $strategy,
+                ],
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Featured error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to get featured properties', $e->getMessage(), 500);
+        }
+    }
+
     private function getFeaturedReason($property)
     {
         $reasons = [];
@@ -2005,45 +1811,6 @@ class PropertyController extends Controller
 
         return $reasons;
     }
-
-    /**
-     * Add a property to featured (admin function)
-     */
-    public function addToFeatured(Request $request, $id)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'featured_until' => 'nullable|date|after:now',
-                'reason' => 'nullable|string|max:255',
-                'priority' => 'integer|between:1,10'
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
-            }
-
-            $property = Property::find($id);
-            if (!$property) {
-                return ApiResponse::error('Property not found', ['id' => $id], 404);
-            }
-
-            // Add to featured (you might want a separate featured_properties table)
-            $property->update([
-                'is_boosted' => true,
-                'boost_start_date' => now(),
-                'boost_end_date' => $request->get('featured_until'),
-            ]);
-
-            return ApiResponse::success('Property added to featured', [
-                'id' => $property->id,
-                'featured_until' => $request->get('featured_until'),
-                'reason' => $request->get('reason'),
-            ], 200);
-        } catch (\Exception $e) {
-            return ApiResponse::error('Failed to add to featured', $e->getMessage(), 500);
-        }
-    }
-
     /**
      * Remove from featured
      */
@@ -3119,160 +2886,66 @@ class PropertyController extends Controller
     {
         try {
             $user = auth('sanctum')->user();
-
-            // Log request for debugging
-            Log::info('Map properties request', [
-                'user_id' => $user?->id,
-                'request_data' => $request->all()
-            ]);
-
-            $requestData = $request->all();
-            if (isset($requestData['ignore_preferences'])) {
-                $requestData['ignore_preferences'] = filter_var($requestData['ignore_preferences'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-            }
-
-            // Validation
-            $validator = Validator::make($request->all(), [
-                'bounds' => 'nullable|array',
-                'bounds.north' => 'required_with:bounds|numeric|between:-90,90',
-                'bounds.south' => 'required_with:bounds|numeric|between:-90,90',
-                'bounds.east' => 'required_with:bounds|numeric|between:-180,180',
-                'bounds.west' => 'required_with:bounds|numeric|between:-180,180',
-                'zoom_level' => 'integer|min:1|max:20',
-                'limit' => 'integer|min:1|max:500',
-                'language' => 'in:en,ar,ku',
-                'ignore_preferences' => 'nullable|in:true,false,1,0',
-                'status' => 'nullable|in:sale,rent,sold',
-                'min_price' => 'nullable|numeric|min:0',
-                'max_price' => 'nullable|numeric|min:0',
-                'property_type' => 'nullable|string',
-                'bedrooms' => 'nullable|integer|min:0',
-            ]);
-
-            if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Invalid map parameters',
-                    $validator->errors(),
-                    400
-                );
-            }
-
-            // Extract parameters
             $bounds = $request->get('bounds');
-            $zoomLevel = $request->get('zoom_level', 10);
             $limit = $request->get('limit', 200);
-            $language = $request->get('language', 'en');
-            $ignorePreferences = $request->boolean('ignore_preferences', false);
 
-            // Base query - exclude cancelled and pending properties (same as index method)
             $query = Property::query()
                 ->active()
                 ->published()
                 ->whereNotIn('status', ['cancelled', 'pending'])
                 ->whereNotNull('locations');
 
-            $baseCount = $query->count();
-            Log::info('Debug - Base query count: ' . $baseCount);
-
-            // Apply map bounds filter
+            // Apply bounds filter
             if ($bounds) {
-                Log::info('Debug - Applying bounds filter', $bounds);
-
-                // Updated bounds query to work with array structure
                 $query->whereExists(function ($subQuery) use ($bounds) {
                     $subQuery->selectRaw('1')
                         ->from('properties as p2')
                         ->whereColumn('p2.id', 'properties.id')
                         ->whereRaw("JSON_LENGTH(p2.locations) > 0")
                         ->whereRaw("
-                    JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lat') BETWEEN ? AND ?
-                    AND JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lng') BETWEEN ? AND ?
-                ", [$bounds['south'], $bounds['north'], $bounds['west'], $bounds['east']]);
+                        JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lat') BETWEEN ? AND ?
+                        AND JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lng') BETWEEN ? AND ?
+                    ", [$bounds['south'], $bounds['north'], $bounds['west'], $bounds['east']]);
                 });
-
-                $boundsCount = $query->count();
-                Log::info('Properties within bounds: ' . $boundsCount);
             }
 
-            // Apply basic filters
             $this->applyBasicMapFilters($query, $request);
+            $properties = $query->limit($limit)->get();
 
-            // Apply user preferences if authenticated and not ignored
-            if ($user && !$ignorePreferences) {
-                $userPreferences = $user->search_preferences ?? $this->getDefaultSearchPreferences();
-                $this->applyUserPreferencesToMapQuery($query, $userPreferences, $user);
+            // ✅ TRACK IMPRESSIONS - Track map browsing
+            if ($user && $properties->isNotEmpty()) {
+                $this->interactionService->trackImpressions(
+                    $user->id,
+                    $properties,
+                    'map',
+                    ['bounds' => $bounds]
+                );
             }
 
-            // Apply sorting - boosted first, then by relevance
-            $this->applyMapSorting($query, $user);
-
-            // Get properties
-            $properties = $query->limit($limit)->get();
-            Log::info('Retrieved properties count: ' . $properties->count());
-
-            // Transform properties using the same method as index - this gives us the full Laravel model structure
             $transformedData = collect($properties)->map(function ($property) {
-                // Use the exact same transformation as index method
                 $propertyData = $this->transformPropertyData($property);
-
-                // Extract coordinates from the locations array
                 $coordinates = $this->getPropertyCoordinates($property);
-
-                // Add coordinates to the property data for map use
                 $propertyData['coordinates'] = [
                     'lat' => (float) ($coordinates['lat'] ?? 0),
                     'lng' => (float) ($coordinates['lng'] ?? 0),
                 ];
-
                 return $propertyData;
             })->filter(function ($property) {
-                // Only include properties with valid coordinates
                 return $property['coordinates']['lat'] != 0 && $property['coordinates']['lng'] != 0;
             });
-
-            Log::info('Debug - Final results', [
-                'total_properties_processed' => $properties->count(),
-                'valid_coordinates' => $transformedData->count(),
-            ]);
-
-            // Generate clusters for lower zoom levels
-            $clusters = [];
-            if ($zoomLevel < 12 && $transformedData->count() > 20) {
-                $clusters = $this->generateSimpleMapClusters($transformedData->toArray(), $zoomLevel);
-            }
-
-            // Generate statistics
-            $statistics = $this->generateSimpleMapStatistics($transformedData);
 
             return ApiResponse::success(
                 'Map properties retrieved successfully',
                 [
                     'data' => $transformedData->values(),
-                    'clusters' => $clusters,
-                    'statistics' => $statistics,
                     'total' => $transformedData->count(),
-                    'meta' => [
-                        'bounds' => $bounds,
-                        'zoom_level' => $zoomLevel,
-                        'user_preferences_applied' => $user && !$ignorePreferences,
-                    ]
+                    'bounds' => $bounds,
                 ],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Map properties error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'request' => $request->all(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return ApiResponse::error(
-                'Failed to load map properties',
-                config('app.debug') ? $e->getMessage() : 'Internal server error',
-                500
-            );
+            Log::error('Map error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to load map properties', $e->getMessage(), 500);
         }
     }
 
