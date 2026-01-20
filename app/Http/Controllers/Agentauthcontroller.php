@@ -863,7 +863,33 @@ class AgentAuthController extends Controller
 
     public function updateProfile(Request $request)
     {
+        Log::info('==================== UPDATE PROFILE STARTED ====================');
+
         $agent = Auth::guard('agent')->user();
+
+        Log::info('1. Agent Retrieved from Auth', [
+            'agent_id' => $agent->id,
+            'agent_name' => $agent->agent_name,
+            'current_profile_image' => $agent->profile_image,
+            'current_bio_image' => $agent->bio_image,
+        ]);
+
+        Log::info('2. Request Data Received', [
+            'agent_name' => $request->agent_name,
+            'primary_phone' => $request->primary_phone,
+            'whatsapp_number' => $request->whatsapp_number,
+            'city' => $request->city,
+            'district' => $request->district,
+            'license_number' => $request->license_number,
+            'years_experience' => $request->years_experience,
+            'agent_bio' => $request->agent_bio,
+            'office_address' => $request->office_address,
+            'latitude' => $request->latitude,
+            'longitude' => $request->longitude,
+            'working_hours' => $request->working_hours,
+            'has_profile_image' => $request->hasFile('profile_image'),
+            'has_bio_image' => $request->hasFile('bio_image'),
+        ]);
 
         $request->validate([
             'agent_name' => 'required|string|max:255',
@@ -882,34 +908,77 @@ class AgentAuthController extends Controller
             'working_hours' => 'nullable|json',
         ]);
 
+        Log::info('3. Validation Passed ✓');
+
         try {
             // ✅ FIX: Handle profile image upload - STORE RELATIVE PATH ONLY
             if ($request->hasFile('profile_image')) {
+                Log::info('4. Profile Image Upload Started');
+
                 // Delete old image if exists
                 if ($agent->profile_image) {
                     $oldPath = str_replace(asset('storage/'), '', $agent->profile_image);
+                    Log::info('4a. Deleting old profile image', ['old_path' => $oldPath]);
+
                     if (Storage::disk('public')->exists($oldPath)) {
                         Storage::disk('public')->delete($oldPath);
+                        Log::info('4b. Old profile image deleted successfully');
+                    } else {
+                        Log::warning('4b. Old profile image not found in storage');
                     }
                 }
+
                 // Store new image - ONLY save the path, not the full URL
                 $path = $request->file('profile_image')->store('agents/profiles', 'public');
                 $agent->profile_image = 'storage/' . $path; // ✅ Relative path
+
+                Log::info('4c. New profile image stored', [
+                    'stored_path' => $path,
+                    'saved_to_db' => $agent->profile_image,
+                ]);
             }
 
             // ✅ FIX: Handle bio image upload - STORE RELATIVE PATH ONLY
             if ($request->hasFile('bio_image')) {
+                Log::info('5. Bio Image Upload Started');
+
                 // Delete old image if exists
                 if ($agent->bio_image) {
                     $oldPath = str_replace(asset('storage/'), '', $agent->bio_image);
+                    Log::info('5a. Deleting old bio image', ['old_path' => $oldPath]);
+
                     if (Storage::disk('public')->exists($oldPath)) {
                         Storage::disk('public')->delete($oldPath);
+                        Log::info('5b. Old bio image deleted successfully');
+                    } else {
+                        Log::warning('5b. Old bio image not found in storage');
                     }
                 }
+
                 // Store new image - ONLY save the path
                 $path = $request->file('bio_image')->store('agents/bio', 'public');
                 $agent->bio_image = 'storage/' . $path; // ✅ Relative path
+
+                Log::info('5c. New bio image stored', [
+                    'stored_path' => $path,
+                    'saved_to_db' => $agent->bio_image,
+                ]);
             }
+
+            Log::info('6. Updating Basic Fields');
+
+            // Store OLD values before update
+            $oldValues = [
+                'agent_name' => $agent->agent_name,
+                'primary_phone' => $agent->primary_phone,
+                'whatsapp_number' => $agent->whatsapp_number,
+                'city' => $agent->city,
+                'district' => $agent->district,
+                'years_experience' => $agent->years_experience,
+                'working_hours' => $agent->working_hours,
+            ];
+
+            Log::info('6a. OLD Values', $oldValues);
 
             // Update basic fields
             $agent->agent_name = $request->agent_name;
@@ -926,27 +995,79 @@ class AgentAuthController extends Controller
 
             // ✅ Save Working Hours
             if ($request->has('working_hours')) {
+                Log::info('7. Working Hours Detected', [
+                    'working_hours_json' => $request->working_hours
+                ]);
                 $agent->working_hours = $request->working_hours;
             }
 
+            // Store NEW values before save
+            $newValues = [
+                'agent_name' => $agent->agent_name,
+                'primary_phone' => $agent->primary_phone,
+                'whatsapp_number' => $agent->whatsapp_number,
+                'city' => $agent->city,
+                'district' => $agent->district,
+                'years_experience' => $agent->years_experience,
+                'working_hours' => $agent->working_hours,
+            ];
+
+            Log::info('6b. NEW Values (Before Save)', $newValues);
+
+            // Check if model is dirty (has changes)
+            Log::info('8. Model Dirty Check', [
+                'is_dirty' => $agent->isDirty(),
+                'dirty_fields' => $agent->getDirty(),
+            ]);
+
             // ✅ FIX: Save and refresh the authenticated user
-            $agent->save();
+            $saveResult = $agent->save();
+
+            Log::info('9. Save Operation Result', [
+                'save_success' => $saveResult,
+                'agent_id' => $agent->id,
+            ]);
+
+            // Verify data was actually saved
+            $freshAgent = Agent::find($agent->id);
+            Log::info('10. Fresh Agent Data from DB', [
+                'agent_name' => $freshAgent->agent_name,
+                'primary_phone' => $freshAgent->primary_phone,
+                'city' => $freshAgent->city,
+                'years_experience' => $freshAgent->years_experience,
+                'working_hours' => $freshAgent->working_hours,
+                'profile_image' => $freshAgent->profile_image,
+                'bio_image' => $freshAgent->bio_image,
+            ]);
 
             // ✅ CRITICAL: Refresh the auth guard to reflect changes immediately
             Auth::guard('agent')->setUser($agent->fresh());
 
-            Log::info('Agent profile updated successfully', ['agent_id' => $agent->id]);
+            Log::info('11. Auth Guard Refreshed');
+
+            $authAgent = Auth::guard('agent')->user();
+            Log::info('12. Auth Agent After Refresh', [
+                'agent_name' => $authAgent->agent_name,
+                'city' => $authAgent->city,
+                'working_hours' => $authAgent->working_hours,
+            ]);
+
+            Log::info('==================== UPDATE PROFILE SUCCESS ====================');
 
             return redirect()->route('agent.profile', $agent->id)
                 ->with('success', 'Profile updated successfully!');
-        } catch (Exception $e) {
-            Log::error('Agent profile update failed', [
+        } catch (\Exception $e) {
+            Log::error('==================== UPDATE PROFILE FAILED ====================');
+            Log::error('Error Details', [
                 'agent_id' => $agent->id,
-                'error' => $e->getMessage()
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'stack_trace' => $e->getTraceAsString(),
             ]);
 
             return back()->withInput()
-                ->with('error', 'Failed to update profile. Please try again.');
+                ->with('error', 'Failed to update profile: ' . $e->getMessage());
         }
     }
 
