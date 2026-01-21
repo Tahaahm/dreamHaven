@@ -27,6 +27,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Models\ServiceProviderPlan;
+use App\Models\Category;
 
 class AdminController extends Controller
 {
@@ -1427,36 +1429,179 @@ class AdminController extends Controller
     // SERVICE PROVIDERS
     // ==========================================
 
-    public function serviceProvidersIndex()
+    public function serviceProvidersIndex(Request $request)
     {
-        $providers = ServiceProvider::with('category')->paginate(15);
+        $query = ServiceProvider::with(['category', 'plan']);
+
+        if ($request->has('search')) {
+            $query->where('company_name', 'like', "%{$request->search}%")
+                ->orWhere('email_address', 'like', "%{$request->search}%");
+        }
+
+        if ($request->has('verified')) {
+            $query->where('is_verified', $request->verified == '1');
+        }
+
+        $providers = $query->latest()->paginate(15)->withQueryString();
         return view('admin.service-providers.index', compact('providers'));
     }
 
+    public function serviceProvidersCreate()
+    {
+        $categories = \App\Models\Category::all(); // Assuming Category model exists
+        $plans = \App\Models\ServiceProviderPlan::where('active', true)->get();
+        return view('admin.service-providers.create', compact('categories', 'plans'));
+    }
     public function serviceProvidersShow($id)
     {
-        $provider = ServiceProvider::with(['category', 'galleries', 'offerings', 'reviews'])->findOrFail($id);
+        $provider = ServiceProvider::with(['category', 'plan', 'galleries', 'offerings', 'reviews'])->findOrFail($id);
         return view('admin.service-providers.show', compact('provider'));
     }
 
     public function serviceProvidersEdit($id)
     {
         $provider = ServiceProvider::findOrFail($id);
-        return view('admin.service-providers.edit', compact('provider'));
+        $categories = \App\Models\Category::all();
+        $plans = \App\Models\ServiceProviderPlan::where('active', true)->get();
+        return view('admin.service-providers.edit', compact('provider', 'categories', 'plans'));
     }
 
     public function serviceProvidersUpdate(Request $request, $id)
     {
         $provider = ServiceProvider::findOrFail($id);
-        $provider->update($request->all());
-        return redirect()->route('admin.service-providers.index')->with('success', 'Service provider updated!');
+
+        $validator = Validator::make($request->all(), [
+            'company_name' => 'required|string|max:255',
+            'category_id' => 'required|exists:categories,id',
+            'email_address' => 'required|email|unique:service_providers,email_address,' . $id,
+            'phone_number' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // 1. Update Base Info
+            $data = $request->except([
+                'profile_image',
+                'plan_id',
+                'gallery_images',
+                'gallery_titles',
+                'gallery_descriptions',
+                'gallery_existing_images', // Added this
+                'offering_titles',
+                'offering_descriptions',
+                'offering_prices',
+                'offering_active',
+                'reviewer_names',
+                'reviewer_ratings',
+                'reviewer_contents',
+                'reviewer_service_types',
+                'reviewer_dates',
+                'reviewer_verified',
+                'reviewer_featured'
+            ]);
+
+            if ($request->hasFile('profile_image')) {
+                // Delete old image if exists
+                if ($provider->profile_image) {
+                    $oldPath = str_replace(asset('storage/'), '', $provider->profile_image);
+                    if (Storage::disk('public')->exists($oldPath)) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                }
+                $path = $request->file('profile_image')->store('service_providers/profiles', 'public');
+                $data['profile_image'] = asset('storage/' . $path);
+            }
+
+            $data['is_verified'] = $request->has('is_verified');
+
+            if ($request->filled('plan_id') && $request->plan_id != $provider->plan_id) {
+                $data['plan_id'] = $request->plan_id;
+                $data['plan_active'] = true;
+                $data['plan_expires_at'] = now()->addMonth();
+            }
+
+            $provider->update($data);
+
+            // 2. Handle Galleries (Fixed Logic)
+            if ($request->has('gallery_titles')) {
+                $provider->galleries()->delete(); // Wipe old items
+
+                foreach ($request->gallery_titles as $index => $title) {
+                    $imageUrl = null;
+
+                    // Case A: New File Uploaded
+                    if (isset($request->file('gallery_images')[$index])) {
+                        $imagePath = $request->file('gallery_images')[$index]->store('service_providers/gallery', 'public');
+                        $imageUrl = asset('storage/' . $imagePath);
+                    }
+                    // Case B: No new file, use existing URL (passed from hidden input)
+                    elseif (isset($request->gallery_existing_images[$index])) {
+                        $imageUrl = $request->gallery_existing_images[$index];
+                    }
+
+                    // Only create if we have a valid image URL
+                    if ($imageUrl) {
+                        $provider->galleries()->create([
+                            'project_title' => $title,
+                            'description' => $request->gallery_descriptions[$index] ?? null,
+                            'image_url' => $imageUrl,
+                            'sort_order' => $index,
+                        ]);
+                    }
+                }
+            }
+
+            // 3. Handle Offerings
+            if ($request->has('offering_titles')) {
+                $provider->offerings()->delete();
+                foreach ($request->offering_titles as $index => $title) {
+                    if ($title) {
+                        $provider->offerings()->create([
+                            'service_title' => $title,
+                            'service_description' => $request->offering_descriptions[$index] ?? null,
+                            'price_range' => $request->offering_prices[$index] ?? null,
+                            'active' => isset($request->offering_active[$index]),
+                            'sort_order' => $index,
+                        ]);
+                    }
+                }
+            }
+
+            // 4. Handle Reviews
+            if ($request->has('reviewer_names')) {
+                $provider->reviews()->delete();
+                foreach ($request->reviewer_names as $index => $name) {
+                    if ($name) {
+                        $provider->reviews()->create([
+                            'reviewer_name' => $name,
+                            'star_rating' => $request->reviewer_ratings[$index] ?? 5,
+                            'review_content' => $request->reviewer_contents[$index] ?? null,
+                            'review_date' => $request->reviewer_dates[$index] ?? now(),
+                            'is_verified' => isset($request->reviewer_verified[$index]),
+                            'is_featured' => isset($request->reviewer_featured[$index]),
+                        ]);
+                    }
+                }
+            }
+
+            DB::commit();
+            return redirect()->route('admin.service-providers.index')->with('success', 'Service Provider updated successfully');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return back()->with('error', 'Update failed: ' . $e->getMessage());
+        }
     }
 
     public function serviceProvidersDelete($id)
     {
         $provider = ServiceProvider::findOrFail($id);
         $provider->delete();
-        return redirect()->route('admin.service-providers.index')->with('success', 'Service provider deleted!');
+        return back()->with('success', 'Service Provider deleted successfully');
     }
 
     public function serviceProvidersVerify($id)
@@ -1465,7 +1610,11 @@ class AdminController extends Controller
         $provider->update(['is_verified' => true]);
         return back()->with('success', 'Service provider verified!');
     }
-
+    public function serviceProviderPlansIndex()
+    {
+        $plans = \App\Models\ServiceProviderPlan::orderBy('sort_order')->paginate(15);
+        return view('admin.service-provider-plans.index', compact('plans'));
+    }
     // ==========================================
     // REVIEWS & REPORTS
     // ==========================================
@@ -1496,6 +1645,151 @@ class AdminController extends Controller
         return back()->with('success', 'Review approved!');
     }
 
+    public function serviceProvidersStore(Request $request)
+    {
+        Log::info('--- STARTED: Creating Service Provider ---');
+
+        // 1. Log Raw Input (excluding files to keep log clean)
+        Log::info('Incoming Request Data:', $request->except(['profile_image', 'gallery_images']));
+
+        $validator = Validator::make($request->all(), [
+            'company_name' => 'required|string|max:255',
+            'category_id' => 'required|exists:categories,id',
+            'email_address' => 'required|email|unique:service_providers,email_address',
+            'phone_number' => 'required|string',
+            'profile_image' => 'nullable|image|max:2048',
+
+            // Arrays
+            'gallery_images.*' => 'nullable|image|max:2048',
+            'gallery_titles.*' => 'nullable|string',
+            'offering_titles.*' => 'nullable|string',
+            'reviewer_names.*' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            Log::error('Validation Failed:', $validator->errors()->toArray());
+            return back()->withErrors($validator)->withInput();
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // 2. Prepare Base Data
+            $data = $request->except([
+                'profile_image',
+                'plan_id',
+                'gallery_images',
+                'gallery_titles',
+                'gallery_descriptions',
+                'offering_titles',
+                'offering_descriptions',
+                'offering_prices',
+                'offering_active',
+                'reviewer_names',
+                'reviewer_ratings',
+                'reviewer_contents',
+                'reviewer_service_types',
+                'reviewer_dates',
+                'reviewer_verified',
+                'reviewer_featured'
+            ]);
+
+            if ($request->hasFile('profile_image')) {
+                Log::info('Uploading profile image...');
+                $path = $request->file('profile_image')->store('service_providers/profiles', 'public');
+                $data['profile_image'] = asset('storage/' . $path);
+            }
+
+            $data['is_verified'] = $request->has('is_verified');
+
+            if ($request->filled('plan_id')) {
+                Log::info('Assigning Plan ID: ' . $request->plan_id);
+                $data['plan_id'] = $request->plan_id;
+                $data['plan_active'] = true;
+                $data['plan_expires_at'] = now()->addMonth();
+            }
+
+            // 3. Create Main Provider
+            $provider = ServiceProvider::create($data);
+            Log::info('Service Provider Created. ID: ' . $provider->id);
+
+            // 4. Handle Galleries
+            if ($request->has('gallery_titles')) {
+                Log::info('Processing Galleries...');
+                foreach ($request->gallery_titles as $index => $title) {
+                    $imageUrl = null;
+                    if (isset($request->file('gallery_images')[$index])) {
+                        $imagePath = $request->file('gallery_images')[$index]->store('service_providers/gallery', 'public');
+                        $imageUrl = asset('storage/' . $imagePath);
+                    }
+
+                    if ($title || $imageUrl) {
+                        $provider->galleries()->create([
+                            'project_title' => $title,
+                            'description' => $request->gallery_descriptions[$index] ?? null,
+                            'image_url' => $imageUrl,
+                            'sort_order' => $index,
+                        ]);
+                    }
+                }
+            } else {
+                Log::info('No Gallery titles found in request.');
+            }
+
+            // 5. Handle Offerings
+            if ($request->has('offering_titles')) {
+                Log::info('Processing Offerings...');
+                foreach ($request->offering_titles as $index => $title) {
+                    if (!empty($title)) {
+                        $provider->offerings()->create([
+                            'service_title' => $title,
+                            'service_description' => $request->offering_descriptions[$index] ?? null,
+                            'price_range' => $request->offering_prices[$index] ?? null,
+                            'active' => isset($request->offering_active[$index]),
+                            'sort_order' => $index,
+                        ]);
+                    }
+                }
+            } else {
+                Log::info('No Offering titles found.');
+            }
+
+            // 6. Handle Reviews
+            if ($request->has('reviewer_names')) {
+                Log::info('Processing Reviews...');
+                foreach ($request->reviewer_names as $index => $name) {
+                    if (!empty($name)) {
+                        $provider->reviews()->create([
+                            'reviewer_name' => $name,
+                            'star_rating' => $request->reviewer_ratings[$index] ?? 5,
+                            'review_content' => $request->reviewer_contents[$index] ?? null,
+                            'service_type' => $request->reviewer_service_types[$index] ?? null,
+                            'review_date' => $request->reviewer_dates[$index] ?? now(),
+                            'is_verified' => isset($request->reviewer_verified[$index]),
+                            'is_featured' => isset($request->reviewer_featured[$index]),
+                        ]);
+                    }
+                }
+            } else {
+                Log::info('No Reviewer names found.');
+            }
+
+            DB::commit();
+            Log::info('--- SUCCESS: Transaction Committed ---');
+
+            return redirect()->route('admin.service-providers.index')->with('success', 'Service Provider created successfully!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            // This is the critical part: Log the actual error message
+            Log::error('!!! CRITICAL ERROR Creating Provider !!!');
+            Log::error('Message: ' . $e->getMessage());
+            Log::error('Line: ' . $e->getLine());
+            Log::error('File: ' . $e->getFile());
+
+            return back()->with('error', 'Error creating provider: ' . $e->getMessage())->withInput();
+        }
+    }
+
     public function reportsIndex()
     {
         $reports = Report::with(['user', 'property'])->paginate(15);
@@ -1514,7 +1808,10 @@ class AdminController extends Controller
         $report->update(['status' => 'resolved']);
         return back()->with('success', 'Report resolved!');
     }
-
+    public function serviceProviderPlansCreate()
+    {
+        return view('admin.service-provider-plans.create');
+    }
     public function reportsDelete($id)
     {
         $report = Report::findOrFail($id);
@@ -1584,6 +1881,40 @@ class AdminController extends Controller
 
         $admin->update(['password' => Hash::make($request->password)]);
         return back()->with('success', 'Password updated successfully!');
+    }
+
+
+    public function serviceProviderPlansStore(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'monthly_price' => 'required|numeric|min:0',
+            'annual_price' => 'required|numeric|min:0',
+            'features' => 'nullable|string', // We accept string from textarea
+        ]);
+
+        $data = $request->all();
+
+        // Convert newline separated string to array
+        if ($request->filled('features')) {
+            $data['features'] = array_filter(array_map('trim', explode("\n", $request->features)));
+        } else {
+            $data['features'] = [];
+        }
+
+        $data['id'] = Str::lower(str_replace(' ', '_', $request->name)) . '_' . Str::random(4); // Manual ID generation as per model
+        $data['active'] = $request->has('active');
+        $data['most_popular'] = $request->has('most_popular');
+
+        \App\Models\ServiceProviderPlan::create($data);
+
+        return redirect()->route('admin.service-provider-plans.index')->with('success', 'Plan created successfully');
+    }
+
+    public function serviceProviderPlansEdit($id)
+    {
+        $plan = \App\Models\ServiceProviderPlan::findOrFail($id);
+        return view('admin.service-provider-plans.edit', compact('plan'));
     }
     /**
      * Update specific user profile image
@@ -1684,6 +2015,32 @@ class AdminController extends Controller
         return redirect()->route('admin.subscription-plans.index')->with('success', 'Plan created successfully!');
     }
 
+    public function serviceProviderPlansUpdate(Request $request, $id)
+    {
+        $plan = \App\Models\ServiceProviderPlan::findOrFail($id);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'monthly_price' => 'required|numeric|min:0',
+            'annual_price' => 'required|numeric|min:0',
+        ]);
+
+        $data = $request->all();
+
+        if ($request->filled('features')) {
+            $data['features'] = array_filter(array_map('trim', explode("\n", $request->features)));
+        } else {
+            $data['features'] = [];
+        }
+
+        $data['active'] = $request->has('active');
+        $data['most_popular'] = $request->has('most_popular');
+
+        $plan->update($data);
+
+        return redirect()->route('admin.service-provider-plans.index')->with('success', 'Plan updated successfully');
+    }
+
     public function subscriptionPlansEdit($id)
     {
         $plan = SubscriptionPlan::findOrFail($id);
@@ -1751,5 +2108,108 @@ class AdminController extends Controller
         $plan = SubscriptionPlan::findOrFail($id);
         $plan->update(['active' => !$plan->active]);
         return back()->with('success', 'Plan status updated!');
+    }
+
+    public function serviceProviderPlansDelete($id)
+    {
+        $plan = \App\Models\ServiceProviderPlan::findOrFail($id);
+        $plan->delete();
+        return back()->with('success', 'Plan deleted successfully');
+    }
+
+
+
+    // ==========================================
+    // CATEGORIES (SERVICE PROVIDERS)
+    // ==========================================
+
+    public function categoriesIndex(Request $request)
+    {
+        $query = Category::orderBy('sort_order', 'asc');
+
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%' . $request->search . '%');
+        }
+
+        $categories = $query->paginate(10);
+        return view('admin.categories.index', compact('categories'));
+    }
+
+    public function categoriesCreate()
+    {
+        return view('admin.categories.create');
+    }
+
+    public function categoriesStore(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'subtitle' => 'nullable|string|max:255',
+            'image' => 'nullable|image|max:2048',
+            'sort_order' => 'nullable|integer',
+        ]);
+
+        $data = $request->except('image');
+        $data['is_active'] = $request->has('is_active');
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('categories', 'public');
+            $data['image'] = asset('storage/' . $path);
+        }
+
+        Category::create($data);
+
+        return redirect()->route('admin.categories.index')->with('success', 'Category created successfully');
+    }
+
+    public function categoriesEdit($id)
+    {
+        $category = Category::findOrFail($id);
+        return view('admin.categories.edit', compact('category'));
+    }
+
+    public function categoriesUpdate(Request $request, $id)
+    {
+        $category = Category::findOrFail($id);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'subtitle' => 'nullable|string|max:255',
+            'image' => 'nullable|image|max:2048',
+            'sort_order' => 'nullable|integer',
+        ]);
+
+        $data = $request->except('image');
+        $data['is_active'] = $request->has('is_active');
+
+        if ($request->hasFile('image')) {
+            // Optional: Delete old image
+            $path = $request->file('image')->store('categories', 'public');
+            $data['image'] = asset('storage/' . $path);
+        }
+
+        $category->update($data);
+
+        return redirect()->route('admin.categories.index')->with('success', 'Category updated successfully');
+    }
+
+    public function categoriesDelete($id)
+    {
+        $category = Category::findOrFail($id);
+
+        // Prevent deleting if providers are attached
+        if ($category->serviceProviders()->count() > 0) {
+            return back()->with('error', 'Cannot delete category containing service providers.');
+        }
+
+        $category->delete();
+        return back()->with('success', 'Category deleted successfully');
+    }
+
+    public function categoriesToggleActive($id)
+    {
+        $category = Category::findOrFail($id);
+        $category->update(['is_active' => !$category->is_active]);
+        return back()->with('success', 'Category status updated');
     }
 }

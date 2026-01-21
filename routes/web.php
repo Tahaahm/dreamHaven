@@ -785,15 +785,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
     // ========== AUTHENTICATED ADMIN ROUTES ==========
     Route::middleware(['auth:admin'])->group(function () {
 
-        // Logout
+        // Logout & Dashboard
         Route::post('/logout', [AdminController::class, 'logout'])->name('logout');
-
-        // Dashboard
         Route::get('/dashboard', [AdminController::class, 'dashboard'])->name('dashboard');
         Route::get('/stats', [AdminController::class, 'getStats'])->name('stats');
         Route::get('/chart-data', [AdminController::class, 'getChartData'])->name('chart.data');
 
-        // ========== USERS MANAGEMENT ==========
+        // ========== USERS ==========
         Route::prefix('users')->name('users.')->group(function () {
             Route::get('/', [AdminController::class, 'usersIndex'])->name('index');
             Route::get('/create', [AdminController::class, 'usersCreate'])->name('create');
@@ -804,11 +802,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [AdminController::class, 'usersDelete'])->name('delete');
             Route::post('/{id}/suspend', [AdminController::class, 'usersSuspend'])->name('suspend');
             Route::post('/{id}/activate', [AdminController::class, 'usersActivate'])->name('activate');
-
             Route::put('/{id}/update-image', [AdminController::class, 'updateUserImage'])->name('update-image');
         });
 
-        // ========== AGENTS MANAGEMENT ==========
+        // ========== AGENTS ==========
         Route::prefix('agents')->name('agents.')->group(function () {
             Route::get('/', [AdminController::class, 'agentsIndex'])->name('index');
             Route::get('/pending', [AdminController::class, 'agentsPending'])->name('pending');
@@ -820,7 +817,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/suspend', [AdminController::class, 'agentsSuspend'])->name('suspend');
         });
 
-        // ========== REAL ESTATE OFFICES MANAGEMENT ==========
+        // ========== OFFICES ==========
         Route::prefix('offices')->name('offices.')->group(function () {
             Route::get('/', [AdminController::class, 'officesIndex'])->name('index');
             Route::get('/pending', [AdminController::class, 'officesPending'])->name('pending');
@@ -832,7 +829,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/suspend', [AdminController::class, 'officesSuspend'])->name('suspend');
         });
 
-        // ========== PROPERTIES MANAGEMENT ==========
+        // ========== PROPERTIES ==========
         Route::prefix('properties')->name('properties.')->group(function () {
             Route::get('/', [AdminController::class, 'propertiesIndex'])->name('index');
             Route::get('/pending', [AdminController::class, 'propertiesPending'])->name('pending');
@@ -845,7 +842,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/toggle-active', [AdminController::class, 'propertiesToggleActive'])->name('toggle.active');
         });
 
-        // ========== PROJECTS MANAGEMENT ==========
+        // ========== PROJECTS ==========
         Route::prefix('projects')->name('projects.')->group(function () {
             Route::get('/', [AdminController::class, 'projectsIndex'])->name('index');
             Route::get('/{id}', [AdminController::class, 'projectsShow'])->name('show');
@@ -855,7 +852,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/toggle-active', [AdminController::class, 'projectsToggleActive'])->name('toggle.active');
         });
 
-        // ========== BANNERS MANAGEMENT ==========
+        // ========== BANNERS ==========
         Route::prefix('banners')->name('banners.')->group(function () {
             Route::get('/', [AdminController::class, 'bannersIndex'])->name('index');
             Route::get('/create', [AdminController::class, 'bannersCreate'])->name('create');
@@ -871,7 +868,19 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/resume', [AdminController::class, 'bannersResume'])->name('resume');
         });
 
-        // ========== SUBSCRIPTIONS MANAGEMENT ==========
+        // ========== AGENT PLANS (Subscription Plans) ==========
+        Route::prefix('subscription-plans')->name('subscription-plans.')->group(function () {
+            Route::get('/', [AdminController::class, 'subscriptionPlansIndex'])->name('index');
+            Route::get('/create', [AdminController::class, 'subscriptionPlansCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'subscriptionPlansStore'])->name('store');
+            Route::get('/{id}', [AdminController::class, 'subscriptionPlansShow'])->name('show');
+            Route::get('/{id}/edit', [AdminController::class, 'subscriptionPlansEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'subscriptionPlansUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'subscriptionPlansDelete'])->name('delete');
+            Route::post('/{id}/toggle-active', [AdminController::class, 'subscriptionPlansToggleActive'])->name('toggle-active');
+        });
+
+        // ========== SUBSCRIPTIONS (Transactions for Agents) ==========
         Route::prefix('subscriptions')->name('subscriptions.')->group(function () {
             Route::get('/', [AdminController::class, 'subscriptionsIndex'])->name('index');
             Route::get('/{id}', [AdminController::class, 'subscriptionsShow'])->name('show');
@@ -882,19 +891,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/renew', [AdminController::class, 'subscriptionsRenew'])->name('renew');
         });
 
-        // ========== SUBSCRIPTION PLANS MANAGEMENT ==========
-        // Inside your existing admin group...
-        Route::prefix('subscription-plans')->name('subscription-plans.')->group(function () {
-            Route::get('/', [AdminController::class, 'subscriptionPlansIndex'])->name('index');
-            Route::get('/create', [AdminController::class, 'subscriptionPlansCreate'])->name('create');
-            Route::post('/store', [AdminController::class, 'subscriptionPlansStore'])->name('store');
-            Route::get('/{id}', [AdminController::class, 'subscriptionPlansShow'])->name('show');
-            Route::get('/{id}/edit', [AdminController::class, 'subscriptionPlansEdit'])->name('edit');
-            Route::put('/{id}', [AdminController::class, 'subscriptionPlansUpdate'])->name('update');
-            Route::delete('/{id}', [AdminController::class, 'subscriptionPlansDelete'])->name('delete');
-
-            // FIX: Changed name from 'toggle.active' to 'toggle-active'
-            Route::post('/{id}/toggle-active', [AdminController::class, 'subscriptionPlansToggleActive'])->name('toggle-active');
+        // ========== CATEGORIES MANAGEMENT ==========
+        Route::prefix('categories')->name('categories.')->group(function () {
+            Route::get('/', [AdminController::class, 'categoriesIndex'])->name('index');
+            Route::get('/create', [AdminController::class, 'categoriesCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'categoriesStore'])->name('store');
+            Route::get('/{id}/edit', [AdminController::class, 'categoriesEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'categoriesUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'categoriesDelete'])->name('delete');
+            Route::post('/{id}/toggle', [AdminController::class, 'categoriesToggleActive'])->name('toggle');
         });
 
         // ========== TRANSACTIONS ==========
@@ -913,14 +918,26 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [AdminController::class, 'appointmentsDelete'])->name('delete');
         });
 
-        // ========== SERVICE PROVIDERS ==========
+        // ========== SERVICE PROVIDERS (Fix: Only Defined Once) ==========
         Route::prefix('service-providers')->name('service-providers.')->group(function () {
             Route::get('/', [AdminController::class, 'serviceProvidersIndex'])->name('index');
+            Route::get('/create', [AdminController::class, 'serviceProvidersCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'serviceProvidersStore'])->name('store');
             Route::get('/{id}', [AdminController::class, 'serviceProvidersShow'])->name('show');
             Route::get('/{id}/edit', [AdminController::class, 'serviceProvidersEdit'])->name('edit');
             Route::put('/{id}', [AdminController::class, 'serviceProvidersUpdate'])->name('update');
             Route::delete('/{id}', [AdminController::class, 'serviceProvidersDelete'])->name('delete');
             Route::post('/{id}/verify', [AdminController::class, 'serviceProvidersVerify'])->name('verify');
+        });
+
+        // ========== SERVICE PROVIDER PLANS (Fix: Only Defined Once) ==========
+        Route::prefix('service-provider-plans')->name('service-provider-plans.')->group(function () {
+            Route::get('/', [AdminController::class, 'serviceProviderPlansIndex'])->name('index');
+            Route::get('/create', [AdminController::class, 'serviceProviderPlansCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'serviceProviderPlansStore'])->name('store');
+            Route::get('/{id}/edit', [AdminController::class, 'serviceProviderPlansEdit'])->name('edit');
+            Route::put('/{id}', [AdminController::class, 'serviceProviderPlansUpdate'])->name('update');
+            Route::delete('/{id}', [AdminController::class, 'serviceProviderPlansDelete'])->name('delete');
         });
 
         // ========== REVIEWS & REPORTS ==========

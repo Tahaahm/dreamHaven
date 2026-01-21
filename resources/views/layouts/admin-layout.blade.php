@@ -6,26 +6,31 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'Dashboard') - Dream Mulk Admin</title>
 
+    {{-- Tailwind CSS via CDN --}}
     <script src="https://cdn.tailwindcss.com"></script>
+
+    {{-- FontAwesome --}}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+    {{-- ApexCharts --}}
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
+    {{-- Custom Styles & Colors --}}
     <style>
         :root {
+            /* The specific color you requested: 0xff303b97 -> #303b97 */
             --primary: #303b97;
-            --primary-light: #4b68ff;
-            --primary-lighter: #6b7fff;
+            --primary-light: #4b56b2;
             --sidebar-bg: #1a1d2e;
             --sidebar-darker: #12141f;
         }
 
-        /* Sidebar Gradient */
+        /* Sidebar Gradient Background */
         .sidebar-dark {
             background: linear-gradient(180deg, var(--sidebar-bg) 0%, var(--sidebar-darker) 100%);
         }
 
-        /* Active Link Styling */
+        /* Active Link Styling using the specific color */
         .sidebar-link-active {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
             box-shadow: 0 4px 12px rgba(48, 59, 151, 0.4);
@@ -33,11 +38,12 @@
             border-right: 3px solid white;
         }
 
+        /* Gradient Utility using specific color */
         .gradient-primary {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
         }
 
-        /* Scrollbar */
+        /* Custom Scrollbar */
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
@@ -53,8 +59,10 @@
 
     <div class="flex h-screen overflow-hidden bg-gray-50">
 
+        {{-- SIDEBAR START --}}
         <aside id="sidebar" class="w-64 sidebar-dark flex flex-col shadow-2xl transition-transform duration-300 -translate-x-full lg:translate-x-0 fixed lg:static h-full z-50">
 
+            {{-- Sidebar Header --}}
             <div class="px-6 py-6 shrink-0">
                 <div class="flex items-center space-x-3">
                     <div class="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center shadow-lg ring-1 ring-white/10">
@@ -67,14 +75,16 @@
                 </div>
             </div>
 
+            {{-- Sidebar Search --}}
             <div class="px-4 mb-2">
                 <div class="relative">
                     <input type="text" id="menu-search" onkeyup="filterMenu()" placeholder="Search menu..."
-                           class="w-full bg-gray-800/50 text-gray-300 text-xs rounded-lg pl-9 pr-3 py-2.5 border border-gray-700/50 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none transition placeholder-gray-500">
+                           class="w-full bg-gray-800/50 text-gray-300 text-xs rounded-lg pl-9 pr-3 py-2.5 border border-gray-700/50 focus:border-[#303b97] focus:ring-1 focus:ring-[#303b97] focus:outline-none transition placeholder-gray-500">
                     <i class="fas fa-search absolute left-3 top-2.5 text-gray-500 text-xs"></i>
                 </div>
             </div>
 
+            {{-- Sidebar Navigation --}}
             <nav class="flex-1 px-3 py-4 overflow-y-auto custom-scrollbar space-y-1" id="sidebar-menu">
 
                 <a href="{{ route('admin.dashboard') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.dashboard') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
@@ -82,6 +92,7 @@
                     <span class="ml-2">Dashboard</span>
                 </a>
 
+                {{-- SECTION: MANAGEMENT --}}
                 <div class="menu-label px-4 mt-6 mb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Management</div>
 
                 <a href="{{ route('admin.users.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.users.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
@@ -99,6 +110,7 @@
                     <span class="ml-2">Offices</span>
                 </a>
 
+                {{-- SECTION: REAL ESTATE --}}
                 <div class="menu-label px-4 mt-6 mb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Real Estate</div>
 
                 <a href="{{ route('admin.properties.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.properties.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
@@ -112,21 +124,39 @@
                 </a>
 
                 <a href="{{ route('admin.appointments.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.appointments.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
-    <i class="fas fa-calendar-check w-6 text-center group-hover:scale-110 transition-transform"></i>
-    <span class="ml-2">Appointments</span>
-</a>
+                    <i class="fas fa-calendar-check w-6 text-center group-hover:scale-110 transition-transform"></i>
+                    <span class="ml-2">Appointments</span>
+                </a>
 
                 <a href="{{ route('admin.banners.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.banners.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
                     <i class="fas fa-rectangle-ad w-6 text-center group-hover:scale-110 transition-transform"></i>
                     <span class="ml-2">Banners</span>
                 </a>
 
+                {{-- SECTION: SERVICES (Providers, Plans, Categories) --}}
+                <div class="menu-label px-4 mt-6 mb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Services</div>
+
+                <a href="{{ route('admin.service-providers.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.service-providers.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
+                    <i class="fas fa-tools w-6 text-center group-hover:scale-110 transition-transform"></i>
+                    <span class="ml-2">Providers</span>
+                </a>
+
+                <a href="{{ route('admin.service-provider-plans.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.service-provider-plans.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
+                    <i class="fas fa-clipboard-list w-6 text-center group-hover:scale-110 transition-transform"></i>
+                    <span class="ml-2">Provider Plans</span>
+                </a>
+
+                <a href="{{ route('admin.categories.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.categories.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
+                    <i class="fas fa-layer-group w-6 text-center group-hover:scale-110 transition-transform"></i>
+                    <span class="ml-2">Categories</span>
+                </a>
+
+                {{-- SECTION: FINANCE --}}
                 <div class="menu-label px-4 mt-6 mb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">Finance</div>
 
-                {{-- NEW: Subscription Plans Link --}}
                 <a href="{{ route('admin.subscription-plans.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.subscription-plans.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
                     <i class="fas fa-tags w-6 text-center group-hover:scale-110 transition-transform"></i>
-                    <span class="ml-2">Plans</span>
+                    <span class="ml-2">Agent Plans</span>
                 </a>
 
                 <a href="{{ route('admin.subscriptions.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.subscriptions.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
@@ -139,6 +169,7 @@
                     <span class="ml-2">Transactions</span>
                 </a>
 
+                {{-- SECTION: SYSTEM --}}
                 <div class="menu-label px-4 mt-6 mb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">System</div>
 
                 <a href="{{ route('admin.settings.index') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->routeIs('admin.settings.*') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
@@ -152,6 +183,7 @@
 
             </nav>
 
+            {{-- Sidebar Footer --}}
             <div class="p-4 border-t border-gray-700/50 bg-gray-900/50">
                 <div class="flex items-center gap-3">
                     <div class="w-9 h-9 gradient-primary rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md ring-2 ring-white/10">
@@ -170,11 +202,15 @@
                 </div>
             </div>
         </aside>
+        {{-- SIDEBAR END --}}
 
+        {{-- Mobile Overlay --}}
         <div onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden hidden transition-opacity" id="sidebar-overlay"></div>
 
+        {{-- Main Content Wrapper --}}
         <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
+            {{-- Top Header --}}
             <header class="bg-white border-b border-gray-200 px-6 py-3 shadow-sm z-30">
                 <div class="flex items-center justify-between gap-4">
 
@@ -184,13 +220,13 @@
                         </button>
 
                         <div class="relative hidden md:block max-w-md w-full">
-                            <input type="text" placeholder="Global search..." class="w-full pl-10 pr-4 py-2 bg-gray-100/50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white transition">
+                            <input type="text" placeholder="Global search..." class="w-full pl-10 pr-4 py-2 bg-gray-100/50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-[#303b97] focus:bg-white transition">
                             <i class="fas fa-search absolute left-3 top-2.5 text-gray-400 text-sm"></i>
                         </div>
                     </div>
 
                     <div class="flex items-center gap-3">
-                        <button class="relative p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition">
+                        <button class="relative p-2 text-gray-500 hover:text-[#303b97] hover:bg-indigo-50 rounded-xl transition">
                             <i class="far fa-bell text-xl"></i>
                             <span class="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
                         </button>
@@ -206,10 +242,10 @@
                                     <p class="text-sm font-semibold text-gray-800">Signed in as</p>
                                     <p class="text-xs text-gray-500 truncate">{{ Auth::guard('admin')->user()->email ?? 'admin@example.com' }}</p>
                                 </div>
-                                <a href="{{ route('admin.profile') }}" class="block px-4 py-2 text-sm text-gray-600 hover:bg-indigo-50 hover:text-indigo-600">
+                                <a href="{{ route('admin.profile') }}" class="block px-4 py-2 text-sm text-gray-600 hover:bg-indigo-50 hover:text-[#303b97]">
                                     <i class="fas fa-user mr-2 w-4"></i> Profile
                                 </a>
-                                <a href="{{ route('admin.settings.index') }}" class="block px-4 py-2 text-sm text-gray-600 hover:bg-indigo-50 hover:text-indigo-600">
+                                <a href="{{ route('admin.settings.index') }}" class="block px-4 py-2 text-sm text-gray-600 hover:bg-indigo-50 hover:text-[#303b97]">
                                     <i class="fas fa-cog mr-2 w-4"></i> Settings
                                 </a>
                                 <div class="border-t border-gray-100 my-1"></div>
@@ -225,6 +261,7 @@
                 </div>
             </header>
 
+            {{-- Main Content --}}
             <main class="flex-1 overflow-y-auto bg-gray-50 p-6 custom-scrollbar fade-in">
 
                 @if(session('success'))
@@ -256,6 +293,7 @@
         </div>
     </div>
 
+    {{-- JS Logic --}}
     <script>
         // 1. Sidebar Toggle (Mobile)
         function toggleSidebar() {
@@ -268,14 +306,14 @@
         // 2. Dropdown Toggle
         function toggleDropdown(id) {
             const el = document.getElementById(id);
-            // Close others first (optional)
+            // Close others first
             document.querySelectorAll('[id$="-menu"]').forEach(menu => {
                 if(menu.id !== id) menu.classList.add('hidden');
             });
             el.classList.toggle('hidden');
         }
 
-        // 3. Search Filter Logic (The feature you requested)
+        // 3. Search Filter Logic
         function filterMenu() {
             const input = document.getElementById('menu-search');
             const filter = input.value.toLowerCase();
@@ -303,9 +341,8 @@
             if (noRes) noRes.style.display = hasResults ? 'none' : 'block';
         }
 
-        // 4. Click Outside to Close
+        // 4. Click Outside to Close Dropdowns
         document.addEventListener('click', function(event) {
-            // Close Dropdowns
             if (!event.target.closest('[onclick^="toggleDropdown"]')) {
                 document.querySelectorAll('[id$="-menu"]:not(#sidebar-menu)').forEach(el => el.classList.add('hidden'));
             }
