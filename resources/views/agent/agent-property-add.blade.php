@@ -986,14 +986,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 })();
 
-// --- 6. FORM VALIDATION - Ensure at least one title is provided ---
+// --- 6. FORM VALIDATION & AUTO-FILL ENGLISH FROM OTHER LANGUAGES ---
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('propertyForm');
     
     form.addEventListener('submit', function(e) {
-        const titleEn = document.querySelector('input[name="title_en"]').value.trim();
-        const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
-        const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
+        const titleEnInput = document.querySelector('input[name="title_en"]');
+        const titleArInput = document.querySelector('input[name="title_ar"]');
+        const titleKuInput = document.querySelector('input[name="title_ku"]');
+        
+        const titleEn = titleEnInput.value.trim();
+        const titleAr = titleArInput.value.trim();
+        const titleKu = titleKuInput.value.trim();
         
         // Check if at least one title is provided
         if (!titleEn && !titleAr && !titleKu) {
@@ -1002,15 +1006,37 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
-        // Check if at least one description is provided
-        const descEn = document.querySelector('textarea[name="description_en"]').value.trim();
-        const descAr = document.querySelector('textarea[name="description_ar"]').value.trim();
-        const descKu = document.querySelector('textarea[name="description_ku"]').value.trim();
+        // If English title is empty, auto-fill from Arabic or Kurdish
+        if (!titleEn) {
+            if (titleAr) {
+                titleEnInput.value = titleAr;
+            } else if (titleKu) {
+                titleEnInput.value = titleKu;
+            }
+        }
+        
+        // Same logic for descriptions
+        const descEnInput = document.querySelector('textarea[name="description_en"]');
+        const descArInput = document.querySelector('textarea[name="description_ar"]');
+        const descKuInput = document.querySelector('textarea[name="description_ku"]');
+        
+        const descEn = descEnInput.value.trim();
+        const descAr = descArInput.value.trim();
+        const descKu = descKuInput.value.trim();
         
         if (!descEn && !descAr && !descKu) {
             e.preventDefault();
             alert('Please provide a property description in at least one language (English, Arabic, or Kurdish)');
             return false;
+        }
+        
+        // If English description is empty, auto-fill from Arabic or Kurdish
+        if (!descEn) {
+            if (descAr) {
+                descEnInput.value = descAr;
+            } else if (descKu) {
+                descEnInput.value = descKu;
+            }
         }
     });
 });
