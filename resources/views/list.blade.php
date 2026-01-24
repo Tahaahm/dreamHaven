@@ -81,6 +81,7 @@
             position: sticky;
             top: 0;
             z-index: 10;
+            margin-top: 55px;
         }
 
         .sidebar-header h2 {
@@ -129,6 +130,7 @@
         }
 
         .filter-content {
+         
             padding: 25px;
         }
 
@@ -320,6 +322,7 @@
         .main-content {
             flex: 1;
             margin-left: 320px;
+            margin-top: 40px;
             padding: 30px;
             transition: margin-left 0.3s ease;
         }
@@ -1094,844 +1097,710 @@
     </div>
 
     <script>
-    $(document).ready(function () {
-        let container = $('#propertiesGrid');
-        let totalProperties = $('.property-card').length;
-        let citiesCache = null;
-        let areasCache = {};
-        let isotopeInstance = null;
+$(document).ready(function () {
+    let container = $('#propertiesGrid');
+    let totalProperties = $('.property-card').length;
+    let citiesCache = null;
+    let areasCache = {};
+    let isotopeInstance = null;
 
-        // ==================== FETCH CITIES AND AREAS ====================
+    // ==================== CACHE CONFIGURATION ====================
+    const CACHE_DURATION = 24 * 60 * 60 * 1000;
+    const CITIES_CACHE_KEY = 'dream_haven_cities_cache';
+    const CITIES_CACHE_TIMESTAMP_KEY = 'dream_haven_cities_cache_timestamp';
+    const AREAS_CACHE_KEY = 'dream_haven_areas_cache';
+    const AREAS_CACHE_TIMESTAMP_KEY = 'dream_haven_areas_cache_timestamp';
+    const MAX_RETRIES = 3;
 
-        // Cache configuration
-        const CACHE_DURATION = 24 * 60 * 60 * 1000; // 1 day in milliseconds
-        const CITIES_CACHE_KEY = 'dream_haven_cities_cache';
-        const CITIES_CACHE_TIMESTAMP_KEY = 'dream_haven_cities_cache_timestamp';
-        const AREAS_CACHE_KEY = 'dream_haven_areas_cache';
-        const AREAS_CACHE_TIMESTAMP_KEY = 'dream_haven_areas_cache_timestamp';
-        const MAX_RETRIES = 3;
+    // ==================== CACHE UTILITIES ====================
+    function isCacheValid(timestampKey) {
+        const timestamp = localStorage.getItem(timestampKey);
+        if (!timestamp) return false;
+        const cacheAge = Date.now() - parseInt(timestamp);
+        return cacheAge < CACHE_DURATION;
+    }
 
-        // Check if cache is valid (less than 1 day old)
-        function isCacheValid(timestampKey) {
-            const timestamp = localStorage.getItem(timestampKey);
-            if (!timestamp) return false;
+    // ==================== FETCH CITIES ====================
+    async function fetchCities(retryCount = 0) {
+        try {
+            $('#retry-cities-btn').hide();
 
-            const cacheAge = Date.now() - parseInt(timestamp);
-            return cacheAge < CACHE_DURATION;
-        }
-
-        // Get cities from cache or API with retry logic
-        async function fetchCities(retryCount = 0) {
-            try {
-                // Hide retry button during loading
-                $('#retry-cities-btn').hide();
-
-                // Check localStorage cache first
-                if (isCacheValid(CITIES_CACHE_TIMESTAMP_KEY)) {
-                    const cachedCities = localStorage.getItem(CITIES_CACHE_KEY);
-                    if (cachedCities) {
-                        console.log('✓ Loading cities from localStorage cache...');
-                        citiesCache = JSON.parse(cachedCities);
-                        populateCitiesDropdown();
-                        console.log(`✓ Loaded ${citiesCache.length} cities from cache`);
-                        return citiesCache;
-                    }
-                }
-
-                // Cache miss or expired - fetch from API
-                console.log(`⟳ Fetching cities from API... (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-                $('#city-dropdown').html('<option value="">Loading cities...</option>');
-
-                const response = await fetch('/v1/api/location/cities', {
-                    method: 'GET',
-                    headers: {
-                        'Accept-Language': 'en',
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-
-                console.log('API Response Status:', response.status, response.statusText);
-
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                console.log('✓ Cities API response:', data);
-
-                if (data.success && data.data && Array.isArray(data.data)) {
-                    citiesCache = data.data;
-
-                    // Save to localStorage with timestamp
-                    try {
-                        localStorage.setItem(CITIES_CACHE_KEY, JSON.stringify(citiesCache));
-                        localStorage.setItem(CITIES_CACHE_TIMESTAMP_KEY, Date.now().toString());
-                        console.log('✓ Cities cached to localStorage');
-                    } catch (e) {
-                        console.warn('⚠ Failed to cache cities to localStorage:', e);
-                    }
-
-                    populateCitiesDropdown();
-                    console.log(`✓ Loaded ${citiesCache.length} cities from API`);
-                    return citiesCache;
-                } else {
-                    throw new Error('Invalid API response format: ' + JSON.stringify(data));
-                }
-            } catch (error) {
-                console.error(`✗ Error fetching cities (attempt ${retryCount + 1}):`, error);
-
-                // Retry logic
-                if (retryCount < MAX_RETRIES - 1) {
-                    console.log(`⟳ Retrying in 2 seconds...`);
-                    $('#city-dropdown').html(`<option value="">Retrying... (${retryCount + 2}/${MAX_RETRIES})</option>`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    return fetchCities(retryCount + 1);
-                }
-
-                // All retries failed - try to use expired cache as fallback
+            if (isCacheValid(CITIES_CACHE_TIMESTAMP_KEY)) {
                 const cachedCities = localStorage.getItem(CITIES_CACHE_KEY);
                 if (cachedCities) {
-                    console.warn('⚠ Using expired cache as fallback');
+                    console.log('✓ Loading cities from cache...');
                     citiesCache = JSON.parse(cachedCities);
                     populateCitiesDropdown();
-                    $('#city-dropdown').prepend('<option value="" disabled selected>⚠ Using cached data (offline)</option>');
                     return citiesCache;
                 }
+            }
 
-                // No cache available - show error
-                $('#city-dropdown').html(`
-                    <option value="" selected disabled>⚠ Error loading cities</option>
-                    <option value="" disabled>Click button below to retry</option>
+            console.log(`⟳ Fetching cities from API (${retryCount + 1}/${MAX_RETRIES})...`);
+            $('#city-dropdown').html('<option value="">Loading cities...</option>');
+
+            const response = await fetch('/v1/api/location/cities', {
+                method: 'GET',
+                headers: {
+                    'Accept-Language': 'en',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+
+            if (data.success && data.data && Array.isArray(data.data)) {
+                citiesCache = data.data;
+
+                try {
+                    localStorage.setItem(CITIES_CACHE_KEY, JSON.stringify(citiesCache));
+                    localStorage.setItem(CITIES_CACHE_TIMESTAMP_KEY, Date.now().toString());
+                    console.log('✓ Cities cached');
+                } catch (e) {
+                    console.warn('⚠ Failed to cache cities:', e);
+                }
+
+                populateCitiesDropdown();
+                console.log(`✓ Loaded ${citiesCache.length} cities`);
+                return citiesCache;
+            } else {
+                throw new Error('Invalid API response format');
+            }
+        } catch (error) {
+            console.error(`✗ Error fetching cities (${retryCount + 1}):`, error);
+
+            if (retryCount < MAX_RETRIES - 1) {
+                console.log(`⟳ Retrying in 2 seconds...`);
+                $('#city-dropdown').html(`<option value="">Retrying... (${retryCount + 2}/${MAX_RETRIES})</option>`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return fetchCities(retryCount + 1);
+            }
+
+            const cachedCities = localStorage.getItem(CITIES_CACHE_KEY);
+            if (cachedCities) {
+                console.warn('⚠ Using expired cache');
+                citiesCache = JSON.parse(cachedCities);
+                populateCitiesDropdown();
+                return citiesCache;
+            }
+
+            $('#city-dropdown').html('<option value="">⚠ Error loading cities</option>');
+            $('#retry-cities-btn').show();
+            throw error;
+        }
+    }
+
+    function populateCitiesDropdown() {
+        const cityDropdown = $('#city-dropdown');
+        cityDropdown.html('<option value="">All Cities</option>');
+
+        if (citiesCache && citiesCache.length > 0) {
+            citiesCache.forEach(city => {
+                cityDropdown.append(`
+                    <option value="${city.id}"
+                            data-name-en="${city.city_name_en || ''}"
+                            data-name-ar="${city.city_name_ar || ''}"
+                            data-name-ku="${city.city_name_ku || ''}">
+                        ${city.city_name_en}
+                    </option>
                 `);
+            });
+        }
+    }
 
-                // Show retry button
-                $('#retry-cities-btn').show();
-
-                console.error('Final error after all retries:', error);
-                throw error;
-            }
+    // ==================== FETCH AREAS ====================
+    async function fetchAreasByCity(cityId) {
+        if (areasCache[cityId]) {
+            console.log(`Using cached areas for city ${cityId}`);
+            populateAreasDropdown(areasCache[cityId]);
+            return;
         }
 
-        function populateCitiesDropdown() {
-            const cityDropdown = $('#city-dropdown');
-            cityDropdown.html('<option value="">All Cities</option>');
+        const areasCacheKey = `${AREAS_CACHE_KEY}_${cityId}`;
+        const areasTimestampKey = `${AREAS_CACHE_TIMESTAMP_KEY}_${cityId}`;
 
-            if (citiesCache && citiesCache.length > 0) {
-                citiesCache.forEach(city => {
-                    cityDropdown.append(`
-                        <option value="${city.id}"
-                                data-name-en="${city.city_name_en}"
-                                data-name-ar="${city.city_name_ar}"
-                                data-name-ku="${city.city_name_ku}">
-                            ${city.city_name_en}
-                        </option>
-                    `);
-                });
-            }
-        }
-
-        async function fetchAreasByCity(cityId) {
-            // Check memory cache first
-            if (areasCache[cityId]) {
-                console.log(`Using memory cache for areas of city ${cityId}`);
-                populateAreasDropdown(areasCache[cityId]);
+        if (isCacheValid(areasTimestampKey)) {
+            const cachedAreas = localStorage.getItem(areasCacheKey);
+            if (cachedAreas) {
+                console.log(`Loading cached areas for city ${cityId}`);
+                const areas = JSON.parse(cachedAreas);
+                areasCache[cityId] = areas;
+                populateAreasDropdown(areas);
                 return;
             }
-
-            // Check localStorage cache
-            const areasCacheKey = `${AREAS_CACHE_KEY}_${cityId}`;
-            const areasTimestampKey = `${AREAS_CACHE_TIMESTAMP_KEY}_${cityId}`;
-
-            if (isCacheValid(areasTimestampKey)) {
-                const cachedAreas = localStorage.getItem(areasCacheKey);
-                if (cachedAreas) {
-                    console.log(`Loading areas for city ${cityId} from localStorage cache...`);
-                    const areas = JSON.parse(cachedAreas);
-                    areasCache[cityId] = areas;
-                    populateAreasDropdown(areas);
-                    console.log(`Loaded ${areas.length} areas from cache`);
-                    return;
-                }
-            }
-
-            // Cache miss or expired - fetch from API
-            try {
-                console.log(`Fetching areas for city ${cityId} from API...`);
-                const response = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
-                    headers: {
-                        'Accept-Language': 'en',
-                        'Accept': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
-                console.log('Areas API response:', data);
-
-                if (data.success && data.data) {
-                    areasCache[cityId] = data.data;
-
-                    // Save to localStorage with timestamp
-                    try {
-                        localStorage.setItem(areasCacheKey, JSON.stringify(data.data));
-                        localStorage.setItem(areasTimestampKey, Date.now().toString());
-                        console.log(`Areas for city ${cityId} cached to localStorage`);
-                    } catch (e) {
-                        console.warn('Failed to cache areas to localStorage:', e);
-                    }
-
-                    populateAreasDropdown(data.data);
-                    console.log(`Loaded ${data.data.length} areas for city ${cityId} from API`);
-                } else {
-                    throw new Error('Invalid API response format');
-                }
-            } catch (error) {
-                console.error('Error fetching areas:', error);
-
-                // Try to use expired cache as fallback
-                const cachedAreas = localStorage.getItem(areasCacheKey);
-                if (cachedAreas) {
-                    console.warn('Using expired areas cache as fallback');
-                    const areas = JSON.parse(cachedAreas);
-                    areasCache[cityId] = areas;
-                    populateAreasDropdown(areas);
-                    return;
-                }
-
-                $('#area-dropdown').html('<option value="">Error loading areas</option>');
-            }
         }
 
-        function populateAreasDropdown(areas) {
-            const areaDropdown = $('#area-dropdown');
-            areaDropdown.html('<option value="">All Areas</option>');
-
-            if (areas && areas.length > 0) {
-                areas.forEach(area => {
-                    areaDropdown.append(`
-                        <option value="${area.id}"
-                                data-name-en="${area.area_name_en}"
-                                data-name-ar="${area.area_name_ar}"
-                                data-name-ku="${area.area_name_ku}">
-                            ${area.area_name_en}
-                        </option>
-                    `);
-                });
-            } else {
-                areaDropdown.html('<option value="">No areas available</option>');
-            }
-        }
-
-        // City change event
-        $('#city-dropdown').on('change', function() {
-            const cityId = $(this).val();
-            const areaDropdown = $('#area-dropdown');
-
-            if (cityId) {
-                areaDropdown.html('<option value="">Loading areas...</option>');
-                fetchAreasByCity(cityId);
-            } else {
-                areaDropdown.html('<option value="">Select city first</option>');
-            }
-
-            performSearch();
-        });
-
-        $('#area-dropdown').on('change', performSearch);
-
-        // Retry cities button handler
-        $('#retry-cities-btn').on('click', function() {
-            console.log('Manual retry requested by user');
-            $(this).html('<i class="fas fa-spinner fa-spin"></i> Retrying...').prop('disabled', true);
-
-            fetchCities().then(() => {
-                $('#retry-cities-btn').html('<i class="fas fa-check"></i> Success!');
-                setTimeout(() => {
-                    $('#retry-cities-btn').hide();
-                }, 2000);
-            }).catch(() => {
-                $('#retry-cities-btn').html('<i class="fas fa-redo"></i> Retry Loading Cities').prop('disabled', false);
+        try {
+            console.log(`Fetching areas for city ${cityId}...`);
+            const response = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
+                headers: {
+                    'Accept-Language': 'en',
+                    'Accept': 'application/json'
+                }
             });
-        });
 
-        // ==================== CACHE MANAGEMENT ====================
-
-        // Utility function to clear location cache
-        function clearLocationCache() {
-            try {
-                localStorage.removeItem(CITIES_CACHE_KEY);
-                localStorage.removeItem(CITIES_CACHE_TIMESTAMP_KEY);
-
-                // Clear all areas caches
-                Object.keys(localStorage).forEach(key => {
-                    if (key.startsWith(AREAS_CACHE_KEY) || key.startsWith(AREAS_CACHE_TIMESTAMP_KEY)) {
-                        localStorage.removeItem(key);
-                    }
-                });
-
-                citiesCache = null;
-                areasCache = {};
-
-                console.log('✓ Location cache cleared successfully');
-                alert('Location cache cleared! Page will reload.');
-                location.reload();
-                return true;
-            } catch (e) {
-                console.error('✗ Error clearing cache:', e);
-                return false;
-            }
-        }
-
-        // Make clearLocationCache available globally for debugging
-        window.clearLocationCache = clearLocationCache;
-
-        // Log cache info on load
-        function logCacheInfo() {
-            console.log('╔════════════════════════════════╗');
-            console.log('║   Location Cache Information   ║');
-            console.log('╚════════════════════════════════╝');
-            console.log('Cache Duration: 24 hours');
-
-            const citiesTimestamp = localStorage.getItem(CITIES_CACHE_TIMESTAMP_KEY);
-            if (citiesTimestamp) {
-                const cacheDate = new Date(parseInt(citiesTimestamp));
-                const age = Math.floor((Date.now() - parseInt(citiesTimestamp)) / (1000 * 60 * 60));
-                const isValid = isCacheValid(CITIES_CACHE_TIMESTAMP_KEY);
-
-                console.log(`Cities Cache:`);
-                console.log(`  - Cached on: ${cacheDate.toLocaleString()}`);
-                console.log(`  - Age: ${age} hours`);
-                console.log(`  - Status: ${isValid ? '✓ Valid' : '✗ Expired'}`);
-            } else {
-                console.log('Cities Cache: No cache found (will fetch from API)');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            // Count areas caches
-            const areasCacheCount = Object.keys(localStorage).filter(key =>
-                key.startsWith(AREAS_CACHE_KEY)
-            ).length;
-            console.log(`Areas Caches: ${areasCacheCount} cities cached`);
+            const data = await response.json();
 
-            console.log('─────────────────────────────────');
-            console.log('To clear cache, run: clearLocationCache()');
-            console.log('═════════════════════════════════');
-        }
+            if (data.success && data.data) {
+                areasCache[cityId] = data.data;
 
-        logCacheInfo();
-
-        // Update cache info in UI
-        function updateCacheInfoUI() {
-            const cacheInfo = $('#cacheInfo');
-            const cacheStatus = $('#cacheStatus');
-            const citiesTimestamp = localStorage.getItem(CITIES_CACHE_TIMESTAMP_KEY);
-
-            if (citiesTimestamp) {
-                const age = Math.floor((Date.now() - parseInt(citiesTimestamp)) / (1000 * 60 * 60));
-                const isValid = isCacheValid(CITIES_CACHE_TIMESTAMP_KEY);
-
-                if (age < 1) {
-                    cacheStatus.text('Updated recently');
-                } else if (age < 24) {
-                    cacheStatus.text(`Updated ${age}h ago`);
-                } else {
-                    cacheStatus.text('Cache expired');
+                try {
+                    localStorage.setItem(areasCacheKey, JSON.stringify(data.data));
+                    localStorage.setItem(areasTimestampKey, Date.now().toString());
+                } catch (e) {
+                    console.warn('Failed to cache areas:', e);
                 }
 
-                cacheInfo.show();
+                populateAreasDropdown(data.data);
+            } else {
+                throw new Error('Invalid API response');
             }
+        } catch (error) {
+            console.error('Error fetching areas:', error);
+            $('#area-dropdown').html('<option value="">Error loading areas</option>');
+        }
+    }
+
+    function populateAreasDropdown(areas) {
+        const areaDropdown = $('#area-dropdown');
+        areaDropdown.html('<option value="">All Areas</option>');
+
+        if (areas && areas.length > 0) {
+            areas.forEach(area => {
+                areaDropdown.append(`
+                    <option value="${area.id}"
+                            data-name-en="${area.area_name_en || ''}"
+                            data-name-ar="${area.area_name_ar || ''}"
+                            data-name-ku="${area.area_name_ku || ''}">
+                        ${area.area_name_en}
+                    </option>
+                `);
+            });
+        } else {
+            areaDropdown.html('<option value="">No areas available</option>');
+        }
+    }
+
+    // ==================== UPDATE RESULTS COUNTER ====================
+    function updateResultsCounter() {
+        let visibleCount = $('.property-card:visible').length;
+        let filterText = '';
+
+        if ($('#purpose-dropdown').val() || $('#property-type-dropdown').val() ||
+            $('#city-dropdown').val() || $('#area-dropdown').val() ||
+            $('#search-keywords-input').val() || $('#property-id-input').val() ||
+            $('#min-area-input').val() || $('#max-area-input').val() ||
+            $('#min-price-input').val() || $('#max-price-input').val()) {
+            filterText = ' (filtered)';
         }
 
-        // Refresh cache button handler
-        $('#refreshCacheBtn').on('click', function(e) {
-            e.preventDefault();
-            if (confirm('Refresh cities and areas data? This will clear the cache and reload.')) {
-                clearLocationCache();
-            }
-        });
+        $('#results-counter').html(`Showing <strong>${visibleCount}</strong> of <strong>${totalProperties}</strong> properties${filterText}`);
+    }
 
-        // ==================== MOBILE FILTER TOGGLE ====================
-
-        $('#mobileFilterToggle, #sidebarOverlay').click(function() {
-            $('#filterSidebar').toggleClass('active');
-            $('#sidebarOverlay').toggleClass('active');
-        });
-
-        // ==================== UPDATE RESULTS COUNTER ====================
-
-        function updateResultsCounter() {
-            let visibleCount = $('.property-card:visible').length;
-            let filterText = '';
-
-            // Check if any filters are active
-            let hasActiveFilters = false;
-            if ($('#purpose-dropdown').val() || $('#property-type-dropdown').val() ||
-                $('#city-dropdown').val() || $('#area-dropdown').val() ||
-                $('#search-keywords-input').val() || $('#property-id-input').val() ||
-                $('#min-area-input').val() || $('#max-area-input').val() ||
-                $('#min-price-input').val() || $('#max-price-input').val()) {
-                hasActiveFilters = true;
-                filterText = ' (filtered)';
-            }
-
-            $('#results-counter').html(`Showing <strong>${visibleCount}</strong> of <strong>${totalProperties}</strong> properties${filterText}`);
-        }
-
-        // ==================== INITIALIZE ISOTOPE ====================
-
-        function initializeIsotope() {
-            container.imagesLoaded(function() {
-                isotopeInstance = container.isotope({
-                    itemSelector: '.property-card',
-                    layoutMode: 'fitRows',
-                    fitRows: {
-                        gutter: 30
+    // ==================== INITIALIZE ISOTOPE ====================
+    function initializeIsotope() {
+        container.imagesLoaded(function() {
+            isotopeInstance = container.isotope({
+                itemSelector: '.property-card',
+                layoutMode: 'fitRows',
+                fitRows: {
+                    gutter: 30
+                },
+                getSortData: {
+                    date: function(item) {
+                        return parseInt($(item).attr('data-date')) || 0;
                     },
-                    getSortData: {
-                        date: function(item) {
-                            return parseInt($(item).attr('data-date'));
-                        },
-                        price: function(item) {
-                            return parseFloat($(item).attr('data-price'));
-                        }
-                    },
-                    sortBy: 'date',
-                    sortAscending: false
-                });
-
-                updateResultsCounter();
-            });
-        }
-
-        // ==================== IMAGE CAROUSEL ====================
-
-        function initializeCarousel() {
-            $('.card-image-container').each(function() {
-                let $carousel = $(this);
-                let images = $carousel.find('.carousel-image');
-                let currentIndex = 0;
-
-                if (images.length <= 1) {
-                    return;
-                }
-
-                function showImage(index) {
-                    images.removeClass('active');
-                    images.eq(index).addClass('active');
-                }
-
-                $carousel.find('.next').on('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    currentIndex = (currentIndex + 1) % images.length;
-                    showImage(currentIndex);
-                });
-
-                $carousel.find('.prev').on('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    currentIndex = (currentIndex - 1 + images.length) % images.length;
-                    showImage(currentIndex);
-                });
-            });
-        }
-
-        // ==================== SEARCH AND FILTER ====================
-
-        function performSearch() {
-            if (!isotopeInstance) return;
-
-            const debugMode = $('#debug-mode').is(':checked');
-
-            let searchTerm = $('#search-keywords-input').val().toLowerCase().trim();
-            let propertyId = $('#property-id-input').val().toLowerCase().trim();
-            let minArea = parseFloat($('#min-area-input').val());
-            let maxArea = parseFloat($('#max-area-input').val());
-            let minPrice = parseFloat($('#min-price-input').val());
-            let maxPrice = parseFloat($('#max-price-input').val());
-            let purpose = $('#purpose-dropdown').val().toLowerCase().trim();
-            let propertyType = $('#property-type-dropdown').val().toLowerCase().trim();
-            let selectedCity = $('#city-dropdown option:selected').data('name-en');
-            let selectedArea = $('#area-dropdown option:selected').data('name-en');
-
-            if (debugMode) {
-                console.log('🔍 FILTERING WITH:', {
-                    searchTerm, propertyId, minArea, maxArea, minPrice, maxPrice,
-                    purpose, propertyType, selectedCity, selectedArea
-                });
-            }
-
-            let visibleCount = 0;
-            let debugResults = [];
-
-            isotopeInstance.arrange({
-                filter: function() {
-                    let $this = $(this);
-
-                    // Get card data
-                    let title = $this.find('.card-title').text().toLowerCase().trim();
-                    let location = $this.find('.card-location').text().toLowerCase().trim();
-                    let price = parseFloat($this.attr('data-price')) || 0;
-                    let areaText = $this.find('.feature-value').last().text().trim();
-                    let area = parseFloat(areaText) || 0;
-
-                    // Get property type from badge (case-insensitive)
-                    let cardPurpose = ($this.find('.badge-type').text() || '').toLowerCase().trim();
-
-                    // Get listing type from badge (case-insensitive)
-                    let cardPropertyType = ($this.find('.badge-listing').text() || '').toLowerCase().trim();
-
-                    // Search keywords - match title OR location
-                    let matchesSearch = !searchTerm ||
-                                       title.includes(searchTerm) ||
-                                       location.includes(searchTerm);
-
-                    // Property ID - match in URL
-                    let matchesPropertyId = !propertyId ||
-                                           $this.find('a').attr('href').toLowerCase().includes(propertyId);
-
-                    // Area range
-                    let matchesArea = true;
-                    if (!isNaN(minArea) && area < minArea) matchesArea = false;
-                    if (!isNaN(maxArea) && area > maxArea) matchesArea = false;
-
-                    // Price range
-                    let matchesPrice = true;
-                    if (!isNaN(minPrice) && price < minPrice) matchesPrice = false;
-                    if (!isNaN(maxPrice) && price > maxPrice) matchesPrice = false;
-
-                    // Property Type - flexible matching (villa matches villa, house matches house, etc.)
-                    let matchesPurpose = !purpose ||
-                                        cardPurpose.includes(purpose) ||
-                                        purpose.includes(cardPurpose);
-
-                    // Listing Type - flexible matching (sell matches for sale, rent matches for rent)
-                    let matchesPropertyType = !propertyType ||
-                                             cardPropertyType.includes(propertyType) ||
-                                             propertyType.includes(cardPropertyType) ||
-                                             (propertyType === 'sell' && cardPropertyType.includes('sale')) ||
-                                             (propertyType === 'rent' && cardPropertyType.includes('rent'));
-
-                    // City filter
-                    let matchesCity = !selectedCity || location.includes(selectedCity.toLowerCase());
-
-                    // Area filter
-                    let matchesSelectedArea = !selectedArea || location.includes(selectedArea.toLowerCase());
-
-                    let result = matchesSearch && matchesPropertyId && matchesArea &&
-                           matchesPrice && matchesPurpose && matchesPropertyType &&
-                           matchesCity && matchesSelectedArea;
-
-                    if (debugMode && debugResults.length < 3) {
-                        debugResults.push({
-                            title: title.substring(0, 40) + '...',
-                            type: cardPurpose,
-                            listing: cardPropertyType,
-                            price: '$' + price.toLocaleString(),
-                            area: area + 'm²',
-                            matches: {
-                                search: matchesSearch,
-                                propertyId: matchesPropertyId,
-                                area: matchesArea,
-                                price: matchesPrice,
-                                purpose: matchesPurpose,
-                                listingType: matchesPropertyType,
-                                city: matchesCity,
-                                selectedArea: matchesSelectedArea
-                            },
-                            visible: result
-                        });
+                    price: function(item) {
+                        return parseFloat($(item).attr('data-price')) || 0;
                     }
-
-                    if (result) visibleCount++;
-
-                    return result;
-                }
+                },
+                sortBy: 'date',
+                sortAscending: false
             });
-
-            if (debugMode) {
-                console.log('📊 FILTER RESULTS:', `${visibleCount} properties visible`);
-                console.table(debugResults);
-            }
 
             updateResultsCounter();
+            console.log('✓ Isotope initialized with', totalProperties, 'properties');
+        });
+    }
 
-            // Show/hide no results message
-            setTimeout(function() {
-                let visibleCards = $('.property-card:visible').length;
+    // ==================== IMAGE CAROUSEL ====================
+    function initializeCarousel() {
+        $('.card-image-container').each(function() {
+            let $carousel = $(this);
+            let images = $carousel.find('.carousel-image');
+            let currentIndex = 0;
 
-                if (visibleCards === 0) {
-                    if ($('.no-results').length === 0) {
-                        container.append(`
-                            <div class="no-results">
-                                <i class="fas fa-search"></i>
-                                <h3>No Properties Found</h3>
-                                <p>Try adjusting your filters to see more results</p>
-                            </div>
-                        `);
-                    }
-                    $('.no-results').show();
-                } else {
-                    $('.no-results').remove();
+            if (images.length <= 1) return;
+
+            function showImage(index) {
+                images.removeClass('active');
+                images.eq(index).addClass('active');
+            }
+
+            $carousel.find('.next').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                currentIndex = (currentIndex + 1) % images.length;
+                showImage(currentIndex);
+            });
+
+            $carousel.find('.prev').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                currentIndex = (currentIndex - 1 + images.length) % images.length;
+                showImage(currentIndex);
+            });
+        });
+    }
+
+    // ==================== SEARCH AND FILTER (FIXED) ====================
+    function performSearch() {
+        if (!isotopeInstance) {
+            console.warn('⚠ Isotope not initialized yet');
+            return;
+        }
+
+        const debugMode = $('#debug-mode').is(':checked');
+
+        // Get all filter values
+        let searchTerm = $('#search-keywords-input').val().toLowerCase().trim();
+        let propertyId = $('#property-id-input').val().toLowerCase().trim();
+        let minArea = parseFloat($('#min-area-input').val());
+        let maxArea = parseFloat($('#max-area-input').val());
+        let minPrice = parseFloat($('#min-price-input').val());
+        let maxPrice = parseFloat($('#max-price-input').val());
+        let purposeFilter = $('#purpose-dropdown').val().toLowerCase().trim();
+        let listingTypeFilter = $('#property-type-dropdown').val().toLowerCase().trim();
+        
+        let selectedCityName = ($('#city-dropdown option:selected').data('name-en') || '').toLowerCase();
+        let selectedAreaName = ($('#area-dropdown option:selected').data('name-en') || '').toLowerCase();
+
+        if (debugMode) {
+            console.log('🔍 FILTERING WITH:', {
+                searchTerm, propertyId, minArea, maxArea, minPrice, maxPrice,
+                purposeFilter, listingTypeFilter, 
+                selectedCityName, selectedAreaName
+            });
+        }
+
+        let visibleCount = 0;
+        let debugResults = [];
+
+        // Hide existing no-results message
+        $('.no-results').remove();
+
+        // Apply Isotope filter
+        isotopeInstance.arrange({
+            filter: function() {
+                let $card = $(this);
+
+                // Extract card data
+                let cardTitle = ($card.find('.card-title').text() || '').toLowerCase().trim();
+                let cardLocation = ($card.find('.card-location span').text() || '').toLowerCase().trim();
+                let cardPrice = parseFloat($card.attr('data-price')) || 0;
+                
+                let cardAreaText = ($card.find('.feature-value').last().text() || '').trim();
+                let cardArea = parseFloat(cardAreaText) || 0;
+
+                let cardType = ($card.attr('data-type') || '').toLowerCase().trim();
+                let cardListing = ($card.attr('data-listing') || '').toLowerCase().trim();
+                let cardHref = ($card.find('a').first().attr('href') || '').toLowerCase();
+
+                // ===== FILTER LOGIC =====
+
+                // 1. Search keywords
+                let matchesSearch = !searchTerm || 
+                                   cardTitle.includes(searchTerm) || 
+                                   cardLocation.includes(searchTerm);
+
+                // 2. Property ID
+                let matchesPropertyId = !propertyId || cardHref.includes(propertyId);
+
+                // 3. Area range
+                let matchesArea = true;
+                if (!isNaN(minArea) && cardArea < minArea) matchesArea = false;
+                if (!isNaN(maxArea) && cardArea > maxArea) matchesArea = false;
+
+                // 4. Price range
+                let matchesPrice = true;
+                if (!isNaN(minPrice) && cardPrice < minPrice) matchesPrice = false;
+                if (!isNaN(maxPrice) && cardPrice > maxPrice) matchesPrice = false;
+
+                // 5. Property Type
+                let matchesPurpose = !purposeFilter || cardType === purposeFilter;
+
+                // 6. Listing Type
+                let matchesListingType = !listingTypeFilter || cardListing === listingTypeFilter;
+
+                // 7. City filter
+                let matchesCity = !selectedCityName || 
+                                 cardLocation.includes(selectedCityName);
+
+                // 8. Area filter
+                let matchesSelectedArea = !selectedAreaName || 
+                                          cardLocation.includes(selectedAreaName);
+
+                // Combine all filters
+                let isVisible = matchesSearch && matchesPropertyId && matchesArea && 
+                               matchesPrice && matchesPurpose && matchesListingType && 
+                               matchesCity && matchesSelectedArea;
+
+                if (debugMode && debugResults.length < 5) {
+                    debugResults.push({
+                        title: cardTitle.substring(0, 40) + '...',
+                        type: cardType,
+                        listing: cardListing,
+                        price: '$' + cardPrice.toLocaleString(),
+                        area: cardArea + 'm²',
+                        location: cardLocation.substring(0, 30) + '...',
+                        matches: {
+                            search: matchesSearch,
+                            propertyId: matchesPropertyId,
+                            areaRange: matchesArea,
+                            priceRange: matchesPrice,
+                            type: matchesPurpose,
+                            listing: matchesListingType,
+                            city: matchesCity,
+                            area: matchesSelectedArea
+                        },
+                        visible: isVisible
+                    });
                 }
+
+                if (isVisible) visibleCount++;
+
+                return isVisible;
+            }
+        });
+
+        if (debugMode) {
+            console.log('📊 FILTER RESULTS:', `${visibleCount} of ${totalProperties} properties visible`);
+            if (debugResults.length > 0) {
+                console.table(debugResults);
+            }
+        }
+
+        // Update counter
+        updateResultsCounter();
+
+        // Handle no results message
+        setTimeout(function() {
+            let visibleCards = $('.property-card:visible').length;
+
+            if (visibleCards === 0) {
+                if ($('.no-results').length === 0) {
+                    container.append(`
+                        <div class="no-results">
+                            <i class="fas fa-search"></i>
+                            <h3>No Properties Found</h3>
+                            <p>Try adjusting your filters to see more results</p>
+                        </div>
+                    `);
+                }
+            } else {
+                $('.no-results').remove();
+            }
+        }, 200);
+    }
+
+    // ==================== SORT TOGGLE ====================
+    $('#toggle-switch').change(function() {
+        if (!isotopeInstance) return;
+
+        if ($(this).is(':checked')) {
+            isotopeInstance.arrange({
+                sortBy: 'price',
+                sortAscending: true
+            });
+            console.log('✓ Sorted by: Price (Low to High)');
+        } else {
+            isotopeInstance.arrange({
+                sortBy: 'date',
+                sortAscending: false
+            });
+            console.log('✓ Sorted by: Date (Newest First)');
+        }
+    });
+
+    // ==================== VIEW TOGGLE ====================
+    $('.view-btn').on('click', function() {
+        const view = $(this).data('view');
+
+        $('.view-btn').removeClass('active');
+        $(this).addClass('active');
+
+        if (view === 'list') {
+            container.removeClass('grid-view').addClass('list-view');
+        } else {
+            container.removeClass('list-view').addClass('grid-view');
+        }
+
+        if (isotopeInstance) {
+            setTimeout(() => {
+                isotopeInstance.arrange();
             }, 100);
         }
-
-        // ==================== SORT TOGGLE ====================
-
-        $('#toggle-switch').change(function() {
-            if (!isotopeInstance) return;
-
-            if ($(this).is(':checked')) {
-                isotopeInstance.arrange({
-                    sortBy: 'price',
-                    sortAscending: true
-                });
-            } else {
-                isotopeInstance.arrange({
-                    sortBy: 'date',
-                    sortAscending: false
-                });
-            }
-        });
-
-        // ==================== VIEW TOGGLE (GRID/LIST) ====================
-
-        $('.view-btn').on('click', function() {
-            const view = $(this).data('view');
-
-            $('.view-btn').removeClass('active');
-            $(this).addClass('active');
-
-            if (view === 'list') {
-                container.removeClass('grid-view').addClass('list-view');
-            } else {
-                container.removeClass('list-view').addClass('grid-view');
-            }
-
-            // Re-layout isotope
-            if (isotopeInstance) {
-                setTimeout(() => {
-                    isotopeInstance.arrange();
-                }, 100);
-            }
-        });
-
-        // ==================== CLEAR FILTERS ====================
-
-        $('#clear-filters').click(function() {
-            // Reset all dropdowns
-            $('#purpose-dropdown').val('');
-            $('#property-type-dropdown').val('');
-            $('#city-dropdown').val('');
-            $('#area-dropdown').html('<option value="">Select city first</option>');
-
-            // Reset all inputs
-            $('#property-id-input').val('');
-            $('#search-keywords-input').val('');
-            $('#min-area-input').val('');
-            $('#max-area-input').val('');
-            $('#min-price-input').val('');
-            $('#max-price-input').val('');
-
-            // Reset sort toggle
-            $('#toggle-switch').prop('checked', false);
-
-            // Reset sort to date
-            if (isotopeInstance) {
-                isotopeInstance.arrange({
-                    sortBy: 'date',
-                    sortAscending: false
-                });
-            }
-
-            // Perform search to show all properties
-            performSearch();
-
-            console.log('Filters cleared');
-        });
-
-        // ==================== EVENT LISTENERS ====================
-
-        // Debounce function for text inputs
-        let searchTimeout;
-        function debounceSearch() {
-            clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(performSearch, 300);
-        }
-
-        // Text inputs - debounced search
-        $('#search-keywords-input, #property-id-input, #min-area-input, #max-area-input, #min-price-input, #max-price-input').on('input', function() {
-            debounceSearch();
-        });
-
-        // Dropdowns - immediate search
-        $('#purpose-dropdown, #property-type-dropdown').on('change', function() {
-            performSearch();
-        });
-
-        // Search button
-        $('#search-button').click(function() {
-            performSearch();
-
-            // Close sidebar on mobile after search
-            if (window.innerWidth <= 992) {
-                $('#filterSidebar').removeClass('active');
-                $('#sidebarOverlay').removeClass('active');
-            }
-        });
-
-        // Enter key to search
-        $('.filter-input').on('keypress', function(e) {
-            if (e.which === 13) {
-                performSearch();
-            }
-        });
-
-        // Debug mode toggle
-        $('#debug-mode').on('change', function() {
-            if ($(this).is(':checked')) {
-                console.log('🐛 DEBUG MODE ENABLED - You will see detailed filter information');
-                performSearch(); // Re-run search to show debug info
-            } else {
-                console.log('🐛 DEBUG MODE DISABLED');
-            }
-        });
-
-        // Toggle diagnostics panel
-        $('#toggle-diagnostics').on('click', function() {
-            const panel = $('#api-diagnostics');
-            const btn = $(this);
-
-            if (panel.is(':visible')) {
-                panel.slideUp();
-                btn.text('Show API Diagnostics');
-            } else {
-                panel.slideDown();
-                btn.text('Hide API Diagnostics');
-                updateDiagnostics();
-            }
-        });
-
-        // Update diagnostics info
-        function updateDiagnostics() {
-            // Check cache status
-            const citiesCache = localStorage.getItem(CITIES_CACHE_KEY);
-            const timestamp = localStorage.getItem(CITIES_CACHE_TIMESTAMP_KEY);
-
-            if (citiesCache && timestamp) {
-                const age = Math.floor((Date.now() - parseInt(timestamp)) / (1000 * 60 * 60));
-                const isValid = isCacheValid(CITIES_CACHE_TIMESTAMP_KEY);
-                $('#cache-status').html(`<span style="color: ${isValid ? 'green' : 'orange'};">${isValid ? '✓ Valid' : '⚠ Expired'} (${age}h old)</span>`);
-            } else {
-                $('#cache-status').html('<span style="color: gray;">No cache</span>');
-            }
-
-            // Check API status
-            if (citiesCache) {
-                const cities = JSON.parse(citiesCache);
-                $('#api-status').html(`<span style="color: green;">✓ ${cities.length} cities loaded</span>`);
-            } else {
-                $('#api-status').html('<span style="color: orange;">⚠ Not loaded yet</span>');
-            }
-        }
-
-        // Test API connection button
-        $('#test-api-btn').on('click', async function() {
-            const btn = $(this);
-            const originalHtml = btn.html();
-
-            btn.html('<i class="fas fa-spinner fa-spin"></i> Testing...').prop('disabled', true);
-            $('#api-status').html('<span style="color: blue;">⟳ Testing connection...</span>');
-
-            try {
-                const startTime = Date.now();
-                const response = await fetch('/v1/api/location/cities', {
-                    method: 'GET',
-                    headers: {
-                        'Accept-Language': 'en',
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json'
-                    }
-                });
-                const duration = Date.now() - startTime;
-
-                console.log('API Test Response:', {
-                    status: response.status,
-                    statusText: response.statusText,
-                    duration: duration + 'ms',
-                    headers: Object.fromEntries(response.headers.entries())
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('API Test Data:', data);
-
-                    if (data.success && data.data) {
-                        $('#api-status').html(`<span style="color: green;">✓ API working (${duration}ms, ${data.data.length} cities)</span>`);
-                        btn.html('<i class="fas fa-check"></i> Test Passed!');
-
-                        // Auto-reload cities
-                        setTimeout(() => {
-                            location.reload();
-                        }, 1500);
-                    } else {
-                        $('#api-status').html(`<span style="color: red;">✗ Invalid response format</span>`);
-                        btn.html('<i class="fas fa-times"></i> Invalid Response');
-                    }
-                } else {
-                    $('#api-status').html(`<span style="color: red;">✗ HTTP ${response.status}</span>`);
-                    btn.html('<i class="fas fa-times"></i> HTTP Error');
-                }
-            } catch (error) {
-                console.error('API Test Error:', error);
-                $('#api-status').html(`<span style="color: red;">✗ ${error.message}</span>`);
-                btn.html('<i class="fas fa-times"></i> Test Failed');
-            } finally {
-                setTimeout(() => {
-                    btn.html(originalHtml).prop('disabled', false);
-                }, 3000);
-            }
-        });
-
-        // ==================== INITIALIZE ====================
-
-        console.log('Initializing property listing page...');
-
-        // Step 1: Initialize Isotope first
-        initializeIsotope();
-
-        // Step 2: Initialize Carousel
-        initializeCarousel();
-
-        // Step 3: Fetch cities (async)
-        fetchCities().then(() => {
-            console.log('Cities loaded successfully');
-            updateCacheInfoUI();
-        }).catch(err => {
-            console.error('Failed to load cities:', err);
-        });
-
-        // Step 4: Set up window resize handler
-        $(window).resize(function() {
-            if (window.innerWidth > 992) {
-                $('#filterSidebar').removeClass('active');
-                $('#sidebarOverlay').removeClass('active');
-            }
-
-            // Re-layout isotope on resize
-            if (isotopeInstance) {
-                setTimeout(() => {
-                    isotopeInstance.arrange();
-                }, 200);
-            }
-        });
-
-        console.log('Initialization complete');
     });
+
+    // ==================== CLEAR FILTERS ====================
+    $('#clear-filters').click(function() {
+        console.log('🧹 Clearing all filters...');
+
+        // Reset dropdowns
+        $('#purpose-dropdown').val('');
+        $('#property-type-dropdown').val('');
+        $('#city-dropdown').val('');
+        $('#area-dropdown').html('<option value="">Select city first</option>');
+
+        // Reset inputs
+        $('#property-id-input').val('');
+        $('#search-keywords-input').val('');
+        $('#min-area-input').val('');
+        $('#max-area-input').val('');
+        $('#min-price-input').val('');
+        $('#max-price-input').val('');
+
+        // Reset sort toggle
+        $('#toggle-switch').prop('checked', false);
+
+        // Reset sort to date
+        if (isotopeInstance) {
+            isotopeInstance.arrange({
+                sortBy: 'date',
+                sortAscending: false,
+                filter: '*' // Show all items
+            });
+        }
+
+        // Update counter
+        updateResultsCounter();
+
+        console.log('✓ Filters cleared - showing all properties');
+    });
+
+    // ==================== EVENT LISTENERS ====================
+
+    // City change
+    $('#city-dropdown').on('change', function() {
+        const cityId = $(this).val();
+        const areaDropdown = $('#area-dropdown');
+
+        if (cityId) {
+            areaDropdown.html('<option value="">Loading areas...</option>');
+            fetchAreasByCity(cityId);
+        } else {
+            areaDropdown.html('<option value="">Select city first</option>');
+        }
+
+        performSearch();
+    });
+
+    // Area change
+    $('#area-dropdown').on('change', performSearch);
+
+    // Debounce for text inputs
+    let searchTimeout;
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(performSearch, 400);
+    }
+
+    // Text inputs - debounced
+    $('#search-keywords-input, #property-id-input, #min-area-input, #max-area-input, #min-price-input, #max-price-input')
+        .on('input', debounceSearch);
+
+    // Dropdowns - immediate
+    $('#purpose-dropdown, #property-type-dropdown').on('change', function() {
+        console.log('Filter changed:', $(this).attr('id'), '=', $(this).val());
+        performSearch();
+    });
+
+    // Search button - force immediate search
+    $('#search-button').click(function() {
+        console.log('🔍 Search button clicked');
+        performSearch();
+
+        // Close mobile sidebar
+        if (window.innerWidth <= 992) {
+            $('#filterSidebar').removeClass('active');
+            $('#sidebarOverlay').removeClass('active');
+        }
+    });
+
+    // Enter key
+    $('.filter-input, .filter-select').on('keypress', function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            performSearch();
+        }
+    });
+
+    // ==================== MOBILE FILTER TOGGLE ====================
+    $('#mobileFilterToggle, #sidebarOverlay').click(function() {
+        $('#filterSidebar').toggleClass('active');
+        $('#sidebarOverlay').toggleClass('active');
+    });
+
+    // ==================== CACHE MANAGEMENT ====================
+    function clearLocationCache() {
+        try {
+            localStorage.removeItem(CITIES_CACHE_KEY);
+            localStorage.removeItem(CITIES_CACHE_TIMESTAMP_KEY);
+
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith(AREAS_CACHE_KEY) || key.startsWith(AREAS_CACHE_TIMESTAMP_KEY)) {
+                    localStorage.removeItem(key);
+                }
+            });
+
+            citiesCache = null;
+            areasCache = {};
+
+            console.log('✓ Cache cleared');
+            alert('Cache cleared! Reloading...');
+            location.reload();
+            return true;
+        } catch (e) {
+            console.error('✗ Error clearing cache:', e);
+            return false;
+        }
+    }
+
+    window.clearLocationCache = clearLocationCache;
+
+    $('#refreshCacheBtn').on('click', function(e) {
+        e.preventDefault();
+        if (confirm('Refresh cities and areas data?')) {
+            clearLocationCache();
+        }
+    });
+
+    $('#retry-cities-btn').on('click', function() {
+        console.log('Manual retry requested');
+        $(this).html('<i class="fas fa-spinner fa-spin"></i> Retrying...').prop('disabled', true);
+
+        fetchCities().then(() => {
+            $('#retry-cities-btn').html('<i class="fas fa-check"></i> Success!');
+            setTimeout(() => $('#retry-cities-btn').hide(), 2000);
+        }).catch(() => {
+            $('#retry-cities-btn').html('<i class="fas fa-redo"></i> Retry Loading Cities').prop('disabled', false);
+        });
+    });
+
+    // ==================== DIAGNOSTICS ====================
+    $('#toggle-diagnostics').on('click', function() {
+        const panel = $('#api-diagnostics');
+        const btn = $(this);
+
+        if (panel.is(':visible')) {
+            panel.slideUp();
+            btn.text('Show API Diagnostics');
+        } else {
+            panel.slideDown();
+            btn.text('Hide API Diagnostics');
+            updateDiagnostics();
+        }
+    });
+
+    function updateDiagnostics() {
+        const citiesCacheData = localStorage.getItem(CITIES_CACHE_KEY);
+        const timestamp = localStorage.getItem(CITIES_CACHE_TIMESTAMP_KEY);
+
+        if (citiesCacheData && timestamp) {
+            const age = Math.floor((Date.now() - parseInt(timestamp)) / (1000 * 60 * 60));
+            const isValid = isCacheValid(CITIES_CACHE_TIMESTAMP_KEY);
+            $('#cache-status').html(`<span style="color: ${isValid ? 'green' : 'orange'};">${isValid ? '✓ Valid' : '⚠ Expired'} (${age}h old)</span>`);
+        } else {
+            $('#cache-status').html('<span style="color: gray;">No cache</span>');
+        }
+
+        if (citiesCacheData) {
+            const cities = JSON.parse(citiesCacheData);
+            $('#api-status').html(`<span style="color: green;">✓ ${cities.length} cities loaded</span>`);
+        } else {
+            $('#api-status').html('<span style="color: orange;">⚠ Not loaded</span>');
+        }
+    }
+
+    $('#test-api-btn').on('click', async function() {
+        const btn = $(this);
+        const originalHtml = btn.html();
+
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Testing...').prop('disabled', true);
+        $('#api-status').html('<span style="color: blue;">⟳ Testing...</span>');
+
+        try {
+            const startTime = Date.now();
+            const response = await fetch('/v1/api/location/cities', {
+                method: 'GET',
+                headers: {
+                    'Accept-Language': 'en',
+                    'Accept': 'application/json'
+                }
+            });
+            const duration = Date.now() - startTime;
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.data) {
+                    $('#api-status').html(`<span style="color: green;">✓ Working (${duration}ms, ${data.data.length} cities)</span>`);
+                    btn.html('<i class="fas fa-check"></i> Passed!');
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    $('#api-status').html(`<span style="color: red;">✗ Invalid response</span>`);
+                    btn.html('<i class="fas fa-times"></i> Failed');
+                }
+            } else {
+                $('#api-status').html(`<span style="color: red;">✗ HTTP ${response.status}</span>`);
+                btn.html('<i class="fas fa-times"></i> Error');
+            }
+        } catch (error) {
+            $('#api-status').html(`<span style="color: red;">✗ ${error.message}</span>`);
+            btn.html('<i class="fas fa-times"></i> Failed');
+        } finally {
+            setTimeout(() => {
+                btn.html(originalHtml).prop('disabled', false);
+            }, 3000);
+        }
+    });
+
+    // ==================== INITIALIZE ====================
+    console.log('🏠 Dream Haven - Initializing Property Listings...');
+    console.log('📦 Total properties:', totalProperties);
+
+    // Initialize in order
+    initializeIsotope();
+    initializeCarousel();
+    
+    fetchCities().then(() => {
+        console.log('✓ Cities loaded successfully');
+    }).catch(err => {
+        console.error('✗ Failed to load cities:', err);
+    });
+
+    // Window resize
+    $(window).resize(function() {
+        if (window.innerWidth > 992) {
+            $('#filterSidebar').removeClass('active');
+            $('#sidebarOverlay').removeClass('active');
+        }
+
+        if (isotopeInstance) {
+            setTimeout(() => isotopeInstance.arrange(), 200);
+        }
+    });
+
+    console.log('✓ Initialization complete');
+    console.log('💡 Tip: Enable Debug Mode checkbox to see detailed filter info');
+});
     </script>
 </body>
 </html>
