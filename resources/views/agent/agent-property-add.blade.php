@@ -415,15 +415,15 @@
                 </button>
             </div>
 
-            {{-- English Fields --}}
+            {{-- English Fields - NO LONGER REQUIRED --}}
             <div class="language-content active" data-content="en">
                 <div class="form-group">
-                    <label class="form-label">Property Title (English)<span class="required">*</span></label>
-                    <input type="text" name="title_en" class="form-input" placeholder="e.g., Luxury Villa in Erbil" required>
+                    <label class="form-label">Property Title (English)</label>
+                    <input type="text" name="title_en" class="form-input" placeholder="e.g., Luxury Villa in Erbil">
                 </div>
                 <div class="form-group" style="margin-top: 20px;">
-                    <label class="form-label">Description (English)<span class="required">*</span></label>
-                    <textarea name="description_en" class="form-textarea" placeholder="Describe your property in detail..." required></textarea>
+                    <label class="form-label">Description (English)</label>
+                    <textarea name="description_en" class="form-textarea" placeholder="Describe your property in detail..."></textarea>
                 </div>
             </div>
 
@@ -456,11 +456,11 @@
                 {{-- PRICE SECTIONS: SEPARATE & REQUIRED --}}
                 <div class="form-group">
                     <label class="form-label">Price (IQD)<span class="required">*</span></label>
-                    <input type="number" name="price" class="form-input" placeholder="e.g., 150000000" min="0" required>
+                    <input type="text" name="price" class="form-input numeric-input" placeholder="e.g., 150000000" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Price (USD)<span class="required">*</span></label>
-                    <input type="number" name="price_usd" class="form-input" placeholder="e.g., 100000" min="0" required>
+                    <input type="text" name="price_usd" class="form-input numeric-input" placeholder="e.g., 100000" required>
                 </div>
 
                 <div class="form-group">
@@ -486,7 +486,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Area (m²)<span class="required">*</span></label>
-                    <input type="number" name="area" class="form-input" placeholder="e.g., 250" min="0" required>
+                    <input type="text" name="area" class="form-input numeric-input" placeholder="e.g., 250" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Listing Type<span class="required">*</span></label>
@@ -538,37 +538,21 @@
                     <div id="map"></div>
                 </div>
 
-                <div class="form-grid">
-                    {{-- Coordinates --}}
-                    <div class="form-group">
-                        <label class="form-label">Latitude <span class="required">*</span></label>
-                        <input type="number" name="latitude" id="latitude" class="form-input" step="any" readonly required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Longitude <span class="required">*</span></label>
-                        <input type="number" name="longitude" id="longitude" class="form-input" step="any" readonly required>
-                    </div>
-                </div>
+                {{-- HIDDEN coordinate fields - not visible to users --}}
+                <input type="hidden" name="latitude" id="latitude">
+                <input type="hidden" name="longitude" id="longitude">
             </div>
             {{-- END MAP WRAPPER --}}
 
-            <div class="form-grid" style="margin-top: 24px;">
-                {{-- English Location Names (Auto-filled) --}}
-                <div class="form-group">
-                    <label class="form-label">City (EN)</label>
-                    <input type="text" name="city_en" id="city_en" class="form-input" readonly required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">District (EN)</label>
-                    <input type="text" name="district_en" id="district_en" class="form-input" readonly required>
-                </div>
+            {{-- HIDDEN location name fields - auto-filled by JS --}}
+            <input type="hidden" name="city_en" id="city_en">
+            <input type="hidden" name="district_en" id="district_en">
+            <input type="hidden" name="city_ar" id="city_ar">
+            <input type="hidden" name="district_ar" id="district_ar">
+            <input type="hidden" name="city_ku" id="city_ku">
+            <input type="hidden" name="district_ku" id="district_ku">
 
-                {{-- Hidden Multi-language fields (Auto-filled by JS) --}}
-                <input type="hidden" name="city_ar" id="city_ar">
-                <input type="hidden" name="district_ar" id="district_ar">
-                <input type="hidden" name="city_ku" id="city_ku">
-                <input type="hidden" name="district_ku" id="district_ku">
-
+            <div class="form-grid">
                 <div class="form-group form-grid-full">
                     <label class="form-label">Full Address Details <span class="required">*</span></label>
                     <input type="text" name="address" class="form-input" placeholder="Street number, building name, floor number, landmark..." required>
@@ -583,19 +567,19 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-bed"></i> Bedrooms</label>
-                    <input type="number" name="bedrooms" class="form-input" min="0" placeholder="e.g., 3" required>
+                    <input type="text" name="bedrooms" class="form-input numeric-input" placeholder="e.g., 3" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-bath"></i> Bathrooms</label>
-                    <input type="number" name="bathrooms" class="form-input" min="0" placeholder="e.g., 2" required>
+                    <input type="text" name="bathrooms" class="form-input numeric-input" placeholder="e.g., 2" required>
                 </div>
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-layer-group"></i> Floors</label>
-                    <input type="number" name="floor_number" class="form-input" min="0" placeholder="e.g., 2">
+                    <input type="text" name="floor_number" class="form-input numeric-input" placeholder="e.g., 2">
                 </div>
                 <div class="form-group">
                     <label class="form-label"><i class="fas fa-calendar-check"></i> Year Built</label>
-                    <input type="number" name="year_built" class="form-input" min="1900" max="2100" placeholder="e.g., 2020">
+                    <input type="text" name="year_built" class="form-input numeric-input" placeholder="e.g., 2020">
                 </div>
             </div>
 
@@ -664,6 +648,53 @@
 
 <script>
 let map, marker;
+
+// --- NUMERIC NORMALIZATION FUNCTION ---
+// Converts Arabic/Kurdish numerals to English numerals
+function normalizeNumber(value) {
+    const arabicNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
+    const kurdishNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩']; // Kurdish uses Arabic-Indic
+    const persianNumerals = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
+    
+    let normalized = value;
+    
+    // Replace Arabic-Indic numerals
+    arabicNumerals.forEach((num, index) => {
+        normalized = normalized.replace(new RegExp(num, 'g'), index.toString());
+    });
+    
+    // Replace Persian numerals
+    persianNumerals.forEach((num, index) => {
+        normalized = normalized.replace(new RegExp(num, 'g'), index.toString());
+    });
+    
+    return normalized;
+}
+
+// Apply normalization to all numeric inputs
+document.addEventListener('DOMContentLoaded', function() {
+    const numericInputs = document.querySelectorAll('.numeric-input');
+    
+    numericInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            const cursorPos = this.selectionStart;
+            const originalLength = this.value.length;
+            
+            // Normalize the value
+            this.value = normalizeNumber(this.value);
+            
+            // Adjust cursor position if length changed
+            const newLength = this.value.length;
+            const newCursorPos = cursorPos + (newLength - originalLength);
+            this.setSelectionRange(newCursorPos, newCursorPos);
+        });
+        
+        // Also normalize on blur to ensure final value is correct
+        input.addEventListener('blur', function() {
+            this.value = normalizeNumber(this.value);
+        });
+    });
+});
 
 // --- 1. GOOGLE MAPS INIT ---
 function initMap() {
@@ -954,5 +985,34 @@ document.addEventListener('DOMContentLoaded', function() {
         imageInput.files = dt.files;
     }
 })();
+
+// --- 6. FORM VALIDATION - Ensure at least one title is provided ---
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('propertyForm');
+    
+    form.addEventListener('submit', function(e) {
+        const titleEn = document.querySelector('input[name="title_en"]').value.trim();
+        const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
+        const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
+        
+        // Check if at least one title is provided
+        if (!titleEn && !titleAr && !titleKu) {
+            e.preventDefault();
+            alert('Please provide a property title in at least one language (English, Arabic, or Kurdish)');
+            return false;
+        }
+        
+        // Check if at least one description is provided
+        const descEn = document.querySelector('textarea[name="description_en"]').value.trim();
+        const descAr = document.querySelector('textarea[name="description_ar"]').value.trim();
+        const descKu = document.querySelector('textarea[name="description_ku"]').value.trim();
+        
+        if (!descEn && !descAr && !descKu) {
+            e.preventDefault();
+            alert('Please provide a property description in at least one language (English, Arabic, or Kurdish)');
+            return false;
+        }
+    });
+});
 </script>
 @endsection
