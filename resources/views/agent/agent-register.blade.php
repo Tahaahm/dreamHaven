@@ -195,6 +195,7 @@
                 {{-- Updated Select to rely on JS --}}
                 <select id="city" name="city" required>
                     <option value="">Loading cities...</option>
+                         <option value="">Loading cities...</option>
                 </select>
             </div>
 
