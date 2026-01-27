@@ -899,15 +899,17 @@ class AdminController extends Controller
 
     public function propertiesUpdate(Request $request, $id)
     {
+        // 1. Find the property using Eloquent (Required for JSON casting to work)
         $property = Property::findOrFail($id);
 
+        // 2. Validation
         $validator = Validator::make($request->all(), [
             'name.en' => 'required|string|max:255',
             'area' => 'required|numeric',
-            'listing_type' => 'required|in:sale,sell,rent',
+            'listing_type' => 'required', // We handle the mapping below
             'status' => 'required|in:available,pending,sold,rented,suspended',
-            'price' => 'required|numeric',
-            'price_currency' => 'required|in:USD,IQD',
+            'price_usd' => 'required|numeric|min:0',
+            'price' => 'required|numeric|min:0', // This is the IQD field
             'images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
@@ -915,157 +917,117 @@ class AdminController extends Controller
             return back()->withErrors($validator)->withInput();
         }
 
-        // Initialize update data
-        $updateData = [];
-
-        // 1. JSON Fields (Core)
-        $updateData['name'] = json_encode([
-            'en' => $request->input('name.en', ''),
-            'ar' => $request->input('name.ar', ''),
-            'ku' => $request->input('name.ku', ''),
-        ]);
-
-        $updateData['description'] = json_encode([
-            'en' => $request->input('description.en', ''),
-            'ar' => $request->input('description.ar', ''),
-            'ku' => $request->input('description.ku', ''),
-        ]);
-
-        // 2. Scalar Fields
-        // FIX: Map 'sale' to 'sell' to match database enum
-        $listingType = $request->input('listing_type');
-        $updateData['listing_type'] = ($listingType === 'sale') ? 'sell' : $listingType;
-
-        $updateData['status'] = $request->input('status');
-        $updateData['area'] = $request->input('area');
-        $updateData['rental_period'] = $request->input('rental_period');
-        $updateData['floor_number'] = $request->input('floor_number');
-        $updateData['year_built'] = $request->input('year_built');
-        $updateData['energy_rating'] = $request->input('energy_rating');
-        $updateData['address'] = $request->input('address');
-        $updateData['virtual_tour_url'] = $request->input('virtual_tour_url');
-        $updateData['floor_plan_url'] = $request->input('floor_plan_url');
-
-        // Booleans
-        $updateData['furnished'] = $request->boolean('furnished');
-        $updateData['electricity'] = $request->boolean('electricity');
-        $updateData['water'] = $request->boolean('water');
-        $updateData['internet'] = $request->boolean('internet');
-        $updateData['is_active'] = $request->boolean('is_active');
-        $updateData['published'] = $request->boolean('published');
-        $updateData['verified'] = $request->boolean('verified');
-        $updateData['is_boosted'] = $request->boolean('is_boosted');
-
-        // Dates
-        $updateData['boost_start_date'] = $request->input('boost_start_date');
-        $updateData['boost_end_date'] = $request->input('boost_end_date');
-
-        // 3. More JSON Fields
-        $updateData['price'] = json_encode([
-            'amount' => $request->input('price'),
-            'currency' => $request->input('price_currency', 'USD'),
-        ]);
-
-        $updateData['type'] = json_encode([
-            'category' => $request->input('type.category', 'apartment'),
-        ]);
-
-        $updateData['rooms'] = json_encode([
-            'bedroom' => (int) $request->input('rooms.bedroom', 0),
-            'bathroom' => (int) $request->input('rooms.bathroom', 0),
-            'living_room' => (int) $request->input('rooms.living_room', 0),
-        ]);
-
-        // Array Handling for Amenities/Features/Nearby
-        $amenities = $request->filled('amenities') ? array_values(array_filter(array_map('trim', explode(',', $request->input('amenities'))))) : [];
-        $updateData['amenities'] = json_encode($amenities);
-
-        $features = $request->filled('features') ? array_values(array_filter(array_map('trim', explode(',', $request->input('features'))))) : [];
-        $updateData['features'] = json_encode($features);
-
-        $nearby = $request->filled('nearby_amenities') ? array_values(array_filter(array_map('trim', explode(',', $request->input('nearby_amenities'))))) : [];
-        $updateData['nearby_amenities'] = json_encode($nearby);
-
-        // Location & Address
-        $locations = [];
-        if ($request->filled('locations.0.lat') && $request->filled('locations.0.lng')) {
-            $locations[] = [
-                'lat' => $request->input('locations.0.lat'),
-                'lng' => $request->input('locations.0.lng'),
-            ];
-        }
-        $updateData['locations'] = json_encode($locations);
-
-        $updateData['address_details'] = json_encode([
-            'city' => [
-                'en' => $request->input('address_details.city.en', ''),
-                'ar' => $request->input('address_details.city.ar', ''),
-                'ku' => $request->input('address_details.city.ku', ''),
-            ],
-            'district' => [
-                'en' => $request->input('address_details.district.en', ''),
-                'ar' => $request->input('address_details.district.ar', ''),
-                'ku' => $request->input('address_details.district.ku', ''),
-            ],
-        ]);
-
-        $updateData['availability'] = json_encode([
-            'from' => $request->input('availability.from'),
-            'to' => $request->input('availability.to'),
-        ]);
-
-        $updateData['floor_details'] = json_encode([
-            'total_floors' => $request->input('floor_details.total_floors'),
-            'position' => $request->input('floor_details.position'),
-        ]);
-
-        $updateData['construction_details'] = json_encode([
-            'type' => $request->input('construction_details.type'),
-            'quality' => $request->input('construction_details.quality'),
-        ]);
-
-        $updateData['energy_details'] = json_encode([
-            'certificate' => $request->input('energy_details.certificate'),
-            'consumption' => $request->input('energy_details.consumption'),
-        ]);
-
-        // Furnishing
-        $furnishingData = null;
-        if ($request->filled('furnishing_details.level')) {
-            $furnishingData = ['level' => $request->input('furnishing_details.level')];
-            if ($request->filled('furnishing_details.items')) {
-                $furnishingData['items'] = array_values(array_filter(array_map('trim', explode(',', $request->input('furnishing_details.items')))));
-            }
-        }
-        $updateData['furnishing_details'] = $furnishingData ? json_encode($furnishingData) : null;
-
-        // SEO
-        $seoData = [];
-        if ($request->filled('seo_metadata.title')) $seoData['title'] = $request->input('seo_metadata.title');
-        if ($request->filled('seo_metadata.description')) $seoData['description'] = $request->input('seo_metadata.description');
-        if ($request->filled('seo_metadata.keywords')) $seoData['keywords'] = array_values(array_filter(array_map('trim', explode(',', $request->input('seo_metadata.keywords')))));
-        $updateData['seo_metadata'] = !empty($seoData) ? json_encode($seoData) : null;
-
-        // 4. Image Upload Handling
-        $currentImages = is_array($property->images) ? $property->images : [];
-        if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('properties', 'public');
-                $currentImages[] = asset('storage/' . $path);
-            }
-        }
-        $updateData['images'] = json_encode($currentImages);
-
-        // 5. Execute Update
         try {
-            DB::table('properties')
-                ->where('id', $id)
-                ->update($updateData);
+            // --- FIX: ENUM MAPPING ---
+            // Your database ENUM is ['sell', 'rent'], but form sends 'sale'.
+            $formListingType = $request->input('listing_type');
+            $dbListingType = ($formListingType === 'sale') ? 'sell' : $formListingType;
+
+            // 3. Prepare Data Array
+            // We pass raw arrays; Eloquent will automatically JSON-encode them
+            // based on the $casts property in your Property model.
+            $updateData = [
+                'name' => [
+                    'en' => $request->input('name.en'),
+                    'ar' => $request->input('name.ar'),
+                    'ku' => $request->input('name.ku'),
+                ],
+                'description' => [
+                    'en' => $request->input('description.en'),
+                    'ar' => $request->input('description.ar'),
+                    'ku' => $request->input('description.ku'),
+                ],
+                // --- FIX: DUAL PRICING ---
+                'price' => [
+                    'usd' => (float) $request->input('price_usd'),
+                    'iqd' => (float) $request->input('price'),
+                    'amount' => (float) $request->input('price_usd'), // Fallback for standard display
+                    'currency' => 'USD'
+                ],
+                'listing_type' => $dbListingType,
+                'status' => $request->input('status'),
+                'area' => (float) $request->input('area'),
+                'floor_number' => $request->input('floor_number'),
+                'year_built' => $request->input('year_built'),
+                'energy_rating' => $request->input('energy_rating'),
+                'address' => $request->input('address'),
+                'virtual_tour_url' => $request->input('virtual_tour_url'),
+                'floor_plan_url' => $request->input('floor_plan_url'),
+                'rental_period' => $request->input('rental_period'),
+
+                // Booleans (Checkboxes)
+                'furnished' => $request->has('furnished'),
+                'electricity' => $request->has('electricity'),
+                'water' => $request->has('water'),
+                'internet' => $request->has('internet'),
+                'is_active' => $request->has('is_active'),
+                'published' => $request->has('published'),
+                'verified' => $request->has('verified'),
+                'is_boosted' => $request->has('is_boosted'),
+                'boost_start_date' => $request->input('boost_start_date'),
+                'boost_end_date' => $request->input('boost_end_date'),
+
+                // Nested JSON Objects
+                'type' => [
+                    'category' => $request->input('type.category')
+                ],
+                'rooms' => [
+                    'bedroom' => (int)$request->input('rooms.bedroom.count'),
+                    'bathroom' => (int)$request->input('rooms.bathroom.count'),
+                    'living_room' => (int)$request->input('rooms.living_room.count'),
+                ],
+                'address_details' => [
+                    'city' => ['en' => $request->input('address_details.city.en')],
+                    'district' => ['en' => $request->input('address_details.district.en')],
+                ],
+                'locations' => [
+                    [
+                        'lat' => (float) $request->input('locations.0.lat'),
+                        'lng' => (float) $request->input('locations.0.lng')
+                    ]
+                ],
+                'availability' => [
+                    'from' => $request->input('availability.from'),
+                    'to' => $request->input('availability.to'),
+                ],
+                'construction_details' => [
+                    'type' => $request->input('construction_details.type'),
+                    'quality' => $request->input('construction_details.quality'),
+                ],
+                'energy_details' => [
+                    'certificate' => $request->input('energy_details.certificate'),
+                    'consumption' => $request->input('energy_details.consumption'),
+                ],
+                'furnishing_details' => [
+                    'level' => $request->input('furnishing_details.level'),
+                    'items' => array_values(array_filter(explode(',', $request->input('furnishing_details.items', '')))),
+                ],
+                'seo_metadata' => [
+                    'title' => $request->input('seo_metadata.title'),
+                    'description' => $request->input('seo_metadata.description'),
+                    'keywords' => array_values(array_filter(explode(',', $request->input('seo_metadata.keywords', '')))),
+                ]
+            ];
+
+            // 4. Handle Image Uploads
+            if ($request->hasFile('images')) {
+                $currentImages = $property->images ?? [];
+                foreach ($request->file('images') as $image) {
+                    $path = $image->store('properties', 'public');
+                    $currentImages[] = 'storage/' . $path;
+                }
+                $updateData['images'] = $currentImages;
+            }
+
+            // 5. Save Changes
+            // Using $property->update() ensures that all dirty attributes are
+            // synchronized and cast properly.
+            $property->update($updateData);
 
             return redirect()->route('admin.properties.index')->with('success', 'Property updated successfully!');
         } catch (\Exception $e) {
             Log::error('Property Update Error: ' . $e->getMessage());
-            return back()->withInput()->with('error', 'Failed to update property: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Critical Error: ' . $e->getMessage());
         }
     }
     public function propertiesDelete($id)
@@ -1185,25 +1147,72 @@ class AdminController extends Controller
 
     public function bannersCreate()
     {
-        return view('admin.banners.create');
+        // Fetch all properties so the dropdown in the view has data
+        $properties = Property::select('id', 'name')->get();
+
+        return view('admin.banners.create', compact('properties'));
     }
 
     public function bannersStore(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'title' => 'required|string|max:255',
-            'image_url' => 'required|url',
-            'link_url' => 'nullable|url',
+        $admin = Auth::guard('admin')->user();
+
+        $request->validate([
+            'title.en' => 'required|string|max:255',
+            'image' => 'required|image|mimes:jpeg,png,jpg,webp|max:4096',
             'start_date' => 'required|date',
-            'end_date' => 'nullable|date|after:start_date',
+            'status' => 'required|in:pending,active,paused',
+            'link_url' => 'nullable|url',
         ]);
 
-        if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
-        }
+        try {
+            $imageUrl = null;
+            if ($request->hasFile('image')) {
+                $path = $request->file('image')->store('banners', 'public');
+                $imageUrl = asset('storage/' . $path);
+            }
 
-        BannerAd::create($request->all());
-        return redirect()->route('admin.banners.index')->with('success', 'Banner created successfully!');
+            $data = [
+                'title' => [
+                    'en' => $request->input('title.en'),
+                    'ar' => $request->input('title.ar') ?? $request->input('title.en'),
+                    'ku' => $request->input('title.ku') ?? $request->input('title.en'),
+                ],
+                'description' => [
+                    'en' => $request->description ?? '',
+                    'ar' => $request->description ?? '',
+                    'ku' => $request->description ?? '',
+                ],
+                'call_to_action' => [
+                    'en' => 'Learn More',
+                ],
+                'image_url' => $imageUrl,
+                'link_url' => $request->link_url,
+
+                // FIXED: We must use one of your ENUM values ('real_estate' or 'agent')
+                'owner_type' => 'real_estate',
+                'owner_id' => $admin->id, // Store admin ID here
+                'owner_name' => $request->owner_name ?? $admin->username,
+
+                'banner_type' => $request->banner_type ?? 'general_marketing',
+                'banner_size' => $request->banner_size ?? 'leaderboard',
+                'position' => $request->position ?? 'header',
+                'property_id' => $request->property_id,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'status' => $request->status,
+                'is_active' => ($request->status === 'active'),
+                'created_by_ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ];
+
+            BannerAd::create($data);
+
+            return redirect()->route('admin.banners.index')->with('success', 'Banner created successfully!');
+        } catch (\Exception $e) {
+            Log::error('Banner Store Error: ' . $e->getMessage());
+            return back()->with('error', 'Error: ' . $e->getMessage())->withInput();
+        }
     }
 
     public function bannersPending()

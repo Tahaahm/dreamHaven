@@ -55,7 +55,7 @@
                     </div>
 
                     {{-- Link & Owner --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                          <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Destination URL</label>
                             <input type="url" name="link_url" value="{{ old('link_url') }}" placeholder="https://..." class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition">
@@ -65,27 +65,80 @@
                             <input type="text" name="owner_name" value="{{ old('owner_name') }}" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition">
                         </div>
                     </div>
+
+                    {{-- Property Link (Missing data from before) --}}
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Link to Specific Property (Optional)</label>
+                        <select name="property_id" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500 transition">
+                            <option value="">None (General Ad)</option>
+                            @foreach($properties as $property)
+                                <option value="{{ $property->id }}" {{ old('property_id') == $property->id ? 'selected' : '' }}>
+                                    {{ is_array($property->name) ? $property->name['en'] : $property->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
 
-                {{-- Image Upload --}}
+                {{-- Image Upload with Preview --}}
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
                     <h3 class="text-lg font-black text-slate-900 mb-2">Banner Image <span class="text-red-500">*</span></h3>
                     <p class="text-xs text-slate-500 mb-6">Recommended size: 1200x600px (2:1 aspect ratio). Max 4MB.</p>
 
-                    <input type="file" name="image" required accept="image/png, image/jpeg, image/jpg, image/webp" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 transition cursor-pointer">
-                     @error('image') <p class="text-xs text-red-500 mt-2 font-bold">{{ $message }}</p> @enderror
+                    <div class="relative group mb-4">
+                        <div id="imagePreviewContainer" class="hidden w-full h-64 mb-4 rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 relative">
+                            <img id="imagePreview" src="#" alt="Preview" class="w-full h-full object-contain bg-slate-50">
+                            <button type="button" onclick="removeImage()" class="absolute top-4 right-4 bg-red-500 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-600 transition shadow-lg">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <label id="uploadPlaceholder" class="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-slate-300 rounded-2xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 mb-3"></i>
+                                <p class="mb-2 text-sm text-slate-500 font-bold">Click to upload image</p>
+                                <p class="text-xs text-slate-400">PNG, JPG or WEBP (MAX. 4MB)</p>
+                            </div>
+                            <input type="file" id="imageInput" name="image" required accept="image/*" class="hidden" onchange="previewFile()">
+                        </label>
+                    </div>
+                    @error('image') <p class="text-xs text-red-500 mt-2 font-bold">{{ $message }}</p> @enderror
                 </div>
             </div>
 
             {{-- Sidebar --}}
             <div class="space-y-6">
 
-                {{-- Configuration --}}
+                {{-- Placement Configuration (Missing fields added) --}}
+                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wide mb-4">Placement</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Banner Size <span class="text-red-500">*</span></label>
+                            <select name="banner_size" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none">
+                                <option value="banner">Standard (728x90)</option>
+                                <option value="leaderboard" selected>Large (1200x600)</option>
+                                <option value="rectangle">Rectangle (300x250)</option>
+                                <option value="mobile">Mobile (320x100)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Position <span class="text-red-500">*</span></label>
+                            <select name="position" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none">
+                                <option value="header">Home Header</option>
+                                <option value="sidebar">Sidebar</option>
+                                <option value="content_middle">Content Middle</option>
+                                <option value="footer">Footer</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Schedule Configuration --}}
                 <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
                     <h3 class="text-sm font-black text-slate-900 uppercase tracking-wide mb-4">Configuration</h3>
 
                     <div class="space-y-4">
-                         {{-- Status Select --}}
                         <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Initial Status <span class="text-red-500">*</span></label>
                             <select name="status" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none cursor-pointer focus:border-indigo-500">
@@ -95,7 +148,6 @@
                             </select>
                         </div>
 
-                        {{-- Dates --}}
                         <div>
                             <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Start Date <span class="text-red-500">*</span></label>
                             <input type="date" name="start_date" value="{{ old('start_date', now()->format('Y-m-d')) }}" required class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 outline-none focus:border-indigo-500">
@@ -112,4 +164,40 @@
         </div>
     </form>
 </div>
+
+{{-- JavaScript for Image Preview --}}
+<script>
+    function previewFile() {
+        const preview = document.getElementById('imagePreview');
+        const file = document.getElementById('imageInput').files[0];
+        const reader = new FileReader();
+        const container = document.getElementById('imagePreviewContainer');
+        const placeholder = document.getElementById('uploadPlaceholder');
+
+        reader.onloadend = function () {
+            preview.src = reader.result;
+            container.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+        }
+
+        if (file) {
+            reader.readAsDataURL(file);
+        } else {
+            preview.src = "";
+        }
+    }
+
+    function removeImage() {
+        const preview = document.getElementById('imagePreview');
+        const input = document.getElementById('imageInput');
+        const container = document.getElementById('imagePreviewContainer');
+        const placeholder = document.getElementById('uploadPlaceholder');
+
+        input.value = "";
+        preview.src = "";
+        container.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+    }
+</script>
+
 @endsection
