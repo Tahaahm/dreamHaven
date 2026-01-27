@@ -130,7 +130,7 @@
         }
 
         .filter-content {
-         
+
             padding: 25px;
         }
 
@@ -1379,14 +1379,14 @@ $(document).ready(function () {
         let maxPrice = parseFloat($('#max-price-input').val());
         let purposeFilter = $('#purpose-dropdown').val().toLowerCase().trim();
         let listingTypeFilter = $('#property-type-dropdown').val().toLowerCase().trim();
-        
+
         let selectedCityName = ($('#city-dropdown option:selected').data('name-en') || '').toLowerCase();
         let selectedAreaName = ($('#area-dropdown option:selected').data('name-en') || '').toLowerCase();
 
         if (debugMode) {
             console.log('🔍 FILTERING WITH:', {
                 searchTerm, propertyId, minArea, maxArea, minPrice, maxPrice,
-                purposeFilter, listingTypeFilter, 
+                purposeFilter, listingTypeFilter,
                 selectedCityName, selectedAreaName
             });
         }
@@ -1406,7 +1406,7 @@ $(document).ready(function () {
                 let cardTitle = ($card.find('.card-title').text() || '').toLowerCase().trim();
                 let cardLocation = ($card.find('.card-location span').text() || '').toLowerCase().trim();
                 let cardPrice = parseFloat($card.attr('data-price')) || 0;
-                
+
                 let cardAreaText = ($card.find('.feature-value').last().text() || '').trim();
                 let cardArea = parseFloat(cardAreaText) || 0;
 
@@ -1417,8 +1417,8 @@ $(document).ready(function () {
                 // ===== FILTER LOGIC =====
 
                 // 1. Search keywords
-                let matchesSearch = !searchTerm || 
-                                   cardTitle.includes(searchTerm) || 
+                let matchesSearch = !searchTerm ||
+                                   cardTitle.includes(searchTerm) ||
                                    cardLocation.includes(searchTerm);
 
                 // 2. Property ID
@@ -1441,16 +1441,16 @@ $(document).ready(function () {
                 let matchesListingType = !listingTypeFilter || cardListing === listingTypeFilter;
 
                 // 7. City filter
-                let matchesCity = !selectedCityName || 
+                let matchesCity = !selectedCityName ||
                                  cardLocation.includes(selectedCityName);
 
                 // 8. Area filter
-                let matchesSelectedArea = !selectedAreaName || 
+                let matchesSelectedArea = !selectedAreaName ||
                                           cardLocation.includes(selectedAreaName);
 
                 // Combine all filters
-                let isVisible = matchesSearch && matchesPropertyId && matchesArea && 
-                               matchesPrice && matchesPurpose && matchesListingType && 
+                let isVisible = matchesSearch && matchesPropertyId && matchesArea &&
+                               matchesPrice && matchesPurpose && matchesListingType &&
                                matchesCity && matchesSelectedArea;
 
                 if (debugMode && debugResults.length < 5) {
@@ -1779,7 +1779,7 @@ $(document).ready(function () {
     // Initialize in order
     initializeIsotope();
     initializeCarousel();
-    
+
     fetchCities().then(() => {
         console.log('✓ Cities loaded successfully');
     }).catch(err => {

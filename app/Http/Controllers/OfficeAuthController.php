@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
 
 class OfficeAuthController extends Controller
 {
@@ -706,276 +708,144 @@ class OfficeAuthController extends Controller
      */
     public function storeProperty(Request $request)
     {
-        // ✅ LOG INCOMING REQUEST
-        Log::info('=== PROPERTY CREATION STARTED ===', [
-            'office_id' => auth('office')->id(),
-            'office_name' => auth('office')->user()->company_name ?? 'Unknown',
-            'request_data' => $request->except(['images', '_token']),
-            'files_count' => $request->hasFile('images') ? count($request->file('images')) : 0,
+        Log::info('=== OFFICE PROPERTY CREATE ===', ['office_id' => auth('office')->id()]);
+
+        // 1. CHECK SUBSCRIPTION
+        $validationResult = $this->validateSubscription();
+        if ($validationResult) return $validationResult;
+
+        $office = auth('office')->user();
+
+        // 2. SMART VALIDATION
+        // "required_without_all" means: English is required ONLY IF Arabic AND Kurdish are empty.
+        // If Kurdish is present, English becomes optional.
+        $validated = $request->validate([
+            'name_en'        => 'nullable|required_without_all:name_ar,name_ku|string|min:3|max:255',
+            'name_ar'        => 'nullable|string|max:255',
+            'name_ku'        => 'nullable|string|max:255',
+
+            'description_en' => 'nullable|required_without_all:description_ar,description_ku|string|min:5',
+            'description_ar' => 'nullable|string',
+            'description_ku' => 'nullable|string',
+
+            'listing_type'   => 'required|in:sell,rent',
+            'property_type'  => 'required|string',
+            'price_usd'      => 'required|numeric|min:0',
+            'price_iqd'      => 'required|numeric|min:0',
+            'bedrooms'       => 'required|integer|min:0',
+            'bathrooms'      => 'required|integer|min:0',
+            'area'           => 'required|numeric|min:1',
+            'city_en'        => 'required|string',
+            'district_en'    => 'required|string',
+            'latitude'       => 'required|numeric|between:-90,90',
+            'longitude'      => 'required|numeric|between:-180,180',
+            'images'         => 'required|array|min:1|max:10',
+            'images.*'       => 'image|mimes:jpeg,png,jpg,webp|max:30720',
+        ], [
+            'name_en.required_without_all' => 'Please provide the property name in at least one language.',
+            'description_en.required_without_all' => 'Please provide a description in at least one language.'
         ]);
 
-        // ✅ CHECK SUBSCRIPTION FIRST
-        $validationResult = $this->validateSubscription();
-        if ($validationResult) {
-            Log::warning('Subscription validation failed', [
-                'office_id' => auth('office')->id(),
-            ]);
-            return $validationResult;
-        }
+        // 3. SMART FALLBACK LOGIC (The Magic Part 🪄)
+        // If English is empty, grab Kurdish. If Kurdish is empty, grab Arabic.
+        $finalNameEn = $request->name_en ?: ($request->name_ku ?: $request->name_ar);
+        $finalNameAr = $request->name_ar ?: ($request->name_ku ?: $finalNameEn); // If Ar empty, try Ku, else En
+        $finalNameKu = $request->name_ku ?: ($request->name_ar ?: $finalNameEn); // If Ku empty, try Ar, else En
 
-        Log::info('Subscription validation passed');
+        // Same for Description
+        $finalDescEn = $request->description_en ?: ($request->description_ku ?: $request->description_ar);
+        $finalDescAr = $request->description_ar ?: ($request->description_ku ?: $finalDescEn);
+        $finalDescKu = $request->description_ku ?: ($request->description_ar ?: $finalDescEn);
 
-        // ✅ VALIDATE REQUEST - FIXED: Reduced min description to 5 characters
-        try {
-            $validated = $request->validate([
-                'name_en' => 'required|string|min:3|max:255',
-                'name_ar' => 'nullable|string|max:255',
-                'name_ku' => 'nullable|string|max:255',
-                'description_en' => 'required|string|min:5',  // ✅ CHANGED from 10 to 5
-                'description_ar' => 'nullable|string',
-                'description_ku' => 'nullable|string',
-                'listing_type' => 'required|in:sell,rent',
-                'property_type' => 'required|string',
-                'price_usd' => 'required|numeric|min:0',
-                'price_iqd' => 'required|numeric|min:0',
-                'bedrooms' => 'required|integer|min:0',
-                'bathrooms' => 'required|integer|min:0',
-                'area' => 'required|numeric|min:1',
-                'furnished' => 'nullable|boolean',
-                'floor_number' => 'nullable|integer|min:0',
-                'year_built' => 'nullable|integer|min:1900|max:2030',
-                'city_en' => 'required|string',
-                'district_en' => 'required|string',
-                'city_ar' => 'nullable|string',
-                'district_ar' => 'nullable|string',
-                'city_ku' => 'nullable|string',
-                'district_ku' => 'nullable|string',
-                'address' => 'nullable|string',
-                'latitude' => 'required|numeric|between:-90,90',
-                'longitude' => 'required|numeric|between:-180,180',
-                'images' => 'required|array|min:1|max:10',
-                'images.*' => 'image|mimes:jpeg,png,jpg,gif|max:5120',
-                'electricity' => 'nullable|boolean',
-                'water' => 'nullable|boolean',
-                'internet' => 'nullable|boolean',
-                'status' => 'nullable|in:available,sold,rented',
-            ], [
-                // ✅ CUSTOM ERROR MESSAGES
-                'name_en.required' => 'Property name is required',
-                'name_en.min' => 'Property name must be at least 3 characters',
-                'description_en.required' => 'Property description is required',
-                'description_en.min' => 'Description must be at least 5 characters',
-                'property_type.required' => 'Please select a property type',
-                'listing_type.required' => 'Please select listing type (Sale or Rent)',
-                'area.required' => 'Area is required',
-                'area.min' => 'Area must be at least 1 m²',
-                'price_usd.required' => 'Price in USD is required',
-                'price_iqd.required' => 'Price in IQD is required',
-                'bedrooms.required' => 'Number of bedrooms is required',
-                'bathrooms.required' => 'Number of bathrooms is required',
-                'city_en.required' => 'Please select a city',
-                'district_en.required' => 'Please select a district/area',
-                'latitude.required' => 'Please select location on the map',
-                'longitude.required' => 'Please select location on the map',
-                'images.required' => 'Please upload at least one property image',
-                'images.min' => 'Please upload at least one image',
-                'images.max' => 'Maximum 10 images allowed',
-                'images.*.image' => 'All uploaded files must be images',
-                'images.*.mimes' => 'Images must be jpeg, png, jpg, or gif format',
-                'images.*.max' => 'Each image must not exceed 5MB',
-            ]);
+        // 4. HANDLE IMAGES (WebP Compression)
+        $imageUrls = [];
+        if ($request->hasFile('images')) {
+            $manager = new ImageManager(new Driver());
+            foreach ($request->file('images') as $index => $image) {
+                try {
+                    $filename = 'prop_off_' . $office->id . '_' . uniqid() . '.webp';
+                    $path = 'property_images/' . $filename;
 
-            Log::info('Validation passed successfully');
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Validation failed', [
-                'errors' => $e->errors(),
-                'messages' => $e->getMessage(),
-            ]);
+                    $img = $manager->read($image);
+                    $img->scaleDown(width: 1920); // Resize 4K images
+                    $encoded = $img->toWebp(quality: 90); // Compress
 
-            return back()
-                ->withErrors($e->errors())
-                ->withInput()
-                ->with('error', 'Please check the form for errors.');
-        }
-
-        try {
-            $office = auth('office')->user();
-            Log::info('Office loaded', ['office_id' => $office->id]);
-
-            // ✅ Upload images
-            $imageUrls = [];
-            if ($request->hasFile('images')) {
-                Log::info('Processing images', ['count' => count($request->file('images'))]);
-
-                foreach ($request->file('images') as $index => $image) {
-                    try {
-                        $path = $image->store('property_images', 'public');
-                        $imageUrls[] = asset('storage/' . $path);
-                        Log::info("Image {$index} uploaded successfully", ['path' => $path]);
-                    } catch (\Exception $e) {
-                        Log::error("Image {$index} upload failed", [
-                            'error' => $e->getMessage(),
-                            'file_name' => $image->getClientOriginalName(),
-                            'file_size' => $image->getSize(),
-                        ]);
-                        throw $e;
-                    }
+                    Storage::disk('public')->put($path, (string) $encoded);
+                    $imageUrls[] = asset('storage/' . $path);
+                } catch (\Exception $e) {
+                    Log::error("Image Error: " . $e->getMessage());
+                    // Fallback to standard upload if compression fails
+                    $fallbackPath = $image->store('property_images', 'public');
+                    $imageUrls[] = asset('storage/' . $fallbackPath);
                 }
-
-                Log::info('All images uploaded', ['total' => count($imageUrls)]);
             }
+        }
 
-            // ✅ Use status from form or default to 'available'
-            $propertyStatus = $request->input('status', 'available');
-            Log::info('Property status set', ['status' => $propertyStatus]);
+        // 5. GENERATE ID
+        $propertyId = $this->generateUniquePropertyId();
 
-            // ✅ Generate unique property ID
-            $propertyId = $this->generateUniquePropertyId();
-            Log::info('Property ID generated', ['id' => $propertyId]);
-
-            // ✅ Build property data
-            $propertyData = [
+        // 6. SAVE TO DB
+        try {
+            Property::insert([
                 'id' => $propertyId,
                 'owner_id' => $office->id,
                 'owner_type' => 'App\\Models\\RealEstateOffice',
 
-                // Multi-language fields
+                // ✅ SAVE THE SMART FALLBACK VALUES
                 'name' => json_encode([
-                    'en' => $request->name_en,
-                    'ar' => $request->name_ar ?? $request->name_en,
-                    'ku' => $request->name_ku ?? $request->name_en,
+                    'en' => $finalNameEn,
+                    'ar' => $finalNameAr,
+                    'ku' => $finalNameKu
                 ]),
+
                 'description' => json_encode([
-                    'en' => $request->description_en,
-                    'ar' => $request->description_ar ?? $request->description_en,
-                    'ku' => $request->description_ku ?? $request->description_en,
+                    'en' => $finalDescEn,
+                    'ar' => $finalDescAr,
+                    'ku' => $finalDescKu
                 ]),
 
-                // Property type
-                'type' => json_encode([
-                    'category' => $request->property_type,
-                    'labels' => [
-                        'en' => ucfirst($request->property_type),
-                        'ar' => $this->translatePropertyType($request->property_type, 'ar'),
-                        'ku' => $this->translatePropertyType($request->property_type, 'ku'),
-                    ]
-                ]),
-
-                // Pricing
-                'price' => json_encode([
-                    'usd' => (float) $request->price_usd,
-                    'iqd' => (float) $request->price_iqd,
-                ]),
-                'listing_type' => $request->listing_type,
-
-                // Rooms
+                'type' => json_encode(['category' => $request->property_type]),
+                'price' => json_encode(['usd' => (float)$request->price_usd, 'iqd' => (float)$request->price_iqd]),
                 'rooms' => json_encode([
-                    'bedroom' => [
-                        'count' => (int) $request->bedrooms,
-                        'labels' => ['en' => 'Bedrooms', 'ar' => 'غرف نوم', 'ku' => 'ژووری نوستن']
-                    ],
-                    'bathroom' => [
-                        'count' => (int) $request->bathrooms,
-                        'labels' => ['en' => 'Bathrooms', 'ar' => 'حمامات', 'ku' => 'ژووری ئاو']
-                    ]
+                    'bedroom' => ['count' => (int)$request->bedrooms],
+                    'bathroom' => ['count' => (int)$request->bathrooms]
                 ]),
 
-                // Location
-                'locations' => json_encode([[
-                    'lat' => (float) $request->latitude,
-                    'lng' => (float) $request->longitude,
-                ]]),
+                // Location & Details
+                'locations' => json_encode([['lat' => (float)$request->latitude, 'lng' => (float)$request->longitude]]),
                 'address_details' => json_encode([
-                    'city' => [
-                        'en' => $request->city_en,
-                        'ar' => $request->city_ar ?? $request->city_en,
-                        'ku' => $request->city_ku ?? $request->city_en,
-                    ],
-                    'district' => [
-                        'en' => $request->district_en,
-                        'ar' => $request->district_ar ?? $request->district_en,
-                        'ku' => $request->district_ku ?? $request->district_en,
-                    ],
+                    'city' => ['en' => $request->city_en, 'ar' => $request->city_ar, 'ku' => $request->city_ku],
+                    'district' => ['en' => $request->district_en, 'ar' => $request->district_ar, 'ku' => $request->district_ku],
                 ]),
                 'address' => $request->address,
-
-                // Details
-                'area' => (float) $request->area,
-                'furnished' => $request->furnished ? 1 : 0,
-                'floor_number' => $request->floor_number,
-                'year_built' => $request->year_built,
-
-                // Utilities
-                'electricity' => $request->electricity ? 1 : 0,
-                'water' => $request->water ? 1 : 0,
-                'internet' => $request->internet ? 1 : 0,
-
-                // Images
+                'area' => (float)$request->area,
+                'listing_type' => $request->listing_type,
                 'images' => json_encode($imageUrls),
 
+                // Booleans
+                'furnished' => $request->boolean('furnished') ? 1 : 0,
+                'electricity' => $request->boolean('electricity') ? 1 : 0,
+                'water' => $request->boolean('water') ? 1 : 0,
+                'internet' => $request->boolean('internet') ? 1 : 0,
+                'floor_number' => (int)$request->floor_number,
+                'year_built' => (int)$request->year_built,
+
                 // Status
-                'verified' => 0,
+                'status' => $request->input('status', 'available'),
                 'is_active' => 1,
                 'published' => 1,
-                'status' => $propertyStatus,
+                'verified' => 0,
                 'views' => 0,
-                'favorites_count' => 0,
-                'rating' => 0,
-
-                // Availability
-                'availability' => json_encode([
-                    'status' => $propertyStatus,
-                    'labels' => [
-                        'en' => ucfirst($propertyStatus),
-                        'ar' => $this->translateStatus($propertyStatus, 'ar'),
-                        'ku' => $this->translateStatus($propertyStatus, 'ku'),
-                    ]
-                ]),
-
-                // Analytics
-                'view_analytics' => json_encode(['unique_views' => 0]),
-                'favorites_analytics' => json_encode(['last_30_days' => 0]),
-
-                // Timestamps
                 'created_at' => now(),
                 'updated_at' => now(),
-            ];
-
-            Log::info('Property data prepared', [
-                'id' => $propertyId,
-                'name_en' => $request->name_en,
-                'images_count' => count($imageUrls),
             ]);
 
-            // ✅ Insert property
-            Property::insert($propertyData);
-            Log::info('Property inserted successfully', ['id' => $propertyId]);
-
-            // ✅ INCREMENT PROPERTY COUNT
             $office->incrementPropertyCount();
-            Log::info('Property count incremented');
 
-            Log::info('=== PROPERTY CREATION COMPLETED SUCCESSFULLY ===', [
-                'property_id' => $propertyId,
-                'office_id' => $office->id,
-            ]);
-
-            // ✅ REDIRECT WITH SUCCESS MESSAGE
-            return redirect()->route('office.properties')
-                ->with('success', '🎉 Property "' . $request->name_en . '" created successfully!');
+            return redirect()->route('office.properties')->with('success', '🎉 Property created successfully!');
         } catch (\Exception $e) {
-            Log::error('=== PROPERTY CREATION FAILED ===', [
-                'error_message' => $e->getMessage(),
-                'error_file' => $e->getFile(),
-                'error_line' => $e->getLine(),
-                'stack_trace' => $e->getTraceAsString(),
-                'office_id' => auth('office')->id() ?? 'not authenticated',
-            ]);
-
-            return back()
-                ->withErrors(['error' => 'Failed to create property: ' . $e->getMessage()])
-                ->withInput()
-                ->with('error', 'Failed to create property. Please try again.');
+            Log::error('DB Error: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Database Error: ' . $e->getMessage());
         }
     }
 

@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver;
 
 class AgentAuthController extends Controller
 {
@@ -220,15 +222,47 @@ class AgentAuthController extends Controller
             'bathrooms'      => 'nullable|integer',
             'floors'         => 'nullable|integer',
             'year_built'     => 'nullable|integer',
-            'images.*'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+            // Allow up to 30MB in validation, we compress it below
+            'images.*'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:30720',
         ]);
 
-        // 3. Handle image uploads
+        // 3. Handle image uploads WITH COMPRESSION
         $imagePaths = [];
+
         if ($request->hasFile('images')) {
+            // Initialize Image Manager (Using GD Driver)
+            $manager = new ImageManager(new Driver());
+
             foreach ($request->file('images') as $image) {
-                $path = $image->store('properties', 'public');
-                $imagePaths[] = asset('storage/' . $path);
+                try {
+                    // A. Generate Unique Filename
+                    // We use .webp extension because we are converting it
+                    $filename = 'prop_' . uniqid() . '_' . time() . '.webp';
+                    $storagePath = 'properties/' . $filename;
+
+                    // B. Read the image
+                    $img = $manager->read($image);
+
+                    // C. INTELLIGENT RESIZING
+                    // Scale down to 1920px width ONLY if the image is larger.
+                    // This creates massive size savings for 4k/Phone photos without losing visible quality.
+                    $img->scaleDown(width: 1920);
+
+                    // D. ENCODE TO WEBP
+                    // Quality 90 is visually lossless but much smaller file size.
+                    $encoded = $img->toWebp(quality: 90);
+
+                    // E. Save to Storage (public disk)
+                    Storage::disk('public')->put($storagePath, (string) $encoded);
+
+                    // F. Store the Full URL (matching your existing logic)
+                    $imagePaths[] = asset('storage/' . $storagePath);
+                } catch (\Exception $e) {
+                    Log::error('Image Compression Failed: ' . $e->getMessage());
+                    // Fallback: If compression fails (rare), store original
+                    $path = $image->store('properties', 'public');
+                    $imagePaths[] = asset('storage/' . $path);
+                }
             }
         }
 
@@ -238,7 +272,6 @@ class AgentAuthController extends Controller
         } while (DB::table('properties')->where('id', $propertyId)->exists());
 
         // 5. Prepare Location Data
-        // FIX: Default to "[]" (empty JSON array) because database does not allow NULL
         $locationsJson = json_encode([]);
 
         if ($request->boolean('has_map') && $request->filled('latitude') && $request->filled('longitude')) {
@@ -283,7 +316,6 @@ class AgentAuthController extends Controller
                     'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
                 ]),
 
-                // FIX: Using the variable that is guaranteed to be a string "[]" or valid JSON
                 'locations' => $locationsJson,
 
                 'address_details' => json_encode([
@@ -883,6 +915,14 @@ class AgentAuthController extends Controller
     {
         $agent = Auth::guard('agent')->user();
 
+        // 1. LOGGING: Check exactly what is coming from the form
+        Log::info('Agent Profile Update - Request Data:', [
+            'agent_id' => $agent->id,
+            'working_hours_raw' => $request->input('working_hours'),
+            'has_profile_image' => $request->hasFile('profile_image'),
+            'has_bio_image' => $request->hasFile('bio_image'),
+        ]);
+
         $request->validate([
             'agent_name' => 'required|string|max:255',
             'primary_phone' => 'required|string|max:20',
@@ -895,23 +935,21 @@ class AgentAuthController extends Controller
             'office_address' => 'nullable|string',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120', // Increased max size to 5MB
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
             'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
-            'working_hours' => 'nullable', // Removed 'json' rule to avoid conflict if sent as array
+            // Allow JSON string or null
+            'working_hours' => 'nullable|string',
         ]);
 
         try {
             // --- 1. PROFILE IMAGE FIX ---
             if ($request->hasFile('profile_image')) {
-                // Delete old image
                 if ($agent->profile_image) {
-                    // Handle cases where 'storage/' might already be in the DB from previous bugs
                     $oldPath = str_replace('storage/', '', $agent->profile_image);
                     if (Storage::disk('public')->exists($oldPath)) {
                         Storage::disk('public')->delete($oldPath);
                     }
                 }
-                // Store ONLY the relative path (e.g., 'agents/profiles/photo.jpg')
                 $agent->profile_image = $request->file('profile_image')->store('agents/profiles', 'public');
             }
 
@@ -939,24 +977,41 @@ class AgentAuthController extends Controller
             $agent->latitude = $request->latitude;
             $agent->longitude = $request->longitude;
 
-            // --- 3. WORKING HOURS FIX ---
-            // We decode the JSON string from the form into an array before saving.
-            // This ensures Laravel casts it correctly if your model has 'working_hours' => 'array'
+            // --- 3. WORKING HOURS LOGIC & LOGGING ---
             if ($request->filled('working_hours')) {
-                $agent->working_hours = json_decode($request->working_hours, true);
+                $rawHours = $request->input('working_hours');
+
+                // Try to decode the JSON string from frontend
+                $decodedHours = json_decode($rawHours, true);
+
+                // Check for JSON errors
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $agent->working_hours = $decodedHours;
+                    Log::info('Working hours processed successfully', ['data' => $decodedHours]);
+                } else {
+                    Log::error('Working hours JSON decode error', [
+                        'error' => json_last_error_msg(),
+                        'raw_input' => $rawHours
+                    ]);
+                    // Optional: Don't save if invalid, or save empty array
+                    // $agent->working_hours = [];
+                }
+            } else {
+                Log::info('No working hours provided in request.');
             }
 
             $agent->save();
 
-            // Refresh Auth to show new images immediately
+            // Refresh Auth
             Auth::guard('agent')->setUser($agent->fresh());
 
             return redirect()->route('agent.profile', $agent->id)
                 ->with('success', 'Profile updated successfully!');
         } catch (Exception $e) {
-            Log::error('Agent profile update failed', [
+            Log::error('Agent profile update CRITICAL FAILURE', [
                 'agent_id' => $agent->id,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             return back()->withInput()

@@ -415,7 +415,7 @@
                 </button>
             </div>
 
-            {{-- English Fields - NO LONGER REQUIRED --}}
+            {{-- English Fields --}}
             <div class="language-content active" data-content="en">
                 <div class="form-group">
                     <label class="form-label">Property Title (English)</label>
@@ -453,7 +453,6 @@
 
             {{-- Core Details --}}
             <div class="form-grid" style="margin-top: 24px;">
-                {{-- PRICE SECTIONS: SEPARATE & REQUIRED --}}
                 <div class="form-group">
                     <label class="form-label">Price (IQD)<span class="required">*</span></label>
                     <input type="text" name="price" class="form-input numeric-input" placeholder="e.g., 150000000" required>
@@ -503,7 +502,6 @@
                 <i class="fas fa-map-marker-alt"></i> Location Information
             </h3>
 
-            {{-- City and Area are ALWAYS required for filtering --}}
             <div class="form-grid" style="margin-bottom: 24px;">
                 <div class="form-group">
                     <label class="form-label">Select City <span class="required">*</span></label>
@@ -519,7 +517,6 @@
                 </div>
             </div>
 
-            {{-- MAP TOGGLE SWITCH --}}
             <div class="form-group" style="margin-bottom: 20px;">
                 <label class="form-label" style="display:flex; align-items:center; gap:12px; cursor:pointer; font-size: 16px;">
                     <input type="checkbox" name="has_map" id="has_map_toggle" value="1" checked style="width:20px; height:20px; accent-color: #303b97;">
@@ -527,7 +524,6 @@
                 </label>
             </div>
 
-            {{-- WRAPPER FOR MAP CONTENT --}}
             <div id="map_content_wrapper" class="map-wrapper">
                 <div class="map-instructions">
                     <i class="fas fa-info-circle" style="font-size: 20px;"></i>
@@ -538,11 +534,9 @@
                     <div id="map"></div>
                 </div>
 
-                {{-- HIDDEN coordinate fields - not visible to users --}}
                 <input type="hidden" name="latitude" id="latitude">
                 <input type="hidden" name="longitude" id="longitude">
             </div>
-            {{-- END MAP WRAPPER --}}
 
             {{-- HIDDEN location name fields - auto-filled by JS --}}
             <input type="hidden" name="city_en" id="city_en">
@@ -583,7 +577,6 @@
                 </div>
             </div>
 
-            {{-- Amenities --}}
             <div class="form-grid" style="margin-top: 24px;">
                 <div class="form-group">
                     <label class="form-label" style="display:flex; align-items:center; gap:8px;">
@@ -622,13 +615,11 @@
                     <i class="fas fa-cloud-upload-alt"></i>
                 </div>
                 <div class="upload-text">Click to upload or drag and drop</div>
-                <div class="upload-hint">PNG, JPG, WEBP up to 5MB each (Min 1 required)</div>
-                {{-- Hidden input for file selection --}}
+                <div class="upload-hint">PNG, JPG, WEBP up to 30MB each (Min 1 required)</div>
                 <input type="file" name="images[]" id="imageInput" accept="image/*" multiple hidden>
             </div>
 
             <div class="image-preview-grid" id="imagePreviewGrid">
-                {{-- Previews will appear here via JS --}}
             </div>
         </div>
 
@@ -647,60 +638,306 @@
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
 
 <script>
+// --- GLOBAL VARS ---
 let map, marker;
 
-// --- NUMERIC NORMALIZATION FUNCTION ---
-// Converts Arabic/Kurdish numerals to English numerals
+// --- UTILS ---
 function normalizeNumber(value) {
     const arabicNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-    const kurdishNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩']; // Kurdish uses Arabic-Indic
+    const kurdishNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
     const persianNumerals = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
-    
-    let normalized = value;
-    
-    // Replace Arabic-Indic numerals
-    arabicNumerals.forEach((num, index) => {
-        normalized = normalized.replace(new RegExp(num, 'g'), index.toString());
-    });
-    
-    // Replace Persian numerals
-    persianNumerals.forEach((num, index) => {
-        normalized = normalized.replace(new RegExp(num, 'g'), index.toString());
-    });
-    
+    let normalized = value.replace(/,/g, '');
+    arabicNumerals.forEach((num, index) => { normalized = normalized.replace(new RegExp(num, 'g'), index.toString()); });
+    persianNumerals.forEach((num, index) => { normalized = normalized.replace(new RegExp(num, 'g'), index.toString()); });
     return normalized;
 }
 
-// Apply normalization to all numeric inputs
+// --- LOCATION SELECTOR CLASS (FIXED & INTEGRATED) ---
+class LocationSelector {
+    constructor(options = {}) {
+        this.citySelectId = options.citySelectId || "city-select";
+        this.areaSelectId = options.areaSelectId || "area-select";
+        this.cityInputId = options.cityInputId || "city";
+        this.districtInputId = options.districtInputId || "district";
+        this.onCityChange = options.onCityChange || null;
+        this.onAreaChange = options.onAreaChange || null;
+        this.cities = [];
+        this.currentCityId = options.selectedCityId || null;
+        this.currentAreaId = options.selectedAreaId || null;
+        this.initialized = false;
+        this.isLoading = false;
+    }
+
+    async init() {
+        if (this.isLoading) return;
+        this.isLoading = true;
+        try {
+            await this.loadCities();
+            this.setupEventListeners();
+            if (this.currentCityId) {
+                await this.loadAreas(this.currentCityId);
+            }
+            this.initialized = true;
+        } catch (error) {
+            console.error("Failed to initialize LocationSelector:", error);
+            this.showError("Failed to load location data. Please refresh the page.");
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    async loadCities() {
+        try {
+            // FIX: Send proper Accept-Language header
+            const response = await fetch("/v1/api/location/branches", {
+                headers: { "Accept-Language": "en" }
+            });
+
+            if (!response.ok) {
+                let errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+            }
+
+            const result = await response.json();
+            if (result.success && result.data && Array.isArray(result.data)) {
+                this.cities = result.data;
+                this.populateCitySelect();
+            } else {
+                throw new Error("Invalid response format or no data");
+            }
+        } catch (error) {
+            console.error("Error loading cities:", error);
+            const citySelect = document.getElementById(this.citySelectId);
+            if (citySelect) {
+                citySelect.innerHTML = '<option value="">Error: Server issue</option>';
+            }
+            this.showError("Unable to load cities. Please try again later.");
+        }
+    }
+
+    populateCitySelect() {
+        const citySelect = document.getElementById(this.citySelectId);
+        if (!citySelect) return;
+
+        citySelect.innerHTML = '<option value="">Select City</option>';
+        if (this.cities.length === 0) return;
+
+        const sortedCities = [...this.cities].sort((a, b) => a.city_name_en.localeCompare(b.city_name_en));
+
+        sortedCities.forEach((city) => {
+            const option = document.createElement("option");
+            option.value = city.id;
+            option.textContent = `${city.city_name_en}`; // Simplified display
+
+            // Data Attributes for Callbacks & Map
+            option.dataset.nameEn = city.city_name_en;
+            option.dataset.nameKu = city.city_name_ku;
+            option.dataset.nameAr = city.city_name_ar;
+
+            // ** ADDED: LAT/LNG FOR MAP **
+            option.dataset.lat = city.coordinates?.lat || city.latitude || '';
+            option.dataset.lng = city.coordinates?.lng || city.longitude || '';
+
+            if (city.id == this.currentCityId) option.selected = true;
+            citySelect.appendChild(option);
+        });
+    }
+
+    async loadAreas(cityId) {
+        try {
+            const areaSelect = document.getElementById(this.areaSelectId);
+            if (!areaSelect) return;
+
+            areaSelect.innerHTML = '<option value="">Loading areas...</option>';
+            areaSelect.disabled = true;
+
+            const response = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
+                headers: { "Accept-Language": "en" },
+            });
+            const result = await response.json();
+
+            if (result.success && result.data) {
+                this.populateAreaSelect(result.data);
+            } else {
+                throw new Error("Invalid response format");
+            }
+        } catch (error) {
+            console.error("Error loading areas:", error);
+            const areaSelect = document.getElementById(this.areaSelectId);
+            if (areaSelect) areaSelect.innerHTML = '<option value="">Error loading areas</option>';
+        } finally {
+            const areaSelect = document.getElementById(this.areaSelectId);
+            if (areaSelect) areaSelect.disabled = false;
+        }
+    }
+
+    populateAreaSelect(areas) {
+        const areaSelect = document.getElementById(this.areaSelectId);
+        if (!areaSelect) return;
+
+        areaSelect.innerHTML = '<option value="">Select Area</option>';
+        const sortedAreas = [...areas].sort((a, b) => a.area_name_en.localeCompare(b.area_name_en));
+
+        sortedAreas.forEach((area) => {
+            const option = document.createElement("option");
+            option.value = area.id;
+            option.textContent = `${area.area_name_en}`;
+
+            option.dataset.nameEn = area.area_name_en;
+            option.dataset.nameKu = area.area_name_ku;
+            option.dataset.nameAr = area.area_name_ar;
+            option.dataset.fullLocation = area.full_location;
+
+            // ** ADDED: LAT/LNG FOR MAP **
+            option.dataset.lat = area.coordinates?.lat || area.latitude || '';
+            option.dataset.lng = area.coordinates?.lng || area.longitude || '';
+
+            if (area.id == this.currentAreaId) option.selected = true;
+            areaSelect.appendChild(option);
+        });
+    }
+
+    setupEventListeners() {
+        const citySelect = document.getElementById(this.citySelectId);
+        const areaSelect = document.getElementById(this.areaSelectId);
+        const cityInput = document.getElementById(this.cityInputId);
+        const districtInput = document.getElementById(this.districtInputId);
+
+        if (citySelect) {
+            citySelect.addEventListener("change", async (e) => {
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                if (e.target.value) {
+                    if (cityInput) cityInput.value = selectedOption.dataset.nameEn || "";
+                    await this.loadAreas(e.target.value);
+                    if (districtInput) districtInput.value = "";
+
+                    if (this.onCityChange) {
+                        this.onCityChange({
+                            id: e.target.value,
+                            nameEn: selectedOption.dataset.nameEn,
+                            nameKu: selectedOption.dataset.nameKu,
+                            nameAr: selectedOption.dataset.nameAr,
+                            lat: selectedOption.dataset.lat, // Pass lat
+                            lng: selectedOption.dataset.lng  // Pass lng
+                        });
+                    }
+                } else {
+                    if (cityInput) cityInput.value = "";
+                    if (districtInput) districtInput.value = "";
+                    if (areaSelect) {
+                        areaSelect.innerHTML = '<option value="">Select City First</option>';
+                        areaSelect.disabled = true;
+                    }
+                }
+            });
+        }
+
+        if (areaSelect) {
+            areaSelect.addEventListener("change", (e) => {
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                if (e.target.value) {
+                    if (districtInput) districtInput.value = selectedOption.dataset.nameEn || "";
+                    if (this.onAreaChange) {
+                        this.onAreaChange({
+                            id: e.target.value,
+                            nameEn: selectedOption.dataset.nameEn,
+                            nameKu: selectedOption.dataset.nameKu,
+                            nameAr: selectedOption.dataset.nameAr,
+                            lat: selectedOption.dataset.lat,
+                            lng: selectedOption.dataset.lng
+                        });
+                    }
+                } else {
+                    if (districtInput) districtInput.value = "";
+                }
+            });
+        }
+    }
+
+    showError(message) {
+        console.error(message);
+    }
+}
+
+// --- INIT SCRIPT ---
 document.addEventListener('DOMContentLoaded', function() {
+    // 1. Initialize Numeric Inputs
     const numericInputs = document.querySelectorAll('.numeric-input');
-    
     numericInputs.forEach(input => {
         input.addEventListener('input', function(e) {
-            const cursorPos = this.selectionStart;
-            const originalLength = this.value.length;
-            
-            // Normalize the value
             this.value = normalizeNumber(this.value);
-            
-            // Adjust cursor position if length changed
-            const newLength = this.value.length;
-            const newCursorPos = cursorPos + (newLength - originalLength);
-            this.setSelectionRange(newCursorPos, newCursorPos);
         });
-        
-        // Also normalize on blur to ensure final value is correct
         input.addEventListener('blur', function() {
             this.value = normalizeNumber(this.value);
         });
     });
+
+    // 2. Initialize Language Tabs
+    document.querySelectorAll('.language-tab').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const lang = this.dataset.lang;
+            document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelector(`[data-content="${lang}"]`).classList.add('active');
+        });
+    });
+
+    // 3. Initialize Location Selector (NEW ROBUST VERSION)
+    const locationSelector = new LocationSelector({
+        citySelectId: 'location-city-select',
+        areaSelectId: 'location-area-select',
+        cityInputId: 'city_en',
+        districtInputId: 'district_en',
+
+        // CALLBACK: When City Changes
+        onCityChange: (data) => {
+            // Fill other language fields
+            document.getElementById('city_ar').value = data.nameAr || '';
+            document.getElementById('city_ku').value = data.nameKu || '';
+
+            // Move Map
+            if(data.lat && data.lng && window.map) {
+                moveMapTo(data.lat, data.lng);
+            }
+        },
+
+        // CALLBACK: When Area Changes
+        onAreaChange: (data) => {
+            // Fill other language fields
+            document.getElementById('district_ar').value = data.nameAr || '';
+            document.getElementById('district_ku').value = data.nameKu || '';
+
+            // Zoom Map
+            if(data.lat && data.lng && window.map) {
+                moveMapTo(data.lat, data.lng);
+                window.map.setZoom(15);
+            }
+        }
+    });
+
+    locationSelector.init();
+
+    // 4. Initialize Map Toggle
+    const mapToggle = document.getElementById('has_map_toggle');
+    if(mapToggle) {
+        mapToggle.addEventListener('change', toggleMap);
+        toggleMap();
+    }
+
+    // 5. Initialize Image Upload
+    setupImageUpload();
+
+    // 6. Form Validation
+    const form = document.getElementById('propertyForm');
+    form.addEventListener('submit', validateForm);
 });
 
-// --- 1. GOOGLE MAPS INIT ---
+// --- GOOGLE MAPS FUNCTIONS ---
 function initMap() {
-    const defaultLoc = { lat: 36.1911, lng: 44.0091 }; // Erbil Default
-
-    map = new google.maps.Map(document.getElementById("map"), {
+    const defaultLoc = { lat: 36.1911, lng: 44.0091 };
+    window.map = new google.maps.Map(document.getElementById("map"), {
         zoom: 13,
         center: defaultLoc,
         styles: [
@@ -709,9 +946,9 @@ function initMap() {
         ]
     });
 
-    marker = new google.maps.Marker({
+    window.marker = new google.maps.Marker({
         position: defaultLoc,
-        map: map,
+        map: window.map,
         draggable: true,
         animation: google.maps.Animation.DROP,
         icon: {
@@ -724,18 +961,15 @@ function initMap() {
         }
     });
 
-    // Event: Update fields on drag
-    google.maps.event.addListener(marker, 'dragend', function(event) {
+    google.maps.event.addListener(window.marker, 'dragend', function(event) {
         updateCoordinates(event.latLng.lat(), event.latLng.lng());
     });
 
-    // Event: Update on click
-    map.addListener('click', function(event) {
-        marker.setPosition(event.latLng);
+    window.map.addListener('click', function(event) {
+        window.marker.setPosition(event.latLng);
         updateCoordinates(event.latLng.lat(), event.latLng.lng());
     });
 
-    // Initial setup
     updateCoordinates(defaultLoc.lat, defaultLoc.lng);
 }
 
@@ -746,182 +980,41 @@ function updateCoordinates(lat, lng) {
 
 function moveMapTo(lat, lng) {
     const pos = { lat: parseFloat(lat), lng: parseFloat(lng) };
-    if (map && marker) {
-        map.panTo(pos);
-        map.setZoom(14);
-        marker.setPosition(pos);
+    if (window.map && window.marker) {
+        window.map.panTo(pos);
+        window.map.setZoom(14);
+        window.marker.setPosition(pos);
         updateCoordinates(lat, lng);
     }
 }
 
-// --- 2. DYNAMIC LOCATION FETCHING ---
-document.addEventListener('DOMContentLoaded', async function() {
-    const citySelect = document.getElementById('location-city-select');
-    const areaSelect = document.getElementById('location-area-select');
-
-    // Load Cities on Page Load
-    try {
-        const response = await fetch("/v1/api/location/branches", {
-            headers: {
-                "Accept": "application/json",
-                "Accept-Language": "en" // Prevents backend Locale crash
-            }
-        });
-        const result = await response.json();
-
-        citySelect.innerHTML = '<option value="">Select City</option>';
-
-        if (result.success && result.data) {
-            const cities = result.data.sort((a, b) => a.city_name_en.localeCompare(b.city_name_en));
-            cities.forEach(city => {
-                const option = document.createElement('option');
-                option.value = city.id; // ID used to fetch areas
-                option.textContent = city.city_name_en;
-
-                // Store extra data for auto-filling inputs
-                option.dataset.lat = city.coordinates?.lat || city.latitude;
-                option.dataset.lng = city.coordinates?.lng || city.longitude;
-                option.dataset.nameEn = city.city_name_en;
-                option.dataset.nameAr = city.city_name_ar;
-                option.dataset.nameKu = city.city_name_ku;
-
-                citySelect.appendChild(option);
-            });
-        }
-    } catch (error) {
-        console.error('Error loading cities:', error);
-        citySelect.innerHTML = '<option value="">Error loading data</option>';
-    }
-
-    // Handle City Change
-    citySelect.addEventListener('change', async function() {
-        const selectedOption = this.options[this.selectedIndex];
-        const cityId = this.value;
-
-        // Reset Areas
-        areaSelect.innerHTML = '<option value="">Loading areas...</option>';
-        areaSelect.disabled = true;
-
-        if (cityId) {
-            // Auto-fill hidden city inputs
-            document.getElementById('city_en').value = selectedOption.dataset.nameEn;
-            document.getElementById('city_ar').value = selectedOption.dataset.nameAr;
-            document.getElementById('city_ku').value = selectedOption.dataset.nameKu;
-
-            // Move Map (only if map is visible/initialized)
-            if(selectedOption.dataset.lat && map) {
-                moveMapTo(selectedOption.dataset.lat, selectedOption.dataset.lng);
-            }
-
-            // Fetch Areas for this City
-            try {
-                const res = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
-                    headers: { "Accept": "application/json", "Accept-Language": "en" }
-                });
-                const data = await res.json();
-
-                areaSelect.innerHTML = '<option value="">Select Area</option>';
-                areaSelect.disabled = false;
-
-                if (data.success && data.data) {
-                    const areas = data.data.sort((a, b) => a.area_name_en.localeCompare(b.area_name_en));
-                    areas.forEach(area => {
-                        const opt = document.createElement('option');
-                        opt.value = area.id;
-                        opt.textContent = area.area_name_en;
-
-                        // Store Area Data
-                        opt.dataset.lat = area.coordinates?.lat || area.latitude;
-                        opt.dataset.lng = area.coordinates?.lng || area.longitude;
-                        opt.dataset.nameEn = area.area_name_en;
-                        opt.dataset.nameAr = area.area_name_ar;
-                        opt.dataset.nameKu = area.area_name_ku;
-
-                        areaSelect.appendChild(opt);
-                    });
-                }
-            } catch (err) {
-                console.error(err);
-                areaSelect.innerHTML = '<option value="">Error loading areas</option>';
-            }
-        } else {
-            areaSelect.innerHTML = '<option value="">Select City First</option>';
-            document.getElementById('city_en').value = '';
-        }
-    });
-
-    // Handle Area Change
-    areaSelect.addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        if (this.value) {
-            // Auto-fill hidden district inputs
-            document.getElementById('district_en').value = selectedOption.dataset.nameEn;
-            document.getElementById('district_ar').value = selectedOption.dataset.nameAr;
-            document.getElementById('district_ku').value = selectedOption.dataset.nameKu;
-
-            // Zoom Map to Area (only if map is visible)
-            if(selectedOption.dataset.lat && map) {
-                moveMapTo(selectedOption.dataset.lat, selectedOption.dataset.lng);
-                map.setZoom(15);
-            }
-        }
-    });
-});
-
-// --- 3. MAP TOGGLE LOGIC ---
-document.addEventListener('DOMContentLoaded', function() {
+function toggleMap() {
     const mapToggle = document.getElementById('has_map_toggle');
     const mapWrapper = document.getElementById('map_content_wrapper');
     const latInput = document.getElementById('latitude');
     const lngInput = document.getElementById('longitude');
 
-    function toggleMap() {
-        if (mapToggle.checked) {
-            // Show Map
-            mapWrapper.classList.remove('hidden');
-            latInput.setAttribute('required', 'required');
-            lngInput.setAttribute('required', 'required');
-
-            // Resize trigger for Google Maps (prevents gray box)
-            if(map) {
-                setTimeout(() => {
-                    google.maps.event.trigger(map, "resize");
-                    map.setCenter(marker.getPosition());
-                }, 100);
-            }
-        } else {
-            // Hide Map
-            mapWrapper.classList.add('hidden');
-            latInput.removeAttribute('required');
-            lngInput.removeAttribute('required');
-
-            // Clear values (optional, but ensures cleaner submission)
-            latInput.value = '';
-            lngInput.value = '';
+    if (mapToggle.checked) {
+        mapWrapper.classList.remove('hidden');
+        latInput.setAttribute('required', 'required');
+        lngInput.setAttribute('required', 'required');
+        if(window.map) {
+            setTimeout(() => {
+                google.maps.event.trigger(window.map, "resize");
+                window.map.setCenter(window.marker.getPosition());
+            }, 100);
         }
+    } else {
+        mapWrapper.classList.add('hidden');
+        latInput.removeAttribute('required');
+        lngInput.removeAttribute('required');
+        latInput.value = '';
+        lngInput.value = '';
     }
+}
 
-    mapToggle.addEventListener('change', toggleMap);
-    toggleMap(); // Run on load
-});
-
-// --- 4. LANGUAGE TABS ---
-document.addEventListener('DOMContentLoaded', function() {
-    document.querySelectorAll('.language-tab').forEach(tab => {
-        tab.addEventListener('click', function(e) {
-            e.preventDefault();
-            const lang = this.dataset.lang;
-            document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            document.querySelector(`[data-content="${lang}"]`).classList.add('active');
-        });
-    });
-});
-
-// --- 5. IMAGE UPLOAD LOGIC ---
-(function() {
-    'use strict';
+// --- IMAGE UPLOAD SETUP ---
+function setupImageUpload() {
     const uploadZone = document.getElementById('uploadZone');
     const imageInput = document.getElementById('imageInput');
     const imagePreviewGrid = document.getElementById('imagePreviewGrid');
@@ -930,26 +1023,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let selectedFiles = [];
 
-    // Trigger input
     uploadZone.onclick = () => imageInput.click();
-
-    // Handle File Selection
     imageInput.onchange = (e) => handleNewFiles(e.target.files);
-
-    // Drag & Drop effects
     uploadZone.ondragover = (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); };
     uploadZone.ondragleave = (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); };
     uploadZone.ondrop = (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleNewFiles(e.dataTransfer.files); };
 
     function handleNewFiles(fileList) {
         if (!fileList.length) return;
-
         for (let i = 0; i < fileList.length; i++) {
             const file = fileList[i];
-            // Basic validation
             if (!file.type.match('image.*')) { alert(file.name + ' is not an image'); continue; }
-            if (file.size > 5 * 1024 * 1024) { alert(file.name + ' exceeds 5MB limit'); continue; }
 
+            // STRICT SIZE CHECK - 30MB
+            if (file.size > 30 * 1024 * 1024) {
+                alert('⚠️ Error: ' + file.name + ' is too large! Maximum file size is 30MB.');
+                continue;
+            }
             selectedFiles.push(file);
             showPreview(file, selectedFiles.length - 1);
         }
@@ -963,16 +1053,13 @@ document.addEventListener('DOMContentLoaded', function() {
             div.className = 'image-preview-item';
             div.innerHTML = `
                 <img src="${e.target.result}" alt="Preview">
-                <button type="button" class="image-remove-btn" onclick="removePreview(${index}, this)">
-                    <i class="fas fa-times"></i>
-                </button>
+                <button type="button" class="image-remove-btn" onclick="removePreview(${index}, this)"><i class="fas fa-times"></i></button>
             `;
             imagePreviewGrid.appendChild(div);
         };
         reader.readAsDataURL(file);
     }
 
-    // Global function for inline onclick removal
     window.removePreview = function(index, btn) {
         selectedFiles.splice(index, 1);
         btn.parentElement.remove();
@@ -984,61 +1071,31 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedFiles.forEach(f => dt.items.add(f));
         imageInput.files = dt.files;
     }
-})();
+}
 
-// --- 6. FORM VALIDATION & AUTO-FILL ENGLISH FROM OTHER LANGUAGES ---
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('propertyForm');
-    
-    form.addEventListener('submit', function(e) {
-        const titleEnInput = document.querySelector('input[name="title_en"]');
-        const titleArInput = document.querySelector('input[name="title_ar"]');
-        const titleKuInput = document.querySelector('input[name="title_ku"]');
-        
-        const titleEn = titleEnInput.value.trim();
-        const titleAr = titleArInput.value.trim();
-        const titleKu = titleKuInput.value.trim();
-        
-        // Check if at least one title is provided
-        if (!titleEn && !titleAr && !titleKu) {
-            e.preventDefault();
-            alert('Please provide a property title in at least one language (English, Arabic, or Kurdish)');
-            return false;
-        }
-        
-        // If English title is empty, auto-fill from Arabic or Kurdish
-        if (!titleEn) {
-            if (titleAr) {
-                titleEnInput.value = titleAr;
-            } else if (titleKu) {
-                titleEnInput.value = titleKu;
-            }
-        }
-        
-        // Same logic for descriptions
-        const descEnInput = document.querySelector('textarea[name="description_en"]');
-        const descArInput = document.querySelector('textarea[name="description_ar"]');
-        const descKuInput = document.querySelector('textarea[name="description_ku"]');
-        
-        const descEn = descEnInput.value.trim();
-        const descAr = descArInput.value.trim();
-        const descKu = descKuInput.value.trim();
-        
-        if (!descEn && !descAr && !descKu) {
-            e.preventDefault();
-            alert('Please provide a property description in at least one language (English, Arabic, or Kurdish)');
-            return false;
-        }
-        
-        // If English description is empty, auto-fill from Arabic or Kurdish
-        if (!descEn) {
-            if (descAr) {
-                descEnInput.value = descAr;
-            } else if (descKu) {
-                descEnInput.value = descKu;
-            }
-        }
-    });
-});
+function validateForm(e) {
+    const titleEn = document.querySelector('input[name="title_en"]').value.trim();
+    const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
+    const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
+
+    if (!titleEn && !titleAr && !titleKu) {
+        e.preventDefault();
+        alert('Please provide a property title in at least one language.');
+        return false;
+    }
+
+    // Auto-fill logic
+    if (!titleEn) {
+        if (titleAr) document.querySelector('input[name="title_en"]').value = titleAr;
+        else if (titleKu) document.querySelector('input[name="title_en"]').value = titleKu;
+    }
+
+    const imageInput = document.getElementById('imageInput');
+    if(imageInput.files.length === 0) {
+         e.preventDefault();
+         alert('Please upload at least one image of the property.');
+         return false;
+    }
+}
 </script>
 @endsection

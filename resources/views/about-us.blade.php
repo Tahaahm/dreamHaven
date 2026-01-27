@@ -3,9 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>About Us - Dream Haven</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>About Us - Dream Mulk</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
     <style>
+        :root {
+            /* Your specific requested color */
+            --primary: #303b97;
+            --primary-dark: #202660;
+            --accent: #d4af37; /* Gold for luxury contrast */
+            --text-dark: #1a1a1a;
+            --text-light: #555555;
+            --bg-light: #f4f6fa;
+            --white: #ffffff;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -13,385 +26,346 @@
         }
 
         body {
-            font-family: 'Poppins', Arial, sans-serif;
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
             overflow-x: hidden;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+            line-height: 1.7;
         }
 
-        .unique-header {
-            position: fixed;
-            height: 80px;
-            width: 100%;
-            z-index: 100;
-            padding: 0 20px;
-            background: #303b97;
+        /* --- Animations --- */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Animated Background */
-        .bg-animation {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            overflow: hidden;
+        @keyframes floatShape {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(20px, 20px) rotate(5deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
         }
 
-        .bg-animation span {
-            position: absolute;
-            display: block;
-            width: 20px;
-            height: 20px;
-            background: rgba(255, 255, 255, 0.1);
-            animation: float 25s infinite;
-            bottom: -150px;
-        }
-
-        .bg-animation span:nth-child(1) { left: 25%; width: 80px; height: 80px; animation-delay: 0s; }
-        .bg-animation span:nth-child(2) { left: 10%; width: 20px; height: 20px; animation-delay: 2s; animation-duration: 12s; }
-        .bg-animation span:nth-child(3) { left: 70%; width: 20px; height: 20px; animation-delay: 4s; }
-        .bg-animation span:nth-child(4) { left: 40%; width: 60px; height: 60px; animation-delay: 0s; animation-duration: 18s; }
-        .bg-animation span:nth-child(5) { left: 65%; width: 20px; height: 20px; animation-delay: 0s; }
-        .bg-animation span:nth-child(6) { left: 75%; width: 110px; height: 110px; animation-delay: 3s; }
-        .bg-animation span:nth-child(7) { left: 35%; width: 150px; height: 150px; animation-delay: 7s; }
-        .bg-animation span:nth-child(8) { left: 50%; width: 25px; height: 25px; animation-delay: 15s; animation-duration: 45s; }
-        .bg-animation span:nth-child(9) { left: 20%; width: 15px; height: 15px; animation-delay: 2s; animation-duration: 35s; }
-        .bg-animation span:nth-child(10) { left: 85%; width: 150px; height: 150px; animation-delay: 0s; animation-duration: 11s; }
-
-        @keyframes float {
-            0% {
-                transform: translateY(0) rotate(0deg);
-                opacity: 1;
-                border-radius: 0;
-            }
-            100% {
-                transform: translateY(-1000px) rotate(720deg);
-                opacity: 0;
-                border-radius: 50%;
-            }
-        }
-
-        .about-wrapper {
+        /* --- Hero Section --- */
+        .hero-section {
             position: relative;
-            z-index: 1;
-            min-height: 100vh;
+            height: 65vh; /* Slightly shorter to emphasize the content overlap */
+            background: linear-gradient(135deg, var(--primary) 0%, #1a2166 100%);
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 120px 20px 40px;
-        }
-
-        .about-container {
-            max-width: 1200px;
-            width: 100%;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(20px);
-            border-radius: 30px;
-            padding: 60px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            animation: slideUp 0.8s ease-out;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(50px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .about-header {
             text-align: center;
-            margin-bottom: 50px;
+            overflow: hidden;
+            padding: 0 20px;
         }
 
-        .about-header h1 {
-            font-size: 56px;
-            color: #303b97;
+        /* Abstract Background Elements */
+        .hero-circle {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(45deg, rgba(255,255,255,0.1), rgba(255,255,255,0));
+            animation: floatShape 15s infinite ease-in-out;
+            z-index: 1;
+        }
+        .c1 { width: 500px; height: 500px; top: -200px; left: -100px; }
+        .c2 { width: 300px; height: 300px; bottom: -50px; right: -50px; animation-delay: 2s; }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 900px;
+            animation: fadeInUp 1s ease-out;
+        }
+
+        .hero-subtitle {
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .hero-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 4rem;
+            color: var(--white);
             margin-bottom: 20px;
-            font-weight: 700;
-            background: linear-gradient(135deg, #303b97, #667eea);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
+            line-height: 1.1;
         }
 
-        .about-header p {
-            font-size: 20px;
-            color: #666;
-            line-height: 1.8;
+        .hero-desc {
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 1.2rem;
+            max-width: 650px;
+            margin: 0 auto;
+            font-weight: 300;
         }
 
-        .story-section {
-            margin-bottom: 50px;
+        /* --- Main Content Overlay --- */
+        .main-container {
+            max-width: 1100px;
+            margin: -120px auto 0; /* Creates the overlapping effect */
+            position: relative;
+            z-index: 10;
+            padding: 0 20px 80px;
         }
 
-        .story-section p {
-            font-size: 18px;
-            color: #555;
-            line-height: 1.8;
+        /* --- The Narrative Card (Replaces Student Story) --- */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.98);
+            padding: 70px;
+            border-radius: 20px;
+            box-shadow: 0 30px 60px rgba(48, 59, 151, 0.15); /* Shadow matches your blue */
+            margin-bottom: 60px;
+            animation: fadeInUp 1s ease-out 0.3s forwards;
+            opacity: 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Decorative top accent line */
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+        }
+
+        .narrative-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 60px;
+            align-items: center;
+        }
+
+        .narrative-text h2 {
+            font-family: 'Playfair Display', serif;
+            color: var(--primary);
+            font-size: 2.5rem;
+            margin-bottom: 25px;
+            line-height: 1.2;
+        }
+
+        .narrative-text p {
+            color: var(--text-light);
+            font-size: 1.05rem;
             margin-bottom: 20px;
             text-align: justify;
         }
 
-        .team-section {
-            margin-top: 60px;
+        .quote-box {
+            background-color: #f8f9fc;
+            border-left: 4px solid var(--accent);
+            padding: 20px 25px;
+            margin-top: 30px;
+            font-style: italic;
+            color: var(--primary);
+            font-weight: 500;
         }
 
-        .team-section h2 {
-            font-size: 36px;
-            color: #303b97;
+        /* Right Side Details */
+        .details-list {
+            list-style: none;
+        }
+
+        .detail-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 30px;
+        }
+
+        .detail-icon {
+            flex-shrink: 0;
+            width: 50px;
+            height: 50px;
+            background: rgba(48, 59, 151, 0.1); /* Light version of your color */
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-size: 20px;
+            margin-right: 20px;
+        }
+
+        .detail-content h4 {
+            font-size: 1.1rem;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .detail-content p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            line-height: 1.5;
+        }
+
+        /* --- Values Section (Replaces Team) --- */
+        .values-section {
+            margin-top: 80px;
             text-align: center;
-            margin-bottom: 40px;
-            font-weight: 700;
         }
 
-        .team-members {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 30px;
+        .values-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.2rem;
+            color: var(--primary);
             margin-bottom: 50px;
         }
 
-        .team-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            border-radius: 20px;
-            padding: 30px;
-            text-align: center;
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .team-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.3);
-        }
-
-        .team-icon {
-            width: 80px;
-            height: 80px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-            font-size: 36px;
-            color: white;
-        }
-
-        .team-card h3 {
-            font-size: 22px;
-            color: #303b97;
-            margin-bottom: 10px;
-            font-weight: 600;
-        }
-
-        .team-card p {
-            font-size: 16px;
-            color: #666;
-        }
-
-        .info-grid {
+        .values-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 30px;
-            margin-top: 50px;
         }
 
-        .info-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        .value-card {
+            background: var(--white);
+            padding: 40px 30px;
             border-radius: 15px;
-            padding: 30px;
-            display: flex;
-            align-items: center;
-            transition: all 0.3s ease;
+            transition: all 0.4s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+            border: 1px solid rgba(0,0,0,0.02);
         }
 
-        .info-card:hover {
-            transform: translateX(10px);
-            box-shadow: 0 10px 30px rgba(48, 59, 151, 0.2);
+        .value-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 50px rgba(48, 59, 151, 0.15);
+            border-bottom: 3px solid var(--accent);
         }
 
-        .info-icon {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 20px;
-            font-size: 24px;
-            color: white;
-            flex-shrink: 0;
+        .value-icon-lg {
+            font-size: 3rem;
+            margin-bottom: 25px;
+            background: -webkit-linear-gradient(var(--primary), #667eea);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .info-content h3 {
-            font-size: 16px;
-            color: #303b97;
-            margin-bottom: 5px;
-            font-weight: 600;
+        .value-card h3 {
+            font-size: 1.3rem;
+            color: var(--text-dark);
+            margin-bottom: 15px;
         }
 
-        .info-content p {
-            font-size: 18px;
-            color: #333;
-            font-weight: 500;
-            margin: 0;
+        .value-card p {
+            font-size: 0.95rem;
+            color: var(--text-light);
         }
 
-        /* Mobile Responsive */
-        @media screen and (max-width: 768px) {
-            .about-container {
-                padding: 40px 30px;
-            }
-
-            .about-header h1 {
-                font-size: 36px;
-            }
-
-            .about-header p {
-                font-size: 16px;
-            }
-
-            .team-section h2 {
-                font-size: 28px;
-            }
-
-            .team-members {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-
-            .info-grid {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-
-            .about-wrapper {
-                padding: 100px 15px 30px;
-            }
-
-            .story-section p {
-                font-size: 16px;
-                text-align: left;
-            }
+        /* --- Footer Info --- */
+        .footer-badge {
+            margin-top: 60px;
+            text-align: center;
+            opacity: 0.6;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+            color: var(--primary);
         }
 
-        @media screen and (max-width: 480px) {
-            .about-header h1 {
-                font-size: 28px;
-            }
+        /* --- Responsive --- */
+        @media screen and (max-width: 900px) {
+            .narrative-grid { grid-template-columns: 1fr; }
+            .hero-title { font-size: 3rem; }
+            .glass-card { padding: 40px; }
+        }
 
-            .team-icon {
-                width: 60px;
-                height: 60px;
-                font-size: 28px;
-            }
-
-            .team-card h3 {
-                font-size: 18px;
-            }
-
-            .info-icon {
-                width: 50px;
-                height: 50px;
-                font-size: 20px;
-            }
+        @media screen and (max-width: 600px) {
+            .values-grid { grid-template-columns: 1fr; }
+            .hero-section { height: 60vh; }
+            .main-container { margin-top: -80px; }
         }
     </style>
 </head>
 <body>
-    @include('navbar')
-    <!-- Animated Background -->
-    <div class="bg-animation">
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-        <span></span>
-    </div>
 
-    <div class="about-wrapper">
-        <div class="about-container">
-            <!-- Header Section -->
-            <div class="about-header">
-                <h1>About Us</h1>
-                <p>Welcome to Dream Haven - Where Real Estate Dreams Come True</p>
-            </div>
+    <header class="hero-section">
+        <div class="hero-circle c1"></div>
+        <div class="hero-circle c2"></div>
 
-            <!-- Story Section -->
-            <div class="story-section">
-                <p>We are a group of passionate students who came together to create something beautiful. Our project started as a simple idea and grew into something much more. It's a testament to our dedication, creativity, and teamwork.</p>
-                
-                <p>Through hard work and collaboration, we've built a platform that we're proud of. This project has been a journey of learning and growth for all of us. We believe in making real estate accessible, transparent, and exciting for everyone.</p>
-                
-                <p>Thank you for visiting and being a part of our story. We're committed to helping you find your dream property and making the process as smooth as possible.</p>
-            </div>
+        <div class="hero-content">
+            <span class="hero-subtitle">Premium Real Estate Solutions</span>
+            <h1 class="hero-title">Dream Mulk</h1>
+            <p class="hero-desc">Redefining ownership. Where architectural brilliance meets your future legacy in Erbil.</p>
+        </div>
+    </header>
 
-            <!-- Team Section -->
-            <div class="team-section">
-                <h2>Meet Our Team</h2>
-                <div class="team-members">
-                    <div class="team-card">
-                        <div class="team-icon">
-                            <i class="fas fa-user-tie"></i>
-                        </div>
-                        <h3>Ahmad Nyaz</h3>
-                        <p>Co-Founder </p>
-                    </div>
-
-                    <div class="team-card">
-                        <div class="team-icon">
-                            <i class="fas fa-user-graduate"></i>
-                        </div>
-                        <h3>Taha Ahmed</h3>
-                        <p>Co-Founder & Developer</p>
-                    </div>
-
-                    <div class="team-card">
-                        <div class="team-icon">
-                            <i class="fas fa-user-cog"></i>
-                        </div>
-                        <h3>Zana Goran</h3>
-                        <p>Co-Founder & Developer</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Info Grid -->
-            <div class="info-grid">
-                <div class="info-card">
-                    <div class="info-icon">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </div>
-                    <div class="info-content">
-                        <h3>Location</h3>
-                        <p>Erbil, Kurdistan, Iraq</p>
+    <div class="main-container">
+        <div class="glass-card">
+            <div class="narrative-grid">
+                <div class="narrative-text">
+                    <h2>The Evolution of Living</h2>
+                    <p>
+                        Dream Mulk was established with a singular, powerful ambition: to elevate the standard of real estate in Kurdistan. We are not merely agents; we are the architects of your next chapter. In a market often defined by complexity, we serve as your beacon of clarity and sophistication.
+                    </p>
+                    <p>
+                        Our journey is fueled by a commitment to modern technology and timeless integrity. We understand that acquiring property is not just a transaction—it is the foundation of your heritage. Whether you are seeking a sanctuary for your family or a cornerstone for your investment portfolio, Dream Mulk provides the vision to see what others miss.
+                    </p>
+                    <div class="quote-box">
+                        "Property is land, but 'Mulk' is legacy. We help you build yours."
                     </div>
                 </div>
 
-                <div class="info-card">
-                    <div class="info-icon">
-                        <i class="fas fa-calendar-alt"></i>
-                    </div>
-                    <div class="info-content">
-                        <h3>Established</h3>
-                        <p>April 3, 2024</p>
-                    </div>
+                <div class="side-details">
+                    <ul class="details-list">
+                        <li class="detail-item">
+                            <div class="detail-icon"><i class="fas fa-calendar-check"></i></div>
+                            <div class="detail-content">
+                                <h4>Established</h4>
+                                <p>April 2026</p>
+                            </div>
+                        </li>
+                        <li class="detail-item">
+                            <div class="detail-icon"><i class="fas fa-map-marked"></i></div>
+                            <div class="detail-content">
+                                <h4>Headquarters</h4>
+                                <p>Erbil, Kurdistan Region</p>
+                            </div>
+                        </li>
+                        <li class="detail-item">
+                            <div class="detail-icon"><i class="fas fa-globe"></i></div>
+                            <div class="detail-content">
+                                <h4>Vision</h4>
+                                <p>To become the most trusted real estate ecosystem in Iraq.</p>
+                            </div>
+                        </li>
+                    </ul>
                 </div>
             </div>
         </div>
+
+        <section class="values-section">
+            <h2 class="values-title">The Dream Mulk Standard</h2>
+
+            <div class="values-grid">
+                <div class="value-card">
+                    <i class="fas fa-crown value-icon-lg"></i>
+                    <h3>Exclusivity</h3>
+                    <p>Access to a curated portfolio of properties that meet our rigorous standards for quality and location.</p>
+                </div>
+
+                <div class="value-card">
+                    <i class="fas fa-laptop-code value-icon-lg"></i>
+                    <h3>Innovation</h3>
+                    <p>Utilizing state-of-the-art digital tools to make your buying or selling journey seamless and transparent.</p>
+                </div>
+
+                <div class="value-card">
+                    <i class="fas fa-hand-holding-heart value-icon-lg"></i>
+                    <h3>Integrity</h3>
+                    <p>We build trust through radical transparency. No hidden details, just honest, expert advice.</p>
+                </div>
+            </div>
+        </section>
+
+        <div class="footer-badge">
+            &copy; 2026 DREAM MULK REAL ESTATE GROUP
+        </div>
     </div>
+
 </body>
 </html>
