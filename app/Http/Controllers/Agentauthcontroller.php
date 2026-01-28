@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Intervention\Image\ImageManager;
 use Intervention\Image\Drivers\Gd\Driver;
 
@@ -186,138 +187,132 @@ class AgentAuthController extends Controller
 
     public function storeProperty(Request $request)
     {
-        // 1. Validate Subscription
-        $validationRedirect = $this->validateSubscription();
-        if ($validationRedirect) {
-            return $validationRedirect;
-        }
+        // 1. LOG INCOMING REQUEST
+        Log::info('----------------------------------------------------');
+        Log::info('🚀 STORE PROPERTY STARTED');
+        Log::info('Agent ID: ' . Auth::guard('agent')->id());
 
-        $agent = Auth::guard('agent')->user();
+        // Log all inputs except the actual image binary data to keep logs clean
+        Log::info('📥 Raw Request Data:', $request->except(['images', '_token']));
 
-        // 2. Validate the request
-        $request->validate([
-            'title_en'       => 'required|string|max:255',
-            'title_ar'       => 'nullable|string|max:255',
-            'title_ku'       => 'nullable|string|max:255',
-            'description_en' => 'nullable|string',
-            'description_ar' => 'nullable|string',
-            'description_ku' => 'nullable|string',
-
-            // Prices
-            'price'          => 'required|numeric|min:0',
-            'price_usd'      => 'required|numeric|min:0',
-
-            'property_type'  => 'required|string',
-            'status'         => 'required|string',
-            'city_en'        => 'required|string',
-            'district_en'    => 'required|string',
-
-            // Map Validation
-            'has_map'        => 'nullable|boolean',
-            'latitude'       => 'required_if:has_map,1|nullable|numeric',
-            'longitude'      => 'required_if:has_map,1|nullable|numeric',
-
-            'area'           => 'nullable|numeric',
-            'bedrooms'       => 'nullable|integer',
-            'bathrooms'      => 'nullable|integer',
-            'floors'         => 'nullable|integer',
-            'year_built'     => 'nullable|integer',
-            // Allow up to 30MB in validation, we compress it below
-            'images.*'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:30720',
-        ]);
-
-        // 3. Handle image uploads WITH COMPRESSION
-        $imagePaths = [];
-
-        if ($request->hasFile('images')) {
-            // Initialize Image Manager (Using GD Driver)
-            $manager = new ImageManager(new Driver());
-
-            foreach ($request->file('images') as $image) {
-                try {
-                    // A. Generate Unique Filename
-                    // We use .webp extension because we are converting it
-                    $filename = 'prop_' . uniqid() . '_' . time() . '.webp';
-                    $storagePath = 'properties/' . $filename;
-
-                    // B. Read the image
-                    $img = $manager->read($image);
-
-                    // C. INTELLIGENT RESIZING
-                    // Scale down to 1920px width ONLY if the image is larger.
-                    // This creates massive size savings for 4k/Phone photos without losing visible quality.
-                    $img->scaleDown(width: 1920);
-
-                    // D. ENCODE TO WEBP
-                    // Quality 90 is visually lossless but much smaller file size.
-                    $encoded = $img->toWebp(quality: 90);
-
-                    // E. Save to Storage (public disk)
-                    Storage::disk('public')->put($storagePath, (string) $encoded);
-
-                    // F. Store the Full URL (matching your existing logic)
-                    $imagePaths[] = asset('storage/' . $storagePath);
-                } catch (\Exception $e) {
-                    Log::error('Image Compression Failed: ' . $e->getMessage());
-                    // Fallback: If compression fails (rare), store original
-                    $path = $image->store('properties', 'public');
-                    $imagePaths[] = asset('storage/' . $path);
-                }
-            }
-        }
-
-        // 4. Generate ID
-        do {
-            $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
-        } while (DB::table('properties')->where('id', $propertyId)->exists());
-
-        // 5. Prepare Location Data
-        $locationsJson = json_encode([]);
-
-        if ($request->boolean('has_map') && $request->filled('latitude') && $request->filled('longitude')) {
-            $locationsJson = json_encode([
-                [
-                    'lat' => (float) $request->latitude,
-                    'lng' => (float) $request->longitude,
-                ]
-            ]);
-        }
-
-        // 6. Database Insertion
         try {
-            DB::table('properties')->insert([
+            // 1. Validate Subscription
+            $validationRedirect = $this->validateSubscription();
+            if ($validationRedirect) {
+                Log::warning('⚠️ Subscription Validation Failed');
+                return $validationRedirect;
+            }
+
+            $agent = Auth::guard('agent')->user();
+
+            // 2. Validate the request
+            Log::info('⏳ Starting Validation...');
+
+            // We capture the validated data to ensure we are using clean data
+            $validatedData = $request->validate([
+                'title_en'       => 'required|string|max:255',
+                'title_ar'       => 'nullable|string|max:255',
+                'title_ku'       => 'nullable|string|max:255',
+                'description_en' => 'nullable|string',
+                'description_ar' => 'nullable|string',
+                'description_ku' => 'nullable|string',
+                'price'          => 'required|numeric|min:0',
+                'price_usd'      => 'required|numeric|min:0',
+                'property_type'  => 'required|string',
+                'status'         => 'required|string',
+                'city_en'        => 'required|string',
+                'district_en'    => 'required|string',
+                'has_map'        => 'nullable|boolean',
+                'latitude'       => 'required_if:has_map,1|nullable|numeric',
+                'longitude'      => 'required_if:has_map,1|nullable|numeric',
+                'area'           => 'nullable|numeric',
+                'bedrooms'       => 'nullable|integer',
+                'bathrooms'      => 'nullable|integer',
+                'floors'         => 'nullable|integer',
+                'year_built'     => 'nullable|integer',
+                'images.*'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:30720',
+            ]);
+
+            Log::info('✅ Validation Passed');
+
+            // 3. Handle image uploads
+            $imagePaths = [];
+            if ($request->hasFile('images')) {
+                Log::info('📸 Processing Images. Count: ' . count($request->file('images')));
+
+                $manager = new ImageManager(new Driver());
+
+                foreach ($request->file('images') as $index => $image) {
+                    try {
+                        Log::info("   Processing Image #{$index}: " . $image->getClientOriginalName());
+
+                        $filename = 'prop_' . uniqid() . '_' . time() . '.webp';
+                        $storagePath = 'properties/' . $filename;
+
+                        $img = $manager->read($image);
+                        $img->scaleDown(width: 1920);
+                        $encoded = $img->toWebp(quality: 90);
+
+                        Storage::disk('public')->put($storagePath, (string) $encoded);
+                        $imagePaths[] = asset('storage/' . $storagePath);
+
+                        Log::info("   ✅ Image #{$index} saved to: $storagePath");
+                    } catch (\Exception $e) {
+                        Log::error("   ❌ Image Compression Failed for #{$index}: " . $e->getMessage());
+                        // Fallback
+                        $path = $image->store('properties', 'public');
+                        $imagePaths[] = asset('storage/' . $path);
+                    }
+                }
+            } else {
+                Log::warning('⚠️ No images found in request');
+            }
+
+            // 4. Generate ID
+            do {
+                $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
+            } while (DB::table('properties')->where('id', $propertyId)->exists());
+
+            Log::info('🆔 Generated Property ID: ' . $propertyId);
+
+            // 5. Prepare Location Data
+            $locationsJson = json_encode([]);
+            if ($request->boolean('has_map') && $request->filled('latitude') && $request->filled('longitude')) {
+                $locationsJson = json_encode([
+                    [
+                        'lat' => (float) $request->latitude,
+                        'lng' => (float) $request->longitude,
+                    ]
+                ]);
+            }
+
+            // 6. PREPARE DB DATA (Log this specifically to see invalid types)
+            $dbData = [
                 'id' => $propertyId,
                 'owner_id' => $agent->id,
                 'owner_type' => 'App\Models\Agent',
-
                 'name' => json_encode([
                     'en' => $request->title_en,
                     'ar' => $request->title_ar ?? '',
                     'ku' => $request->title_ku ?? '',
                 ]),
-
                 'description' => json_encode([
                     'en' => $request->description_en ?? '',
                     'ar' => $request->description_ar ?? '',
                     'ku' => $request->description_ku ?? '',
                 ]),
-
                 'type' => json_encode([
                     'category' => $request->property_type,
                 ]),
-
                 'price' => json_encode([
                     'iqd' => (float) $request->price,
                     'usd' => (float) $request->price_usd,
                 ]),
-
                 'rooms' => json_encode([
                     'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
                     'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
                 ]),
-
                 'locations' => $locationsJson,
-
                 'address_details' => json_encode([
                     'city' => [
                         'en' => $request->city_en,
@@ -330,8 +325,7 @@ class AgentAuthController extends Controller
                         'ku' => $request->district_ku ?? '',
                     ],
                 ]),
-
-                'listing_type' => 'sell',
+                'listing_type' => 'sell', // Hardcoded as per your code? Check if this should be dynamic.
                 'area' => (float) ($request->area ?? 0),
                 'furnished' => $request->boolean('furnished') ? 1 : 0,
                 'electricity' => $request->boolean('electricity') ? 1 : 0,
@@ -341,8 +335,6 @@ class AgentAuthController extends Controller
                 'address' => $request->address ?? null,
                 'floor_number' => (int) ($request->floors ?? 0),
                 'year_built' => (int) ($request->year_built ?? null),
-
-                // Defaults
                 'features' => json_encode([]),
                 'amenities' => json_encode([]),
                 'furnishing_details' => json_encode(['status' => 'unfurnished']),
@@ -350,16 +342,10 @@ class AgentAuthController extends Controller
                 'rental_period' => null,
                 'virtual_tour_url' => null,
                 'floor_plan_url' => null,
-
                 'availability' => json_encode([
                     'status' => 'available',
-                    'labels' => [
-                        'en' => 'Available',
-                        'ar' => 'متوفر',
-                        'ku' => 'بەردەست'
-                    ]
+                    'labels' => ['en' => 'Available', 'ar' => 'متوفر', 'ku' => 'بەردەست']
                 ]),
-
                 'verified' => 0,
                 'is_active' => 1,
                 'published' => 1,
@@ -370,15 +356,28 @@ class AgentAuthController extends Controller
                 'is_boosted' => 0,
                 'view_analytics' => json_encode(['unique_views' => 0, 'returning_views' => 0]),
                 'favorites_analytics' => json_encode(['last_30_days' => 0]),
-
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ];
 
+            Log::info('💾 Attempting DB Insert with Data:', $dbData);
+
+            DB::table('properties')->insert($dbData);
+
+            Log::info('✅ DB Insert Successful');
             return redirect()->route('agent.properties')->with('success', 'Property added successfully!');
+        } catch (ValidationException $e) {
+            // CATCH VALIDATION ERRORS SPECIFICALLY
+            Log::error('❌ VALIDATION FAILED:', $e->errors());
+            throw $e; // Throw it back so Laravel redirects with errors
         } catch (\Exception $e) {
-            Log::error('Property Store Error: ' . $e->getMessage());
-            return back()->withInput()->with('error', 'Failed to add property. ' . $e->getMessage());
+            // CATCH EVERYTHING ELSE
+            Log::error('🔥 CRITICAL EXCEPTION in storeProperty');
+            Log::error('Message: ' . $e->getMessage());
+            Log::error('File: ' . $e->getFile() . ' on line ' . $e->getLine());
+
+            // Return a clear error to the UI
+            return back()->withInput()->with('error', 'System Error: ' . $e->getMessage());
         }
     }
 
