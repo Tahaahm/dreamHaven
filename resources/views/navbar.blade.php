@@ -4,109 +4,169 @@
   <meta charset="utf-8"/>
   <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Dream Haven Navigation</title>
 
   <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.0/css/line.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <style>
-    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap");
-    * { box-sizing: border-box; margin:0; padding:0; font-family:"Inter",sans-serif; }
-    a { text-decoration: none; color: inherit; }
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-    /* ---------- Header / Desktop layout ---------- */
+  <style>
+    :root {
+      --primary: #303b97;       /* Dream Mulk Blue */
+      --primary-dark: #1a225a;
+      --gold: #d4af37;          /* Luxury Gold */
+      --gold-hover: #b5952f;
+      --white: #ffffff;
+      --glass: rgba(255, 255, 255, 0.95);
+      --glass-dark: rgba(48, 59, 151, 0.95);
+    }
+
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body { font-family: 'Poppins', sans-serif; }
+    a { text-decoration: none; color: inherit; transition: all 0.3s ease; }
+
+    /* ---------- Header Layout ---------- */
     .unique-header {
       position: fixed;
       top: 0;
       left: 0;
-      right:0;
-      height: 80px;
+      right: 0;
+      height: 90px;
       width: 100%;
       z-index: 1100;
-      padding: 0 20px;
-      transition: transform 0.3s ease, background-color 0.25s ease;
-      background: transparent;
+      padding: 0 40px;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%);
       display: flex;
       align-items: center;
     }
 
+    .unique-header.scrolled {
+      background: var(--glass-dark);
+      backdrop-filter: blur(12px);
+      height: 80px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+
     .unique-nav {
-      max-width: 1100px;
+      max-width: 1400px;
       width: 100%;
       margin: 0 auto;
       display: flex;
       height: 100%;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
     }
 
-    .unique-nav-left { display:flex; align-items:center; gap:12px; }
+    /* ---------- Logo Styling ---------- */
     .unique-nav-logo {
-      font-size: 25px;
-      color:#fff;
+      font-family: 'Playfair Display', serif;
+      font-size: 26px;
+      color: var(--white);
       font-weight: 700;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 15px;
+      letter-spacing: 0.5px;
     }
 
-    .unique-nav-items { display:flex; align-items:center; gap:8px; }
-    .unique-nav-item { display:flex; gap:25px; align-items:center; }
+    .brand-logo-img {
+        height: 55px;
+        width: 55px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid var(--white);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        background: var(--white);
+        transition: transform 0.3s ease;
+    }
+
+    .unique-nav-logo:hover .brand-logo-img {
+        transform: scale(1.05) rotate(5deg);
+        border-color: var(--gold);
+    }
+
+    /* ---------- Desktop Links ---------- */
+    .unique-nav-items { display: flex; align-items: center; gap: 40px; }
+    .unique-nav-item { display: flex; gap: 35px; align-items: center; }
+
     .unique-nav-link {
-      color:#fff;
-      padding:6px 12px;
-      border-radius: 6px;
-      transition: all 0.3s ease;
+      color: rgba(255,255,255,0.85);
+      font-size: 15px;
+      font-weight: 400;
+      position: relative;
+      padding: 5px 0;
+      letter-spacing: 0.5px;
     }
 
-    .unique-nav-link:hover {
-      background: rgba(255, 255, 255, 0.1);
+    .unique-nav-link:hover, .unique-nav-link.active {
+      color: var(--gold);
     }
 
+    .unique-nav-link::after {
+      content: '';
+      position: absolute;
+      width: 0;
+      height: 2px;
+      bottom: 0;
+      left: 0;
+      background-color: var(--gold);
+      transition: width 0.3s ease;
+    }
+
+    .unique-nav-link:hover::after, .unique-nav-link.active::after {
+      width: 100%;
+    }
+
+    /* ---------- Buttons & User ---------- */
     .unique-button {
-      padding: 8px 24px;
-      border: 2px solid #fff;
+      padding: 10px 28px;
+      border: 1px solid var(--gold);
       background: transparent;
-      border-radius: 8px;
+      border-radius: 50px;
       cursor: pointer;
-      color:#fff;
+      color: var(--gold);
       font-weight: 500;
+      font-size: 14px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
       transition: all 0.3s ease;
     }
 
     .unique-button:hover {
-      background: #fff;
-      color: #667eea;
+      background: var(--gold);
+      color: var(--primary);
+      box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
     }
 
     .user-initial-circle {
-      width: 40px;
-      height: 40px;
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#fff;
-      font-weight:600;
-      text-transform:uppercase;
-      cursor:pointer;
-      transition: transform .15s ease, box-shadow .15s ease;
-      font-size: 16px;
-    }
-    .user-initial-circle:hover {
-      transform: translateY(-2px) scale(1.05);
-      box-shadow:0 6px 18px rgba(102, 126, 234, 0.4);
+      background: var(--gold);
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-family: 'Playfair Display', serif;
+      cursor: pointer;
+      transition: transform .2s ease;
+      border: 2px solid rgba(255,255,255,0.2);
     }
 
-    /* ---------- Notification Bell Styles ---------- */
+    .user-initial-circle:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+    }
+
+    /* ---------- Notification Bell ---------- */
     .notification-bell-wrapper {
       position: relative;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      margin: 0 12px;
+      gap: 15px;
+      margin: 0 20px;
     }
 
     .notification-bell-link {
@@ -117,72 +177,48 @@
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.15);
-      color: #fff;
+      color: var(--white);
       transition: all 0.3s ease;
     }
 
     .notification-bell-link:hover {
-      background: rgba(255, 255, 255, 0.25);
-      transform: scale(1.1);
-    }
-
-    .notification-bell-link i {
-      font-size: 1.2rem;
+      color: var(--gold);
+      transform: translateY(-2px);
     }
 
     .notification-badge {
       position: absolute;
-      top: -5px;
-      right: -5px;
-      background: linear-gradient(135deg, #ff2d20 0%, #ff5540 100%);
+      top: 0;
+      right: 0;
+      background: #e74c3c;
       color: white;
-      font-size: 0.65rem;
+      font-size: 10px;
       font-weight: bold;
       padding: 2px 5px;
-      border-radius: 10px;
-      min-width: 18px;
-      text-align: center;
-      animation: pulse 2s infinite;
-      box-shadow: 0 2px 8px rgba(255, 45, 32, 0.5);
-      line-height: 1.2;
+      border-radius: 6px;
+      border: 1px solid var(--primary);
     }
 
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.15); }
-    }
-
-    /* Light mode notification bell */
-    .unique-header.navbar-light .notification-bell-link {
-      background: rgba(102, 126, 234, 0.1);
-      color: #667eea;
-    }
-
-    .unique-header.navbar-light .notification-bell-link:hover {
-      background: rgba(102, 126, 234, 0.2);
-    }
-
-    /* ---------- Mobile: hamburger + drawer ---------- */
+    /* ---------- Mobile Toggle ---------- */
     .menu-toggle {
       display: none;
       background: transparent;
       border: none;
-      font-size: 24px;
-      color: #fff;
+      font-size: 28px;
+      color: var(--gold);
       cursor: pointer;
-      align-items: center;
     }
 
+    /* ---------- Mobile Drawer ---------- */
     .nav-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.45);
+      background: rgba(0,0,0,0.6);
       opacity: 0;
       pointer-events: none;
-      transition: opacity .25s ease;
+      transition: opacity .3s ease;
       z-index: 1090;
-      backdrop-filter: blur(2px);
+      backdrop-filter: blur(4px);
     }
     .nav-backdrop.show { opacity: 1; pointer-events: auto; }
 
@@ -191,124 +227,83 @@
       top: 0;
       right: -100%;
       height: 100vh;
-      width: min(420px, 86%);
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.98), rgba(118, 75, 162, 0.98));
-      color: #fff;
+      width: min(380px, 85%);
+      background: var(--primary);
       z-index: 1100;
-      padding: 34px 22px;
+      padding: 40px 30px;
       display: flex;
       flex-direction: column;
-      gap: 18px;
-      transition: right .32s cubic-bezier(.2,.9,.3,1);
-      box-shadow: -8px 30px 60px rgba(0,0,0,0.45);
-      overflow-y: auto;
+      gap: 20px;
+      transition: right .4s cubic-bezier(.2,.9,.3,1);
+      box-shadow: -10px 0 30px rgba(0,0,0,0.5);
     }
+
+    .nav-drawer::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 4px;
+        background: var(--gold);
+    }
+
     .nav-drawer.open { right: 0; }
 
     .drawer-header {
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
-    .drawer-title { font-size:20px; font-weight:700; color:#fff; }
-
-    .drawer-links { display:flex; flex-direction:column; gap:14px; margin-top:12px; }
-    .drawer-links a {
-      font-size:16px;
-      padding:12px 16px;
-      border-radius:8px;
-      color:#fff;
-      transition: all 0.3s ease;
-    }
-    .drawer-links a:hover { background: rgba(255,255,255,0.15); }
-
-    .drawer-cta { margin-top: 12px; display:flex; gap:10px; align-items:center; }
-    .drawer-cta .unique-button { padding:10px 18px; }
-
-    .drawer-divider { height:1px; background: rgba(255,255,255,0.15); margin:12px 0; border-radius:2px; }
-
-    /* Notification bell in mobile drawer */
-    .drawer-notification-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
-      border-radius: 8px;
-      color: #fff;
-      transition: all 0.3s ease;
+      margin-bottom: 20px;
     }
-    .drawer-notification-item:hover {
-      background: rgba(255,255,255,0.15);
-    }
-    .drawer-notification-content {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .drawer-title {
+        font-family: 'Playfair Display', serif;
+        font-size: 24px;
+        color: var(--white);
     }
 
-    /* ---------- Responsive rules ---------- */
-    @media (max-width: 900px) {
-      .unique-nav-items { display: none; }
-      .menu-toggle { display: inline-flex; }
-      .unique-header { padding: 0 14px; }
-      .notification-bell-wrapper { display: none; }
+    .drawer-links a {
+      font-size: 18px;
+      padding: 15px 0;
+      color: rgba(255,255,255,0.8);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: block;
+      transition: all 0.3s;
+    }
+    .drawer-links a:hover, .drawer-links a.active {
+        color: var(--gold);
+        padding-left: 10px;
     }
 
-    @media (max-width: 900px) {
-      .unique-header a[aria-label="Login"],
-      .unique-header a[aria-label="Go to dashboard"] {
-        display: none !important;
-      }
-    }
-
-    button:focus, a:focus { outline: 3px solid rgba(102, 126, 234, 0.3); outline-offset:2px; border-radius:6px; }
-
-    /* ---------- LIGHT MODE ---------- */
+    /* Light Mode Overrides */
     .unique-header.navbar-light {
-      background: white !important;
-      border-bottom: 1px solid rgba(0,0,0,0.08);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      background: rgba(255,255,255,0.95) !important;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.05);
     }
 
-    .unique-header.navbar-light .unique-nav-logo,
-    .unique-header.navbar-light .unique-nav-link,
-    .unique-header.navbar-light .menu-toggle,
-    .unique-header.navbar-light .uil {
-      color: #1e293b !important;
-    }
-
-    .unique-header.navbar-light .unique-nav-link:hover {
-      background: rgba(102, 126, 234, 0.1);
-    }
+    .unique-header.navbar-light .unique-nav-logo { color: var(--primary) !important; }
+    .unique-header.navbar-light .brand-logo-img { border-color: var(--primary); box-shadow:none; }
+    .unique-header.navbar-light .unique-nav-link { color: var(--text-dark) !important; }
+    .unique-header.navbar-light .unique-nav-link:hover { color: var(--primary) !important; }
+    .unique-header.navbar-light .unique-nav-link::after { background-color: var(--primary); }
+    .unique-header.navbar-light .notification-bell-link { color: var(--primary); }
+    .unique-header.navbar-light .menu-toggle { color: var(--primary); }
 
     .unique-header.navbar-light .unique-button {
-      color: #667eea !important;
-      border-color: #667eea !important;
+      border-color: var(--primary);
+      color: var(--primary);
     }
-
     .unique-header.navbar-light .unique-button:hover {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-      color: #fff !important;
+      background: var(--primary);
+      color: var(--white);
     }
 
-    .nav-drawer.light {
-      background: white !important;
-      color: #1e293b !important;
-    }
-
-    .nav-drawer.light .drawer-title,
-    .nav-drawer.light a,
-    .nav-drawer.light i {
-      color: #1e293b !important;
-    }
-
-    .nav-drawer.light .drawer-links a:hover,
-    .nav-drawer.light .drawer-notification-item:hover {
-      background: rgba(102, 126, 234, 0.1) !important;
-    }
-
-    .nav-drawer.light .drawer-divider {
-      background: rgba(0,0,0,0.12) !important;
+    @media (max-width: 900px) {
+      .unique-nav-items, .notification-bell-wrapper, .user-initial-circle { display: none !important; }
+      .menu-toggle { display: block; }
+      .unique-header { padding: 0 20px; height: 70px; }
+      .unique-header.scrolled { height: 70px; }
     }
   </style>
 </head>
@@ -319,7 +314,7 @@
   <nav class="unique-nav" role="navigation" aria-label="Primary">
     <div class="unique-nav-left">
       <a href="{{ route('newindex') }}" class="unique-nav-logo">
-        <i class="fas fa-home"></i>
+        <img src="{{ asset('logo_dream_mulk.png') }}" alt="Dream Mulk" class="brand-logo-img">
         <span>Dream Mulk</span>
       </a>
     </div>
@@ -329,68 +324,67 @@
         <a class="unique-nav-link {{ request()->routeIs('newindex') ? ' active' : '' }}" href="{{ route('newindex') }}">Home</a>
         <a class="unique-nav-link {{ request()->routeIs('property.list') ? ' active' : '' }}" href="{{ route('property.list') }}">Properties</a>
         <a class="unique-nav-link {{ request()->routeIs('about-us') ? ' active' : '' }}" href="{{ route('about-us') }}">About Us</a>
-        <a class="unique-nav-link {{ request()->routeIs('contact-us') ? ' active' : '' }}" href="{{ route('contact-us') }}">Contact</a>
+        <a class="unique-nav-link {{ request()->routeIs('contact-us') ? ' active' : '' }}" href="{{ route('contact-us') }}">Contact Us</a>
       </div>
     </div>
 
-    @php
-      $user = \Illuminate\Support\Facades\Auth::user();
-      $agent = \Illuminate\Support\Facades\Auth::guard('agent')->user();
+    <div style="display:flex; align-items:center;">
+        @php
+          $user = \Illuminate\Support\Facades\Auth::user();
+          $agent = \Illuminate\Support\Facades\Auth::guard('agent')->user();
 
-      // Get unread notifications count
-      $unreadCount = 0;
-      if ($user) {
-          $unreadCount = \DB::table('notifications')
-              ->where('user_id', $user->id)
-              ->where('is_read', false)
-              ->where(function($query) {
-                  $query->whereNull('expires_at')
-                        ->orWhere('expires_at', '>', now());
-              })
-              ->count();
-      }
-    @endphp
+          $unreadCount = 0;
+          if ($user) {
+              $unreadCount = \DB::table('notifications')
+                  ->where('user_id', $user->id)
+                  ->where('is_read', false)
+                  ->where(function($query) {
+                      $query->whereNull('expires_at')
+                            ->orWhere('expires_at', '>', now());
+                  })
+                  ->count();
+          }
+        @endphp
 
-    @if($user || $agent)
-      <div class="notification-bell-wrapper">
-        <a href="{{ route('user.appointments') }}" class="notification-bell-link" title="My Appointments">
-          <i class="fas fa-calendar-check"></i>
-        </a>
+        @if($user || $agent)
+          <div class="notification-bell-wrapper">
+            <a href="{{ route('user.appointments') }}" class="notification-bell-link" title="My Appointments">
+              <i class="far fa-calendar-alt"></i>
+            </a>
 
-        <a href="{{ route('user.notifications') }}" class="notification-bell-link" title="Notifications">
-          <i class="fas fa-bell"></i>
-          @if($unreadCount > 0)
-            <span class="notification-badge">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
-          @endif
-        </a>
-      </div>
-    @endif
+            <a href="{{ route('user.notifications') }}" class="notification-bell-link" title="Notifications">
+              <i class="far fa-bell"></i>
+              @if($unreadCount > 0)
+                <span class="notification-badge">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+              @endif
+            </a>
+          </div>
 
-    @if($user || $agent)
-      @php
-        if ($user) {
-            $displayName = $user->username ?? $user->name ?? 'User';
-            $redirectRoute = route('user.profile');
-        } else {
-            $displayName = $agent->agent_name;
-            $redirectRoute = route('agent.profile.page');
-        }
-      @endphp
+          @php
+            if ($user) {
+                $displayName = $user->username ?? $user->name ?? 'User';
+                $redirectRoute = route('user.profile');
+            } else {
+                $displayName = $agent->agent_name;
+                $redirectRoute = route('agent.profile.page');
+            }
+          @endphp
 
-      <a href="{{ $redirectRoute }}" aria-label="Go to profile">
-        <div class="user-initial-circle" title="{{ $displayName }}">
-          {{ strtoupper(substr($displayName, 0, 1)) }}
-        </div>
-      </a>
-    @else
-      <a href="{{ route('login-page') }}" aria-label="Login">
-        <button class="unique-button">Login</button>
-      </a>
-    @endif
+          <a href="{{ $redirectRoute }}" aria-label="Go to profile" class="user-initial-circle" title="{{ $displayName }}">
+            {{ strtoupper(substr($displayName, 0, 1)) }}
+          </a>
+        @else
+          <div class="unique-nav-items">
+              <a href="{{ route('login-page') }}" aria-label="Login">
+                <button class="unique-button">Client Login</button>
+              </a>
+          </div>
+        @endif
 
-    <button id="hamburger" class="menu-toggle" aria-controls="mobile-drawer" aria-expanded="false" aria-label="Open menu">
-      <i class="uil uil-bars" id="hamburger-icon"></i>
-    </button>
+        <button id="hamburger" class="menu-toggle" aria-controls="mobile-drawer" aria-expanded="false" aria-label="Open menu">
+          <i class="uil uil-bars" id="hamburger-icon"></i>
+        </button>
+    </div>
 
   </nav>
 </header>
@@ -399,45 +393,40 @@
 
 <aside id="mobile-drawer" class="nav-drawer" role="dialog" aria-labelledby="drawer-title" aria-hidden="true">
   <div class="drawer-header">
-    <div class="drawer-title" id="drawer-title">Menu</div>
-    <button id="drawer-close" aria-label="Close menu" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;">
+    <div class="drawer-title" id="drawer-title">Dream Mulk</div>
+    <button id="drawer-close" aria-label="Close menu" style="background:transparent;border:none;color:var(--gold);font-size:24px;cursor:pointer;">
       <i class="uil uil-times"></i>
     </button>
   </div>
 
   <nav class="drawer-links" aria-label="Mobile links">
-    <a href="{{ route('newindex') }}" class="drawer-link" data-close>Home</a>
-    <a href="{{ route('property.list') }}" class="drawer-link" data-close>Properties</a>
-    <a href="{{ route('about-us') }}" class="drawer-link" data-close>About Us</a>
-    <a href="{{ route('contact-us') }}" class="drawer-link" data-close>Contact</a>
+    <a href="{{ route('newindex') }}" class="{{ request()->routeIs('newindex') ? 'active' : '' }}" data-close>Home</a>
+    <a href="{{ route('property.list') }}" class="{{ request()->routeIs('property.list') ? 'active' : '' }}" data-close>Properties</a>
+    <a href="{{ route('about-us') }}" class="{{ request()->routeIs('about-us') ? 'active' : '' }}" data-close>About Us</a>
+    <a href="{{ route('contact-us') }}" class="{{ request()->routeIs('contact-us') ? 'active' : '' }}" data-close>Contact Us</a>
 
     @if($user || $agent)
-      <div class="drawer-divider" aria-hidden="true"></div>
+      <div style="height:1px; background:rgba(255,255,255,0.1); margin:15px 0;"></div>
 
-      <a href="{{ route('user.appointments') }}" class="drawer-notification-item" data-close>
-        <div class="drawer-notification-content">
-          <i class="fas fa-calendar-check"></i>
-          <span>My Appointments</span>
-        </div>
+      <a href="{{ route('user.appointments') }}" data-close style="display:flex; justify-content:space-between; align-items:center;">
+        <span>My Appointments</span>
+        <i class="fas fa-calendar-check" style="color:var(--gold)"></i>
       </a>
 
-      <a href="{{ route('user.notifications') }}" class="drawer-notification-item" data-close>
-        <div class="drawer-notification-content">
-          <i class="fas fa-bell"></i>
-          <span>Notifications</span>
-        </div>
+      <a href="{{ route('user.notifications') }}" data-close style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Notifications</span>
         @if($unreadCount > 0)
-          <span class="notification-badge">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+          <span class="notification-badge" style="position:static;">{{ $unreadCount }}</span>
+        @else
+          <i class="fas fa-bell" style="color:var(--gold)"></i>
         @endif
       </a>
     @endif
   </nav>
 
-  <div class="drawer-divider" aria-hidden="true"></div>
-
-  <div class="drawer-cta" aria-hidden="false">
+  <div style="margin-top:auto;">
     @if($user || $agent)
-      @php
+        @php
         if ($user) {
             $displayName = $user->username ?? $user->name ?? 'User';
             $redirectRoute = route('user.profile');
@@ -445,88 +434,60 @@
             $displayName = $agent->agent_name;
             $redirectRoute = route('agent.profile.page');
         }
-      @endphp
-      <a href="{{ $redirectRoute }}" style="display:inline-flex; align-items:center; gap:10px;">
-        <div class="user-initial-circle">{{ strtoupper(substr($displayName, 0, 1)) }}</div>
-        <div style="font-weight:600;">{{ \Illuminate\Support\Str::limit($displayName, 16) }}</div>
-      </a>
+        @endphp
+        <a href="{{ $redirectRoute }}" style="display:flex; align-items:center; gap:15px; background:rgba(255,255,255,0.05); padding:15px; border-radius:12px;">
+            <div class="user-initial-circle" style="width:35px; height:35px; font-size:14px;">{{ strtoupper(substr($displayName, 0, 1)) }}</div>
+            <div style="color:white; font-weight:500;">{{ \Illuminate\Support\Str::limit($displayName, 16) }}</div>
+        </a>
     @else
       <a href="{{ route('login-page') }}">
-        <button class="unique-button">Login</button>
+        <button class="unique-button" style="width:100%; text-align:center;">Client Login</button>
       </a>
     @endif
-  </div>
-
-  <div style="margin-top:auto; font-size:12px; color:rgba(255,255,255,0.6); text-align: center;">
-    Dream Haven &nbsp;•&nbsp; Real Estate Platform
   </div>
 </aside>
 
 <script>
-  let lastScrollTop = 0;
   const navbar = document.getElementById('navbar');
 
   window.addEventListener('scroll', function() {
-    let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
-    if (currentScroll > lastScrollTop && currentScroll > 100) {
-      navbar.style.transform = 'translateY(-100%)';
+    if (window.scrollY > 50) {
+      navbar.classList.add('scrolled');
     } else {
-      navbar.style.transform = 'translateY(0)';
+      navbar.classList.remove('scrolled');
     }
-    lastScrollTop = currentScroll <= 0 ? 0 : currentScroll;
-  }, false);
-</script>
+  });
 
-<script>
   (function(){
     const hamburger = document.getElementById('hamburger');
     const hamburgerIcon = document.getElementById('hamburger-icon');
     const drawer = document.getElementById('mobile-drawer');
     const backdrop = document.getElementById('nav-backdrop');
     const closeBtn = document.getElementById('drawer-close');
-    const focusablesSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    let lastFocused = null;
 
     function openDrawer() {
-      lastFocused = document.activeElement;
       drawer.classList.add('open');
       backdrop.classList.add('show');
-      drawer.setAttribute('aria-hidden', 'false');
-      backdrop.setAttribute('aria-hidden', 'false');
       hamburger.setAttribute('aria-expanded', 'true');
-      hamburgerIcon.className = 'uil uil-times';
-      const focusables = drawer.querySelectorAll(focusablesSelector);
-      if (focusables.length) focusables[0].focus();
       document.body.style.overflow = 'hidden';
     }
 
     function closeDrawer() {
       drawer.classList.remove('open');
       backdrop.classList.remove('show');
-      drawer.setAttribute('aria-hidden', 'true');
-      backdrop.setAttribute('aria-hidden', 'true');
       hamburger.setAttribute('aria-expanded', 'false');
-      hamburgerIcon.className = 'uil uil-bars';
       document.body.style.overflow = '';
-      if (lastFocused) lastFocused.focus();
     }
 
-    hamburger.addEventListener('click', function(e){
-      const expanded = hamburger.getAttribute('aria-expanded') === 'true';
-      if (expanded) closeDrawer(); else openDrawer();
+    hamburger.addEventListener('click', function(){
+      if (drawer.classList.contains('open')) closeDrawer(); else openDrawer();
     });
 
     closeBtn.addEventListener('click', closeDrawer);
     backdrop.addEventListener('click', closeDrawer);
 
     drawer.querySelectorAll('[data-close]').forEach(el => {
-      el.addEventListener('click', function(){ closeDrawer(); });
-    });
-
-    document.addEventListener('keydown', function(e){
-      if (e.key === 'Escape' && drawer.classList.contains('open')) {
-        closeDrawer();
-      }
+      el.addEventListener('click', closeDrawer);
     });
 
     window.addEventListener('resize', function(){
@@ -535,17 +496,12 @@
       }
     });
   })();
-</script>
 
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-    const navbar = document.getElementById("navbar");
-    const drawer = document.getElementById("mobile-drawer");
-
+  document.addEventListener("DOMContentLoaded", () => {
     if (navbar.classList.contains("navbar-light")) {
-        drawer.classList.add("light");
+        // Light mode overrides handled by CSS
     }
-});
+  });
 </script>
 
 </body>
