@@ -4,7 +4,6 @@
 
 @section('styles')
 <style>
-    /* ... (Keeping your existing Edit Page Styles exactly as they were) ... */
     :root {
         --primary: #303b97;
         --primary-dark: #252e7a;
@@ -417,6 +416,77 @@
         font-weight: 600;
     }
 
+    /* Toggle Switch */
+    .toggle-wrapper-box {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        padding: 16px 20px;
+        background: var(--gray-50);
+        border-radius: 14px;
+        border: 2px solid var(--gray-200);
+        transition: all 0.3s ease;
+        margin-bottom: 20px;
+    }
+
+    .toggle-wrapper-box:hover {
+        background: white;
+        border-color: var(--primary);
+    }
+
+    .toggle-wrapper-box input[type="checkbox"] {
+        display: none;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 56px;
+        height: 30px;
+        background: #cbd5e1;
+        border-radius: 30px;
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+    }
+
+    .toggle-switch::after {
+        content: '';
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 50%;
+        top: 3px;
+        left: 3px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .toggle-wrapper-box input[type="checkbox"]:checked + .toggle-switch {
+        background: var(--primary);
+    }
+
+    .toggle-wrapper-box input[type="checkbox"]:checked + .toggle-switch::after {
+        transform: translateX(26px);
+    }
+
+    .toggle-label {
+        font-weight: 600;
+        color: var(--gray-700);
+        font-size: 15px;
+    }
+
+    .map-section {
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+    .map-section.hidden {
+        display: none;
+        opacity: 0;
+        max-height: 0;
+    }
+
     /* Features */
     .features-grid {
         display: grid;
@@ -462,6 +532,21 @@
         margin: 0;
     }
 
+    /* Sort Instructions */
+    .sort-instructions {
+        background: linear-gradient(135deg, rgba(48,59,151,0.05), rgba(48,59,151,0.02));
+        border: 1px dashed var(--primary);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--primary);
+        font-weight: 600;
+        font-size: 14px;
+    }
+
     /* Images */
     .images-grid {
         display: grid;
@@ -475,9 +560,43 @@
         aspect-ratio: 1;
         border-radius: 14px;
         overflow: hidden;
-        border: 2px solid var(--gray-200);
+        border: 3px solid var(--gray-200);
         transition: all 0.3s;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        cursor: move;
+        cursor: grab;
+    }
+
+    .image-item:active {
+        cursor: grabbing;
+    }
+
+    .image-item.dragging {
+        opacity: 0.5;
+        transform: scale(0.95);
+        border-color: var(--primary);
+        box-shadow: 0 8px 24px rgba(48,59,151,0.3);
+    }
+
+    .image-item.drag-over {
+        border-color: var(--success);
+        background: rgba(16,185,129,0.05);
+        transform: scale(1.05);
+    }
+
+    .image-item:first-child::after {
+        content: 'COVER';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        color: white;
+        padding: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+        letter-spacing: 1px;
     }
 
     .image-item:hover {
@@ -490,6 +609,7 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
+        pointer-events: none;
     }
 
     .remove-img-btn {
@@ -507,17 +627,36 @@
         align-items: center;
         justify-content: center;
         transition: all 0.3s;
-        opacity: 0;
         font-size: 16px;
-    }
-
-    .image-item:hover .remove-img-btn {
-        opacity: 1;
+        z-index: 10;
     }
 
     .remove-img-btn:hover {
         background: #dc2626;
         transform: scale(1.15);
+    }
+
+    .drag-handle {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 36px;
+        height: 36px;
+        background: rgba(48,59,151,0.9);
+        border: none;
+        border-radius: 10px;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        z-index: 5;
+        cursor: move;
+        cursor: grab;
+    }
+
+    .drag-handle:active {
+        cursor: grabbing;
     }
 
     .upload-zone {
@@ -782,6 +921,10 @@
         $address = is_array($property->address_details) ? $property->address_details : json_decode($property->address_details, true);
         $locations = is_array($property->locations) ? $property->locations : json_decode($property->locations, true);
         $images = is_array($property->images) ? $property->images : json_decode($property->images, true);
+
+        $hasMap = !empty($locations) && isset($locations[0]['lat']) && $locations[0]['lat'] != 0;
+        $lat = $hasMap ? $locations[0]['lat'] : 0;
+        $lng = $hasMap ? $locations[0]['lng'] : 0;
     @endphp
 
     {{-- Header --}}
@@ -837,16 +980,6 @@
                 @endif
 
                 <div class="stats-grid">
-                    {{-- <div class="stat-item">
-                        <div class="stat-icon"><i class="fas fa-eye"></i></div>
-                        <div class="stat-value">{{ number_format($property->views ?? 0) }}</div>
-                        <div class="stat-label">Views</div>
-                    </div> --}}
-                    {{-- <div class="stat-item">
-                        <div class="stat-icon"><i class="fas fa-heart"></i></div>
-                        <div class="stat-value">{{ number_format($property->favorites_count ?? 0) }}</div>
-                        <div class="stat-label">Favorites</div>
-                    </div> --}}
                     <div class="stat-item">
                         <div class="stat-icon"><i class="fas fa-star"></i></div>
                         <div class="stat-value">{{ number_format($property->rating ?? 0, 1) }}</div>
@@ -862,7 +995,7 @@
         </div>
 
         {{-- Main Form --}}
-        <form action="{{ route('office.property.update', $property->id) }}" method="POST" enctype="multipart/form-data">
+        <form action="{{ route('office.property.update', $property->id) }}" method="POST" enctype="multipart/form-data" id="propertyForm">
             @csrf
             @method('PUT')
 
@@ -1008,21 +1141,29 @@
                             <label class="form-label">Full Address</label>
                             <input type="text" name="address" class="form-input" value="{{ old('address', $property->address) }}">
                         </div>
-                        <div class="form-group">
-    <label class="form-label">Latitude<span class="required">*</span></label>
-    <input type="number" name="latitude" id="latitude" class="form-input"
-           value="{{ old('latitude', $locations[0]['lat'] ?? 36.1911) }}"
-           step="any" required>
-</div>
-                        <div class="form-group">
-    <label class="form-label">Longitude<span class="required">*</span></label>
-    <input type="number" name="longitude" id="longitude" class="form-input"
-           value="{{ old('longitude', $locations[0]['lng'] ?? 44.0094) }}"
-           step="any" required>
-</div>
+
+                        {{-- MAP TOGGLE --}}
                         <div class="form-group full-width">
-                            <label class="form-label">Map Location</label>
-                            <div id="map-preview" style="height: 400px; width: 100%; border-radius: 14px; border: 2px solid var(--gray-200); margin-top: 5px;"></div>
+                            <label class="toggle-wrapper-box">
+                                <input type="checkbox" name="has_map" id="mapToggle" value="1" {{ $hasMap ? 'checked' : '' }}>
+                                <div class="toggle-switch"></div>
+                                <span class="toggle-label"><i class="fas fa-map-marked-alt"></i> Pin Exact Location on Map</span>
+                            </label>
+                        </div>
+
+                        {{-- MAP SECTION --}}
+                        <div id="mapSection" class="form-group full-width map-section {{ $hasMap ? '' : 'hidden' }}">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">Latitude</label>
+                                    <input type="number" name="latitude" id="latitude" class="form-input" value="{{ old('latitude', $lat) }}" step="any" readonly>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Longitude</label>
+                                    <input type="number" name="longitude" id="longitude" class="form-input" value="{{ old('longitude', $lng) }}" step="any" readonly>
+                                </div>
+                            </div>
+                            <div id="map-preview" style="height: 400px; width: 100%; border-radius: 14px; border: 2px solid var(--gray-200); margin-top: 10px;"></div>
                         </div>
                     </div>
                 </div>
@@ -1063,9 +1204,14 @@
                     @if(is_array($images) && count($images) > 0)
                     <div style="margin-bottom: 32px;">
                         <label class="form-label">Current Images</label>
+                        <div class="sort-instructions">
+                            <i class="fas fa-arrows-alt" style="font-size: 18px;"></i>
+                            <span>Drag and drop images to reorder. First image will be the cover photo.</span>
+                        </div>
                         <div class="images-grid" id="existingImages">
                             @foreach($images as $idx => $img)
-                            <div class="image-item" id="img-{{ $idx }}">
+                            <div class="image-item" draggable="true" data-index="{{ $idx }}" data-url="{{ $img }}">
+                                <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
                                 <img src="{{ $img }}">
                                 <button type="button" class="remove-img-btn" onclick="removeImage({{ $idx }})">
                                     <i class="fas fa-times"></i>
@@ -1073,6 +1219,7 @@
                             </div>
                             @endforeach
                         </div>
+                        <input type="hidden" name="existing_images_order" id="existingImagesOrder">
                     </div>
                     @endif
 
@@ -1082,6 +1229,11 @@
                         <div class="upload-text">Click to upload images</div>
                         <div class="upload-hint">JPG, PNG, GIF (Max 5MB each, up to 10 images)</div>
                         <input type="file" id="newImages" name="images[]" multiple accept="image/*" style="display:none" onchange="previewNew(event)">
+                    </div>
+
+                    <div class="sort-instructions" id="newImagesSortInstructions" style="display: none; margin-top: 24px;">
+                        <i class="fas fa-arrows-alt" style="font-size: 18px;"></i>
+                        <span>Drag and drop to reorder new images.</span>
                     </div>
                     <div id="newPreview" class="images-grid" style="margin-top: 24px; display: none;"></div>
                     <input type="hidden" name="remove_images" id="removeImages" value="">
@@ -1121,15 +1273,15 @@ let newFiles = [];
 let locationSelector;
 let map = null;
 let marker = null;
+let draggedExistingItem = null;
+let draggedNewItem = null;
 
 // Initialize Google Map
 function initMap() {
-    // Get initial coordinates from inputs (from DB/Blade) or default to Erbil
     let latVal = parseFloat(document.getElementById('latitude').value);
     let lngVal = parseFloat(document.getElementById('longitude').value);
 
-    // Fallback if NaN
-    if (isNaN(latVal) || isNaN(lngVal)) {
+    if (isNaN(latVal) || isNaN(lngVal) || (latVal === 0 && lngVal === 0)) {
         latVal = 36.1901;
         lngVal = 44.0091;
     }
@@ -1153,23 +1305,20 @@ function initMap() {
             animation: google.maps.Animation.DROP
         });
 
-        // Event: Update coordinates when marker is dragged
         marker.addListener('dragend', function() {
             const pos = marker.getPosition();
-            document.getElementById('latitude').value = pos.lat();
-            document.getElementById('longitude').value = pos.lng();
+            document.getElementById('latitude').value = pos.lat().toFixed(6);
+            document.getElementById('longitude').value = pos.lng().toFixed(6);
         });
 
-        // Event: Click on map to move marker
         map.addListener('click', function(e) {
             const pos = e.latLng;
             marker.setPosition(pos);
-            document.getElementById('latitude').value = pos.lat();
-            document.getElementById('longitude').value = pos.lng();
+            document.getElementById('latitude').value = pos.lat().toFixed(6);
+            document.getElementById('longitude').value = pos.lng().toFixed(6);
             map.panTo(pos);
         });
 
-        // Event: Update marker when manual inputs change
         const latInput = document.getElementById('latitude');
         const lngInput = document.getElementById('longitude');
 
@@ -1188,9 +1337,30 @@ function initMap() {
     }
 }
 
+// MAP TOGGLE
+function toggleMap() {
+    const mapToggle = document.getElementById('mapToggle');
+    const mapSection = document.getElementById('mapSection');
+    const latInput = document.getElementById('latitude');
+    const lngInput = document.getElementById('longitude');
+
+    if (mapToggle.checked) {
+        mapSection.classList.remove('hidden');
+        if (map) {
+            setTimeout(() => {
+                google.maps.event.trigger(map, "resize");
+                map.setCenter(marker.getPosition());
+            }, 100);
+        }
+    } else {
+        mapSection.classList.add('hidden');
+        latInput.value = '0';
+        lngInput.value = '0';
+    }
+}
+
 // Initialize LocationSelector and Page scripts
 document.addEventListener('DOMContentLoaded', async function() {
-    // Init LocationSelector
     locationSelector = new LocationSelector({
         citySelectId: 'city-select',
         areaSelectId: 'area-select',
@@ -1200,26 +1370,24 @@ document.addEventListener('DOMContentLoaded', async function() {
             document.getElementById('city_ar').value = city.nameAr || '';
             document.getElementById('city_ku').value = city.nameKu || '';
 
-            // If selecting a new city, center map on it
-            if(map && city.id && city.lat && city.lng) {
+            if(map && city.id && city.lat && city.lng && document.getElementById('mapToggle').checked) {
                 const newPos = { lat: parseFloat(city.lat), lng: parseFloat(city.lng) };
                 map.setCenter(newPos);
                 marker.setPosition(newPos);
-                document.getElementById('latitude').value = newPos.lat;
-                document.getElementById('longitude').value = newPos.lng;
+                document.getElementById('latitude').value = newPos.lat.toFixed(6);
+                document.getElementById('longitude').value = newPos.lng.toFixed(6);
             }
         },
         onAreaChange: (area) => {
             document.getElementById('district_ar').value = area.nameAr || '';
             document.getElementById('district_ku').value = area.nameKu || '';
 
-            // If selecting a new area, center map on it
-            if(map && area.id && area.lat && area.lng) {
+            if(map && area.id && area.lat && area.lng && document.getElementById('mapToggle').checked) {
                 const newPos = { lat: parseFloat(area.lat), lng: parseFloat(area.lng) };
                 map.setCenter(newPos);
                 marker.setPosition(newPos);
-                document.getElementById('latitude').value = newPos.lat;
-                document.getElementById('longitude').value = newPos.lng;
+                document.getElementById('latitude').value = newPos.lat.toFixed(6);
+                document.getElementById('longitude').value = newPos.lng.toFixed(6);
             }
         }
     });
@@ -1227,12 +1395,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     try {
         await locationSelector.init();
 
-        // Set initial values from Blade
         const initialCity = "{{ $address['city']['en'] ?? '' }}";
         const initialDistrict = "{{ $address['district']['en'] ?? '' }}";
 
         if (initialCity) {
-            // Note: Use setCityByName if available in your class, or match manually
             await locationSelector.setCityByName(initialCity);
 
             if (initialDistrict) {
@@ -1245,45 +1411,192 @@ document.addEventListener('DOMContentLoaded', async function() {
         console.error('Failed to initialize location selector:', error);
     }
 
+    // Map Toggle Event
+    document.getElementById('mapToggle')?.addEventListener('change', toggleMap);
+    toggleMap();
+
+    // Setup existing images drag & drop
+    setupExistingImagesDragDrop();
+    updateExistingImagesOrder();
+
     // Alert auto-close
     if (document.getElementById('successAlert')) setTimeout(() => closeAlert('successAlert'), 5000);
     if (document.getElementById('errorAlert')) setTimeout(() => closeAlert('errorAlert'), 8000);
 });
 
-function removeImage(idx) {
-    removed.push(idx);
-    document.getElementById('removeImages').value = JSON.stringify(removed);
-    const el = document.getElementById('img-' + idx);
-    el.style.transform = 'scale(0)';
-    el.style.opacity = '0';
-    setTimeout(() => el.remove(), 300);
+// EXISTING IMAGES DRAG & DROP
+function setupExistingImagesDragDrop() {
+    const existingGrid = document.getElementById('existingImages');
+    if (!existingGrid) return;
+
+    const items = existingGrid.querySelectorAll('.image-item');
+    items.forEach(item => {
+        item.addEventListener('dragstart', handleExistingDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('dragenter', handleDragEnter);
+        item.addEventListener('dragleave', handleDragLeave);
+        item.addEventListener('drop', handleExistingDrop);
+        item.addEventListener('dragend', handleDragEnd);
+    });
 }
 
+function handleExistingDragStart(e) {
+    draggedExistingItem = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleExistingDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+
+    if (draggedExistingItem !== this) {
+        const allItems = Array.from(document.getElementById('existingImages').children);
+        const draggedIndex = allItems.indexOf(draggedExistingItem);
+        const targetIndex = allItems.indexOf(this);
+
+        if (draggedIndex < targetIndex) {
+            this.parentNode.insertBefore(draggedExistingItem, this.nextSibling);
+        } else {
+            this.parentNode.insertBefore(draggedExistingItem, this);
+        }
+
+        updateExistingImagesOrder();
+    }
+
+    this.classList.remove('drag-over');
+    return false;
+}
+
+function updateExistingImagesOrder() {
+    const existingGrid = document.getElementById('existingImages');
+    if (!existingGrid) return;
+
+    const items = existingGrid.querySelectorAll('.image-item');
+    const order = Array.from(items).map(item => item.dataset.url);
+    document.getElementById('existingImagesOrder').value = JSON.stringify(order);
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    this.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    this.classList.remove('drag-over');
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.image-item').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+}
+
+// REMOVE EXISTING IMAGE
+function removeImage(idx) {
+    const items = document.getElementById('existingImages').querySelectorAll('.image-item');
+    const item = Array.from(items).find(i => i.dataset.index == idx);
+
+    if (item) {
+        removed.push(item.dataset.url);
+        document.getElementById('removeImages').value = JSON.stringify(removed);
+        item.style.transform = 'scale(0)';
+        item.style.opacity = '0';
+        setTimeout(() => {
+            item.remove();
+            updateExistingImagesOrder();
+        }, 300);
+    }
+}
+
+// NEW IMAGES PREVIEW WITH DRAG & DROP
 function previewNew(e) {
     newFiles = Array.from(e.target.files);
     const grid = document.getElementById('newPreview');
+    const sortInstructions = document.getElementById('newImagesSortInstructions');
     grid.innerHTML = '';
-    grid.style.display = 'grid';
+
+    if (newFiles.length > 0) {
+        grid.style.display = 'grid';
+        sortInstructions.style.display = 'flex';
+    } else {
+        grid.style.display = 'none';
+        sortInstructions.style.display = 'none';
+    }
 
     newFiles.forEach((file, i) => {
         const reader = new FileReader();
         reader.onload = function(ev) {
             const div = document.createElement('div');
             div.className = 'image-item';
+            div.draggable = true;
+            div.dataset.index = i;
             div.style.animation = 'fadeInUp 0.4s ease';
-            div.innerHTML = `<img src="${ev.target.result}"><button type="button" class="remove-img-btn" onclick="removeNew(${i})"><i class="fas fa-times"></i></button>`;
+            div.innerHTML = `
+                <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
+                <img src="${ev.target.result}">
+                <button type="button" class="remove-img-btn" data-index="${i}">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+
+            div.addEventListener('dragstart', handleNewDragStart);
+            div.addEventListener('dragover', handleDragOver);
+            div.addEventListener('dragenter', handleDragEnter);
+            div.addEventListener('dragleave', handleDragLeave);
+            div.addEventListener('drop', handleNewDrop);
+            div.addEventListener('dragend', handleDragEnd);
+
+            div.querySelector('.remove-img-btn').addEventListener('click', function() {
+                removeNew(parseInt(this.dataset.index));
+            });
+
             grid.appendChild(div);
         };
         reader.readAsDataURL(file);
     });
 }
 
+function handleNewDragStart(e) {
+    draggedNewItem = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleNewDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+
+    if (draggedNewItem !== this) {
+        const draggedIndex = parseInt(draggedNewItem.dataset.index);
+        const targetIndex = parseInt(this.dataset.index);
+
+        const temp = newFiles[draggedIndex];
+        newFiles[draggedIndex] = newFiles[targetIndex];
+        newFiles[targetIndex] = temp;
+
+        updateNewFileInput();
+        previewNew({ target: { files: newFiles } });
+    }
+
+    this.classList.remove('drag-over');
+    return false;
+}
+
 function removeNew(idx) {
     newFiles.splice(idx, 1);
+    updateNewFileInput();
+    previewNew({ target: { files: newFiles } });
+}
+
+function updateNewFileInput() {
     const dt = new DataTransfer();
     newFiles.forEach(f => dt.items.add(f));
     document.getElementById('newImages').files = dt.files;
-    previewNew({ target: { files: newFiles } });
 }
 
 function closeAlert(id) {
@@ -1293,5 +1606,34 @@ function closeAlert(id) {
         setTimeout(() => el.remove(), 500);
     }
 }
+
+// AUTO-FILL ON SUBMIT
+document.getElementById('propertyForm').addEventListener('submit', function(e) {
+    const titleEn = document.querySelector('input[name="name_en"]').value.trim();
+    const titleAr = document.querySelector('input[name="name_ar"]').value.trim();
+    const titleKu = document.querySelector('input[name="name_ku"]').value.trim();
+
+    const descEn = document.querySelector('textarea[name="description_en"]').value.trim();
+    const descAr = document.querySelector('textarea[name="description_ar"]').value.trim();
+    const descKu = document.querySelector('textarea[name="description_ku"]').value.trim();
+
+    const primaryTitle = titleEn || titleAr || titleKu;
+    if (!document.querySelector('input[name="name_en"]').value) document.querySelector('input[name="name_en"]').value = primaryTitle;
+    if (!document.querySelector('input[name="name_ar"]').value) document.querySelector('input[name="name_ar"]').value = primaryTitle;
+    if (!document.querySelector('input[name="name_ku"]').value) document.querySelector('input[name="name_ku"]').value = primaryTitle;
+
+    const primaryDesc = descEn || descAr || descKu;
+    if (primaryDesc) {
+        if (!document.querySelector('textarea[name="description_en"]').value) document.querySelector('textarea[name="description_en"]').value = primaryDesc;
+        if (!document.querySelector('textarea[name="description_ar"]').value) document.querySelector('textarea[name="description_ar"]').value = primaryDesc;
+        if (!document.querySelector('textarea[name="description_ku"]').value) document.querySelector('textarea[name="description_ku"]').value = primaryDesc;
+    }
+
+    const mapToggle = document.getElementById('mapToggle');
+    if (!mapToggle.checked) {
+        document.getElementById('latitude').value = '0';
+        document.getElementById('longitude').value = '0';
+    }
+});
 </script>
 @endsection

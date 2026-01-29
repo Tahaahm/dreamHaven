@@ -139,22 +139,104 @@
     }
 
     .image-section-label {
-        font-size: 14px; font-weight: 700; color: #64748b; margin: 25px 0 15px; text-transform: uppercase; letter-spacing: 0.5px;
+        font-size: 14px; font-weight: 700; color: #64748b; margin: 25px 0 15px;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+
+    .sort-instructions {
+        background: linear-gradient(135deg, rgba(48,59,151,0.05), rgba(48,59,151,0.02));
+        border: 1px dashed #303b97;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #303b97;
+        font-weight: 600;
+        font-size: 14px;
     }
 
     .image-preview-grid {
-        display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 15px; margin-bottom: 20px;
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 15px; margin-bottom: 20px;
     }
+
     .preview-item {
-        aspect-ratio: 1; border-radius: 12px; overflow: hidden; position: relative; border: 2px solid #e2e8f0; box-shadow: var(--shadow-sm);
+        aspect-ratio: 1; border-radius: 12px; overflow: hidden; position: relative;
+        border: 2px solid #e2e8f0; box-shadow: var(--shadow-sm);
+        cursor: move;
+        cursor: grab;
+        transition: all 0.3s ease;
     }
-    .preview-item img { width: 100%; height: 100%; object-fit: cover; }
+
+    .preview-item:active {
+        cursor: grabbing;
+    }
+
+    .preview-item.dragging {
+        opacity: 0.5;
+        transform: scale(0.95);
+        border-color: #303b97;
+        box-shadow: 0 8px 24px rgba(48,59,151,0.3);
+    }
+
+    .preview-item.drag-over {
+        border-color: #10b981;
+        background: rgba(16,185,129,0.05);
+        transform: scale(1.05);
+    }
+
+    .preview-item:first-child::after {
+        content: 'COVER';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #303b97, #1e2875);
+        color: white;
+        padding: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+        letter-spacing: 1px;
+    }
+
+    .preview-item img {
+        width: 100%; height: 100%; object-fit: cover;
+        pointer-events: none;
+    }
+
     .remove-btn {
         position: absolute; top: 5px; right: 5px; background: rgba(239,68,68,0.9); color: white;
         width: 26px; height: 26px; border-radius: 50%; border: none; cursor: pointer;
-        display: flex; align-items: center; justify-content: center; font-size: 12px; transition: 0.2s;
+        display: flex; align-items: center; justify-content: center; font-size: 12px;
+        transition: 0.2s; z-index: 10;
     }
     .remove-btn:hover { transform: scale(1.1); background: #dc2626; }
+
+    .drag-handle {
+        position: absolute;
+        top: 5px;
+        left: 5px;
+        width: 26px;
+        height: 26px;
+        background: rgba(48,59,151,0.9);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        z-index: 5;
+        cursor: move;
+        cursor: grab;
+    }
+
+    .drag-handle:active {
+        cursor: grabbing;
+    }
 
     /* --- Actions --- */
     .sticky-actions {
@@ -452,9 +534,14 @@
             {{-- Existing Images --}}
             @if(count($images) > 0)
                 <div class="image-section-label">Current Images</div>
-                <div class="image-preview-grid">
+                <div class="sort-instructions">
+                    <i class="fas fa-arrows-alt" style="font-size: 18px;"></i>
+                    <span>Drag and drop to reorder images. First image will be the cover photo.</span>
+                </div>
+                <div class="image-preview-grid" id="existingImagesGrid">
                     @foreach($images as $index => $img)
-                    <div class="preview-item" id="existing-img-{{ $index }}">
+                    <div class="preview-item" draggable="true" data-index="{{ $index }}" data-url="{{ $img }}">
+                        <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
                         <img src="{{ $img }}">
                         <button type="button" class="remove-btn" onclick="removeExistingImage({{ $index }})">
                             <i class="fas fa-times"></i>
@@ -462,7 +549,8 @@
                     </div>
                     @endforeach
                 </div>
-                {{-- Input to track removed images --}}
+                {{-- Hidden inputs for image order and removal --}}
+                <input type="hidden" name="existing_images_order" id="existingImagesOrder">
                 <input type="hidden" name="remove_images" id="removeImagesInput">
             @endif
 
@@ -471,8 +559,13 @@
             <div class="luxury-upload-box" onclick="document.getElementById('imageInput').click()">
                 <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
                 <div style="font-weight: 700;">Click to upload photos</div>
-                <div style="color: #64748b; font-size: 13px;">Max 5MB per image. JPG, PNG, WEBP.</div>
+                <div style="color: #64748b; font-size: 13px;">Max 30MB per image. JPG, PNG, WEBP.</div>
                 <input type="file" name="images[]" id="imageInput" accept="image/*" multiple hidden>
+            </div>
+
+            <div class="sort-instructions" id="newImagesSortInstructions" style="display: none;">
+                <i class="fas fa-arrows-alt" style="font-size: 18px;"></i>
+                <span>Drag and drop to reorder new images.</span>
             </div>
             <div class="image-preview-grid" id="newPreviewGrid"></div>
         </div>
@@ -554,13 +647,11 @@
     mapToggle.addEventListener('change', function() {
         if(this.checked) {
             mapSection.classList.remove('hidden');
-            latInput.setAttribute('required', 'required');
-            lngInput.setAttribute('required', 'required');
             if(map) { setTimeout(() => { google.maps.event.trigger(map, "resize"); map.setCenter(marker.getPosition()); }, 100); }
         } else {
             mapSection.classList.add('hidden');
-            latInput.removeAttribute('required');
-            lngInput.removeAttribute('required');
+            latInput.value = '0';
+            lngInput.value = '0';
         }
     });
 
@@ -654,55 +745,237 @@
                 }
             }
         });
-    });
 
-    // --- 4. IMAGE HANDLING ---
+        // --- 4. IMAGE HANDLING WITH DRAG & DROP SORTING ---
 
-    // Remove Existing
-    let removedImages = [];
-    window.removeExistingImage = function(index) {
-        if(confirm('Remove this image?')) {
-            removedImages.push(index);
-            document.getElementById('removeImagesInput').value = JSON.stringify(removedImages);
-            document.getElementById('existing-img-' + index).style.display = 'none';
+        // ==== EXISTING IMAGES SORTING ====
+        const existingGrid = document.getElementById('existingImagesGrid');
+        let draggedExistingItem = null;
+
+        if (existingGrid) {
+            setupSortableGrid(existingGrid, 'existing');
+            updateExistingImagesOrder();
         }
-    };
 
-    // Upload New
-    (function(){
+        // ==== NEW IMAGES UPLOAD & SORTING ====
         const input = document.getElementById('imageInput');
-        const grid = document.getElementById('newPreviewGrid');
-        let files = [];
+        const newGrid = document.getElementById('newPreviewGrid');
+        const newSortInstructions = document.getElementById('newImagesSortInstructions');
+        let newFiles = [];
 
         input.addEventListener('change', function(e) {
             Array.from(e.target.files).forEach(file => {
-                if(!file.type.startsWith('image/')) return;
-                files.push(file);
+                if(!file.type.startsWith('image/')) {
+                    alert(file.name + ' is not an image');
+                    return;
+                }
+
+                if (file.size > 30 * 1024 * 1024) {
+                    alert('⚠️ Error: ' + file.name + ' is too large! Maximum file size is 30MB.');
+                    return;
+                }
+
+                newFiles.push(file);
+            });
+
+            renderNewImages();
+            updateFileInput();
+
+            if (newFiles.length > 0) {
+                newSortInstructions.style.display = 'flex';
+            }
+        });
+
+        function renderNewImages() {
+            newGrid.innerHTML = '';
+            newFiles.forEach((file, index) => {
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                     const div = document.createElement('div');
                     div.className = 'preview-item';
-                    div.innerHTML = `<img src="${ev.target.result}"><button type="button" class="remove-btn" onclick="removeNewImg(this)"><i class="fas fa-times"></i></button>`;
-                    grid.appendChild(div);
+                    div.draggable = true;
+                    div.dataset.index = index;
+                    div.innerHTML = `
+                        <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
+                        <img src="${ev.target.result}">
+                        <button type="button" class="remove-btn" data-index="${index}">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    `;
+
+                    // Setup drag events
+                    div.addEventListener('dragstart', handleNewDragStart);
+                    div.addEventListener('dragover', handleDragOver);
+                    div.addEventListener('drop', handleNewDrop);
+                    div.addEventListener('dragend', handleDragEnd);
+                    div.addEventListener('dragenter', handleDragEnter);
+                    div.addEventListener('dragleave', handleDragLeave);
+
+                    // Setup remove button
+                    div.querySelector('.remove-btn').addEventListener('click', function() {
+                        const idx = parseInt(this.dataset.index);
+                        newFiles.splice(idx, 1);
+                        renderNewImages();
+                        updateFileInput();
+
+                        if (newFiles.length === 0) {
+                            newSortInstructions.style.display = 'none';
+                        }
+                    });
+
+                    newGrid.appendChild(div);
                 };
                 reader.readAsDataURL(file);
             });
-            updateInput();
-        });
+        }
 
-        window.removeNewImg = function(btn) {
-            const div = btn.parentElement;
-            const idx = Array.from(grid.children).indexOf(div);
-            files.splice(idx, 1);
-            div.remove();
-            updateInput();
-        };
-
-        function updateInput() {
+        function updateFileInput() {
             const dt = new DataTransfer();
-            files.forEach(f => dt.items.add(f));
+            newFiles.forEach(f => dt.items.add(f));
             input.files = dt.files;
         }
-    })();
+
+        // ==== DRAG & DROP HANDLERS FOR NEW IMAGES ====
+        let draggedNewItem = null;
+
+        function handleNewDragStart(e) {
+            draggedNewItem = this;
+            this.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleNewDrop(e) {
+            if (e.stopPropagation) e.stopPropagation();
+
+            if (draggedNewItem !== this) {
+                const draggedIndex = parseInt(draggedNewItem.dataset.index);
+                const targetIndex = parseInt(this.dataset.index);
+
+                // Swap files
+                const temp = newFiles[draggedIndex];
+                newFiles[draggedIndex] = newFiles[targetIndex];
+                newFiles[targetIndex] = temp;
+
+                renderNewImages();
+                updateFileInput();
+            }
+
+            this.classList.remove('drag-over');
+            return false;
+        }
+
+        // ==== GENERIC DRAG HANDLERS ====
+        function handleDragOver(e) {
+            if (e.preventDefault) e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+
+        function handleDragEnter(e) {
+            this.classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            this.classList.remove('drag-over');
+        }
+
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+            document.querySelectorAll('.preview-item').forEach(item => {
+                item.classList.remove('drag-over');
+            });
+        }
+
+        // ==== SETUP SORTABLE GRID FOR EXISTING IMAGES ====
+        function setupSortableGrid(grid, type) {
+            const items = grid.querySelectorAll('.preview-item');
+
+            items.forEach(item => {
+                item.addEventListener('dragstart', function(e) {
+                    draggedExistingItem = this;
+                    this.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('dragenter', handleDragEnter);
+                item.addEventListener('dragleave', handleDragLeave);
+
+                item.addEventListener('drop', function(e) {
+                    if (e.stopPropagation) e.stopPropagation();
+
+                    if (draggedExistingItem !== this) {
+                        // Swap DOM elements
+                        const allItems = Array.from(grid.children);
+                        const draggedIndex = allItems.indexOf(draggedExistingItem);
+                        const targetIndex = allItems.indexOf(this);
+
+                        if (draggedIndex < targetIndex) {
+                            this.parentNode.insertBefore(draggedExistingItem, this.nextSibling);
+                        } else {
+                            this.parentNode.insertBefore(draggedExistingItem, this);
+                        }
+
+                        updateExistingImagesOrder();
+                    }
+
+                    this.classList.remove('drag-over');
+                    return false;
+                });
+
+                item.addEventListener('dragend', handleDragEnd);
+            });
+        }
+
+        // ==== UPDATE EXISTING IMAGES ORDER ====
+        function updateExistingImagesOrder() {
+            if (!existingGrid) return;
+
+            const items = existingGrid.querySelectorAll('.preview-item');
+            const order = Array.from(items).map(item => item.dataset.url);
+            document.getElementById('existingImagesOrder').value = JSON.stringify(order);
+        }
+
+        // ==== REMOVE EXISTING IMAGE ====
+        let removedImages = [];
+        window.removeExistingImage = function(index) {
+            if(confirm('Remove this image?')) {
+                const items = existingGrid.querySelectorAll('.preview-item');
+                const item = Array.from(items).find(i => i.dataset.index == index);
+
+                if (item) {
+                    removedImages.push(item.dataset.url);
+                    document.getElementById('removeImagesInput').value = JSON.stringify(removedImages);
+                    item.style.display = 'none';
+                    updateExistingImagesOrder();
+                }
+            }
+        };
+    });
+
+    // Form submission - auto-fill titles/descriptions
+    document.getElementById('propertyForm').addEventListener('submit', function(e) {
+        const titleEn = document.querySelector('input[name="title_en"]').value.trim();
+        const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
+        const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
+
+        const descEn = document.querySelector('textarea[name="description_en"]').value.trim();
+        const descAr = document.querySelector('textarea[name="description_ar"]').value.trim();
+        const descKu = document.querySelector('textarea[name="description_ku"]').value.trim();
+
+        // Auto-fill titles
+        const primaryTitle = titleEn || titleAr || titleKu;
+        if (!titleEn) document.querySelector('input[name="title_en"]').value = primaryTitle;
+        if (!titleAr) document.querySelector('input[name="title_ar"]').value = primaryTitle;
+        if (!titleKu) document.querySelector('input[name="title_ku"]').value = primaryTitle;
+
+        // Auto-fill descriptions
+        const primaryDesc = descEn || descAr || descKu;
+        if (primaryDesc) {
+            if (!descEn) document.querySelector('textarea[name="description_en"]').value = primaryDesc;
+            if (!descAr) document.querySelector('textarea[name="description_ar"]').value = primaryDesc;
+            if (!descKu) document.querySelector('textarea[name="description_ku"]').value = primaryDesc;
+        }
+    });
 </script>
 @endsection

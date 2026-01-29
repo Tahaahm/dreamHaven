@@ -278,6 +278,21 @@
         color: #64748b;
     }
 
+    .sort-instructions {
+        background: linear-gradient(135deg, rgba(48,59,151,0.05), rgba(48,59,151,0.02));
+        border: 1px dashed #303b97;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: #303b97;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
     .image-preview-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -294,6 +309,41 @@
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         background: #f3f4f6;
         animation: scaleUp 0.3s ease;
+        cursor: move;
+        cursor: grab;
+        transition: all 0.3s ease;
+    }
+
+    .image-preview-item:active {
+        cursor: grabbing;
+    }
+
+    .image-preview-item.dragging {
+        opacity: 0.5;
+        transform: scale(0.95);
+        border-color: #303b97;
+        box-shadow: 0 8px 24px rgba(48,59,151,0.3);
+    }
+
+    .image-preview-item.drag-over {
+        border-color: #10b981;
+        background: rgba(16,185,129,0.05);
+        transform: scale(1.05);
+    }
+
+    .image-preview-item:first-child::after {
+        content: 'COVER';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #303b97, #1e2875);
+        color: white;
+        padding: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+        letter-spacing: 1px;
     }
 
     @keyframes scaleUp {
@@ -306,6 +356,7 @@
         height: 100%;
         object-fit: cover;
         display: block;
+        pointer-events: none;
     }
 
     .image-remove-btn {
@@ -331,6 +382,30 @@
     .image-remove-btn:hover {
         background: #dc2626;
         transform: scale(1.1);
+    }
+
+    .drag-handle {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 32px;
+        height: 32px;
+        background: rgba(48,59,151,0.9);
+        border: none;
+        border-radius: 8px;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        z-index: 5;
+        cursor: move;
+        cursor: grab;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .drag-handle:active {
+        cursor: grabbing;
     }
 
     /* --- Form Actions --- */
@@ -534,8 +609,8 @@
                     <div id="map"></div>
                 </div>
 
-                <input type="hidden" name="latitude" id="latitude">
-                <input type="hidden" name="longitude" id="longitude">
+                <input type="hidden" name="latitude" id="latitude" value="0">
+                <input type="hidden" name="longitude" id="longitude" value="0">
             </div>
 
             {{-- HIDDEN location name fields - auto-filled by JS --}}
@@ -619,6 +694,11 @@
                 <input type="file" name="images[]" id="imageInput" accept="image/*" multiple hidden>
             </div>
 
+            <div class="sort-instructions" id="sortInstructions" style="display: none;">
+                <i class="fas fa-arrows-alt" style="font-size: 20px;"></i>
+                <span>Drag and drop images to reorder. First image will be the cover photo.</span>
+            </div>
+
             <div class="image-preview-grid" id="imagePreviewGrid">
             </div>
         </div>
@@ -652,7 +732,7 @@ function normalizeNumber(value) {
     return normalized;
 }
 
-// --- LOCATION SELECTOR CLASS (FIXED & INTEGRATED) ---
+// --- LOCATION SELECTOR CLASS ---
 class LocationSelector {
     constructor(options = {}) {
         this.citySelectId = options.citySelectId || "city-select";
@@ -688,7 +768,6 @@ class LocationSelector {
 
     async loadCities() {
         try {
-            // FIX: Send proper Accept-Language header
             const response = await fetch("/v1/api/location/branches", {
                 headers: { "Accept-Language": "en" }
             });
@@ -727,14 +806,11 @@ class LocationSelector {
         sortedCities.forEach((city) => {
             const option = document.createElement("option");
             option.value = city.id;
-            option.textContent = `${city.city_name_en}`; // Simplified display
+            option.textContent = `${city.city_name_en}`;
 
-            // Data Attributes for Callbacks & Map
             option.dataset.nameEn = city.city_name_en;
             option.dataset.nameKu = city.city_name_ku;
             option.dataset.nameAr = city.city_name_ar;
-
-            // ** ADDED: LAT/LNG FOR MAP **
             option.dataset.lat = city.coordinates?.lat || city.latitude || '';
             option.dataset.lng = city.coordinates?.lng || city.longitude || '';
 
@@ -787,8 +863,6 @@ class LocationSelector {
             option.dataset.nameKu = area.area_name_ku;
             option.dataset.nameAr = area.area_name_ar;
             option.dataset.fullLocation = area.full_location;
-
-            // ** ADDED: LAT/LNG FOR MAP **
             option.dataset.lat = area.coordinates?.lat || area.latitude || '';
             option.dataset.lng = area.coordinates?.lng || area.longitude || '';
 
@@ -817,8 +891,8 @@ class LocationSelector {
                             nameEn: selectedOption.dataset.nameEn,
                             nameKu: selectedOption.dataset.nameKu,
                             nameAr: selectedOption.dataset.nameAr,
-                            lat: selectedOption.dataset.lat, // Pass lat
-                            lng: selectedOption.dataset.lng  // Pass lng
+                            lat: selectedOption.dataset.lat,
+                            lng: selectedOption.dataset.lng
                         });
                     }
                 } else {
@@ -884,32 +958,26 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // 3. Initialize Location Selector (NEW ROBUST VERSION)
+    // 3. Initialize Location Selector
     const locationSelector = new LocationSelector({
         citySelectId: 'location-city-select',
         areaSelectId: 'location-area-select',
         cityInputId: 'city_en',
         districtInputId: 'district_en',
 
-        // CALLBACK: When City Changes
         onCityChange: (data) => {
-            // Fill other language fields
             document.getElementById('city_ar').value = data.nameAr || '';
             document.getElementById('city_ku').value = data.nameKu || '';
 
-            // Move Map
             if(data.lat && data.lng && window.map) {
                 moveMapTo(data.lat, data.lng);
             }
         },
 
-        // CALLBACK: When Area Changes
         onAreaChange: (data) => {
-            // Fill other language fields
             document.getElementById('district_ar').value = data.nameAr || '';
             document.getElementById('district_ku').value = data.nameKu || '';
 
-            // Zoom Map
             if(data.lat && data.lng && window.map) {
                 moveMapTo(data.lat, data.lng);
                 window.map.setZoom(15);
@@ -926,7 +994,7 @@ document.addEventListener('DOMContentLoaded', function() {
         toggleMap();
     }
 
-    // 5. Initialize Image Upload
+    // 5. Initialize Image Upload with Sortable
     setupImageUpload();
 
     // 6. Form Validation
@@ -996,8 +1064,6 @@ function toggleMap() {
 
     if (mapToggle.checked) {
         mapWrapper.classList.remove('hidden');
-        latInput.setAttribute('required', 'required');
-        lngInput.setAttribute('required', 'required');
         if(window.map) {
             setTimeout(() => {
                 google.maps.event.trigger(window.map, "resize");
@@ -1006,22 +1072,22 @@ function toggleMap() {
         }
     } else {
         mapWrapper.classList.add('hidden');
-        latInput.removeAttribute('required');
-        lngInput.removeAttribute('required');
-        latInput.value = '';
-        lngInput.value = '';
+        latInput.value = '0';
+        lngInput.value = '0';
     }
 }
 
-// --- IMAGE UPLOAD SETUP ---
+// --- IMAGE UPLOAD WITH DRAG & DROP SORTING ---
 function setupImageUpload() {
     const uploadZone = document.getElementById('uploadZone');
     const imageInput = document.getElementById('imageInput');
     const imagePreviewGrid = document.getElementById('imagePreviewGrid');
+    const sortInstructions = document.getElementById('sortInstructions');
 
     if (!uploadZone || !imageInput) return;
 
     let selectedFiles = [];
+    let draggedItem = null;
 
     uploadZone.onclick = () => imageInput.click();
     imageInput.onchange = (e) => handleNewFiles(e.target.files);
@@ -1033,38 +1099,127 @@ function setupImageUpload() {
         if (!fileList.length) return;
         for (let i = 0; i < fileList.length; i++) {
             const file = fileList[i];
-            if (!file.type.match('image.*')) { alert(file.name + ' is not an image'); continue; }
+            if (!file.type.match('image.*')) {
+                alert(file.name + ' is not an image');
+                continue;
+            }
 
-            // STRICT SIZE CHECK - 30MB
             if (file.size > 30 * 1024 * 1024) {
                 alert('⚠️ Error: ' + file.name + ' is too large! Maximum file size is 30MB.');
                 continue;
             }
             selectedFiles.push(file);
-            showPreview(file, selectedFiles.length - 1);
         }
+        renderPreviews();
         syncInputFiles();
+
+        // Show sort instructions if we have images
+        if (selectedFiles.length > 0) {
+            sortInstructions.style.display = 'flex';
+        }
     }
 
-    function showPreview(file, index) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const div = document.createElement('div');
-            div.className = 'image-preview-item';
-            div.innerHTML = `
-                <img src="${e.target.result}" alt="Preview">
-                <button type="button" class="image-remove-btn" onclick="removePreview(${index}, this)"><i class="fas fa-times"></i></button>
-            `;
-            imagePreviewGrid.appendChild(div);
-        };
-        reader.readAsDataURL(file);
+    function renderPreviews() {
+        imagePreviewGrid.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const div = document.createElement('div');
+                div.className = 'image-preview-item';
+                div.draggable = true;
+                div.dataset.index = index;
+
+                div.innerHTML = `
+                    <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
+                    <img src="${e.target.result}" alt="Preview">
+                    <button type="button" class="image-remove-btn" data-index="${index}">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+
+                // Drag events
+                div.addEventListener('dragstart', handleDragStart);
+                div.addEventListener('dragover', handleDragOver);
+                div.addEventListener('drop', handleDrop);
+                div.addEventListener('dragend', handleDragEnd);
+                div.addEventListener('dragenter', handleDragEnter);
+                div.addEventListener('dragleave', handleDragLeave);
+
+                // Remove button
+                const removeBtn = div.querySelector('.image-remove-btn');
+                removeBtn.addEventListener('click', () => removeImage(index));
+
+                imagePreviewGrid.appendChild(div);
+            };
+            reader.readAsDataURL(file);
+        });
     }
 
-    window.removePreview = function(index, btn) {
+    function handleDragStart(e) {
+        draggedItem = this;
+        this.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/html', this.innerHTML);
+    }
+
+    function handleDragOver(e) {
+        if (e.preventDefault) {
+            e.preventDefault();
+        }
+        e.dataTransfer.dropEffect = 'move';
+        return false;
+    }
+
+    function handleDragEnter(e) {
+        if (this !== draggedItem) {
+            this.classList.add('drag-over');
+        }
+    }
+
+    function handleDragLeave(e) {
+        this.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+        if (e.stopPropagation) {
+            e.stopPropagation();
+        }
+
+        if (draggedItem !== this) {
+            const draggedIndex = parseInt(draggedItem.dataset.index);
+            const targetIndex = parseInt(this.dataset.index);
+
+            // Swap files in array
+            const temp = selectedFiles[draggedIndex];
+            selectedFiles[draggedIndex] = selectedFiles[targetIndex];
+            selectedFiles[targetIndex] = temp;
+
+            // Re-render
+            renderPreviews();
+            syncInputFiles();
+        }
+
+        this.classList.remove('drag-over');
+        return false;
+    }
+
+    function handleDragEnd(e) {
+        this.classList.remove('dragging');
+        document.querySelectorAll('.image-preview-item').forEach(item => {
+            item.classList.remove('drag-over');
+        });
+    }
+
+    function removeImage(index) {
         selectedFiles.splice(index, 1);
-        btn.parentElement.remove();
+        renderPreviews();
         syncInputFiles();
-    };
+
+        // Hide instructions if no images
+        if (selectedFiles.length === 0) {
+            sortInstructions.style.display = 'none';
+        }
+    }
 
     function syncInputFiles() {
         const dt = new DataTransfer();
@@ -1073,29 +1228,60 @@ function setupImageUpload() {
     }
 }
 
+// --- FORM VALIDATION WITH AUTO-FILL ---
 function validateForm(e) {
+    // Get all title values
     const titleEn = document.querySelector('input[name="title_en"]').value.trim();
     const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
     const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
 
+    // Get all description values
+    const descEn = document.querySelector('textarea[name="description_en"]').value.trim();
+    const descAr = document.querySelector('textarea[name="description_ar"]').value.trim();
+    const descKu = document.querySelector('textarea[name="description_ku"]').value.trim();
+
+    // Check if at least one title exists
     if (!titleEn && !titleAr && !titleKu) {
         e.preventDefault();
-        alert('Please provide a property title in at least one language.');
+        alert('⚠️ Please provide a property title in at least one language.');
         return false;
     }
 
-    // Auto-fill logic
-    if (!titleEn) {
-        if (titleAr) document.querySelector('input[name="title_en"]').value = titleAr;
-        else if (titleKu) document.querySelector('input[name="title_en"]').value = titleKu;
+    // AUTO-FILL TITLES: Priority order (English > Arabic > Kurdish)
+    const primaryTitle = titleEn || titleAr || titleKu;
+
+    if (!titleEn) document.querySelector('input[name="title_en"]').value = primaryTitle;
+    if (!titleAr) document.querySelector('input[name="title_ar"]').value = primaryTitle;
+    if (!titleKu) document.querySelector('input[name="title_ku"]').value = primaryTitle;
+
+    // AUTO-FILL DESCRIPTIONS: Priority order (English > Arabic > Kurdish)
+    const primaryDesc = descEn || descAr || descKu;
+
+    if (primaryDesc) {
+        if (!descEn) document.querySelector('textarea[name="description_en"]').value = primaryDesc;
+        if (!descAr) document.querySelector('textarea[name="description_ar"]').value = primaryDesc;
+        if (!descKu) document.querySelector('textarea[name="description_ku"]').value = primaryDesc;
     }
 
+    // ENSURE LAT/LNG ARE SET (0 if map disabled or empty)
+    const mapToggle = document.getElementById('has_map_toggle');
+    const latInput = document.getElementById('latitude');
+    const lngInput = document.getElementById('longitude');
+
+    if (!mapToggle.checked || !latInput.value || !lngInput.value) {
+        latInput.value = '0';
+        lngInput.value = '0';
+    }
+
+    // Validate images
     const imageInput = document.getElementById('imageInput');
     if(imageInput.files.length === 0) {
          e.preventDefault();
-         alert('Please upload at least one image of the property.');
+         alert('⚠️ Please upload at least one image of the property.');
          return false;
     }
+
+    return true;
 }
 </script>
 @endsection

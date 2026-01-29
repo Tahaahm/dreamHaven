@@ -260,6 +260,78 @@
         to { opacity: 1; }
     }
 
+    /* Toggle Switch Styles */
+    .toggle-wrapper-box {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+        padding: 16px 20px;
+        background: var(--gray-50);
+        border-radius: 12px;
+        border: 2px solid var(--gray-200);
+        transition: all 0.3s ease;
+        margin-bottom: 20px;
+    }
+
+    .toggle-wrapper-box:hover {
+        background: white;
+        border-color: var(--primary);
+    }
+
+    .toggle-wrapper-box input[type="checkbox"] {
+        display: none;
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 56px;
+        height: 30px;
+        background: #cbd5e1;
+        border-radius: 30px;
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+    }
+
+    .toggle-switch::after {
+        content: '';
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        background: white;
+        border-radius: 50%;
+        top: 3px;
+        left: 3px;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .toggle-wrapper-box input[type="checkbox"]:checked + .toggle-switch {
+        background: var(--primary);
+    }
+
+    .toggle-wrapper-box input[type="checkbox"]:checked + .toggle-switch::after {
+        transform: translateX(26px);
+    }
+
+    .toggle-label {
+        font-weight: 600;
+        color: var(--gray-700);
+        font-size: 15px;
+    }
+
+    /* Map Section Toggle */
+    .map-section {
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+
+    .map-section.hidden {
+        display: none;
+        opacity: 0;
+        max-height: 0;
+    }
+
     /* Image Upload */
     .image-upload-area {
         border: 3px dashed var(--gray-200);
@@ -303,6 +375,25 @@
 
     .upload-hint { color: var(--gray-500); font-size: 14px; }
 
+    .sort-instructions {
+        background: linear-gradient(135deg, rgba(99,102,241,0.05), rgba(99,102,241,0.02));
+        border: 1px dashed var(--primary);
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 20px;
+        margin-bottom: 10px;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        color: var(--primary);
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .sort-instructions.show {
+        display: flex;
+    }
+
     /* Image Preview */
     .image-preview-grid {
         display: grid;
@@ -318,6 +409,10 @@
         overflow: hidden;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         animation: scaleIn 0.3s ease;
+        cursor: move;
+        cursor: grab;
+        transition: all 0.3s ease;
+        border: 3px solid var(--gray-200);
     }
 
     @keyframes scaleIn {
@@ -325,10 +420,43 @@
         to { opacity: 1; transform: scale(1); }
     }
 
+    .image-preview-item:active {
+        cursor: grabbing;
+    }
+
+    .image-preview-item.dragging {
+        opacity: 0.5;
+        transform: scale(0.95);
+        border-color: var(--primary);
+        box-shadow: 0 8px 24px rgba(99,102,241,0.3);
+    }
+
+    .image-preview-item.drag-over {
+        border-color: var(--success);
+        background: rgba(16,185,129,0.05);
+        transform: scale(1.05);
+    }
+
+    .image-preview-item:first-child::after {
+        content: 'COVER';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, var(--primary), var(--primary-light));
+        color: white;
+        padding: 6px;
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+        letter-spacing: 1px;
+    }
+
     .image-preview-item img {
         width: 100%;
         height: 100%;
         object-fit: cover;
+        pointer-events: none;
     }
 
     .remove-image {
@@ -346,11 +474,36 @@
         align-items: center;
         justify-content: center;
         transition: all 0.3s ease;
-        opacity: 0;
+        z-index: 10;
     }
 
-    .image-preview-item:hover .remove-image { opacity: 1; }
-    .remove-image:hover { background: var(--danger); transform: scale(1.1); }
+    .remove-image:hover {
+        background: var(--danger);
+        transform: scale(1.1);
+    }
+
+    .drag-handle {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        width: 32px;
+        height: 32px;
+        background: rgba(99,102,241,0.9);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        z-index: 5;
+        cursor: move;
+        cursor: grab;
+    }
+
+    .drag-handle:active {
+        cursor: grabbing;
+    }
 
     /* Features */
     .feature-grid {
@@ -708,19 +861,31 @@
                     <span class="input-hint">Optional - Additional address details</span>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Latitude <span class="required">*</span></label>
-                    <input type="number" id="latitude" name="latitude" class="form-input" value="{{ old('latitude') }}" step="0.000001" required readonly>
-                    <span class="input-hint">Click on the map to set location</span>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Longitude <span class="required">*</span></label>
-                    <input type="number" id="longitude" name="longitude" class="form-input" value="{{ old('longitude') }}" step="0.000001" required readonly>
-                    <span class="input-hint">Click on the map to set location</span>
-                </div>
-
+                <!-- MAP TOGGLE -->
                 <div class="form-group full-width">
+                    <label class="toggle-wrapper-box">
+                        <input type="checkbox" name="has_map" id="mapToggle" value="1" checked>
+                        <div class="toggle-switch"></div>
+                        <span class="toggle-label"><i class="fas fa-map-marked-alt"></i> Pin Exact Location on Map</span>
+                    </label>
+                </div>
+
+                <!-- MAP SECTION (Toggleable) -->
+                <div id="mapSection" class="form-group full-width map-section">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Latitude</label>
+                            <input type="number" id="latitude" name="latitude" class="form-input" value="{{ old('latitude', '0') }}" step="0.000001" readonly>
+                            <span class="input-hint">Click on the map to set location</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Longitude</label>
+                            <input type="number" id="longitude" name="longitude" class="form-input" value="{{ old('longitude', '0') }}" step="0.000001" readonly>
+                            <span class="input-hint">Click on the map to set location</span>
+                        </div>
+                    </div>
+
                     <div id="map-preview" style="height: 400px; width: 100%; border-radius: 12px; border: 2px solid var(--gray-200); margin-top: 10px;"></div>
                 </div>
             </div>
@@ -769,6 +934,11 @@
                 <div class="upload-text">Click to upload images</div>
                 <div class="upload-hint">JPG or PNG only (Max: 5MB per image)</div>
                 <input type="file" id="imageInput" name="images[]" multiple accept="image/jpeg,image/jpg,image/png" style="display:none" onchange="previewImages(event)">
+            </div>
+
+            <div class="sort-instructions" id="sortInstructions">
+                <i class="fas fa-arrows-alt" style="font-size: 20px;"></i>
+                <span>Drag and drop images to reorder. First image will be the cover photo.</span>
             </div>
 
             <div id="imagePreview" class="image-preview-grid"></div>
@@ -887,6 +1057,7 @@ let locationSelector;
 let map = null;
 let marker = null;
 const validationErrors = [];
+let draggedItem = null;
 
 // ==================== MAP INITIALIZATION ====================
 function initMap(lat, lng) {
@@ -921,7 +1092,6 @@ function initMap(lat, lng) {
             const pos = marker.getPosition();
             document.getElementById('latitude').value = pos.lat().toFixed(6);
             document.getElementById('longitude').value = pos.lng().toFixed(6);
-            validateField(document.getElementById('latitude'));
         });
 
         map.addListener('click', function(e) {
@@ -930,11 +1100,32 @@ function initMap(lat, lng) {
             document.getElementById('latitude').value = pos.lat().toFixed(6);
             document.getElementById('longitude').value = pos.lng().toFixed(6);
             map.panTo(pos);
-            validateField(document.getElementById('latitude'));
         });
     } else {
         map.setCenter(position);
         marker.setPosition(position);
+    }
+}
+
+// ==================== MAP TOGGLE ====================
+function toggleMap() {
+    const mapToggle = document.getElementById('mapToggle');
+    const mapSection = document.getElementById('mapSection');
+    const latInput = document.getElementById('latitude');
+    const lngInput = document.getElementById('longitude');
+
+    if (mapToggle.checked) {
+        mapSection.classList.remove('hidden');
+        if (map) {
+            setTimeout(() => {
+                google.maps.event.trigger(map, "resize");
+                map.setCenter(marker.getPosition());
+            }, 100);
+        }
+    } else {
+        mapSection.classList.add('hidden');
+        latInput.value = '0';
+        lngInput.value = '0';
     }
 }
 
@@ -946,17 +1137,16 @@ document.addEventListener('DOMContentLoaded', async function() {
             document.getElementById('city-ar').value = city.nameAr || '';
             document.getElementById('city-ku').value = city.nameKu || '';
             const cityOpt = document.querySelector(`#city-select option[value="${city.id}"]`);
-            if(cityOpt && cityOpt.dataset.lat) {
+            if(cityOpt && cityOpt.dataset.lat && document.getElementById('mapToggle').checked) {
                 initMap(cityOpt.dataset.lat, cityOpt.dataset.lng);
             }
-            validateField(document.getElementById('city-select'));
         },
         onAreaChange: function(area) {
             document.getElementById('district-en').value = area.nameEn || '';
             document.getElementById('district-ar').value = area.nameAr || '';
             document.getElementById('district-ku').value = area.nameKu || '';
             const areaOpt = document.querySelector(`#area-select option[value="${area.id}"]`);
-            if(areaOpt && areaOpt.dataset.lat) {
+            if(areaOpt && areaOpt.dataset.lat && document.getElementById('mapToggle').checked) {
                 const lat = parseFloat(areaOpt.dataset.lat);
                 const lng = parseFloat(areaOpt.dataset.lng);
                 if(marker) {
@@ -967,7 +1157,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                     document.getElementById('longitude').value = lng.toFixed(6);
                 }
             }
-            validateField(document.getElementById('area-select'));
         }
     });
 
@@ -983,7 +1172,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
         locationSelector.loadAreas(e.target.value);
 
-        // Reset area selection
         document.getElementById('area-select').value = '';
         document.getElementById('district-en').value = '';
         document.getElementById('district-ar').value = '';
@@ -1000,22 +1188,20 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     });
 
-    // Add real-time validation to all inputs
+    // Map Toggle Event
+    document.getElementById('mapToggle')?.addEventListener('change', toggleMap);
+    toggleMap(); // Initialize state
+
     attachRealTimeValidation();
 });
 
 // ==================== VALIDATION HELPERS ====================
 function showError(input, message) {
     if (!input) return;
-
     input.classList.add('error');
     input.classList.remove('valid');
-
-    // Remove existing error message
     const existingError = input.parentNode.querySelector('.error-msg');
     if (existingError) existingError.remove();
-
-    // Add new error message
     const errorSpan = document.createElement('div');
     errorSpan.className = 'error-msg';
     errorSpan.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
@@ -1024,27 +1210,22 @@ function showError(input, message) {
 
 function clearError(input) {
     if (!input) return;
-
     input.classList.remove('error');
     input.classList.add('valid');
-
     const errorSpan = input.parentNode.querySelector('.error-msg');
     if (errorSpan) errorSpan.remove();
 }
 
 function validateField(field) {
     if (!field) return true;
-
     const fieldName = field.name || field.id;
     const value = field.value?.trim();
 
-    // Required field check
     if (field.hasAttribute('required') && !value) {
         showError(field, 'This field is required');
         return false;
     }
 
-    // Specific validations
     switch(fieldName) {
         case 'name_en':
             if (value.length < 3) {
@@ -1119,17 +1300,6 @@ function validateField(field) {
                 return false;
             }
             break;
-
-        case 'latitude':
-        case 'longitude':
-            if (!value || value == '0' || value == '0.000000') {
-                showError(field, 'Please select location on the map');
-                document.getElementById('map-preview').style.borderColor = '#ef4444';
-                return false;
-            } else {
-                document.getElementById('map-preview').style.borderColor = '#10b981';
-            }
-            break;
     }
 
     clearError(field);
@@ -1138,7 +1308,6 @@ function validateField(field) {
 
 function attachRealTimeValidation() {
     const fields = document.querySelectorAll('input[required], select[required], textarea[required], input[type="number"]');
-
     fields.forEach(field => {
         field.addEventListener('blur', () => validateField(field));
         field.addEventListener('input', () => {
@@ -1154,7 +1323,6 @@ function validateForm() {
     validationErrors.length = 0;
     let isValid = true;
 
-    // 1. Basic Information
     if (!validateField(document.getElementById('name_en'))) {
         validationErrors.push('Property name (English) is required (minimum 3 characters)');
         isValid = false;
@@ -1165,7 +1333,6 @@ function validateForm() {
         isValid = false;
     }
 
-    // 2. Property Details
     if (!validateField(document.getElementById('property_type'))) {
         validationErrors.push('Property type must be selected');
         isValid = false;
@@ -1201,7 +1368,6 @@ function validateForm() {
         isValid = false;
     }
 
-    // 3. Location
     const citySelect = document.getElementById('city-select');
     if (!citySelect.value) {
         showError(citySelect, 'Please select a city');
@@ -1216,16 +1382,6 @@ function validateForm() {
         isValid = false;
     }
 
-    const latitude = document.getElementById('latitude');
-    const longitude = document.getElementById('longitude');
-    if (!latitude.value || !longitude.value || latitude.value == '0' || longitude.value == '0') {
-        showError(latitude, 'Please select location on the map');
-        validationErrors.push('Location must be selected on the map');
-        document.getElementById('map-preview').style.borderColor = '#ef4444';
-        isValid = false;
-    }
-
-    // 4. Images
     if (selectedFiles.length === 0) {
         validationErrors.push('At least 1 property image is required');
         document.getElementById('uploadArea').classList.add('error');
@@ -1234,7 +1390,6 @@ function validateForm() {
         document.getElementById('uploadArea').classList.remove('error');
     }
 
-    // Show validation summary
     if (!isValid) {
         const summary = document.getElementById('validationSummary');
         const errorList = document.getElementById('errorList');
@@ -1262,9 +1417,9 @@ function switchLang(e, lang) {
     document.getElementById('lang-' + lang).classList.add('active');
 }
 
-// ==================== IMAGE HANDLING ====================
+// ==================== IMAGE HANDLING WITH DRAG & DROP ====================
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png'];
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE = 5 * 1024 * 1024;
 
 function previewImages(e) {
     const files = Array.from(e.target.files);
@@ -1306,6 +1461,10 @@ function previewImages(e) {
         }
 
         renderPreviews();
+
+        if (selectedFiles.length > 0) {
+            document.getElementById('sortInstructions').classList.add('show');
+        }
     }
 }
 
@@ -1318,12 +1477,28 @@ function renderPreviews() {
         reader.onload = function(e) {
             const div = document.createElement('div');
             div.className = 'image-preview-item';
+            div.draggable = true;
+            div.dataset.index = idx;
+
             div.innerHTML = `
+                <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
                 <img src="${e.target.result}" alt="Preview ${idx + 1}">
-                <button type="button" class="remove-image" onclick="removeImage(${idx})" title="Remove image">
+                <button type="button" class="remove-image" data-index="${idx}" title="Remove image">
                     <i class="fas fa-times"></i>
                 </button>
             `;
+
+            div.addEventListener('dragstart', handleDragStart);
+            div.addEventListener('dragover', handleDragOver);
+            div.addEventListener('drop', handleDrop);
+            div.addEventListener('dragend', handleDragEnd);
+            div.addEventListener('dragenter', handleDragEnter);
+            div.addEventListener('dragleave', handleDragLeave);
+
+            div.querySelector('.remove-image').addEventListener('click', function() {
+                removeImage(parseInt(this.dataset.index));
+            });
+
             preview.appendChild(div);
         };
         reader.readAsDataURL(file);
@@ -1332,9 +1507,60 @@ function renderPreviews() {
     updateFileInput();
 }
 
+function handleDragStart(e) {
+    draggedItem = this;
+    this.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(e) {
+    if (e.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    return false;
+}
+
+function handleDragEnter(e) {
+    if (this !== draggedItem) {
+        this.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    this.classList.remove('drag-over');
+}
+
+function handleDrop(e) {
+    if (e.stopPropagation) e.stopPropagation();
+
+    if (draggedItem !== this) {
+        const draggedIndex = parseInt(draggedItem.dataset.index);
+        const targetIndex = parseInt(this.dataset.index);
+
+        const temp = selectedFiles[draggedIndex];
+        selectedFiles[draggedIndex] = selectedFiles[targetIndex];
+        selectedFiles[targetIndex] = temp;
+
+        renderPreviews();
+    }
+
+    this.classList.remove('drag-over');
+    return false;
+}
+
+function handleDragEnd(e) {
+    this.classList.remove('dragging');
+    document.querySelectorAll('.image-preview-item').forEach(item => {
+        item.classList.remove('drag-over');
+    });
+}
+
 function removeImage(idx) {
     selectedFiles.splice(idx, 1);
     renderPreviews();
+
+    if (selectedFiles.length === 0) {
+        document.getElementById('sortInstructions').classList.remove('show');
+    }
 }
 
 function updateFileInput() {
@@ -1351,12 +1577,41 @@ document.getElementById('propertyForm').addEventListener('submit', function(e) {
         return false;
     }
 
-    // Disable submit button and show loading
+    // AUTO-FILL TITLES AND DESCRIPTIONS
+    const titleEn = document.getElementById('name_en').value.trim();
+    const titleAr = document.getElementById('name_ar').value.trim();
+    const titleKu = document.getElementById('name_ku').value.trim();
+
+    const descEn = document.getElementById('description_en').value.trim();
+    const descAr = document.getElementById('description_ar').value.trim();
+    const descKu = document.getElementById('description_ku').value.trim();
+
+    const primaryTitle = titleEn || titleAr || titleKu;
+    if (!document.getElementById('name_en').value) document.getElementById('name_en').value = primaryTitle;
+    if (!document.getElementById('name_ar').value) document.getElementById('name_ar').value = primaryTitle;
+    if (!document.getElementById('name_ku').value) document.getElementById('name_ku').value = primaryTitle;
+
+    const primaryDesc = descEn || descAr || descKu;
+    if (primaryDesc) {
+        if (!document.getElementById('description_en').value) document.getElementById('description_en').value = primaryDesc;
+        if (!document.getElementById('description_ar').value) document.getElementById('description_ar').value = primaryDesc;
+        if (!document.getElementById('description_ku').value) document.getElementById('description_ku').value = primaryDesc;
+    }
+
+    // SET LAT/LNG TO 0 IF MAP IS DISABLED
+    const mapToggle = document.getElementById('mapToggle');
+    const latInput = document.getElementById('latitude');
+    const lngInput = document.getElementById('longitude');
+
+    if (!mapToggle.checked) {
+        latInput.value = '0';
+        lngInput.value = '0';
+    }
+
     const submitBtn = document.getElementById('submitBtn');
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<div class="spinner" style="display:block"></div> Creating Property...';
 
-    // Submit the form
     this.submit();
 });
 </script>

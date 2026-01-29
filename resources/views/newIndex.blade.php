@@ -1,520 +1,1084 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link href='https://unpkg.com/css.gg@2.0.0/icons/css/search.css' rel='stylesheet'>
-    <script src="assets/vendor/isotope-layout/isotope.pkgd.min.js"></script>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
 
-    <title>Dream Mulk - Real Estate</title>
-    <meta content="" name="description" />
-    <meta content="" name="keywords" />
+    <title>Dream Mulk - Premium Real Estate</title>
+    <meta content="Luxury real estate platform in Kurdistan" name="description" />
+    <meta content="real estate, kurdistan, erbil, property" name="keywords" />
 
-    <link href="assets/img/apple-touch-icon.png" rel="apple-touch-icon" />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
 
-    <link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,700,700i|Poppins:300,400,500,600,700|Playfair+Display:400,700" rel="stylesheet"/>
-
-    <link href="assets/vendor/aos/aos.css" rel="stylesheet" />
-    <link rel="stylesheet" type="text/css" href="{{ asset('assets/vendor/bootstrap/css/bootstrap.min.css') }}">
-    <link href="../vendor2/bootstrap-icons/bootstrap-icons.css" rel="stylesheet"/>
-    <link href="../vendo2r/boxicons/css/boxicons.min.css" rel="stylesheet" />
-    <link href="../vendor2/glightbox/css/glightbox.min.css" rel="stylesheet"/>
-    <link rel="stylesheet" type="text/css" href="{{ asset('../vendor2/swiper/swiper-bundle.min.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-    <link rel="stylesheet" type="text/css" href="{{ asset('../css/newstyle.css') }}">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 
     <style>
-        :root {
-            --primary: #303b97; /* Your Brand Color */
-            --accent: #d4af37; /* Gold */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        /* --- Agent Floating Button --- */
-        .agent-fab {
+        :root {
+            --primary: #303b97;
+            --primary-dark: #1e2456;
+            --primary-light: #4a56c4;
+            --accent: #d4af37;
+            --accent-dark: #b8941f;
+            --text-dark: #1a1a2e;
+            --text-light: #eef1f5;
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background: #0a0e27;
+            color: var(--text-light);
+        }
+
+        /* ============ GLASSMORPHIC NAVBAR ============ */
+        .glass-navbar {
             position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: var(--primary);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 50px;
-            box-shadow: 0 4px 20px rgba(48, 59, 151, 0.4);
+            top: 0;
+            left: 0;
+            right: 0;
             z-index: 9999;
+            padding: 15px 0;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-navbar.scrolled {
+            background: rgba(10, 14, 39, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: 10px 0;
+        }
+
+        .navbar-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-logo {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+            font-family: 'Playfair Display', serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
             text-decoration: none;
             transition: all 0.3s ease;
-            font-family: 'Poppins', sans-serif;
-            font-weight: 600;
-            border: 2px solid white;
         }
 
-        .agent-fab:hover {
-            transform: translateY(-5px);
-            background: #202660;
-            color: var(--accent);
-            box-shadow: 0 8px 25px rgba(48, 59, 151, 0.6);
+        .nav-logo i {
+            font-size: 32px;
+            background: linear-gradient(135deg, var(--accent), #f0d077);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .agent-fab i {
-            font-size: 1.2rem;
+        .nav-logo:hover {
+            transform: translateY(-2px);
         }
 
-        /* --- Updated Service Buttons to match Brand --- */
-        .button {
-            background-color: var(--primary) !important;
-            border: none !important;
-        }
-        .button:hover {
-            background-color: #202660 !important;
+        .nav-menu {
+            display: flex;
+            gap: 40px;
+            align-items: center;
+            list-style: none;
         }
 
-        /* --- About Section Premium Styles --- */
-        #about {
-            background-color: #f4f6fa;
-            padding: 80px 0;
+        .nav-link {
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 15px;
             position: relative;
+            padding: 8px 0;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent), #f0d077);
+            transition: width 0.3s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--accent);
+        }
+
+        .nav-link:hover::after {
+            width: 100%;
+        }
+
+        .nav-cta {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .notification-icon {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .notification-icon:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: linear-gradient(135deg, #ff2d20, #ff5540);
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(255, 45, 32, 0.5);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent), #f0d077);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-dark);
+            font-weight: 700;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+        }
+
+        .user-avatar:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.6);
+        }
+
+        .btn-login {
+            padding: 10px 30px;
+            background: transparent;
+            border: 2px solid var(--accent);
+            border-radius: 50px;
+            color: var(--accent);
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .btn-login:hover {
+            background: linear-gradient(135deg, var(--accent), #f0d077);
+            color: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(212, 175, 55, 0.4);
+        }
+
+        /* Mobile Menu Toggle */
+        .mobile-toggle {
+            display: none;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 28px;
+            cursor: pointer;
+        }
+
+        /* ============ HERO SECTION ============ */
+        .hero-section {
+            position: relative;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .hero-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(48, 59, 151, 0.9), rgba(30, 36, 86, 0.95)),
+                        url('{{ asset('images/design-house-modern-villa-with-open-plan-living-private-bedroom-wing-large-terrace-with-privacy.jpg') }}');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+
+        .hero-background::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 50% 50%, transparent 0%, rgba(10, 14, 39, 0.6) 100%);
+        }
+
+        .hero-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            background: rgba(212, 175, 55, 0.3);
+            border-radius: 50%;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); }
+            50% { transform: translateY(-100px) translateX(100px); }
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 10;
+            text-align: center;
+            max-width: 900px;
+            padding: 0 20px;
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 20px;
+            animation: fadeInUp 0.8s ease;
+        }
+
+        .hero-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(48px, 8vw, 92px);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 30px;
+            background: linear-gradient(135deg, #fff, #e0e7ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: fadeInUp 0.8s ease 0.2s both;
+        }
+
+        .hero-description {
+            font-size: 20px;
+            line-height: 1.6;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 50px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            animation: fadeInUp 0.8s ease 0.4s both;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ============ GLASS SEARCH BAR ============ */
+        .glass-search-container {
+            animation: fadeInUp 0.8s ease 0.6s both;
+        }
+
+        .glass-search {
+            position: relative;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .glass-search-input {
+            width: 100%;
+            padding: 20px 70px 20px 30px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 60px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .glass-search-input:focus {
+            outline: none;
+            background: rgba(255, 255, 255, 0.15);
+            border-color: var(--accent);
+            box-shadow: 0 8px 32px rgba(212, 175, 55, 0.3);
+        }
+
+        .glass-search-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .glass-search-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--accent), #f0d077);
+            border: none;
+            border-radius: 50%;
+            color: var(--primary-dark);
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .glass-search-btn:hover {
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 8px 20px rgba(212, 175, 55, 0.5);
+        }
+
+        /* ============ SCROLL INDICATOR ============ */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            animation: bounce 2s infinite;
+        }
+
+        .scroll-indicator i {
+            font-size: 32px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(10px); }
+        }
+
+        /* ============ SERVICES SECTION ============ */
+        .services-section {
+            position: relative;
+            padding: 120px 20px;
+            background: linear-gradient(180deg, #0a0e27 0%, #1a1e3e 100%);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 80px;
+        }
+
+        .section-subtitle {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 15px;
+        }
+
+        .section-title {
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(36px, 5vw, 56px);
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        .section-description {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.7);
+            max-width: 700px;
+            margin: 0 auto;
+            line-height: 1.8;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 40px;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .service-card {
+            position: relative;
+            height: 550px;
+            border-radius: 30px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .service-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.9) 100%);
+            transition: all 0.5s ease;
+            z-index: 1;
+        }
+
+        .service-card:hover::before {
+            background: linear-gradient(180deg, transparent 0%, rgba(48, 59, 151, 0.95) 100%);
+        }
+
+        .service-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.5s ease;
+        }
+
+        .service-card:hover .service-bg {
+            transform: scale(1.1);
+        }
+
+        .service-content {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 40px;
+            z-index: 2;
+            transform: translateY(0);
+            transition: all 0.5s ease;
+        }
+
+        .service-icon {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .service-icon i {
+            font-size: 32px;
+            color: var(--accent);
+        }
+
+        .service-title {
+            font-family: 'Playfair Display', serif;
+            font-size: 32px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 15px;
+        }
+
+        .service-text {
+            font-size: 16px;
+            line-height: 1.7;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 25px;
+            max-height: 0;
+            overflow: hidden;
+            opacity: 0;
+            transition: all 0.5s ease;
+        }
+
+        .service-card:hover .service-text {
+            max-height: 200px;
+            opacity: 1;
+        }
+
+        .service-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, var(--accent), #f0d077);
+            border: none;
+            border-radius: 50px;
+            color: var(--primary-dark);
+            font-weight: 700;
+            font-size: 15px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .service-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(212, 175, 55, 0.5);
+        }
+
+        /* ============ ABOUT SECTION ============ */
+        .about-section {
+            position: relative;
+            padding: 120px 20px;
+            background: linear-gradient(180deg, #1a1e3e 0%, #0a0e27 100%);
+        }
+
+        .about-container {
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
         .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            padding: 60px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(48, 59, 151, 0.1);
-            position: relative;
-            overflow: hidden;
-            border-top: 5px solid var(--accent);
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 40px;
+            padding: 80px 60px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
 
         .about-grid {
             display: grid;
             grid-template-columns: 1.5fr 1fr;
-            gap: 50px;
+            gap: 80px;
             align-items: center;
         }
 
         .about-content h2 {
             font-family: 'Playfair Display', serif;
-            color: var(--primary);
-            font-size: 2.5rem;
-            margin-bottom: 20px;
+            font-size: clamp(36px, 5vw, 52px);
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 30px;
+            line-height: 1.2;
         }
 
         .about-content p {
-            color: #555;
-            font-size: 1.05rem;
+            font-size: 18px;
             line-height: 1.8;
-            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 25px;
         }
 
         .quote-box {
-            background: #f8f9fa;
+            background: rgba(212, 175, 55, 0.1);
             border-left: 4px solid var(--accent);
-            padding: 15px 20px;
+            padding: 25px 30px;
+            border-radius: 12px;
+            margin-top: 30px;
             font-style: italic;
-            color: var(--primary);
-            font-weight: 500;
-            margin-top: 20px;
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 18px;
         }
 
         .values-list {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
         }
 
         .value-item {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
             display: flex;
             align-items: center;
-            gap: 15px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-            transition: transform 0.3s;
+            gap: 20px;
+            transition: all 0.3s ease;
         }
 
         .value-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
             transform: translateX(10px);
         }
 
         .value-icon {
-            width: 50px;
-            height: 50px;
-            background: rgba(48, 59, 151, 0.1);
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, var(--accent), #f0d077);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--primary);
-            font-size: 1.2rem;
+            color: var(--primary-dark);
+            font-size: 28px;
+            flex-shrink: 0;
         }
 
         .value-text h4 {
-            margin: 0;
-            font-size: 1.1rem;
-            color: var(--primary);
             font-family: 'Playfair Display', serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 5px;
         }
 
         .value-text span {
-            font-size: 0.9rem;
-            color: #666;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 500;
         }
 
-        @media (max-width: 991px) {
+        /* ============ AGENT FAB ============ */
+        .agent-fab {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            background: linear-gradient(135deg, var(--accent), #f0d077);
+            color: var(--primary-dark);
+            padding: 18px 35px;
+            border-radius: 60px;
+            box-shadow: 0 8px 30px rgba(212, 175, 55, 0.5);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .agent-fab:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(212, 175, 55, 0.7);
+            color: var(--primary-dark);
+        }
+
+        .agent-fab i {
+            font-size: 20px;
+        }
+
+        /* ============ RESPONSIVE ============ */
+        @media (max-width: 992px) {
+            .nav-menu {
+                display: none;
+            }
+
+            .mobile-toggle {
+                display: block;
+            }
+
             .about-grid {
                 grid-template-columns: 1fr;
+                gap: 50px;
             }
+
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .glass-card {
+                padding: 50px 30px;
+            }
+
+            .navbar-container {
+                padding: 0 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 48px;
+            }
+
+            .hero-description {
+                font-size: 16px;
+            }
+
+            .section-title {
+                font-size: 36px;
+            }
+
+            .agent-fab {
+                bottom: 20px;
+                right: 20px;
+                padding: 14px 24px;
+                font-size: 14px;
+            }
+        }
+
+        /* ============ BACK TO TOP ============ */
+        .back-to-top {
+            position: fixed;
+            bottom: 40px;
+            left: 40px;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 20px;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            z-index: 998;
+        }
+
+        .back-to-top.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .back-to-top:hover {
+            background: var(--accent);
+            color: var(--primary-dark);
+            transform: translateY(-5px);
         }
     </style>
 </head>
 
 <body>
 
-    <a href="{{ route('agent.login') }}" class="agent-fab" data-aos="fade-left" data-aos-delay="500">
-        <i class="fa-solid fa-user-shield"></i>
+    <!-- GLASSMORPHIC NAVBAR -->
+    <nav class="glass-navbar" id="navbar">
+        <div class="navbar-container">
+            <a href="{{ route('newindex') }}" class="nav-logo">
+                <i class="fas fa-gem"></i>
+                <span>Dream Mulk</span>
+            </a>
+
+            <ul class="nav-menu">
+                <li><a href="{{ route('newindex') }}" class="nav-link">Home</a></li>
+                <li><a href="{{ route('property.list') }}" class="nav-link">Properties</a></li>
+                <li><a href="{{ route('about-us') }}" class="nav-link">About</a></li>
+                <li><a href="{{ route('contact-us') }}" class="nav-link">Contact</a></li>
+            </ul>
+
+            @php
+                $user = \Illuminate\Support\Facades\Auth::user();
+                $agent = \Illuminate\Support\Facades\Auth::guard('agent')->user();
+                $unreadCount = 0;
+                if ($user) {
+                    $unreadCount = \DB::table('notifications')
+                        ->where('user_id', $user->id)
+                        ->where('is_read', false)
+                        ->where(function($query) {
+                            $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                        })->count();
+                }
+            @endphp
+
+            <div class="nav-cta">
+                @if($user || $agent)
+                    <a href="{{ route('user.appointments') }}" class="notification-icon">
+                        <i class="fas fa-calendar-check"></i>
+                    </a>
+
+                    <a href="{{ route('user.notifications') }}" class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        @if($unreadCount > 0)
+                            <span class="notification-badge">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+                        @endif
+                    </a>
+
+                    @php
+                        if ($user) {
+                            $displayName = $user->username ?? $user->name ?? 'User';
+                            $redirectRoute = route('user.profile');
+                        } else {
+                            $displayName = $agent->agent_name;
+                            $redirectRoute = route('agent.profile.page');
+                        }
+                    @endphp
+
+                    <a href="{{ $redirectRoute }}">
+                        <div class="user-avatar">{{ strtoupper(substr($displayName, 0, 1)) }}</div>
+                    </a>
+                @else
+                    <a href="{{ route('login-page') }}" class="btn-login">Login</a>
+                @endif
+
+                <button class="mobile-toggle" id="mobileToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- HERO SECTION -->
+    <section class="hero-section">
+        <div class="hero-background"></div>
+
+        <div class="hero-particles">
+            <div class="particle" style="width: 4px; height: 4px; top: 20%; left: 10%; animation-delay: 0s;"></div>
+            <div class="particle" style="width: 6px; height: 6px; top: 60%; left: 80%; animation-delay: 2s;"></div>
+            <div class="particle" style="width: 3px; height: 3px; top: 40%; left: 30%; animation-delay: 4s;"></div>
+            <div class="particle" style="width: 5px; height: 5px; top: 70%; left: 60%; animation-delay: 6s;"></div>
+        </div>
+
+        <div class="hero-content">
+            <div class="hero-subtitle" data-aos="fade-up">Premium Real Estate</div>
+            <h1 class="hero-title" data-aos="fade-up" data-aos-delay="100">DREAM Mulk</h1>
+            <p class="hero-description" data-aos="fade-up" data-aos-delay="200">
+                A revolutionary platform to buy, sell, and rent premium properties across Kurdistan without any agent fees or commissions.
+            </p>
+
+            <div class="glass-search-container" data-aos="fade-up" data-aos-delay="300">
+                <div class="glass-search">
+                    <input
+                        type="text"
+                        class="glass-search-input"
+                        placeholder="Search by city, area, or property type..."
+                        id="searchInput"
+                    >
+                    <button class="glass-search-btn" id="searchBtn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="scroll-indicator">
+            <i class="fas fa-chevron-down"></i>
+        </div>
+    </section>
+
+    <!-- SERVICES SECTION -->
+    <section class="services-section">
+        <div class="section-header" data-aos="fade-up">
+            <div class="section-subtitle">Our Services</div>
+            <h2 class="section-title">What We Offer</h2>
+            <p class="section-description">
+                Explore our comprehensive real estate services designed to make your property journey seamless and rewarding.
+            </p>
+        </div>
+
+        <div class="services-grid">
+            <div class="service-card" data-aos="fade-up" data-aos-delay="100">
+                <img src="{{ asset('images/AdobeStock_565645717.jpeg') }}" alt="Buy Property" class="service-bg">
+                <div class="service-content">
+                    <div class="service-icon">
+                        <i class="fas fa-key"></i>
+                    </div>
+                    <h3 class="service-title">Buy a Property</h3>
+                    <p class="service-text">
+                        Discover your dream home with our advanced search filters. Browse exclusive listings across Kurdistan with detailed insights.
+                    </p>
+                    <a href="{{ route('property.list') }}" class="service-btn">
+                        <span>Explore Properties</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="service-card" data-aos="fade-up" data-aos-delay="200">
+                <img src="{{ asset('images/house.jpg') }}" alt="Sell Property" class="service-bg">
+                <div class="service-content">
+                    <div class="service-icon">
+                        <i class="fas fa-tags"></i>
+                    </div>
+                    <h3 class="service-title">Sell a Property</h3>
+                    <p class="service-text">
+                        List your property and connect with serious buyers. Our platform ensures maximum visibility and competitive pricing.
+                    </p>
+                    @php
+                        $user = Auth::user();
+                        $agentId = session('agent_id');
+                    @endphp
+                    <a href="{{ ($user || $agentId) ? route('property.upload') : route('login-page') }}" class="service-btn">
+                        <span>List Your Property</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+
+            <div class="service-card" data-aos="fade-up" data-aos-delay="300">
+                <img src="{{ asset('images/giving house keys.webp') }}" alt="Rent Property" class="service-bg">
+                <div class="service-content">
+                    <div class="service-icon">
+                        <i class="fas fa-home"></i>
+                    </div>
+                    <h3 class="service-title">Rent a Property</h3>
+                    <p class="service-text">
+                        Find the perfect rental that fits your lifestyle and budget. Browse verified listings with transparent pricing.
+                    </p>
+                    <a href="{{ route('property.list', ['type' => 'rent']) }}" class="service-btn">
+                        <span>Find Rentals</span>
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ABOUT SECTION -->
+    <section class="about-section">
+        <div class="about-container" data-aos="fade-up">
+            <div class="glass-card">
+                <div class="about-grid">
+                    <div class="about-content">
+                        <h2>The Dream Mulk Standard</h2>
+                        <p>
+                            Dream Mulk was established with a singular, powerful ambition: to elevate the standard of real estate in Kurdistan. We are not merely agents; we are the architects of your next chapter.
+                        </p>
+                        <p>
+                            In a market often defined by complexity, we serve as your beacon of clarity and sophistication. Our journey is fueled by a commitment to modern technology and timeless integrity.
+                        </p>
+                        <div class="quote-box">
+                            "Property is land, but 'Mulk' is legacy. We help you build yours."
+                        </div>
+                    </div>
+
+                    <div class="values-list">
+                        <div class="value-item" data-aos="fade-left" data-aos-delay="100">
+                            <div class="value-icon">
+                                <i class="fas fa-crown"></i>
+                            </div>
+                            <div class="value-text">
+                                <h4>Exclusivity</h4>
+                                <span>Curated Portfolio</span>
+                            </div>
+                        </div>
+
+                        <div class="value-item" data-aos="fade-left" data-aos-delay="200">
+                            <div class="value-icon">
+                                <i class="fas fa-handshake"></i>
+                            </div>
+                            <div class="value-text">
+                                <h4>Integrity</h4>
+                                <span>Radical Transparency</span>
+                            </div>
+                        </div>
+
+                        <div class="value-item" data-aos="fade-left" data-aos-delay="300">
+                            <div class="value-icon">
+                                <i class="fas fa-map-marked-alt"></i>
+                            </div>
+                            <div class="value-text">
+                                <h4>Erbil Based</h4>
+                                <span>Est. 2026</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- AGENT FAB -->
+    <a href="{{ route('agent.login') }}" class="agent-fab" data-aos="fade-left">
+        <i class="fas fa-user-shield"></i>
         <span>Agent Portal</span>
     </a>
 
-    @include('navbar')
-    @php
-        $backgroundImageUrl = asset('images/design-house-modern-villa-with-open-plan-living-private-bedroom-wing-large-terrace-with-privacy.jpg');
-    @endphp
-
-    <section style="background-image: url('{{ $backgroundImageUrl }}');" id="hero">
-        <div class="hero-container" data-aos="zoom-in" data-aos-delay="100">
-            <h1 style="font-family: 'Playfair Display', serif;">DREAM Mulk</h1>
-            <h2>
-                A great platform to buy, sell and rent your properties without any agent or commissions.
-            </h2>
-
-            <style>
-                #search { display: grid; grid-area: search; grid-template: "search" 60px / 420px; justify-content: center; align-content: center; justify-items: stretch; align-items: stretch; background: none; }
-                #search input { color: #fff; display: block; grid-area: search; -webkit-appearance: none; appearance: none; width: 100%; height: 100%; background: none; padding: 0 30px 0 60px; border: none; border-radius: 100px; font: 24px/1 system-ui, sans-serif; outline-offset: -8px; }
-                #search svg { grid-area: search; overflow: visible; color: #c2c7ee; fill: none; stroke: currentColor; }
-                .spark { fill: currentColor; stroke: none; r: 15; }
-                .spark:nth-child(1) { animation: spark-radius 2.03s 1s both, spark-one-motion 2s 1s both; }
-                @keyframes spark-radius { 0% { r: 0; animation-timing-function: cubic-bezier(0, 0.3, 0, 1.57); } 30% { r: 15; animation-timing-function: cubic-bezier(1, -0.39, 0.68, 1.04); } 95% { r: 8; } 99% { r: 10; } 99.99% { r: 7; } 100% { r: 0; } }
-                @keyframes spark-one-motion { 0% { transform: translate(-20%, 50%); animation-timing-function: cubic-bezier(0.63, 0.88, 0, 1.25); } 20% { transform: rotate(-0deg) translate(0%, -50%); animation-timing-function: ease-in; } 80% { transform: rotate(-230deg) translateX(-20%) rotate(-100deg) translateX(15%); animation-timing-function: linear; } 100% { transform: rotate(-360deg) translate(30px, 100%); animation-timing-function: cubic-bezier(0.64, 0.66, 0, 0.51); } }
-                .spark:nth-child(2) { animation: spark-radius 2.03s 1s both, spark-two-motion 2.03s 1s both; }
-                @keyframes spark-two-motion { 0% { transform: translate(120%, 50%) rotate(-70deg) translateY(0%); animation-timing-function: cubic-bezier(0.36, 0.18, 0.94, 0.55); } 20% { transform: translate(90%, -80%) rotate(60deg) translateY(-80%); animation-timing-function: cubic-bezier(0.16, 0.77, 1, 0.4); } 40% { transform: translate(110%, -50%) rotate(-30deg) translateY(-120%); animation-timing-function: linear; } 70% { transform: translate(100%, -50%) rotate(120deg) translateY(-100%); animation-timing-function: linear; } 80% { transform: translate(95%, 50%) rotate(80deg) translateY(-150%); animation-timing-function: cubic-bezier(0.64, 0.66, 0, 0.51); } 100% { transform: translate(100%, 50%) rotate(120deg) translateY(0%); } }
-                .spark:nth-child(3) { animation: spark-radius 2.05s 1s both, spark-three-motion 2.03s 1s both; }
-                @keyframes spark-three-motion { 0% { transform: translate(50%, 100%) rotate(-40deg) translateX(0%); animation-timing-function: cubic-bezier(0.62, 0.56, 1, 0.54); } 30% { transform: translate(40%, 70%) rotate(20deg) translateX(20%); animation-timing-function: cubic-bezier(0, 0.21, 0.88, 0.46); } 40% { transform: translate(65%, 20%) rotate(-50deg) translateX(15%); animation-timing-function: cubic-bezier(0, 0.24, 1, 0.62); } 60% { transform: translate(60%, -40%) rotate(-50deg) translateX(20%); animation-timing-function: cubic-bezier(0, 0.24, 1, 0.62); } 70% { transform: translate(70%, -0%) rotate(-180deg) translateX(20%); animation-timing-function: cubic-bezier(0.15, 0.48, 0.76, 0.26); } 100% { transform: translate(70%, -0%) rotate(-360deg) translateX(0%) rotate(180deg) translateX(20%); } }
-                .burst { stroke-width: 3; }
-                .burst :nth-child(2n) { color: #ff783e; }
-                .burst :nth-child(3n) { color: #ffab00; }
-                .burst :nth-child(4n) { color: #55e214; }
-                .burst :nth-child(5n) { color: #82d9f5; }
-                .circle { r: 6; }
-                .rect { width: 10px; height: 10px; }
-                .triangle { d: path("M0,-6 L7,6 L-7,6 Z"); stroke-linejoin: round; }
-                .plus { d: path("M0,-5 L0,5 M-5,0L 5,0"); stroke-linecap: round; }
-                .burst:nth-child(4) { transform: translate(30px, 100%) rotate(150deg); }
-                .burst:nth-child(5) { transform: translate(50%, 0%) rotate(-20deg); }
-                .burst:nth-child(6) { transform: translate(100%, 50%) rotate(75deg); }
-                @keyframes particle-fade { 0%, 100% { opacity: 0; } 5%, 80% { opacity: 1; } }
-                .burst :nth-child(1) { animation: particle-fade 600ms 2.95s both, particle-one-move 600ms 2.95s both; }
-                .burst :nth-child(2) { animation: particle-fade 600ms 2.95s both, particle-two-move 600ms 2.95s both; }
-                .burst :nth-child(3) { animation: particle-fade 600ms 2.95s both, particle-three-move 600ms 2.95s both; }
-                .burst :nth-child(4) { animation: particle-fade 600ms 2.95s both, particle-four-move 600ms 2.95s both; }
-                .burst :nth-child(5) { animation: particle-fade 600ms 2.95s both, particle-five-move 600ms 2.95s both; }
-                .burst :nth-child(6) { animation: particle-fade 600ms 2.95s both, particle-six-move 600ms 2.95s both; }
-                @keyframes particle-one-move { 0% { transform: rotate(0deg) translate(-5%) scale(0.0001, 0.0001); } 100% { transform: rotate(-20deg) translateX(8%) scale(0.5, 0.5); } }
-                @keyframes particle-two-move { 0% { transform: rotate(0deg) translate(-5%) scale(0.0001, 0.0001); } 100% { transform: rotate(0deg) translateX(8%) scale(0.5, 0.5); } }
-                @keyframes particle-three-move { 0% { transform: rotate(0deg) translate(-5%) scale(0.0001, 0.0001); } 100% { transform: rotate(20deg) translateX(8%) scale(0.5, 0.5); } }
-                @keyframes particle-four-move { 0% { transform: rotate(0deg) translate(-5%) scale(0.0001, 0.0001); } 100% { transform: rotate(-35deg) translateX(12%); } }
-                @keyframes particle-five-move { 0% { transform: rotate(0deg) translate(-5%) scale(0.0001, 0.0001); } 100% { transform: rotate(0deg) translateX(12%); } }
-                @keyframes particle-six-move { 0% { transform: rotate(0deg) translate(-5%) scale(0.0001, 0.0001); } 100% { transform: rotate(35deg) translateX(12%); } }
-                .bar { width: 100%; height: 100%; ry: 50%; stroke-width: 3; animation: bar-in 900ms 3s both; }
-                @keyframes bar-in { 0% { stroke-dasharray: 0 180 0 226 0 405 0 0; } 100% { stroke-dasharray: 0 0 181 0 227 0 405 0; } }
-                .magnifier { animation: magnifier-in 600ms 3.6s both; transform-box: fill-box; }
-                @keyframes magnifier-in { 0% { transform: translate(20px, 8px) rotate(-45deg) scale(0.01, 0.01); } 50% { transform: translate(-4px, 8px) rotate(-45deg); } 100% { transform: translate(0px, 0px) rotate(0deg); } }
-                .magnifier .handle { x1: 32; y1: 32; x2: 44; y2: 44; stroke-width: 3; }
-                #searchIcon { cursor: pointer; display: none; }
-                #searchInput::placeholder { color: #c2c7ee; opacity: 1; }
-                #results { grid-area: results; background: hsl(0, 0%, 95%); }
-                #search i { margin-top: -40px; margin-left: 15px; color: #c2c7ee; cursor: pointer; }
-            </style>
-
-            <div id="search">
-                <i class="gg-search search-icon" id="searchIcon"></i>
-                <svg viewBox="0 0 420 60" xmlns="http://www.w3.org/2000/svg">
-                    <rect class="bar" />
-                    <g class="sparks">
-                        <circle class="spark" />
-                        <circle class="spark" />
-                        <circle class="spark" />
-                    </g>
-                    <g class="burst pattern-one">
-                        <circle class="particle circle" />
-                        <path class="particle triangle" />
-                        <circle class="particle circle" />
-                        <path class="particle plus" />
-                        <rect class="particle rect" />
-                        <path class="particle triangle" />
-                    </g>
-                    <g class="burst pattern-two">
-                        <path class="particle plus" />
-                        <circle class="particle circle" />
-                        <path class="particle triangle" />
-                        <rect class="particle rect" />
-                        <circle class="particle circle" />
-                        <path class="particle plus" />
-                    </g>
-                    <g class="burst pattern-three">
-                        <circle class="particle circle" />
-                        <rect class="particle rect" />
-                        <path class="particle plus" />
-                        <path class="particle triangle" />
-                        <rect class="particle rect" />
-                        <path class="particle plus" />
-                    </g>
-                </svg>
-                <input type="search" name="q" aria-label="Search for inspiration" id="searchInput" placeholder="" />
-            </div>
-
-            <div id="results"></div>
-
-            <script>
-                document.addEventListener("DOMContentLoaded", function() {
-                    setTimeout(function() {
-                        document.getElementById("searchInput").setAttribute("placeholder", "Search for an address or city");
-                        document.getElementById("searchIcon").style.display = "block";
-                    }, 3000);
-
-                    document.getElementById('searchInput').addEventListener('keypress', function (e) {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const query = this.value;
-                            window.location.href = `{{ route('properties.search') }}?q=${query}`;
-                        }
-                    });
-
-                    document.querySelector('#searchIcon').addEventListener("click", function() {
-                        var query = document.getElementById("searchInput").value;
-                        window.location.href = "{{ route('properties.search') }}?q=" + encodeURIComponent(query);
-                    });
-                });
-            </script>
-        </div>
-    </section>
-    <main id="main">
-
-        <div id="services">
-            <div class="service-box" style="background-image: url('../images/AdobeStock_565645717.jpeg');">
-                <div class="service-content">
-                    <h3 class="service-title">Buy a Property</h3>
-                    <p class="service-text">Finding the perfect home can be daunting. Our search tool streamlines the process, allowing users to filter properties by location, price, and more.</p>
-                    <div class="buttons-container">
-                        <a href="{{ route('property.list') }}" class="button">Search</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="service-box" style="background-image: url('../images/house.jpg');">
-                <div class="service-content">
-                    <h3 class="service-title">Sell a Property</h3>
-                    <p class="service-text">Unlock the charm of your property. Upload it here and embark on a journey to find the perfect buyer who will appreciate it as much as you do.</p>
-                    <div class="buttons-container">
-                        @php
-                            $user = Auth::user();
-                            $agentId = session('agent_id');
-                        @endphp
-
-                        @if($user || $agentId)
-                            <a href="{{ route('property.upload') }}" class="button">Register Your Home</a>
-                        @else
-                            <a href="{{ route('login-page') }}" class="button">Register Your Home</a>
-                        @endif
-                    </div>
-                </div>
-            </div>
-
-            <div class="service-box" style="background-image: url('../images/giving house keys.webp');">
-                <div class="service-content">
-                    <h3 class="service-title">Rent a Property</h3>
-                    <p class="service-text">We're simplifying the rental process - from browsing to payment. Discover your perfect space effortlessly, tailored to your needs and budget.</p>
-                    <div class="buttons-container">
-                        <a href="{{ route('property.list', ['type' => 'rent']) }}" class="button find-rental-button">Find Rental</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <section id="about">
-            <div class="container" data-aos="fade-up">
-                <div class="glass-card">
-                    <div class="about-grid">
-                        <div class="about-content">
-                            <h2>The Dream Mulk Standard</h2>
-                            <p>
-                                Dream Mulk was established with a singular, powerful ambition: to elevate the standard of real estate in Kurdistan. We are not merely agents; we are the architects of your next chapter. In a market often defined by complexity, we serve as your beacon of clarity and sophistication.
-                            </p>
-                            <p>
-                                Our journey is fueled by a commitment to modern technology and timeless integrity. We understand that acquiring property is not just a transaction—it is the foundation of your heritage.
-                            </p>
-                            <div class="quote-box">
-                                "Property is land, but 'Mulk' is legacy. We help you build yours."
-                            </div>
-                        </div>
-
-                        <div class="values-list">
-                            <div class="value-item">
-                                <div class="value-icon"><i class="fas fa-crown"></i></div>
-                                <div class="value-text">
-                                    <h4>Exclusivity</h4>
-                                    <span>Curated Portfolio</span>
-                                </div>
-                            </div>
-                            <div class="value-item">
-                                <div class="value-icon"><i class="fas fa-handshake"></i></div>
-                                <div class="value-text">
-                                    <h4>Integrity</h4>
-                                    <span>Radical Transparency</span>
-                                </div>
-                            </div>
-                            <div class="value-item">
-                                <div class="value-icon"><i class="fas fa-map-marked-alt"></i></div>
-                                <div class="value-text">
-                                    <h4>Erbil Based</h4>
-                                    <span>Est. 2026</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-    <a href="#" class="back-to-top d-flex align-items-center justify-content-center">
-        <i class="bi bi-arrow-up-short"></i>
+    <!-- BACK TO TOP -->
+    <a href="#" class="back-to-top" id="backToTop">
+        <i class="fas fa-arrow-up"></i>
     </a>
 
-    <script src="assets/vendor/purecounter/purecounter_vanilla.js"></script>
-    <script src="assets/vendor/aos/aos.js"></script>
-    <script src="assets/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/vendor/glightbox/js/glightbox.min.js"></script>
-    <script src="assets/vendor/isotope-layout/isotope.pkgd.min.js"></script>
-    <script src="assets/vendor/swiper/swiper-bundle.min.js"></script>
-    <script src="assets/vendor/php-email-form/validate.js"></script>
-
+    <!-- SCRIPTS -->
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
     <script>
-        ;(function () {
-            'use strict'
-            const select = (el, all = false) => {
-                el = el.trim()
-                if (all) { return [...document.querySelectorAll(el)] } else { return document.querySelector(el) }
+        // AOS Init
+        AOS.init({
+            duration: 800,
+            easing: 'ease-in-out',
+            once: true,
+            offset: 100
+        });
+
+        // Navbar Scroll Effect
+        const navbar = document.getElementById('navbar');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 100) {
+                navbar.classList.add('scrolled');
+            } else {
+                navbar.classList.remove('scrolled');
             }
-            const on = (type, el, listener, all = false) => {
-                let selectEl = select(el, all)
-                if (selectEl) {
-                    if (all) { selectEl.forEach(e => e.addEventListener(type, listener)) } else { selectEl.addEventListener(type, listener) }
+        });
+
+        // Search Functionality
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            const query = document.getElementById('searchInput').value;
+            if (query.trim()) {
+                window.location.href = `{{ route('properties.search') }}?q=${encodeURIComponent(query)}`;
+            }
+        });
+
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const query = e.target.value;
+                if (query.trim()) {
+                    window.location.href = `{{ route('properties.search') }}?q=${encodeURIComponent(query)}`;
                 }
             }
-            const onscroll = (el, listener) => { el.addEventListener('scroll', listener) }
-            let navbarlinks = select('#navbar .scrollto', true)
-            const navbarlinksActive = () => {
-                let position = window.scrollY + 200
-                navbarlinks.forEach(navbarlink => {
-                    if (!navbarlink.hash) return
-                    let section = select(navbarlink.hash)
-                    if (!section) return
-                    if (position >= section.offsetTop && position <= (section.offsetTop + section.offsetHeight)) {
-                        navbarlink.classList.add('active')
-                    } else {
-                        navbarlink.classList.remove('active')
-                    }
-                })
+        });
+
+        // Back to Top
+        const backToTop = document.getElementById('backToTop');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 300) {
+                backToTop.classList.add('active');
+            } else {
+                backToTop.classList.remove('active');
             }
-            window.addEventListener('load', navbarlinksActive)
-            onscroll(document, navbarlinksActive)
-            const scrollto = (el) => {
-                let header = select('#header')
-                let offset = header.offsetHeight
-                if (!header.classList.contains('header-scrolled')) { offset -= 20 }
-                let elementPos = select(el).offsetTop
-                window.scrollTo({ top: elementPos - offset, behavior: 'smooth' })
-            }
-            let selectHeader = select('#header')
-            if (selectHeader) {
-                const headerScrolled = () => {
-                    if (window.scrollY > 100) { selectHeader.classList.add('header-scrolled') } else { selectHeader.classList.remove('header-scrolled') }
-                }
-                window.addEventListener('load', headerScrolled)
-                onscroll(document, headerScrolled)
-            }
-            let backtotop = select('.back-to-top')
-            if (backtotop) {
-                const toggleBacktotop = () => {
-                    if (window.scrollY > 100) { backtotop.classList.add('active') } else { backtotop.classList.remove('active') }
-                }
-                window.addEventListener('load', toggleBacktotop)
-                onscroll(document, toggleBacktotop)
-            }
-            on('click', '.mobile-nav-toggle', function (e) {
-                select('#navbar').classList.toggle('navbar-mobile')
-                this.classList.toggle('bi-list')
-                this.classList.toggle('bi-x')
-            })
-            on('click', '.navbar .dropdown > a', function (e) {
-                if (select('#navbar').classList.contains('navbar-mobile')) {
-                    e.preventDefault()
-                    this.nextElementSibling.classList.toggle('dropdown-active')
-                }
-            }, true)
-            on('click', '.scrollto', function (e) {
-                if (select(this.hash)) {
-                    e.preventDefault()
-                    let navbar = select('#navbar')
-                    if (navbar.classList.contains('navbar-mobile')) {
-                        navbar.classList.remove('navbar-mobile')
-                        let navbarToggle = select('.mobile-nav-toggle')
-                        navbarToggle.classList.toggle('bi-list')
-                        navbarToggle.classList.toggle('bi-x')
-                    }
-                    scrollto(this.hash)
-                }
-            }, true)
-            window.addEventListener('load', () => {
-                if (window.location.hash) {
-                    if (select(window.location.hash)) { scrollto(window.location.hash) }
-                }
-            })
-            window.addEventListener('load', () => {
-                let portfolioContainer = document.querySelector('.portfolio-container')
-                if (portfolioContainer) {
-                    let portfolioIsotope = new Isotope(portfolioContainer, { itemSelector: '.portfolio-item', layoutMode: 'fitRows', getSortData: { date: '.item-date', } })
-                    let portfolioFilters = document.querySelectorAll('#portfolio-flters li')
-                    portfolioFilters.forEach(function (filter) {
-                        filter.addEventListener('click', function (e) {
-                            e.preventDefault()
-                            portfolioFilters.forEach(function (el) { el.classList.remove('filter-active') })
-                            this.classList.add('filter-active')
-                            portfolioIsotope.arrange({ filter: this.getAttribute('data-filter') })
-                            portfolioIsotope.on('arrangeComplete', function () { AOS.refresh() })
-                        })
-                    })
-                    let sortButton = document.querySelector('#portfolio-flters li[data-sort-by]')
-                    if (sortButton) {
-                        sortButton.addEventListener('click', function (e) {
-                            e.preventDefault()
-                            portfolioFilters.forEach(function (el) { el.classList.remove('item-date') })
-                            this.classList.add('item-date')
-                            portfolioIsotope.arrange({ sortBy: this.getAttribute('data-sort-by') })
-                            portfolioIsotope.on('arrangeComplete', function () { AOS.refresh() })
-                        })
-                    }
-                }
-            })
-            const portfolioLightbox = GLightbox({ selector: '.portfolio-lightbox' })
-            new Swiper('.portfolio-details-slider', { speed: 300, loop: true, autoplay: { delay: 4000, disableOnInteraction: false }, pagination: { el: '.swiper-pagination', type: 'bullets', clickable: true } })
-            window.addEventListener('load', () => { AOS.init({ duration: 1000, easing: 'ease-in-out', once: true, mirror: false }) })
-            new PureCounter()
-        })()
+        });
+
+        backToTop.addEventListener('click', (e) => {
+            e.preventDefault();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        // Mobile Toggle (placeholder - implement drawer if needed)
+        document.getElementById('mobileToggle').addEventListener('click', () => {
+            alert('Mobile menu - implement drawer navigation here');
+        });
     </script>
 
 </body>
