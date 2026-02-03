@@ -44,7 +44,7 @@
                     <span class="text-xs font-medium bg-white/20 px-2 py-1 rounded-md backdrop-blur-sm">All Time</span>
                 </div>
                 <p class="text-3xl font-black mb-1">{{ number_format($property->views ?? 0) }}</p>
-                <p class="text-indigo-100 text-sm font-medium">Total Page Hits</p>
+                <p class="text-indigo-100 text-sm font-medium">Total Page Impressions</p>
             </div>
         </div>
 
@@ -57,7 +57,7 @@
             </div>
             {{-- Calculate unique users based on the interactions relationship --}}
             <p class="text-3xl font-black text-gray-900 mb-1">
-                {{ $property->interactions()->where('interaction_type', 'view')->distinct('user_id')->count('user_id') }}
+                {{ $property->interactions()->where('interaction_type', 'impression')->distinct('user_id')->count('user_id') }}
             </p>
             <p class="text-gray-500 text-sm font-medium">Unique Registered Users</p>
         </div>
@@ -68,7 +68,7 @@
                 <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
                     <i class="fas fa-chart-line text-xl"></i>
                 </div>
-                @if($property->interactions()->where('interaction_type', 'view')->whereDate('created_at', today())->count() > 0)
+                @if($property->interactions()->where('interaction_type', 'impression')->whereDate('created_at', today())->count() > 0)
                 <span class="flex h-3 w-3">
                     <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-emerald-400 opacity-75"></span>
                     <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
@@ -76,7 +76,7 @@
                 @endif
             </div>
             <p class="text-3xl font-black text-gray-900 mb-1">
-                {{ $property->interactions()->where('interaction_type', 'view')->whereDate('created_at', today())->count() }}
+                {{ $property->interactions()->where('interaction_type', 'impression')->whereDate('created_at', today())->count() }}
             </p>
             <p class="text-gray-500 text-sm font-medium">Views Today</p>
         </div>
@@ -89,7 +89,7 @@
                 </div>
             </div>
             <p class="text-3xl font-black text-gray-900 mb-1">
-                {{ $property->interactions()->where('interaction_type', 'view')->where('created_at', '>=', now()->startOfWeek())->count() }}
+                {{ $property->interactions()->where('interaction_type', 'impression')->where('created_at', '>=', now()->startOfWeek())->count() }}
             </p>
             <p class="text-gray-500 text-sm font-medium">Views This Week</p>
         </div>
@@ -118,7 +118,7 @@
                     <tr class="bg-gray-50/50 border-b border-gray-100">
                         <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">User Profile</th>
                         <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">Contact Details</th>
-                        <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">Engagement</th>
+                        <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">Interest Level</th>
                         <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right">Last Interaction</th>
                     </tr>
                 </thead>
@@ -182,17 +182,25 @@
                             {{-- Engagement Column --}}
                             <td class="px-8 py-5 align-middle">
                                 @php
-                                    // Calculate how many times THIS user viewed THIS property
-                                    $count = $property->interactions()->where('user_id', $interaction->user_id)->where('interaction_type', 'view')->count();
+                                    // Count how many times THIS specific user has viewed THIS property to show intent
+                                    $viewCount = $property->interactions()->where('user_id', $interaction->user_id)->where('interaction_type', 'impression')->count();
+                                    $percentage = min(($viewCount / 10) * 100, 100); // 10 views = 100% Interest
                                 @endphp
                                 <div class="flex items-center gap-3">
-                                    {{-- Visual Bar for Intensity --}}
-                                    <div class="flex-1 h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
-                                        <div class="h-full bg-[#303b97] rounded-full" style="width: {{ min(($count / 10) * 100, 100) }}%"></div>
+                                    <div class="flex-1 h-2 w-24 bg-gray-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-gradient-to-r from-[#303b97] to-[#4b56b2] rounded-full" style="width: {{ $percentage }}%"></div>
                                     </div>
-                                    <span class="text-xs font-bold text-gray-700 whitespace-nowrap">{{ $count }} Views</span>
+                                    <span class="text-xs font-bold text-gray-700 whitespace-nowrap">{{ $viewCount }} Views</span>
                                 </div>
-                                <p class="text-[10px] text-gray-400 mt-1">Interest Level</p>
+                                <p class="text-[10px] text-gray-400 mt-1">
+                                    @if($viewCount > 5)
+                                        <span class="text-emerald-600 font-bold">🔥 High Interest</span>
+                                    @elseif($viewCount > 2)
+                                        <span class="text-indigo-600 font-medium">Interested</span>
+                                    @else
+                                        Casual Viewer
+                                    @endif
+                                </p>
                             </td>
 
                             {{-- Time Column --}}
