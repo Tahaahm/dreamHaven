@@ -830,6 +830,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         });
 
         // ========== PROPERTIES ==========
+        // ========== PROPERTIES ==========
         Route::prefix('properties')->name('properties.')->group(function () {
             Route::get('/', [AdminController::class, 'propertiesIndex'])->name('index');
             Route::get('/pending', [AdminController::class, 'propertiesPending'])->name('pending');
@@ -839,6 +840,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::delete('/{id}', [AdminController::class, 'propertiesDelete'])->name('delete');
             Route::post('/{id}/approve', [AdminController::class, 'propertiesApprove'])->name('approve');
             Route::post('/{id}/reject', [AdminController::class, 'propertiesReject'])->name('reject');
+            Route::get('/{id}/viewers', [AdminController::class, 'propertiesViewers'])->name('viewers'); // ✅ Fixed
             Route::post('/{id}/toggle-active', [AdminController::class, 'propertiesToggleActive'])->name('toggle.active');
         });
 

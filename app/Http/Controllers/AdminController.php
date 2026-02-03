@@ -2298,4 +2298,23 @@ class AdminController extends Controller
         ]);
         return back()->with('success', 'User suspended successfully!');
     }
+
+    public function propertiesViewers($id)
+    {
+        $property = Property::with(['interactions' => function ($query) {
+            $query->where('interaction_type', 'view')
+                ->whereNotNull('user_id')
+                ->with('user')
+                ->latest();
+        }])->findOrFail($id);
+
+        $viewers = $property->interactions()
+            ->where('interaction_type', 'view')
+            ->whereNotNull('user_id')
+            ->with('user')
+            ->latest()
+            ->paginate(50);
+
+        return view('admin.properties.viewers', compact('property', 'viewers'));
+    }
 }
