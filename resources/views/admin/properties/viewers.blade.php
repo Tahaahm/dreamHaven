@@ -1,151 +1,206 @@
 @extends('layouts.admin-layout')
 
-@section('title', 'Property Viewers - ' . ($property->name['en'] ?? 'Property'))
+@section('title', 'Property Viewers')
 
 @section('content')
 
-<div class="max-w-[1400px] mx-auto">
+<div class="max-w-[1600px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 
-    {{-- Header --}}
-    <div class="mb-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-800">Property Viewers</h1>
-                <p class="text-gray-600 mt-1">{{ $property->name['en'] ?? 'Property' }}</p>
+    {{-- 1. Header & Navigation --}}
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        <div>
+            <div class="flex items-center gap-2 text-xs font-medium text-gray-500 mb-2">
+                <a href="{{ route('admin.properties.index') }}" class="hover:text-[#303b97] transition">Properties</a>
+                <i class="fas fa-chevron-right text-[10px] text-gray-300"></i>
+                <a href="{{ route('admin.properties.show', $property->id) }}" class="hover:text-[#303b97] transition">Details</a>
+                <i class="fas fa-chevron-right text-[10px] text-gray-300"></i>
+                <span class="text-gray-800">Viewers</span>
             </div>
+            <h1 class="text-3xl font-black text-gray-900 tracking-tight">Viewer Analytics</h1>
+            <p class="text-gray-500 font-medium mt-1">
+                Tracking engagement for <span class="text-[#303b97] font-bold">"{{ $property->name['en'] ?? 'Property #' . $property->id }}"</span>
+            </p>
+        </div>
+
+        <div class="flex gap-3">
             <a href="{{ route('admin.properties.show', $property->id) }}"
-               class="bg-gray-200 text-gray-700 px-6 py-3 rounded-xl font-semibold hover:bg-gray-300 transition">
-                <i class="fas fa-arrow-left mr-2"></i> Back to Property
+               class="flex items-center gap-2 bg-white text-gray-700 border border-gray-200 px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-gray-50 hover:border-gray-300 transition shadow-sm">
+                <i class="fas fa-arrow-left"></i> Back to Property
             </a>
         </div>
     </div>
 
-    {{-- Stats Bar --}}
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-600 mb-1">Total Views</p>
-                    <p class="text-2xl font-bold text-gray-900">{{ number_format($property->views ?? 0) }}</p>
+    {{-- 2. High-Impact Stats Cards --}}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+
+        {{-- Card 1: Total Views (Primary) --}}
+        <div class="relative overflow-hidden bg-gradient-to-br from-[#303b97] to-[#4b56b2] rounded-2xl p-6 shadow-lg shadow-indigo-200 text-white group">
+            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition duration-500"></div>
+            <div class="relative z-10">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                        <i class="fas fa-eye text-xl"></i>
+                    </div>
+                    <span class="text-xs font-medium bg-white/20 px-2 py-1 rounded-md backdrop-blur-sm">All Time</span>
                 </div>
-                <div class="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-eye text-indigo-600 text-xl"></i>
-                </div>
+                <p class="text-3xl font-black mb-1">{{ number_format($property->views ?? 0) }}</p>
+                <p class="text-indigo-100 text-sm font-medium">Total Page Hits</p>
             </div>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-600 mb-1">Unique Viewers</p>
-                    <p class="text-2xl font-bold text-gray-900">
-                        {{ $property->interactions()->where('interaction_type', 'impression')->distinct('user_id')->count('user_id') }}
-                    </p>
-                </div>
-                <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-users text-purple-600 text-xl"></i>
+        {{-- Card 2: Unique Authenticated --}}
+        <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                    <i class="fas fa-user-check text-xl"></i>
                 </div>
             </div>
+            <p class="text-3xl font-black text-gray-900 mb-1">
+                {{ $property->interactions()->where('interaction_type', 'view')->distinct('user_id')->count('user_id') }}
+            </p>
+            <p class="text-gray-500 text-sm font-medium">Unique Registered Users</p>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-600 mb-1">Today</p>
-                    <p class="text-2xl font-bold text-gray-900">
-                        {{ $property->interactions()->where('interaction_type', 'impression')->whereDate('created_at', today())->count() }}
-                    </p>
+        {{-- Card 3: Today's Activity --}}
+        <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+                    <i class="fas fa-chart-line text-xl"></i>
                 </div>
-                <div class="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-calendar-day text-emerald-600 text-xl"></i>
-                </div>
+                @if($property->interactions()->where('interaction_type', 'view')->whereDate('created_at', today())->count() > 0)
+                <span class="flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                </span>
+                @endif
             </div>
+            <p class="text-3xl font-black text-gray-900 mb-1">
+                {{ $property->interactions()->where('interaction_type', 'view')->whereDate('created_at', today())->count() }}
+            </p>
+            <p class="text-gray-500 text-sm font-medium">Views Today</p>
         </div>
 
-        <div class="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-            <div class="flex items-center justify-between">
-                <div>
-                    <p class="text-sm text-gray-600 mb-1">This Week</p>
-                    <p class="text-2xl font-bold text-gray-900">
-                        {{ $property->interactions()->where('interaction_type', 'impression')->where('created_at', '>=', now()->startOfWeek())->count() }}
-                    </p>
-                </div>
-                <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                    <i class="fas fa-calendar-week text-blue-600 text-xl"></i>
+        {{-- Card 4: This Week --}}
+        <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition duration-300">
+            <div class="flex items-center justify-between mb-4">
+                <div class="p-2 bg-amber-50 text-amber-600 rounded-lg">
+                    <i class="fas fa-calendar-week text-xl"></i>
                 </div>
             </div>
+            <p class="text-3xl font-black text-gray-900 mb-1">
+                {{ $property->interactions()->where('interaction_type', 'view')->where('created_at', '>=', now()->startOfWeek())->count() }}
+            </p>
+            <p class="text-gray-500 text-sm font-medium">Views This Week</p>
         </div>
     </div>
 
-    {{-- Viewers Table --}}
-    <div class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+    {{-- 3. The Data Table --}}
+    <div class="bg-white rounded-3xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+
+        {{-- Table Header --}}
+        <div class="px-8 py-6 border-b border-gray-100 bg-gray-50/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+                <h3 class="text-lg font-bold text-gray-900">Registered Viewer Log</h3>
+                <p class="text-sm text-gray-500 mt-1">Detailed list of authenticated users who accessed this property details page.</p>
+            </div>
+            <div>
+               {{-- Optional: Export or Filter buttons could go here --}}
+               <span class="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-600 border border-gray-200">
+                   Showing {{ $viewers->count() }} records
+               </span>
+            </div>
+        </div>
+
+        {{-- Table Content --}}
         <div class="overflow-x-auto">
-            <table class="w-full text-left">
+            <table class="w-full text-left border-collapse">
                 <thead>
-                    <tr class="bg-gray-50 border-b border-gray-100">
-                        <th class="px-6 py-4 text-xs font-bold text-gray-600 uppercase">Viewer</th>
-                        <th class="px-6 py-4 text-xs font-bold text-gray-600 uppercase">Contact</th>
-                        <th class="px-6 py-4 text-xs font-bold text-gray-600 uppercase">Viewed At</th>
-                        <th class="px-6 py-4 text-xs font-bold text-gray-600 uppercase text-center">View Count</th>
-                        <th class="px-6 py-4 text-xs font-bold text-gray-600 uppercase text-right">Actions</th>
+                    <tr class="bg-gray-50/50 border-b border-gray-100">
+                        <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">User Profile</th>
+                        <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">Contact Details</th>
+                        <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">Engagement</th>
+                        <th class="px-8 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right">Last Interaction</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-50">
                     @forelse($viewers as $interaction)
                         @if($interaction->user)
-                        <tr class="hover:bg-gray-50 transition">
-                            <td class="px-6 py-4">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
-                                        {{ strtoupper(substr($interaction->user->username ?? 'U', 0, 1)) }}
+                        <tr class="group hover:bg-indigo-50/30 transition-colors duration-200">
+
+                            {{-- User Column --}}
+                            <td class="px-8 py-5 align-top">
+                                <div class="flex items-start gap-4">
+                                    <div class="relative">
+                                        @if($interaction->user->photo_image)
+                                            <img src="{{ $interaction->user->photo_image }}" class="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm group-hover:border-indigo-100 transition">
+                                        @else
+                                            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 border-2 border-white shadow-sm flex items-center justify-center text-gray-500 font-bold text-sm">
+                                                {{ strtoupper(substr($interaction->user->username ?? 'U', 0, 1)) }}
+                                            </div>
+                                        @endif
+
+                                        @if($interaction->user->is_verified)
+                                            <div class="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5" title="Verified User">
+                                                <i class="fas fa-check-circle text-emerald-500 text-xs"></i>
+                                            </div>
+                                        @endif
                                     </div>
                                     <div>
-                                        <p class="font-semibold text-gray-900">{{ $interaction->user->username ?? 'Unknown' }}</p>
-                                        <p class="text-xs text-gray-500">
-                                            @if($interaction->user->is_verified)
-                                                <i class="fas fa-check-circle text-green-500 mr-1"></i> Verified
-                                            @else
-                                                <i class="fas fa-circle text-gray-300 mr-1"></i> Unverified
-                                            @endif
-                                        </p>
+                                        <a href="{{ route('admin.users.show', $interaction->user->id) }}" class="text-sm font-bold text-gray-900 hover:text-[#303b97] transition block">
+                                            {{ $interaction->user->username ?? 'Unknown User' }}
+                                        </a>
+                                        <span class="inline-flex mt-1 items-center px-2 py-0.5 rounded text-[10px] font-medium {{ $interaction->user->is_verified ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600' }}">
+                                            {{ $interaction->user->is_verified ? 'Verified Account' : 'Unverified' }}
+                                        </span>
                                     </div>
                                 </div>
                             </td>
 
-                            <td class="px-6 py-4">
-                                <div class="space-y-1">
+                            {{-- Contact Column --}}
+                            <td class="px-8 py-5 align-top">
+                                <div class="flex flex-col gap-2">
                                     @if($interaction->user->email)
-                                    <p class="text-sm text-gray-700">
-                                        <i class="fas fa-envelope text-gray-400 mr-2"></i>
-                                        {{ $interaction->user->email }}
-                                    </p>
+                                    <div class="flex items-center gap-2 group/link cursor-pointer" onclick="navigator.clipboard.writeText('{{ $interaction->user->email }}'); alert('Email copied!');">
+                                        <div class="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-400 group-hover/link:text-[#303b97] group-hover/link:bg-indigo-50 transition">
+                                            <i class="fas fa-envelope text-xs"></i>
+                                        </div>
+                                        <span class="text-sm text-gray-600 font-medium group-hover/link:text-gray-900 transition">{{ $interaction->user->email }}</span>
+                                    </div>
                                     @endif
+
                                     @if($interaction->user->phone)
-                                    <p class="text-sm text-gray-700">
-                                        <i class="fas fa-phone text-gray-400 mr-2"></i>
-                                        {{ $interaction->user->phone }}
-                                    </p>
+                                    <div class="flex items-center gap-2 group/link">
+                                        <div class="w-6 h-6 rounded-md bg-gray-50 flex items-center justify-center text-gray-400 group-hover/link:text-emerald-600 group-hover/link:bg-emerald-50 transition">
+                                            <i class="fas fa-phone text-xs"></i>
+                                        </div>
+                                        <span class="text-sm text-gray-600 font-medium group-hover/link:text-gray-900 transition">{{ $interaction->user->phone }}</span>
+                                    </div>
                                     @endif
                                 </div>
                             </td>
 
-                            <td class="px-6 py-4">
-                                <p class="text-sm text-gray-900 font-medium">{{ $interaction->created_at->format('M d, Y') }}</p>
-                                <p class="text-xs text-gray-500">{{ $interaction->created_at->format('h:i A') }}</p>
-                                <p class="text-xs text-gray-400 mt-1">{{ $interaction->created_at->diffForHumans() }}</p>
+                            {{-- Engagement Column --}}
+                            <td class="px-8 py-5 align-middle">
+                                @php
+                                    $count = $property->interactions()->where('user_id', $interaction->user_id)->where('interaction_type', 'view')->count();
+                                @endphp
+                                <div class="flex items-center gap-3">
+                                    <div class="flex-1 h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
+                                        <div class="h-full bg-[#303b97] rounded-full" style="width: {{ min(($count / 10) * 100, 100) }}%"></div>
+                                    </div>
+                                    <span class="text-xs font-bold text-gray-700 whitespace-nowrap">{{ $count }} Views</span>
+                                </div>
+                                <p class="text-[10px] text-gray-400 mt-1">Frequency</p>
                             </td>
 
-                            <td class="px-6 py-4 text-center">
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-indigo-50 text-indigo-700">
-                                    {{ $property->interactions()->where('user_id', $interaction->user_id)->where('interaction_type', 'impression')->count() }}x
-                                </span>
-                            </td>
+                            {{-- Time Column --}}
+                            <td class="px-8 py-5 align-middle text-right">
+                                <div class="flex flex-col items-end">
+                                    <span class="text-sm font-bold text-gray-800">{{ $interaction->created_at->diffForHumans() }}</span>
+                                    <span class="text-xs font-mono text-gray-400 mt-0.5">{{ $interaction->created_at->format('M d, Y • h:i A') }}</span>
 
-                            <td class="px-6 py-4 text-right">
-                                <div class="flex items-center justify-end gap-2">
-                                    <a href="{{ route('admin.users.show', $interaction->user->id) }}"
-                                       class="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-semibold hover:bg-indigo-100 transition">
-                                        <i class="fas fa-user mr-1"></i> View Profile
+                                    <a href="{{ route('admin.users.show', $interaction->user->id) }}" class="mt-2 text-xs font-semibold text-[#303b97] hover:underline opacity-0 group-hover:opacity-100 transition-opacity">
+                                        View Full Profile &rarr;
                                     </a>
                                 </div>
                             </td>
@@ -153,11 +208,15 @@
                         @endif
                     @empty
                         <tr>
-                            <td colspan="5" class="px-6 py-12 text-center">
-                                <div class="max-w-sm mx-auto">
-                                    <i class="fas fa-eye-slash text-4xl text-gray-300 mb-3"></i>
-                                    <h3 class="text-gray-900 font-bold mb-1">No Viewers Yet</h3>
-                                    <p class="text-gray-500 text-sm">This property hasn't been viewed by any registered users.</p>
+                            <td colspan="4" class="px-8 py-24 text-center">
+                                <div class="max-w-xs mx-auto flex flex-col items-center">
+                                    <div class="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                                        <i class="fas fa-users-slash text-2xl text-gray-300"></i>
+                                    </div>
+                                    <h3 class="text-lg font-bold text-gray-900">No Viewers Yet</h3>
+                                    <p class="text-sm text-gray-500 mt-2 text-center leading-relaxed">
+                                        This property has not been viewed by any <strong>logged-in</strong> users yet. Guest views are counted in the total stats but not listed here.
+                                    </p>
                                 </div>
                             </td>
                         </tr>
@@ -166,8 +225,8 @@
             </table>
         </div>
 
-        {{-- Pagination --}}
-        <div class="bg-gray-50 px-6 py-4 border-t border-gray-100">
+        {{-- 4. Footer & Pagination --}}
+        <div class="bg-gray-50 px-8 py-5 border-t border-gray-200">
             {{ $viewers->links() }}
         </div>
     </div>
