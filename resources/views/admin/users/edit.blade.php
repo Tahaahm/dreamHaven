@@ -64,22 +64,22 @@
                 <div class="text-white">
                     <h1 class="text-4xl font-black tracking-tight leading-tight mb-2 drop-shadow-lg">{{ $user->username }}</h1>
                     <div class="flex flex-wrap items-center gap-3">
-                        <span class="flex items-center text-sm font-medium text-white/90 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                            <i class="far fa-envelope mr-2"></i> {{ $user->email }}
-                        </span>
-                        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide bg-white/30 backdrop-blur-sm text-white border border-white/40">
-                            <i class="fas fa-user-tag"></i> {{ $user->role }}
-                        </span>
-                        @if($user->is_active)
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide bg-emerald-400/90 text-white border-2 border-emerald-300">
-                                <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> Active
-                            </span>
-                        @else
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide bg-red-400/90 text-white border-2 border-red-300">
-                                <span class="w-2 h-2 rounded-full bg-white"></span> Suspended
-                            </span>
-                        @endif
-                    </div>
+    <span class="flex items-center text-sm font-medium text-white/90 bg-white/20 backdrop-blur-sm px-3 py-1.5 rounded-full">
+        <i class="far fa-envelope mr-2"></i> {{ $user->email }}
+    </span>
+    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide bg-white/30 backdrop-blur-sm text-white border border-white/40">
+        <i class="fas fa-user-tag"></i> {{ $user->role }}
+    </span>
+    @if($user->is_verified)
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide bg-emerald-400/90 text-white border-2 border-emerald-300">
+            <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span> Verified
+        </span>
+    @else
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide bg-red-400/90 text-white border-2 border-red-300">
+            <span class="w-2 h-2 rounded-full bg-white"></span> Unverified
+        </span>
+    @endif
+</div>
                     <div class="flex items-center gap-2 mt-3 text-white/80 text-sm">
                         <i class="far fa-calendar-alt"></i>
                         <span>Joined {{ $user->created_at->format('F d, Y') }}</span>
@@ -92,27 +92,27 @@
             </div>
 
             {{-- Action Buttons --}}
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <button onclick="openEditModal()" class="px-6 py-3 bg-white hover:bg-gray-50 text-[#303b97] text-sm font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95">
-                    <i class="fas fa-pen-to-square"></i> Edit Profile
-                </button>
+<div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+    <button onclick="openEditModal()" class="px-6 py-3 bg-white hover:bg-gray-50 text-[#303b97] text-sm font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95">
+        <i class="fas fa-pen-to-square"></i> Edit Profile
+    </button>
 
-                @if($user->is_active)
-                    <form action="{{ route('admin.users.suspend', $user->id) }}" method="POST" class="inline-block">
-                        @csrf
-                        <button type="submit" onclick="return confirm('Are you sure you want to suspend this user?')" class="w-full px-6 py-3 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95">
-                            <i class="fas fa-ban"></i> Suspend User
-                        </button>
-                    </form>
-                @else
-                    <form action="{{ route('admin.users.activate', $user->id) }}" method="POST" class="inline-block">
-                        @csrf
-                        <button type="submit" class="w-full px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95">
-                            <i class="fas fa-check-circle"></i> Activate User
-                        </button>
-                    </form>
-                @endif
-            </div>
+    @if($user->is_verified)
+        <form action="{{ route('admin.users.suspend', $user->id) }}" method="POST" class="inline-block">
+            @csrf
+            <button type="submit" onclick="return confirm('Are you sure you want to suspend this user? This will unverify their account.')" class="w-full px-6 py-3 bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95">
+                <i class="fas fa-ban"></i> Suspend User
+            </button>
+        </form>
+    @else
+        <form action="{{ route('admin.users.activate', $user->id) }}" method="POST" class="inline-block">
+            @csrf
+            <button type="submit" class="w-full px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 hover:scale-105 active:scale-95">
+                <i class="fas fa-check-circle"></i> Verify & Activate User
+            </button>
+        </form>
+    @endif
+</div>
         </div>
     </div>
 </div>

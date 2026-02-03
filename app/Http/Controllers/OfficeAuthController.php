@@ -674,9 +674,38 @@ class OfficeAuthController extends Controller
 
     public function updateAppointmentStatus(Request $request, $id)
     {
+        Log::info('🔵 Office updateAppointmentStatus called', [
+            'appointment_id' => $id,
+            'request_status' => $request->input('status'),
+            'request_method' => $request->method(),
+            'authenticated_office' => Auth::guard('office')->check(),
+            'office_id' => Auth::guard('office')->id(),
+        ]);
+
         $office = Auth::guard('office')->user();
 
-        $appointment = Appointment::where('office_id', $office->id)->findOrFail($id);
+        if (!$office) {
+            Log::error('❌ No authenticated office found');
+            return redirect()->back()->with('error', 'Authentication required');
+        }
+
+        $appointment = Appointment::where('id', $id)
+            ->where('office_id', $office->id)
+            ->first();
+
+        if (!$appointment) {
+            Log::error('❌ Appointment not found', [
+                'appointment_id' => $id,
+                'office_id' => $office->id
+            ]);
+            return redirect()->back()->with('error', 'Appointment not found');
+        }
+
+        Log::info('✅ Appointment found', [
+            'appointment_id' => $appointment->id,
+            'current_status' => $appointment->status,
+            'user_id' => $appointment->user_id
+        ]);
 
         $validator = Validator::make($request->all(), [
             'status' => 'required|in:pending,confirmed,completed,cancelled',
@@ -686,10 +715,218 @@ class OfficeAuthController extends Controller
             return redirect()->back()->withErrors($validator);
         }
 
-        $appointment->update(['status' => $request->status]);
+        $oldStatus = $appointment->status;
+        $newStatus = $request->status;
+
+        Log::info('🔄 Updating status', [
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus
+        ]);
+
+        // Update appointment status using model methods
+        switch ($newStatus) {
+            case 'confirmed':
+                $appointment->confirm();
+                break;
+            case 'completed':
+                $appointment->complete();
+                break;
+            case 'cancelled':
+                $appointment->cancel();
+                break;
+            default:
+                $appointment->update(['status' => $newStatus]);
+        }
+
+        Log::info('✅ Appointment status updated in database', [
+            'appointment_id' => $appointment->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'office_id' => $office->id,
+            'user_id' => $appointment->user_id
+        ]);
+
+        // Send notification to user
+        $this->notifyUserAboutAppointmentStatusChange($appointment, $oldStatus, $newStatus);
 
         return redirect()->route('office.appointments')
             ->with('success', 'Appointment status updated successfully!');
+    }
+    private function notifyUserAboutAppointmentStatusChange($appointment, $oldStatus, $newStatus)
+    {
+        Log::info('Starting appointment notification process', [
+            'appointment_id' => $appointment->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus
+        ]);
+
+        $user = $appointment->user;
+
+        if (!$user) {
+            Log::warning('Appointment has no user - notification cancelled', [
+                'appointment_id' => $appointment->id
+            ]);
+            return;
+        }
+
+        // ✅ Get user's preferred language (default to English)
+        $userLanguage = $user->language ?? 'en';
+
+        Log::info('User language detected', [
+            'user_id' => $user->id,
+            'language' => $userLanguage
+        ]);
+
+        // ✅ Multilingual notification messages
+        $statusMessages = [
+            'confirmed' => [
+                'en' => 'Your appointment has been confirmed! We look forward to seeing you.',
+                'ar' => 'تم تأكيد موعدك! نتطلع لرؤيتك.',
+                'ku' => 'چاوپێکەوتنەکەت پشتڕاست کرایەوە! چاوەڕوانی بینینت دەکەین.',
+            ],
+            'completed' => [
+                'en' => 'Your appointment has been completed. Thank you for your time!',
+                'ar' => 'تم إكمال موعدك. شكراً لوقتك!',
+                'ku' => 'چاوپێکەوتنەکەت تەواو بوو. سوپاس بۆ کاتەکەت!',
+            ],
+            'cancelled' => [
+                'en' => 'Your appointment has been cancelled. Please contact us if you have questions.',
+                'ar' => 'تم إلغاء موعدك. يرجى الاتصال بنا إذا كان لديك أسئلة.',
+                'ku' => 'چاوپێکەوتنەکەت هەڵوەشێنرایەوە. تکایە پەیوەندیمان پێوە بکە ئەگەر پرسیارت هەیە.',
+            ],
+            'pending' => [
+                'en' => 'Your appointment is pending confirmation.',
+                'ar' => 'موعدك في انتظار التأكيد.',
+                'ku' => 'چاوپێکەوتنەکەت چاوەڕوانی پشتڕاستکردنەوەیە.',
+            ],
+        ];
+
+        $titles = [
+            'confirmed' => [
+                'en' => 'Appointment Confirmed',
+                'ar' => 'تم تأكيد الموعد',
+                'ku' => 'چاوپێکەوتن پشتڕاست کرایەوە',
+            ],
+            'completed' => [
+                'en' => 'Appointment Completed',
+                'ar' => 'تم إكمال الموعد',
+                'ku' => 'چاوپێکەوتن تەواو بوو',
+            ],
+            'cancelled' => [
+                'en' => 'Appointment Cancelled',
+                'ar' => 'تم إلغاء الموعد',
+                'ku' => 'چاوپێکەوتن هەڵوەشێنرایەوە',
+            ],
+            'pending' => [
+                'en' => 'Appointment Pending',
+                'ar' => 'الموعد قيد الانتظار',
+                'ku' => 'چاوپێکەوتن چاوەڕێیە',
+            ],
+        ];
+
+        // ✅ Get message in user's language
+        $title = $titles[$newStatus][$userLanguage] ?? $titles[$newStatus]['en'] ?? 'Appointment Update';
+        $message = $statusMessages[$newStatus][$userLanguage] ?? $statusMessages[$newStatus]['en'] ?? 'Your appointment status has been updated.';
+
+        Log::info('Notification messages prepared', [
+            'language' => $userLanguage,
+            'title' => $title,
+            'message_preview' => substr($message, 0, 50) . '...'
+        ]);
+
+        // Get appointment details
+        $propertyName = 'Property Viewing';
+        if ($appointment->property) {
+            $propertyName = is_array($appointment->property->name)
+                ? ($appointment->property->name[$userLanguage] ?? $appointment->property->name['en'] ?? 'Property Viewing')
+                : $appointment->property->name;
+        }
+
+        $appointmentDate = $appointment->appointment_date->format('M d, Y');
+
+        try {
+            $appointmentTime = $appointment->appointment_time instanceof \Carbon\Carbon
+                ? $appointment->appointment_time->format('h:i A')
+                : \Carbon\Carbon::parse($appointment->appointment_time)->format('h:i A');
+        } catch (\Exception $e) {
+            $appointmentTime = $appointment->appointment_time ?? 'N/A';
+            Log::warning('Failed to parse appointment time', [
+                'appointment_id' => $appointment->id,
+                'raw_time' => $appointment->appointment_time,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        // Get office name
+        $office = Auth::guard('office')->user();
+        $officeName = $office->company_name ?? 'Real Estate Office';
+
+        // Prepare notification data
+        $notificationData = [
+            'appointment_id' => $appointment->id,
+            'property_name' => $propertyName,
+            'appointment_date' => $appointmentDate,
+            'appointment_time' => $appointmentTime,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'office_name' => $officeName,
+            'language' => $userLanguage,
+        ];
+
+        Log::info('Notification data prepared', $notificationData);
+
+        try {
+            $fcmService = app(\App\Services\FCMNotificationService::class);
+
+            Log::info('Calling FCM service to send notification', [
+                'user_id' => $user->id,
+                'appointment_id' => $appointment->id
+            ]);
+
+            $result = $fcmService->createAndSendNotification(
+                $user,
+                $title,
+                $message,
+                'appointment', // ✅ Shortened to fit in database
+                $notificationData
+            );
+
+            if ($result['success']) {
+                $fcmSent = $result['fcm_result']['success'] ?? false;
+                $sentCount = $result['fcm_result']['sent_count'] ?? 0;
+                $totalTokens = $result['fcm_result']['total_tokens'] ?? 0;
+
+                Log::info('✅ Appointment notification sent successfully', [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'appointment_id' => $appointment->id,
+                    'status' => $newStatus,
+                    'language' => $userLanguage,
+                    'database_notification_created' => true,
+                    'fcm_notification_sent' => $fcmSent,
+                    'fcm_tokens_sent_to' => $sentCount,
+                    'fcm_total_tokens' => $totalTokens,
+                    'notification_id' => $result['notification']->id ?? null
+                ]);
+            } else {
+                Log::warning('⚠️ Notification created in database but FCM failed', [
+                    'user_id' => $user->id,
+                    'appointment_id' => $appointment->id,
+                    'fcm_error' => $result['fcm_result']['error'] ?? 'Unknown error'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('❌ Failed to send appointment notification', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'appointment_id' => $appointment->id,
+                'status' => $newStatus,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
     }
 
     public function showPropertyUpload()
@@ -703,9 +940,8 @@ class OfficeAuthController extends Controller
         return view('office.property-add');
     }
 
-    /**
-     * ✅ Store new property
-     */
+    // ✅ FIXED VERSION - Replace your storeProperty method with this:
+
     public function storeProperty(Request $request)
     {
         Log::info('=== OFFICE PROPERTY CREATE ===', ['office_id' => auth('office')->id()]);
@@ -716,9 +952,25 @@ class OfficeAuthController extends Controller
 
         $office = auth('office')->user();
 
+        // ✅ 1.5. CHECK PROPERTY LIMIT BEFORE ALLOWING UPLOAD
+        if (!$office->canAddProperty()) {
+            $propertyInfo = $office->getPropertyLimitInfo();
+
+            $message = "⚠️ Property Limit Reached! ";
+
+            if ($propertyInfo['is_unlimited']) {
+                // Should never happen with unlimited plan, but just in case
+                Log::warning('Unlimited plan blocking property creation', ['office_id' => $office->id]);
+            } else {
+                $message .= "You've used {$propertyInfo['used']} out of {$propertyInfo['limit']} properties. ";
+                $message .= "Please upgrade your subscription or delete some properties to add new ones.";
+            }
+
+            return redirect()->route('office.properties')
+                ->with('error', $message);
+        }
+
         // 2. SMART VALIDATION
-        // "required_without_all" means: English is required ONLY IF Arabic AND Kurdish are empty.
-        // If Kurdish is present, English becomes optional.
         $validated = $request->validate([
             'name_en'        => 'nullable|required_without_all:name_ar,name_ku|string|min:3|max:255',
             'name_ar'        => 'nullable|string|max:255',
@@ -746,13 +998,11 @@ class OfficeAuthController extends Controller
             'description_en.required_without_all' => 'Please provide a description in at least one language.'
         ]);
 
-        // 3. SMART FALLBACK LOGIC (The Magic Part 🪄)
-        // If English is empty, grab Kurdish. If Kurdish is empty, grab Arabic.
+        // 3. SMART FALLBACK LOGIC
         $finalNameEn = $request->name_en ?: ($request->name_ku ?: $request->name_ar);
-        $finalNameAr = $request->name_ar ?: ($request->name_ku ?: $finalNameEn); // If Ar empty, try Ku, else En
-        $finalNameKu = $request->name_ku ?: ($request->name_ar ?: $finalNameEn); // If Ku empty, try Ar, else En
+        $finalNameAr = $request->name_ar ?: ($request->name_ku ?: $finalNameEn);
+        $finalNameKu = $request->name_ku ?: ($request->name_ar ?: $finalNameEn);
 
-        // Same for Description
         $finalDescEn = $request->description_en ?: ($request->description_ku ?: $request->description_ar);
         $finalDescAr = $request->description_ar ?: ($request->description_ku ?: $finalDescEn);
         $finalDescKu = $request->description_ku ?: ($request->description_ar ?: $finalDescEn);
@@ -767,14 +1017,13 @@ class OfficeAuthController extends Controller
                     $path = 'property_images/' . $filename;
 
                     $img = $manager->read($image);
-                    $img->scaleDown(width: 1920); // Resize 4K images
-                    $encoded = $img->toWebp(quality: 90); // Compress
+                    $img->scaleDown(width: 1920);
+                    $encoded = $img->toWebp(quality: 90);
 
                     Storage::disk('public')->put($path, (string) $encoded);
                     $imageUrls[] = asset('storage/' . $path);
                 } catch (\Exception $e) {
                     Log::error("Image Error: " . $e->getMessage());
-                    // Fallback to standard upload if compression fails
                     $fallbackPath = $image->store('property_images', 'public');
                     $imageUrls[] = asset('storage/' . $fallbackPath);
                 }
@@ -791,7 +1040,6 @@ class OfficeAuthController extends Controller
                 'owner_id' => $office->id,
                 'owner_type' => 'App\\Models\\RealEstateOffice',
 
-                // ✅ SAVE THE SMART FALLBACK VALUES
                 'name' => json_encode([
                     'en' => $finalNameEn,
                     'ar' => $finalNameAr,
@@ -822,6 +1070,9 @@ class OfficeAuthController extends Controller
                 'listing_type' => $request->listing_type,
                 'images' => json_encode($imageUrls),
 
+                // ✅ FIX: availability field (was missing)
+                'availability' => json_encode([]),
+
                 // Booleans
                 'furnished' => $request->boolean('furnished') ? 1 : 0,
                 'electricity' => $request->boolean('electricity') ? 1 : 0,
@@ -840,7 +1091,14 @@ class OfficeAuthController extends Controller
                 'updated_at' => now(),
             ]);
 
+            // ✅ INCREMENT PROPERTY COUNT IN SUBSCRIPTION
             $office->incrementPropertyCount();
+
+            Log::info('✅ Property created successfully', [
+                'property_id' => $propertyId,
+                'office_id' => $office->id,
+                'properties_count' => $office->subscription->properties_activated_this_month ?? 0
+            ]);
 
             return redirect()->route('office.properties')->with('success', '🎉 Property created successfully!');
         } catch (\Exception $e) {

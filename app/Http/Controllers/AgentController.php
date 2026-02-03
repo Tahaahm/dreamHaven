@@ -18,6 +18,8 @@ use App\Models\Support\UserFavoriteProperty;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Subscription\Subscription;
 use App\Models\SubscriptionPlan;
+use App\Services\FCMNotificationService;
+
 
 class AgentController extends Controller
 {
@@ -1401,35 +1403,224 @@ class AgentController extends Controller
     /**
      * ✅ NEW: Update Appointment Status (Confirm/Cancel/Complete)
      */
+
     public function updateAppointmentStatus(Request $request, $id)
     {
+        $agent = Auth::guard('agent')->user();
+
+        $appointment = Appointment::where('id', $id)
+            ->where('agent_id', $agent->id)
+            ->firstOrFail();
+
+        $request->validate([
+            'status' => 'required|in:pending,confirmed,completed,cancelled'
+        ]);
+
+        $oldStatus = $appointment->status;
+        $newStatus = $request->status;
+
+        // Update appointment status using model methods
+        switch ($newStatus) {
+            case 'confirmed':
+                $appointment->confirm();
+                break;
+            case 'completed':
+                $appointment->complete();
+                break;
+            case 'cancelled':
+                $appointment->cancel();
+                break;
+            default:
+                $appointment->update(['status' => $newStatus]);
+        }
+
+        Log::info('Appointment status updated', [
+            'appointment_id' => $appointment->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'agent_id' => $agent->id,
+            'user_id' => $appointment->user_id
+        ]);
+
+        // Send notification to user
+        $this->notifyUserAboutAppointmentStatusChange($appointment, $oldStatus, $newStatus);
+
+        return redirect()->back()->with('success', 'Appointment status updated successfully!');
+    }
+
+    /**
+     * Send multilingual notification to user about appointment status change
+     */
+    private function notifyUserAboutAppointmentStatusChange($appointment, $oldStatus, $newStatus)
+    {
+        Log::info('Starting appointment notification process', [
+            'appointment_id' => $appointment->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus
+        ]);
+
+        $user = $appointment->user;
+
+        if (!$user) {
+            Log::warning('Appointment has no user - notification cancelled', [
+                'appointment_id' => $appointment->id
+            ]);
+            return;
+        }
+
+        // ✅ Get user's preferred language (default to English)
+        $userLanguage = $user->language ?? 'en';
+
+        Log::info('User language detected', [
+            'user_id' => $user->id,
+            'language' => $userLanguage
+        ]);
+
+        // ✅ Multilingual notification messages
+        $statusMessages = [
+            'confirmed' => [
+                'en' => 'Your appointment has been confirmed! We look forward to seeing you.',
+                'ar' => 'تم تأكيد موعدك! نتطلع لرؤيتك.',
+                'ku' => 'چاوپێکەوتنەکەت پشتڕاست کرایەوە! چاوەڕوانی بینینت دەکەین.',
+            ],
+            'completed' => [
+                'en' => 'Your appointment has been completed. Thank you for your time!',
+                'ar' => 'تم إكمال موعدك. شكراً لوقتك!',
+                'ku' => 'چاوپێکەوتنەکەت تەواو بوو. سوپاس بۆ کاتەکەت!',
+            ],
+            'cancelled' => [
+                'en' => 'Your appointment has been cancelled. Please contact us if you have questions.',
+                'ar' => 'تم إلغاء موعدك. يرجى الاتصال بنا إذا كان لديك أسئلة.',
+                'ku' => 'چاوپێکەوتنەکەت هەڵوەشێنرایەوە. تکایە پەیوەندیمان پێوە بکە ئەگەر پرسیارت هەیە.',
+            ],
+            'pending' => [
+                'en' => 'Your appointment is pending confirmation.',
+                'ar' => 'موعدك في انتظار التأكيد.',
+                'ku' => 'چاوپێکەوتنەکەت چاوەڕوانی پشتڕاستکردنەوەیە.',
+            ],
+        ];
+
+        $titles = [
+            'confirmed' => [
+                'en' => 'Appointment Confirmed',
+                'ar' => 'تم تأكيد الموعد',
+                'ku' => 'چاوپێکەوتن پشتڕاست کرایەوە',
+            ],
+            'completed' => [
+                'en' => 'Appointment Completed',
+                'ar' => 'تم إكمال الموعد',
+                'ku' => 'چاوپێکەوتن تەواو بوو',
+            ],
+            'cancelled' => [
+                'en' => 'Appointment Cancelled',
+                'ar' => 'تم إلغاء الموعد',
+                'ku' => 'چاوپێکەوتن هەڵوەشێنرایەوە',
+            ],
+            'pending' => [
+                'en' => 'Appointment Pending',
+                'ar' => 'الموعد قيد الانتظار',
+                'ku' => 'چاوپێکەوتن چاوەڕێیە',
+            ],
+        ];
+
+        // ✅ Get message in user's language
+        $title = $titles[$newStatus][$userLanguage] ?? $titles[$newStatus]['en'] ?? 'Appointment Update';
+        $message = $statusMessages[$newStatus][$userLanguage] ?? $statusMessages[$newStatus]['en'] ?? 'Your appointment status has been updated.';
+
+        Log::info('Notification messages prepared', [
+            'language' => $userLanguage,
+            'title' => $title,
+            'message_preview' => substr($message, 0, 50) . '...'
+        ]);
+
+        // Get appointment details
+        $propertyName = 'Property Viewing';
+        if ($appointment->property) {
+            $propertyName = is_array($appointment->property->name)
+                ? ($appointment->property->name[$userLanguage] ?? $appointment->property->name['en'] ?? 'Property Viewing')
+                : $appointment->property->name;
+        }
+
+        $appointmentDate = $appointment->appointment_date->format('M d, Y');
+
         try {
-            $agent = $request->user();
-
-            $appointment = Appointment::where('id', $id)
-                ->where('agent_id', $agent->id) // Security: Ensure appointment belongs to agent
-                ->first();
-
-            if (!$appointment) {
-                return ApiResponse::error('Appointment not found', null, 404);
-            }
-
-            $request->validate([
-                'status' => 'required|in:pending,confirmed,completed,cancelled'
-            ]);
-
-            $appointment->update([
-                'status' => $request->status
-            ]);
-
-            return ApiResponse::success(
-                ResponseDetails::successMessage('Status updated successfully'),
-                $appointment,
-                ResponseDetails::CODE_SUCCESS
-            );
+            $appointmentTime = $appointment->appointment_time instanceof \Carbon\Carbon
+                ? $appointment->appointment_time->format('h:i A')
+                : \Carbon\Carbon::parse($appointment->appointment_time)->format('h:i A');
         } catch (\Exception $e) {
-            Log::error('Update Status Error: ' . $e->getMessage());
-            return ApiResponse::error('Failed to update status', null, 500);
+            $appointmentTime = $appointment->appointment_time ?? 'N/A';
+            Log::warning('Failed to parse appointment time', [
+                'appointment_id' => $appointment->id,
+                'raw_time' => $appointment->appointment_time,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        // Prepare notification data
+        $notificationData = [
+            'appointment_id' => $appointment->id,
+            'property_name' => $propertyName,
+            'appointment_date' => $appointmentDate,
+            'appointment_time' => $appointmentTime,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'agent_name' => $appointment->agent->agent_name ?? 'Agent',
+            'language' => $userLanguage,
+        ];
+
+        Log::info('Notification data prepared', $notificationData);
+
+        try {
+            $fcmService = app(FCMNotificationService::class);
+
+            Log::info('Calling FCM service to send notification', [
+                'user_id' => $user->id,
+                'appointment_id' => $appointment->id
+            ]);
+
+            $result = $fcmService->createAndSendNotification(
+                $user,
+                $title,
+                $message,
+                'appointment_status',
+                $notificationData
+            );
+
+            if ($result['success']) {
+                $fcmSent = $result['fcm_result']['success'] ?? false;
+                $sentCount = $result['fcm_result']['sent_count'] ?? 0;
+                $totalTokens = $result['fcm_result']['total_tokens'] ?? 0;
+
+                Log::info('✅ Appointment notification sent successfully', [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'appointment_id' => $appointment->id,
+                    'status' => $newStatus,
+                    'language' => $userLanguage,
+                    'database_notification_created' => true,
+                    'fcm_notification_sent' => $fcmSent,
+                    'fcm_tokens_sent_to' => $sentCount,
+                    'fcm_total_tokens' => $totalTokens,
+                    'notification_id' => $result['notification']->id ?? null
+                ]);
+            } else {
+                Log::warning('⚠️ Notification created in database but FCM failed', [
+                    'user_id' => $user->id,
+                    'appointment_id' => $appointment->id,
+                    'fcm_error' => $result['fcm_result']['error'] ?? 'Unknown error'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('❌ Failed to send appointment notification', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'appointment_id' => $appointment->id,
+                'status' => $newStatus,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
         }
     }
 }

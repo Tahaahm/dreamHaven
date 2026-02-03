@@ -274,17 +274,17 @@ class RealEstateOffice extends Authenticatable
      */
     public function incrementPropertyCount(): void
     {
-        if ($this->subscription && $this->subscription->property_activation_limit > 0) {
+        if ($this->subscription) {
             $this->subscription->incrementPropertyCount();
         }
     }
 
     /**
-     * Decrement property count (when removing property)
+     * Decrement property count in subscription
      */
     public function decrementPropertyCount(): void
     {
-        if ($this->subscription && $this->subscription->property_activation_limit > 0) {
+        if ($this->subscription) {
             $this->subscription->decrementPropertyCount();
         }
     }

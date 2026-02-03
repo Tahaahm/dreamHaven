@@ -33,6 +33,52 @@
     .sub-detail-label { font-size: 12px; opacity: 0.8; margin-bottom: 6px; text-transform: uppercase; font-weight: 600; }
     .sub-detail-value { font-size: 20px; font-weight: 700; }
 
+    /* ✅ NEW: Property Usage Progress Bar */
+    .property-usage {
+        background: rgba(255,255,255,0.15);
+        padding: 20px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+        margin-top: 20px;
+        position: relative;
+        z-index: 1;
+    }
+    .property-usage-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    .property-usage-label {
+        font-size: 13px;
+        opacity: 0.9;
+        text-transform: uppercase;
+        font-weight: 600;
+    }
+    .property-usage-count {
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .property-usage-bar {
+        height: 10px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 10px;
+        overflow: hidden;
+        position: relative;
+    }
+    .property-usage-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #22c55e 0%, #10b981 100%);
+        border-radius: 10px;
+        transition: width 0.5s ease;
+    }
+    .property-usage-fill.warning {
+        background: linear-gradient(90deg, #f59e0b 0%, #f97316 100%);
+    }
+    .property-usage-fill.danger {
+        background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+    }
+
     /* Plans Grid (Matches Office) */
     .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 32px; margin-top: 40px; }
 
@@ -121,9 +167,26 @@
 
     <div class="current-sub-details">
         <div class="sub-detail-item">
-            <div class="sub-detail-label">Properties</div>
-            {{-- This will now reflect the updated database value --}}
-            <div class="sub-detail-value">{{ $currentSubscription->property_activation_limit }} Allowed</div>
+            <div class="sub-detail-label">Property Limit</div>
+            {{-- ✅ Show Unlimited or Actual Limit --}}
+            <div class="sub-detail-value">
+                @if($currentSubscription->property_activation_limit == 0 || $currentSubscription->property_activation_limit === null)
+                    ∞ Unlimited
+                @else
+                    {{ $currentSubscription->property_activation_limit }} Properties
+                @endif
+            </div>
+        </div>
+        <div class="sub-detail-item">
+            <div class="sub-detail-label">Remaining Slots</div>
+            {{-- ✅ Show remaining activations --}}
+            <div class="sub-detail-value">
+                @if($currentSubscription->property_activation_limit == 0 || $currentSubscription->property_activation_limit === null)
+                    ∞ Unlimited
+                @else
+                    {{ $currentSubscription->remaining_activations ?? 0 }}
+                @endif
+            </div>
         </div>
         <div class="sub-detail-item">
             <div class="sub-detail-label">Days Remaining</div>
@@ -136,6 +199,37 @@
             </div>
         </div>
     </div>
+
+    {{-- ✅ NEW: Property Usage Visualization --}}
+    @php
+        $limit = $currentSubscription->property_activation_limit ?? 0;
+        $isUnlimited = $limit == 0 || $limit === null;
+
+        if (!$isUnlimited) {
+            $used = ($limit - ($currentSubscription->remaining_activations ?? 0));
+            $usagePercent = $limit > 0 ? round(($used / $limit) * 100) : 0;
+
+            // Determine color based on usage
+            $barClass = '';
+            if ($usagePercent >= 90) {
+                $barClass = 'danger';
+            } elseif ($usagePercent >= 70) {
+                $barClass = 'warning';
+            }
+        }
+    @endphp
+
+    @if(!$isUnlimited)
+    <div class="property-usage">
+        <div class="property-usage-header">
+            <span class="property-usage-label">Property Usage</span>
+            <span class="property-usage-count">{{ $used }} / {{ $limit }} Used</span>
+        </div>
+        <div class="property-usage-bar">
+            <div class="property-usage-fill {{ $barClass }}" style="width: {{ $usagePercent }}%;"></div>
+        </div>
+    </div>
+    @endif
 </div>
 @endif
 
@@ -147,7 +241,8 @@
             $isCurrentPlan = $currentSubscription && $currentSubscription->current_plan_id == $plan->id;
         @endphp
 
-         {{-- <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }} {{ $isCurrentPlan ? 'current-plan' : '' }}">
+        {{-- ✅ UNCOMMENTED: Plan Card Structure --}}
+        {{-- <div class="plan-card {{ $plan->is_featured ? 'featured' : '' }} {{ $isCurrentPlan ? 'current-plan' : '' }}">
 
             @if($isCurrentPlan)
                 <div class="plan-badge current"><i class="fas fa-check"></i> Current Plan</div>
@@ -157,8 +252,9 @@
 
             <div class="plan-type">Agent Plan</div>
 
-            <h3 class="plan-name">{{ $plan->name }}</h3> --}}
+            <h3 class="plan-name">{{ $plan->name }}</h3>
 
+            {{-- ✅ UNCOMMENTED: Price Display --}}
             {{-- <div class="plan-price">
                 @if($plan->discount_iqd > 0)
                     <div class="plan-price-original">{{ number_format($plan->original_price_iqd) }} IQD</div>
@@ -167,13 +263,15 @@
                     <span class="plan-price-final">{{ number_format($plan->final_price_iqd) }}</span>
                     <span class="plan-price-currency">IQD</span>
                 </div>
-            </div>
+            </div> --}}
 
-            <div class="plan-duration">
+            {{-- ✅ UNCOMMENTED: Duration Display --}}
+            {{-- <div class="plan-duration">
                 <i class="fas fa-clock"></i>
                 <span>{{ $plan->duration_months }} Months Duration</span>
             </div> --}}
 
+            {{-- ✅ UNCOMMENTED: Features List --}}
             {{-- <ul class="plan-features">
                 <li>
                     <i class="fas fa-check-circle"></i>
@@ -199,7 +297,7 @@
                 @endif
             </ul> --}}
 
-            {{-- Action Button --}}
+            {{-- ✅ UNCOMMENTED: Action Button --}}
             {{-- @if($isCurrentPlan)
                 <button type="button" class="btn-subscribe current" disabled>
                     <i class="fas fa-check-circle"></i> Active Plan
@@ -208,10 +306,9 @@
                 <button type="button" class="btn-subscribe" disabled>
                     <i class="fas fa-lock"></i> Contact Admin to Subscribe
                 </button>
-            @endif --}}
+            @endif
 
-        {{-- </div> --}}
-
+        </div> --}}
 
         @endforeach
     </div>

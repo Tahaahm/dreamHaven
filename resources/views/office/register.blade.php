@@ -269,18 +269,16 @@
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="city-select">City *</label>
-                    <select id="city-select" required>
+                    <label for="city">City *</label>
+                    <select id="city" name="city" required>
                         <option value="">Loading cities...</option>
                     </select>
-                    <input type="hidden" id="city" name="city" value="{{ old('city') }}">
                 </div>
                 <div class="form-group">
-                    <label for="area-select">District *</label>
-                    <select id="area-select" disabled required>
+                    <label for="district">District *</label>
+                    <select id="district" name="district" disabled required>
                         <option value="">Select City First</option>
                     </select>
-                    <input type="hidden" id="district" name="district" value="{{ old('district') }}">
                 </div>
             </div>
 
@@ -308,69 +306,136 @@
         </div>
     </div>
 
-    <script src="{{ asset('js/location-selector.js') }}"></script>
+    {{-- ✅ SAME LOGIC AS AGENT REGISTRATION --}}
     <script>
-        // Initialize LocationSelector for registration
-        let locationSelector;
+    document.addEventListener('DOMContentLoaded', async function() {
+        const citySelect = document.getElementById('city');
+        const districtSelect = document.getElementById('district');
+        const oldCity = "{{ old('city') }}";
+        const oldDistrict = "{{ old('district') }}";
 
-        window.addEventListener('DOMContentLoaded', async function() {
-            console.log('=== Registration Location Selector Initialization ===');
+        // ============================================
+        // Load Cities (Same as Agent)
+        // ============================================
+        try {
+            const response = await fetch("/v1/api/location/cities", {
+                headers: {
+                    "Accept": "application/json",
+                    "Accept-Language": "en"
+                }
+            });
 
-            try {
-                // Create LocationSelector instance
-                locationSelector = new LocationSelector({
-                    citySelectId: 'city-select',
-                    areaSelectId: 'area-select',
-                    cityInputId: 'city',
-                    districtInputId: 'district'
+            if (!response.ok) throw new Error('Failed to load cities');
+
+            const result = await response.json();
+
+            citySelect.innerHTML = '<option value="">Select City</option>';
+
+            if (result.success && result.data) {
+                const cities = result.data.sort((a, b) => {
+                    const nameA = a.name_en || a.nameEn || a.city_name_en || '';
+                    const nameB = b.name_en || b.nameEn || b.city_name_en || '';
+                    return nameA.localeCompare(nameB);
                 });
 
-                // Initialize (loads cities and sets up event listeners)
-                await locationSelector.init();
-                console.log('✓ Location selector initialized successfully');
+                cities.forEach(city => {
+                    const option = document.createElement('option');
+                    const cityName = city.name_en || city.nameEn || city.city_name_en;
 
-                // Restore old values if form validation failed
-                const oldCity = "{{ old('city') }}";
-                const oldDistrict = "{{ old('district') }}";
+                    option.value = cityName;
+                    option.textContent = cityName;
+                    option.dataset.cityId = city.id;
 
-                if (oldCity && oldCity.trim() !== '') {
-                    console.log('Restoring saved city:', oldCity);
-                    const citySet = await locationSelector.setCityByName(oldCity);
-
-                    if (citySet) {
-                        console.log('✓ City restored successfully');
-
-                        // Wait for areas to load, then restore district
-                        if (oldDistrict && oldDistrict.trim() !== '') {
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                            console.log('Restoring saved district:', oldDistrict);
-                            const districtSet = locationSelector.setAreaByName(oldDistrict);
-
-                            if (districtSet) {
-                                console.log('✓ District restored successfully');
-                            } else {
-                                console.warn('✗ Failed to restore district');
-                            }
-                        }
-                    } else {
-                        console.warn('✗ Failed to restore city');
+                    if (oldCity && oldCity === cityName) {
+                        option.selected = true;
                     }
-                } else {
-                    console.log('No saved values to restore');
-                }
 
-                console.log('=== Initialization Complete ===');
+                    citySelect.appendChild(option);
+                });
 
-            } catch (error) {
-                console.error('!!! Failed to initialize location selector:', error);
-
-                // Show user-friendly error
-                const citySelect = document.getElementById('city-select');
-                if (citySelect) {
-                    citySelect.innerHTML = '<option value="">Failed to load cities - Please refresh</option>';
+                // Load districts if old city exists
+                if (oldCity) {
+                    const selectedOption = citySelect.options[citySelect.selectedIndex];
+                    if (selectedOption && selectedOption.dataset.cityId) {
+                        await loadDistricts(selectedOption.dataset.cityId);
+                    }
                 }
             }
+        } catch (error) {
+            console.error('Error fetching cities:', error);
+            citySelect.innerHTML = '<option value="">Error loading cities</option>';
+        }
+
+        // ============================================
+        // City Change Event
+        // ============================================
+        citySelect.addEventListener('change', async function() {
+            const selectedOption = this.options[this.selectedIndex];
+
+            if (!selectedOption.value) {
+                districtSelect.innerHTML = '<option value="">Select City First</option>';
+                districtSelect.disabled = true;
+                return;
+            }
+
+            const cityId = selectedOption.dataset.cityId;
+            await loadDistricts(cityId);
         });
+
+        // ============================================
+        // Load Districts Function
+        // ============================================
+        async function loadDistricts(cityId) {
+            try {
+                districtSelect.innerHTML = '<option value="">Loading districts...</option>';
+                districtSelect.disabled = true;
+
+                const response = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
+                    headers: {
+                        "Accept": "application/json",
+                        "Accept-Language": "en"
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load districts');
+
+                const result = await response.json();
+
+                districtSelect.innerHTML = '<option value="">Select District</option>';
+
+                if (result.success && result.data) {
+                    const districts = result.data.sort((a, b) => {
+                        const nameA = a.name_en || a.nameEn || a.area_name_en || '';
+                        const nameB = b.name_en || b.nameEn || b.area_name_en || '';
+                        return nameA.localeCompare(nameB);
+                    });
+
+                    districts.forEach(district => {
+                        const option = document.createElement('option');
+                        const districtName = district.name_en || district.nameEn || district.area_name_en;
+
+                        option.value = districtName;
+                        option.textContent = districtName;
+
+                        if (oldDistrict && oldDistrict === districtName) {
+                            option.selected = true;
+                        }
+
+                        districtSelect.appendChild(option);
+                    });
+
+                    districtSelect.disabled = false;
+                } else {
+                    districtSelect.innerHTML = '<option value="">No districts available</option>';
+                    districtSelect.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error fetching districts:', error);
+                districtSelect.innerHTML = '<option value="">Error loading districts</option>';
+                districtSelect.disabled = false;
+            }
+        }
+    });
     </script>
 </body>
 </html>

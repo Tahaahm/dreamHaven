@@ -284,4 +284,16 @@ class Agent extends Authenticatable
     {
         return $query->where('current_plan', $plan);
     }
+
+
+    public function showAddProperty()
+    {
+        // ✅ CHECK SUBSCRIPTION BEFORE SHOWING FORM
+        $validationResult = $this->validateSubscription();
+        if ($validationResult) {
+            return $validationResult;
+        }
+
+        return view('agent.agent-property-add');
+    }
 }

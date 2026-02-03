@@ -154,7 +154,7 @@
        class="{{ request()->routeIs('admin.profile') ? 'active' : '' }}">
         <i class="fas fa-user"></i> My Profile
     </a>
-{{-- 
+{{--
     <a href="{{ route('agents.list') }}"
        class="{{ request()->routeIs('agents.list') ? 'active' : '' }}">
         <i class="fas fa-users"></i> Agents
@@ -168,10 +168,14 @@
 @endif
 
 
-  
 
-    <a href="{{ route('notifications') }}" class="{{ request()->routeIs('notifications') ? 'active' : '' }}">
+
+<a href="{{ route('notifications') }}" class="{{ request()->routeIs('notifications') ? 'active' : '' }}">
     <i class="fas fa-bell"></i> Notifications
+</a>
+
+<a href="{{ route('office.appointments') }}" class="{{ request()->routeIs('office.appointments') ? 'active' : '' }}">
+    <i class="fas fa-calendar-check"></i> Appointments
 </a>
 
 <a href="{{ route('schedule') }}" class="{{ request()->routeIs('schedule') ? 'active' : '' }}">
@@ -217,15 +221,15 @@
 
 
 
-  
+
 @auth
     @if(Auth::check() && Auth::user()->role === 'admin')
-        <a href="{{ route('admin.users') }}" 
+        <a href="{{ route('admin.users') }}"
            class="{{ request()->routeIs('admin.users') ? 'active' : '' }}">
             <i class="fas fa-users"></i> Manage Users
         </a>
 
-              <a href="{{ route('admin.properties') }}" 
+              <a href="{{ route('admin.properties') }}"
            class="{{ request()->routeIs('admin.properties') ? 'active' : '' }}">
             <i class="fas fa-building"></i> Manage Properties
         </a>

@@ -38,16 +38,24 @@
     {{-- 2. KEY METRICS --}}
     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
 
-        {{-- Revenue --}}
+        {{-- ✅ FIXED: Subscription Revenue in IQD --}}
         <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all group">
             <div class="flex justify-between items-start mb-4">
                 <div class="p-3 bg-slate-50 rounded-xl group-hover:bg-emerald-50 transition-colors">
                     <i class="fas fa-wallet text-xl text-slate-900 group-hover:text-emerald-600"></i>
                 </div>
-                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Revenue</span>
+                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">Subscriptions</span>
             </div>
-            <h3 class="text-3xl font-black text-slate-900 mb-1">${{ number_format($stats['total_revenue']) }}</h3>
-            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Total Earnings (USD)</p>
+            <h3 class="text-3xl font-black text-slate-900 mb-1">{{ number_format($stats['subscription_revenue_iqd']) }}</h3>
+            <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Total Revenue (IQD)</p>
+
+            {{-- ✅ Show Active Subscriptions Count --}}
+            <div class="mt-3 pt-3 border-t border-slate-100">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-500 font-medium">Active Subscriptions</span>
+                    <span class="font-bold text-slate-900">{{ $stats['active_subscriptions'] }}</span>
+                </div>
+            </div>
         </div>
 
         {{-- Users --}}
@@ -106,6 +114,59 @@
         </div>
     </div>
 
+    {{-- ✅ NEW: Subscription Revenue Breakdown --}}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        {{-- Agent Subscriptions --}}
+        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 p-6 rounded-2xl border border-blue-200">
+            <div class="flex items-center justify-between mb-3">
+                <div class="p-2 bg-white rounded-lg shadow-sm">
+                    <i class="fas fa-user-tie text-blue-600"></i>
+                </div>
+                <span class="text-xs font-bold text-blue-600 uppercase">Agents</span>
+            </div>
+            <h4 class="text-2xl font-black text-slate-900 mb-1">{{ number_format($stats['agent_subscription_revenue']) }}</h4>
+            <p class="text-xs text-slate-600 font-medium mb-3">IQD from {{ $stats['agent_subscriptions_count'] }} subscriptions</p>
+            <div class="h-2 bg-blue-200 rounded-full overflow-hidden">
+                <div class="h-full bg-blue-600 rounded-full"
+                     style="width: {{ $stats['subscription_revenue_iqd'] > 0 ? round(($stats['agent_subscription_revenue'] / $stats['subscription_revenue_iqd']) * 100) : 0 }}%"></div>
+            </div>
+        </div>
+
+        {{-- Office Subscriptions --}}
+        <div class="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-2xl border border-purple-200">
+            <div class="flex items-center justify-between mb-3">
+                <div class="p-2 bg-white rounded-lg shadow-sm">
+                    <i class="fas fa-building text-purple-600"></i>
+                </div>
+                <span class="text-xs font-bold text-purple-600 uppercase">Offices</span>
+            </div>
+            <h4 class="text-2xl font-black text-slate-900 mb-1">{{ number_format($stats['office_subscription_revenue']) }}</h4>
+            <p class="text-xs text-slate-600 font-medium mb-3">IQD from {{ $stats['office_subscriptions_count'] }} subscriptions</p>
+            <div class="h-2 bg-purple-200 rounded-full overflow-hidden">
+                <div class="h-full bg-purple-600 rounded-full"
+                     style="width: {{ $stats['subscription_revenue_iqd'] > 0 ? round(($stats['office_subscription_revenue'] / $stats['subscription_revenue_iqd']) * 100) : 0 }}%"></div>
+            </div>
+        </div>
+
+        {{-- This Month Revenue --}}
+        <div class="bg-gradient-to-br from-emerald-50 to-teal-50 p-6 rounded-2xl border border-emerald-200">
+            <div class="flex items-center justify-between mb-3">
+                <div class="p-2 bg-white rounded-lg shadow-sm">
+                    <i class="fas fa-calendar-check text-emerald-600"></i>
+                </div>
+                <span class="text-xs font-bold text-emerald-600 uppercase">This Month</span>
+            </div>
+            <h4 class="text-2xl font-black text-slate-900 mb-1">{{ number_format($stats['this_month_revenue']) }}</h4>
+            <p class="text-xs text-slate-600 font-medium mb-3">IQD from new subscriptions</p>
+            <div class="flex items-center gap-2 text-xs">
+                <span class="flex items-center gap-1 text-emerald-600 font-bold">
+                    <i class="fas fa-arrow-up text-[10px]"></i>
+                    {{ $stats['new_subscriptions_this_month'] }} new
+                </span>
+            </div>
+        </div>
+    </div>
+
     {{-- 3. CONTENT GRID --}}
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
 
@@ -130,21 +191,18 @@
                 <div class="divide-y divide-slate-50">
                     @forelse($recent_properties as $property)
                         @php
-
                             $rawName = $property->name;
                             $pName = is_array($rawName) ? ($rawName['en'] ?? 'Property') : (json_decode($rawName)->en ?? $property->name);
 
-                            // 2. Price (Logic to find USD)
+                            // Price (Logic to find USD)
                             $rawPrice = $property->price;
                             $pPrice = 0;
 
                             if (is_array($rawPrice)) {
-                                // Try 'usd' first
                                 $pPrice = $rawPrice['usd'] ?? $rawPrice['amount'] ?? 0;
                             } elseif (is_string($rawPrice)) {
                                 $decoded = json_decode($rawPrice, true);
                                 if (is_array($decoded)) {
-                                    // Try 'usd' first
                                     $pPrice = $decoded['usd'] ?? $decoded['amount'] ?? 0;
                                 } elseif (is_numeric($rawPrice)) {
                                     $pPrice = $rawPrice;
@@ -153,7 +211,7 @@
                                 $pPrice = $rawPrice;
                             }
 
-                            // 3. Image
+                            // Image
                             $rawImg = $property->images;
                             $pThumb = null;
                             if (is_array($rawImg) && !empty($rawImg)) {
@@ -183,7 +241,6 @@
                                 <div class="flex justify-between items-center mb-1">
                                     <h4 class="font-bold text-slate-900 truncate pr-4 text-sm group-hover:text-indigo-600 transition">{{ $pName }}</h4>
 
-                                    {{-- UPDATED PRICE DISPLAY TO SHOW USD --}}
                                     <span class="font-black text-slate-900 text-sm whitespace-nowrap">
                                         ${{ number_format($pPrice) }} <span class="text-[10px] text-slate-400 font-bold">USD</span>
                                     </span>

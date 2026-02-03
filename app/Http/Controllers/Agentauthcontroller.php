@@ -8,6 +8,7 @@ use App\Models\Subscription\Subscription as ModelsSubscription;
 use App\Models\BannerAd;
 use App\Models\Appointment;
 use App\Models\Subscription\SubscriptionPlan;
+use App\Services\FCMNotificationService;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -120,7 +121,7 @@ class AgentAuthController extends Controller
             'new_this_month' => Property::where('owner_id', $agent->id)
                 ->where('owner_type', 'App\Models\Agent')
                 ->whereMonth('created_at', now()->month)
-                ->whereYear('created_at', now()->year) // ✅ Added year check
+                ->whereYear('created_at', now()->year)
                 ->count(),
             'total_views' => $totalViews,
             'views_this_week' => Property::where('owner_id', $agent->id)
@@ -166,7 +167,6 @@ class AgentAuthController extends Controller
             ->latest()
             ->paginate(12);
 
-        // Decode JSON fields for each property
         $properties->getCollection()->transform(function ($property) {
             $property->name = is_string($property->name) ? json_decode($property->name, true) : $property->name;
             $property->price = is_string($property->price) ? json_decode($property->price, true) : $property->price;
@@ -182,33 +182,51 @@ class AgentAuthController extends Controller
 
     public function showAddProperty()
     {
+        // ✅ CHECK SUBSCRIPTION BEFORE SHOWING FORM
+        $validationResult = $this->validateSubscription();
+        if ($validationResult) {
+            return $validationResult;
+        }
+
         return view('agent.agent-property-add');
     }
 
     public function storeProperty(Request $request)
     {
-        // 1. LOG INCOMING REQUEST
         Log::info('----------------------------------------------------');
-        Log::info('🚀 STORE PROPERTY STARTED');
+        Log::info('🚀 AGENT STORE PROPERTY STARTED');
         Log::info('Agent ID: ' . Auth::guard('agent')->id());
 
-        // Log all inputs except the actual image binary data to keep logs clean
-        Log::info('📥 Raw Request Data:', $request->except(['images', '_token']));
-
         try {
-            // 1. Validate Subscription
-            $validationRedirect = $this->validateSubscription();
-            if ($validationRedirect) {
+            // ✅ 1. VALIDATE SUBSCRIPTION FIRST
+            $validationResult = $this->validateSubscription();
+            if ($validationResult) {
                 Log::warning('⚠️ Subscription Validation Failed');
-                return $validationRedirect;
+                return $validationResult;
             }
 
             $agent = Auth::guard('agent')->user();
 
-            // 2. Validate the request
+            // ✅ 2. CHECK PROPERTY LIMIT BEFORE ALLOWING UPLOAD
+            if (!$agent->canAddProperty()) {
+                $propertyInfo = $agent->getPropertyLimitInfo();
+
+                $message = "⚠️ Property Limit Reached! ";
+
+                if ($propertyInfo['is_unlimited']) {
+                    Log::warning('Unlimited plan blocking property creation', ['agent_id' => $agent->id]);
+                } else {
+                    $message .= "You've used {$propertyInfo['used']} out of {$propertyInfo['limit']} properties. ";
+                    $message .= "Please upgrade your subscription or delete some properties to add new ones.";
+                }
+
+                return redirect()->route('agent.properties')
+                    ->with('error', $message);
+            }
+
+            // 3. Validate the request
             Log::info('⏳ Starting Validation...');
 
-            // We capture the validated data to ensure we are using clean data
             $validatedData = $request->validate([
                 'title_en'       => 'required|string|max:255',
                 'title_ar'       => 'nullable|string|max:255',
@@ -235,7 +253,7 @@ class AgentAuthController extends Controller
 
             Log::info('✅ Validation Passed');
 
-            // 3. Handle image uploads
+            // 4. Handle image uploads
             $imagePaths = [];
             if ($request->hasFile('images')) {
                 Log::info('📸 Processing Images. Count: ' . count($request->file('images')));
@@ -246,7 +264,7 @@ class AgentAuthController extends Controller
                     try {
                         Log::info("   Processing Image #{$index}: " . $image->getClientOriginalName());
 
-                        $filename = 'prop_' . uniqid() . '_' . time() . '.webp';
+                        $filename = 'prop_agent_' . $agent->id . '_' . uniqid() . '.webp';
                         $storagePath = 'properties/' . $filename;
 
                         $img = $manager->read($image);
@@ -259,7 +277,6 @@ class AgentAuthController extends Controller
                         Log::info("   ✅ Image #{$index} saved to: $storagePath");
                     } catch (\Exception $e) {
                         Log::error("   ❌ Image Compression Failed for #{$index}: " . $e->getMessage());
-                        // Fallback
                         $path = $image->store('properties', 'public');
                         $imagePaths[] = asset('storage/' . $path);
                     }
@@ -268,14 +285,14 @@ class AgentAuthController extends Controller
                 Log::warning('⚠️ No images found in request');
             }
 
-            // 4. Generate ID
+            // 5. Generate ID
             do {
                 $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
             } while (DB::table('properties')->where('id', $propertyId)->exists());
 
             Log::info('🆔 Generated Property ID: ' . $propertyId);
 
-            // 5. Prepare Location Data
+            // 6. Prepare Location Data
             $locationsJson = json_encode([]);
             if ($request->boolean('has_map') && $request->filled('latitude') && $request->filled('longitude')) {
                 $locationsJson = json_encode([
@@ -286,7 +303,7 @@ class AgentAuthController extends Controller
                 ]);
             }
 
-            // 6. PREPARE DB DATA (Log this specifically to see invalid types)
+            // 7. PREPARE DB DATA
             $dbData = [
                 'id' => $propertyId,
                 'owner_id' => $agent->id,
@@ -325,7 +342,7 @@ class AgentAuthController extends Controller
                         'ku' => $request->district_ku ?? '',
                     ],
                 ]),
-                'listing_type' => 'sell', // Hardcoded as per your code? Check if this should be dynamic.
+                'listing_type' => 'sell',
                 'area' => (float) ($request->area ?? 0),
                 'furnished' => $request->boolean('furnished') ? 1 : 0,
                 'electricity' => $request->boolean('electricity') ? 1 : 0,
@@ -360,23 +377,30 @@ class AgentAuthController extends Controller
                 'updated_at' => now(),
             ];
 
-            Log::info('💾 Attempting DB Insert with Data:', $dbData);
+            Log::info('💾 Attempting DB Insert');
 
             DB::table('properties')->insert($dbData);
 
             Log::info('✅ DB Insert Successful');
-            return redirect()->route('agent.properties')->with('success', 'Property added successfully!');
+
+            // ✅ INCREMENT PROPERTY COUNT IN SUBSCRIPTION
+            $agent->incrementPropertyCount();
+
+            Log::info('✅ Property count incremented', [
+                'agent_id' => $agent->id,
+                'properties_activated_this_month' => $agent->subscription->properties_activated_this_month ?? 0,
+                'remaining_activations' => $agent->subscription->remaining_activations ?? 0
+            ]);
+
+            return redirect()->route('agent.properties')->with('success', '🎉 Property added successfully!');
         } catch (ValidationException $e) {
-            // CATCH VALIDATION ERRORS SPECIFICALLY
             Log::error('❌ VALIDATION FAILED:', $e->errors());
-            throw $e; // Throw it back so Laravel redirects with errors
+            throw $e;
         } catch (\Exception $e) {
-            // CATCH EVERYTHING ELSE
             Log::error('🔥 CRITICAL EXCEPTION in storeProperty');
             Log::error('Message: ' . $e->getMessage());
             Log::error('File: ' . $e->getFile() . ' on line ' . $e->getLine());
 
-            // Return a clear error to the UI
             return back()->withInput()->with('error', 'System Error: ' . $e->getMessage());
         }
     }
@@ -393,8 +417,6 @@ class AgentAuthController extends Controller
         return view('agent.agent-property-edit', compact('property'));
     }
 
-    // ... inside AgentAuthController class
-
     public function updateProperty(Request $request, $id)
     {
         $agent = Auth::guard('agent')->user();
@@ -410,7 +432,7 @@ class AgentAuthController extends Controller
             return redirect()->route('agent.properties')->with('error', 'Property not found or unauthorized.');
         }
 
-        // 2. Validate (Updated to match Add Property logic)
+        // 2. Validate
         $request->validate([
             'title_en'       => 'required|string|max:255',
             'title_ar'       => 'nullable|string|max:255',
@@ -418,21 +440,15 @@ class AgentAuthController extends Controller
             'description_en' => 'nullable|string',
             'description_ar' => 'nullable|string',
             'description_ku' => 'nullable|string',
-
-            // Prices: Both Required & Manual
-            'price'          => 'required|numeric|min:0', // IQD
-            'price_usd'      => 'required|numeric|min:0', // USD
-
+            'price'          => 'required|numeric|min:0',
+            'price_usd'      => 'required|numeric|min:0',
             'property_type'  => 'required|string',
             'status'         => 'required|string',
             'city_en'        => 'required|string',
             'district_en'    => 'required|string',
-
-            // Map Logic
             'has_map'        => 'nullable|boolean',
             'latitude'       => 'required_if:has_map,1|nullable|numeric',
             'longitude'      => 'required_if:has_map,1|nullable|numeric',
-
             'area'           => 'nullable|numeric',
             'bedrooms'       => 'nullable|integer',
             'bathrooms'      => 'nullable|integer',
@@ -441,17 +457,15 @@ class AgentAuthController extends Controller
             'images.*'       => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
-        // 3. Handle Images (Remove deleted, Add new)
+        // 3. Handle Images
         $currentImages = json_decode($property->images, true) ?? [];
 
-        // Remove images marked for deletion
         if ($request->filled('remove_images')) {
             $removeIndices = json_decode($request->remove_images, true);
             if (is_array($removeIndices)) {
                 rsort($removeIndices);
                 foreach ($removeIndices as $index) {
                     if (isset($currentImages[$index])) {
-                        // Optional: Delete physical file
                         $filePath = str_replace(asset('storage/'), '', $currentImages[$index]);
                         Storage::disk('public')->delete($filePath);
                         unset($currentImages[$index]);
@@ -461,7 +475,6 @@ class AgentAuthController extends Controller
             }
         }
 
-        // Add new images
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
                 $path = $image->store('properties', 'public');
@@ -469,7 +482,7 @@ class AgentAuthController extends Controller
             }
         }
 
-        // 4. Map Logic (Empty JSON if disabled)
+        // 4. Map Logic
         $locationsJson = json_encode([]);
         if ($request->boolean('has_map') && $request->filled('latitude') && $request->filled('longitude')) {
             $locationsJson = json_encode([[
@@ -493,7 +506,6 @@ class AgentAuthController extends Controller
                         'ar' => $request->description_ar ?? '',
                         'ku' => $request->description_ku ?? '',
                     ]),
-                    // Update Prices (Manual USD)
                     'price' => json_encode([
                         'iqd' => (float) $request->price,
                         'usd' => (float) $request->price_usd,
@@ -503,7 +515,6 @@ class AgentAuthController extends Controller
                         'bedroom' => ['count' => (int) ($request->bedrooms ?? 0)],
                         'bathroom' => ['count' => (int) ($request->bathrooms ?? 0)],
                     ]),
-                    // Update Location (Empty or Coordinates)
                     'locations' => $locationsJson,
                     'address_details' => json_encode([
                         'city' => [
@@ -548,25 +559,30 @@ class AgentAuthController extends Controller
 
         $property->delete();
 
+        // ✅ DECREMENT PROPERTY COUNT IN SUBSCRIPTION
+        $agent->decrementPropertyCount();
+
+        Log::info('✅ Property deleted and count decremented', [
+            'agent_id' => $agent->id,
+            'property_id' => $id,
+            'remaining_activations' => $agent->subscription->remaining_activations ?? 0
+        ]);
+
         return redirect()->route('agent.properties')->with('success', 'Property deleted successfully!');
     }
 
     // SUBSCRIPTIONS
-    // App/Http/Controllers/AgentAuthController.php
-
     public function showSubscriptions()
     {
         try {
             $agent = Auth::guard('agent')->user();
 
-            // 1. Log the Agent trying to view the page
             Log::info('------------------------------------------');
             Log::info('ShowSubscriptions: User Request', [
                 'agent_id' => $agent->id ?? 'unknown',
                 'agent_name' => $agent->agent_name ?? 'unknown'
             ]);
 
-            // 2. Log Current Subscription Search
             $currentSubscription = ModelsSubscription::with('currentPlan')
                 ->where('user_id', $agent->id)
                 ->where('status', 'active')
@@ -578,28 +594,23 @@ class AgentAuthController extends Controller
                 'plan_name' => $currentSubscription?->currentPlan?->name ?? 'N/A'
             ]);
 
-            // 3. Build the Plans Query to inspect SQL
             $plansQuery = SubscriptionPlan::where('type', 'agent')
-                ->active() // checking active scope
+                ->active()
                 ->orderBy('sort_order', 'asc');
 
-            // 4. Log the exact SQL being executed
             Log::info('ShowSubscriptions: Plans Query SQL', [
                 'sql' => $plansQuery->toSql(),
                 'bindings' => $plansQuery->getBindings()
             ]);
 
-            // 5. Execute Query
             $plans = $plansQuery->get();
 
-            // 6. Log the results
             Log::info('ShowSubscriptions: Plans Results', [
                 'count' => $plans->count(),
                 'names_found' => $plans->pluck('name')->toArray(),
                 'ids_found' => $plans->pluck('id')->toArray()
             ]);
 
-            // 7. Debug: Check for NON-active plans (To see if they exist but are hidden)
             $hiddenPlans = SubscriptionPlan::where('type', 'agent')->where('active', 0)->count();
             Log::info('ShowSubscriptions: DEBUG - Inactive/Hidden Plans Count', ['count' => $hiddenPlans]);
 
@@ -609,6 +620,7 @@ class AgentAuthController extends Controller
             return back()->with('error', 'Error loading subscriptions');
         }
     }
+
     // APPOINTMENTS
     public function showAppointments()
     {
@@ -637,17 +649,74 @@ class AgentAuthController extends Controller
 
     public function updateAppointmentStatus(Request $request, $id)
     {
+        Log::info('🔵 updateAppointmentStatus called', [
+            'appointment_id' => $id,
+            'request_status' => $request->input('status'),
+            'request_method' => $request->method(),
+            'authenticated_agent' => Auth::guard('agent')->check(),
+            'agent_id' => Auth::guard('agent')->id(),
+        ]);
+
         $agent = Auth::guard('agent')->user();
+
+        if (!$agent) {
+            Log::error('❌ No authenticated agent found');
+            return redirect()->back()->with('error', 'Authentication required');
+        }
 
         $appointment = Appointment::where('id', $id)
             ->where('agent_id', $agent->id)
-            ->firstOrFail();
+            ->first();
+
+        if (!$appointment) {
+            Log::error('❌ Appointment not found', [
+                'appointment_id' => $id,
+                'agent_id' => $agent->id
+            ]);
+            return redirect()->back()->with('error', 'Appointment not found');
+        }
+
+        Log::info('✅ Appointment found', [
+            'appointment_id' => $appointment->id,
+            'current_status' => $appointment->status,
+            'user_id' => $appointment->user_id
+        ]);
 
         $request->validate([
             'status' => 'required|in:pending,confirmed,completed,cancelled'
         ]);
 
-        $appointment->update(['status' => $request->status]);
+        $oldStatus = $appointment->status;
+        $newStatus = $request->status;
+
+        Log::info('🔄 Updating status', [
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus
+        ]);
+
+        switch ($newStatus) {
+            case 'confirmed':
+                $appointment->confirm();
+                break;
+            case 'completed':
+                $appointment->complete();
+                break;
+            case 'cancelled':
+                $appointment->cancel();
+                break;
+            default:
+                $appointment->update(['status' => $newStatus]);
+        }
+
+        Log::info('✅ Appointment status updated in database', [
+            'appointment_id' => $appointment->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'agent_id' => $agent->id,
+            'user_id' => $appointment->user_id
+        ]);
+
+        $this->notifyUserAboutAppointmentStatusChange($appointment, $oldStatus, $newStatus);
 
         return redirect()->back()->with('success', 'Appointment status updated successfully!');
     }
@@ -713,16 +782,14 @@ class AgentAuthController extends Controller
             'end_date.after' => 'End date must be after start date.',
         ]);
 
-        // Upload image
         $imagePath = $request->file('image')->store('banners', 'public');
-        $imageUrl = asset('storage/' . $imagePath); // ✅ FIXED
+        $imageUrl = asset('storage/' . $imagePath);
 
         BannerAd::create([
-            'title' => json_encode(['en' => $request->title, 'ar' => $request->title, 'ku' => $request->title]),  // JSON format for multi-language
+            'title' => json_encode(['en' => $request->title, 'ar' => $request->title, 'ku' => $request->title]),
             'description' => $request->description ? json_encode(['en' => $request->description, 'ar' => $request->description, 'ku' => $request->description]) : null,
             'call_to_action' => $request->call_to_action ? json_encode(['en' => $request->call_to_action, 'ar' => $request->call_to_action, 'ku' => $request->call_to_action]) : null,
             'image_url' => $imageUrl,
-
             'link_url' => $request->link_url,
             'link_opens_new_tab' => $request->has('link_opens_new_tab'),
             'owner_type' => 'agent',
@@ -790,7 +857,7 @@ class AgentAuthController extends Controller
         ]);
 
         $data = [
-            'title' => json_encode(['en' => $request->title, 'ar' => $request->title, 'ku' => $request->title]),  // JSON format for multi-language
+            'title' => json_encode(['en' => $request->title, 'ar' => $request->title, 'ku' => $request->title]),
             'description' => $request->description ? json_encode(['en' => $request->description, 'ar' => $request->description, 'ku' => $request->description]) : null,
             'call_to_action' => $request->call_to_action ? json_encode(['en' => $request->call_to_action, 'ar' => $request->call_to_action, 'ku' => $request->call_to_action]) : null,
             'link_url' => $request->link_url,
@@ -805,11 +872,9 @@ class AgentAuthController extends Controller
             'show_contact_info' => $request->has('show_contact_info'),
         ];
 
-        // Upload new image if provided
-        // ✅ Upload new image if provided - SAME AS OFFICE CONTROLLER
         if ($request->hasFile('image')) {
             $imagePath = $request->file('image')->store('banners', 'public');
-            $data['image_url'] = asset('storage/' . $imagePath); // ✅ FIXED
+            $data['image_url'] = asset('storage/' . $imagePath);
         }
 
         $banner->update($data);
@@ -878,10 +943,8 @@ class AgentAuthController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        // ✅ FIX: Refresh agent from database to get latest data
         $agent->refresh();
 
-        // ✅ FIX: Calculate statistics using Query Builder instead of relationship
         $totalProperties = Property::where('owner_id', $agent->id)
             ->where('owner_type', 'App\Models\Agent')
             ->count();
@@ -896,7 +959,6 @@ class AgentAuthController extends Controller
             ->where('status', 'sold')
             ->count();
 
-        // Add calculated stats to agent object
         $agent->total_properties = $totalProperties;
         $agent->active_properties = $activeProperties;
         $agent->properties_sold = $soldProperties;
@@ -914,7 +976,6 @@ class AgentAuthController extends Controller
     {
         $agent = Auth::guard('agent')->user();
 
-        // 1. LOGGING: Check exactly what is coming from the form
         Log::info('Agent Profile Update - Request Data:', [
             'agent_id' => $agent->id,
             'working_hours_raw' => $request->input('working_hours'),
@@ -936,12 +997,10 @@ class AgentAuthController extends Controller
             'longitude' => 'nullable|numeric',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
             'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
-            // Allow JSON string or null
             'working_hours' => 'nullable|string',
         ]);
 
         try {
-            // --- 1. PROFILE IMAGE FIX ---
             if ($request->hasFile('profile_image')) {
                 if ($agent->profile_image) {
                     $oldPath = str_replace('storage/', '', $agent->profile_image);
@@ -952,7 +1011,6 @@ class AgentAuthController extends Controller
                 $agent->profile_image = $request->file('profile_image')->store('agents/profiles', 'public');
             }
 
-            // --- 2. BIO IMAGE FIX ---
             if ($request->hasFile('bio_image')) {
                 if ($agent->bio_image) {
                     $oldPath = str_replace('storage/', '', $agent->bio_image);
@@ -963,7 +1021,6 @@ class AgentAuthController extends Controller
                 $agent->bio_image = $request->file('bio_image')->store('agents/bio', 'public');
             }
 
-            // Update basic fields
             $agent->agent_name = $request->agent_name;
             $agent->primary_phone = $request->primary_phone;
             $agent->whatsapp_number = $request->whatsapp_number;
@@ -976,14 +1033,10 @@ class AgentAuthController extends Controller
             $agent->latitude = $request->latitude;
             $agent->longitude = $request->longitude;
 
-            // --- 3. WORKING HOURS LOGIC & LOGGING ---
             if ($request->filled('working_hours')) {
                 $rawHours = $request->input('working_hours');
-
-                // Try to decode the JSON string from frontend
                 $decodedHours = json_decode($rawHours, true);
 
-                // Check for JSON errors
                 if (json_last_error() === JSON_ERROR_NONE) {
                     $agent->working_hours = $decodedHours;
                     Log::info('Working hours processed successfully', ['data' => $decodedHours]);
@@ -992,8 +1045,6 @@ class AgentAuthController extends Controller
                         'error' => json_last_error_msg(),
                         'raw_input' => $rawHours
                     ]);
-                    // Optional: Don't save if invalid, or save empty array
-                    // $agent->working_hours = [];
                 }
             } else {
                 Log::info('No working hours provided in request.');
@@ -1001,7 +1052,6 @@ class AgentAuthController extends Controller
 
             $agent->save();
 
-            // Refresh Auth
             Auth::guard('agent')->setUser($agent->fresh());
 
             return redirect()->route('agent.profile', $agent->id)
@@ -1032,54 +1082,233 @@ class AgentAuthController extends Controller
             'new_password' => 'required|min:8|confirmed',
         ]);
 
-        // Check current password
         if (!Hash::check($request->current_password, $agent->password)) {
             return back()->with('error', 'Current password is incorrect');
         }
 
-        // Update password
         $agent->password = Hash::make($request->new_password);
         $agent->save();
 
         return redirect()->route('agent.profile', $agent->id)->with('success', 'Password changed successfully!');
     }
 
+    // ✅ IMPROVED VALIDATION METHOD - MATCHES OFFICE CONTROLLER
     private function validateSubscription()
     {
-        $agent = Auth::guard('agent')->user();
+        $agent = Auth::guard('agent')->user()->load('subscription.currentPlan');
 
-        // 1. Check if subscription exists
-        $subscription = ModelsSubscription::where('user_id', $agent->id)
-            ->where('status', 'active')
-            ->latest()
-            ->first();
-
-        if (!$subscription) {
+        // 1. Check if has subscription
+        if (!$agent->subscription_id || !$agent->subscription) {
             return redirect()->route('agent.subscriptions')
-                ->with('error', 'You need an active subscription to add properties. Please subscribe.');
+                ->with('error', 'You need an active subscription to add properties. Please subscribe to continue.');
         }
 
-        // 2. Check if expired
-        if ($subscription->end_date < now()) {
-            return redirect()->route('agent.subscriptions')
-                ->with('error', 'Your subscription has expired. Please renew to continue.');
-        }
+        // 2. Check if subscription is active
+        if (!$agent->hasActiveSubscription()) {
+            $subscription = $agent->subscription;
 
-        // 3. Check Property Limit (If limit is 0, we assume it means Unlimited or handle differently based on your logic)
-        // Assuming > 0 is a limit. If your unlimited plan stores -1 or 0, adjust accordingly.
-        $limit = $subscription->property_activation_limit;
-
-        if ($limit > 0) {
-            $currentCount = Property::where('owner_id', $agent->id)
-                ->where('owner_type', 'App\Models\Agent')
-                ->count();
-
-            if ($currentCount >= $limit) {
-                return redirect()->route('agent.properties')
-                    ->with('error', "You have reached your limit of {$limit} properties. Please upgrade your plan.");
+            if ($subscription->isExpired()) {
+                return redirect()->route('agent.subscriptions')
+                    ->with('error', 'Your subscription has expired on ' . $subscription->end_date->format('M d, Y') . '. Please renew to continue adding properties.');
             }
+
+            if ($subscription->status === 'suspended') {
+                return redirect()->route('agent.subscriptions')
+                    ->with('error', 'Your subscription is suspended. Please contact support for assistance.');
+            }
+
+            return redirect()->route('agent.subscriptions')
+                ->with('error', 'Your subscription is not active. Please activate your subscription to continue.');
         }
 
-        return null; // Passed all checks
+        // 3. Check property limit
+        if (!$agent->canAddProperty()) {
+            $info = $agent->getPropertyLimitInfo();
+
+            if ($info['is_unlimited']) {
+                return null; // Unlimited, allow
+            }
+
+            $message = "You've reached your property limit ({$info['limit']} properties). ";
+
+            if ($info['remaining'] == 0) {
+                $message .= "Please upgrade your subscription or remove some properties to add new ones.";
+            } else {
+                $message .= "You have {$info['remaining']} properties remaining.";
+            }
+
+            return redirect()->route('agent.properties')
+                ->with('error', $message);
+        }
+
+        return null; // Validation passed
+    }
+
+    private function notifyUserAboutAppointmentStatusChange($appointment, $oldStatus, $newStatus)
+    {
+        Log::info('Starting appointment notification process', [
+            'appointment_id' => $appointment->id,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus
+        ]);
+
+        $user = $appointment->user;
+
+        if (!$user) {
+            Log::warning('Appointment has no user - notification cancelled', [
+                'appointment_id' => $appointment->id
+            ]);
+            return;
+        }
+
+        $userLanguage = $user->language ?? 'en';
+
+        Log::info('User language detected', [
+            'user_id' => $user->id,
+            'language' => $userLanguage
+        ]);
+
+        $statusMessages = [
+            'confirmed' => [
+                'en' => 'Your appointment has been confirmed! We look forward to seeing you.',
+                'ar' => 'تم تأكيد موعدك! نتطلع لرؤيتك.',
+                'ku' => 'چاوپێکەوتنەکەت پشتڕاست کرایەوە! چاوەڕوانی بینینت دەکەین.',
+            ],
+            'completed' => [
+                'en' => 'Your appointment has been completed. Thank you for your time!',
+                'ar' => 'تم إكمال موعدك. شكراً لوقتك!',
+                'ku' => 'چاوپێکەوتنەکەت تەواو بوو. سوپاس بۆ کاتەکەت!',
+            ],
+            'cancelled' => [
+                'en' => 'Your appointment has been cancelled. Please contact us if you have questions.',
+                'ar' => 'تم إلغاء موعدك. يرجى الاتصال بنا إذا كان لديك أسئلة.',
+                'ku' => 'چاوپێکەوتنەکەت هەڵوەشێنرایەوە. تکایە پەیوەندیمان پێوە بکە ئەگەر پرسیارت هەیە.',
+            ],
+            'pending' => [
+                'en' => 'Your appointment is pending confirmation.',
+                'ar' => 'موعدك في انتظار التأكيد.',
+                'ku' => 'چاوپێکەوتنەکەت چاوەڕوانی پشتڕاستکردنەوەیە.',
+            ],
+        ];
+
+        $titles = [
+            'confirmed' => [
+                'en' => 'Appointment Confirmed',
+                'ar' => 'تم تأكيد الموعد',
+                'ku' => 'چاوپێکەوتن پشتڕاست کرایەوە',
+            ],
+            'completed' => [
+                'en' => 'Appointment Completed',
+                'ar' => 'تم إكمال الموعد',
+                'ku' => 'چاوپێکەوتن تەواو بوو',
+            ],
+            'cancelled' => [
+                'en' => 'Appointment Cancelled',
+                'ar' => 'تم إلغاء الموعد',
+                'ku' => 'چاوپێکەوتن هەڵوەشێنرایەوە',
+            ],
+            'pending' => [
+                'en' => 'Appointment Pending',
+                'ar' => 'الموعد قيد الانتظار',
+                'ku' => 'چاوپێکەوتن چاوەڕێیە',
+            ],
+        ];
+
+        $title = $titles[$newStatus][$userLanguage] ?? $titles[$newStatus]['en'] ?? 'Appointment Update';
+        $message = $statusMessages[$newStatus][$userLanguage] ?? $statusMessages[$newStatus]['en'] ?? 'Your appointment status has been updated.';
+
+        Log::info('Notification messages prepared', [
+            'language' => $userLanguage,
+            'title' => $title,
+            'message_preview' => substr($message, 0, 50) . '...'
+        ]);
+
+        $propertyName = 'Property Viewing';
+        if ($appointment->property) {
+            $propertyName = is_array($appointment->property->name)
+                ? ($appointment->property->name[$userLanguage] ?? $appointment->property->name['en'] ?? 'Property Viewing')
+                : $appointment->property->name;
+        }
+
+        $appointmentDate = $appointment->appointment_date->format('M d, Y');
+
+        try {
+            $appointmentTime = $appointment->appointment_time instanceof \Carbon\Carbon
+                ? $appointment->appointment_time->format('h:i A')
+                : \Carbon\Carbon::parse($appointment->appointment_time)->format('h:i A');
+        } catch (\Exception $e) {
+            $appointmentTime = $appointment->appointment_time ?? 'N/A';
+            Log::warning('Failed to parse appointment time', [
+                'appointment_id' => $appointment->id,
+                'raw_time' => $appointment->appointment_time,
+                'error' => $e->getMessage()
+            ]);
+        }
+
+        $notificationData = [
+            'appointment_id' => $appointment->id,
+            'property_name' => $propertyName,
+            'appointment_date' => $appointmentDate,
+            'appointment_time' => $appointmentTime,
+            'old_status' => $oldStatus,
+            'new_status' => $newStatus,
+            'agent_name' => $appointment->agent->agent_name ?? 'Agent',
+            'language' => $userLanguage,
+        ];
+
+        Log::info('Notification data prepared', $notificationData);
+
+        try {
+            $fcmService = app(FCMNotificationService::class);
+
+            Log::info('Calling FCM service to send notification', [
+                'user_id' => $user->id,
+                'appointment_id' => $appointment->id
+            ]);
+
+            $result = $fcmService->createAndSendNotification(
+                $user,
+                $title,
+                $message,
+                'appointment',
+                $notificationData
+            );
+
+            if ($result['success']) {
+                $fcmSent = $result['fcm_result']['success'] ?? false;
+                $sentCount = $result['fcm_result']['sent_count'] ?? 0;
+                $totalTokens = $result['fcm_result']['total_tokens'] ?? 0;
+
+                Log::info('✅ Appointment notification sent successfully', [
+                    'user_id' => $user->id,
+                    'user_email' => $user->email,
+                    'appointment_id' => $appointment->id,
+                    'status' => $newStatus,
+                    'language' => $userLanguage,
+                    'database_notification_created' => true,
+                    'fcm_notification_sent' => $fcmSent,
+                    'fcm_tokens_sent_to' => $sentCount,
+                    'fcm_total_tokens' => $totalTokens,
+                    'notification_id' => $result['notification']->id ?? null
+                ]);
+            } else {
+                Log::warning('⚠️ Notification created in database but FCM failed', [
+                    'user_id' => $user->id,
+                    'appointment_id' => $appointment->id,
+                    'fcm_error' => $result['fcm_result']['error'] ?? 'Unknown error'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('❌ Failed to send appointment notification', [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'appointment_id' => $appointment->id,
+                'status' => $newStatus,
+                'error_message' => $e->getMessage(),
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
     }
 }

@@ -29,10 +29,14 @@
     .meta-item i { color: #303b97; }
 
     .appointment-actions { display: flex; gap: 8px; margin-top: 12px; }
-    .btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; text-decoration: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+    .btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; text-decoration: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.2s; }
+    .btn:hover { transform: translateY(-1px); }
     .btn-confirm { background: #dcfce7; color: #16a34a; }
+    .btn-confirm:hover { background: #bbf7d0; }
     .btn-complete { background: #dbeafe; color: #2563eb; }
+    .btn-complete:hover { background: #bfdbfe; }
     .btn-cancel { background: #fee2e2; color: #dc2626; }
+    .btn-cancel:hover { background: #fecaca; }
 
     .status-badge { padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; }
     .status-pending { background: #fef3c7; color: #d97706; }
@@ -45,10 +49,18 @@
 
     .alert { padding: 16px; border-radius: 10px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
     .alert-success { background: #d1fae5; border: 2px solid #059669; color: #059669; font-weight: 600; }
+    .alert-error { background: #fee2e2; border: 2px solid #dc2626; color: #dc2626; font-weight: 600; }
+
+    @media (max-width: 768px) {
+        .stats-grid { grid-template-columns: repeat(2, 1fr); }
+        .appointment-item { flex-direction: column; gap: 16px; }
+        .appointment-date-badge { width: 100%; }
+    }
 </style>
 @endsection
 
 @section('content')
+{{-- Success/Error Messages --}}
 @if(session('success'))
 <div class="alert alert-success">
     <i class="fas fa-check-circle"></i>
@@ -56,8 +68,16 @@
 </div>
 @endif
 
+@if(session('error'))
+<div class="alert alert-error">
+    <i class="fas fa-exclamation-circle"></i>
+    {{ session('error') }}
+</div>
+@endif
+
 <h1 class="page-title">My Appointments</h1>
 
+{{-- Statistics Cards --}}
 <div class="stats-grid">
     <div class="stat-card">
         <div class="stat-value">{{ $stats['total'] }}</div>
@@ -77,9 +97,11 @@
     </div>
 </div>
 
+{{-- Appointments List --}}
 <div class="appointments-container">
     @forelse($appointments as $appointment)
         <div class="appointment-item">
+            {{-- Date Badge --}}
             <div class="appointment-date-badge">
                 <div class="date-day">{{ $appointment->appointment_date->format('d') }}</div>
                 <div class="date-month">{{ $appointment->appointment_date->format('M Y') }}</div>
@@ -98,36 +120,53 @@
                 <div class="date-time">{{ $timeStr }}</div>
             </div>
 
+            {{-- Appointment Details --}}
             <div class="appointment-details">
-                <h3 class="appointment-title">{{ $appointment->user->name ?? 'Client' }}</h3>
+                {{-- ✅ FIX: Client Name (from appointments table or user relationship) --}}
+                <h3 class="appointment-title">
+                    {{ $appointment->client_name ?? $appointment->user->username ?? 'Client' }}
+                </h3>
 
+                {{-- Client Meta Information --}}
                 <div class="appointment-meta">
+                    {{-- ✅ FIX: Phone Number --}}
                     <div class="meta-item">
                         <i class="fas fa-phone"></i>
-                        <span>{{ $appointment->user->phone ?? 'N/A' }}</span>
+                        <span>{{ $appointment->client_phone ?? $appointment->user->phone ?? 'N/A' }}</span>
                     </div>
+
+                    {{-- ✅ FIX: Email Address --}}
                     <div class="meta-item">
                         <i class="fas fa-envelope"></i>
-                        <span>{{ $appointment->user->email ?? 'N/A' }}</span>
+                        <span>{{ $appointment->client_email ?? $appointment->user->email ?? 'N/A' }}</span>
                     </div>
+
+                    {{-- Property Name --}}
                     @if($appointment->property)
                         <div class="meta-item">
                             <i class="fas fa-home"></i>
-                            <span>{{ is_array($appointment->property->name) ? $appointment->property->name['en'] : $appointment->property->name }}</span>
+                            <span>{{ is_array($appointment->property->name) ? ($appointment->property->name['en'] ?? 'Property') : $appointment->property->name }}</span>
                         </div>
                     @endif
                 </div>
 
-                @if($appointment->message)
-                    <p style="color: #64748b; font-size: 14px; margin: 12px 0;">{{ $appointment->message }}</p>
+                {{-- Appointment Notes/Message --}}
+                @if($appointment->notes || $appointment->message)
+                    <p style="color: #64748b; font-size: 14px; margin: 12px 0;">
+                        {{ $appointment->notes ?? $appointment->message }}
+                    </p>
                 @endif
 
-                <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px;">
+                {{-- Status Badge and Action Buttons --}}
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+                    {{-- Status Badge --}}
                     <span class="status-badge status-{{ $appointment->status }}">
                         {{ ucfirst($appointment->status) }}
                     </span>
 
+                    {{-- Action Buttons --}}
                     <div class="appointment-actions">
+                        {{-- Confirm Button (Only for Pending) --}}
                         @if($appointment->status == 'pending')
                             <form method="POST" action="{{ route('agent.appointment.status', $appointment->id) }}" style="display: inline;">
                                 @csrf
@@ -139,6 +178,7 @@
                             </form>
                         @endif
 
+                        {{-- Complete Button (Only for Confirmed) --}}
                         @if($appointment->status == 'confirmed')
                             <form method="POST" action="{{ route('agent.appointment.status', $appointment->id) }}" style="display: inline;">
                                 @csrf
@@ -150,8 +190,9 @@
                             </form>
                         @endif
 
+                        {{-- Cancel Button (Not for Cancelled or Completed) --}}
                         @if($appointment->status != 'cancelled' && $appointment->status != 'completed')
-                            <form method="POST" action="{{ route('agent.appointment.status', $appointment->id) }}" style="display: inline;" onsubmit="return confirm('Cancel this appointment?')">
+                            <form method="POST" action="{{ route('agent.appointment.status', $appointment->id) }}" style="display: inline;" onsubmit="return confirm('Are you sure you want to cancel this appointment?')">
                                 @csrf
                                 @method('PUT')
                                 <input type="hidden" name="status" value="cancelled">
@@ -165,6 +206,7 @@
             </div>
         </div>
     @empty
+        {{-- Empty State --}}
         <div class="empty-state">
             <i class="fas fa-calendar-times"></i>
             <p style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">No appointments yet</p>
@@ -173,6 +215,7 @@
     @endforelse
 </div>
 
+{{-- Pagination --}}
 @if($appointments->hasPages())
     <div style="margin-top: 24px;">
         {{ $appointments->links() }}

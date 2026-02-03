@@ -11,14 +11,19 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // ✅ ADD THIS - Register middleware alias
+        // ✅ Register all middleware aliases
         $middleware->alias([
-            'auth.office' => \App\Http\Middleware\OfficeAuthenticate::class,
+            // Guest middleware (redirects if already authenticated)
+            'guest' => \App\Http\Middleware\RedirectIfAuthenticated::class,
 
+            // Authentication middleware for each guard
             'auth.agent' => \App\Http\Middleware\AgentAuth::class,
+            'auth.office' => \App\Http\Middleware\OfficeAuth::class,
+            'auth.admin' => \App\Http\Middleware\AdminMiddleware::class,
 
-            'guest.agent' => \App\Http\Middleware\RedirectIfAgent::class,
-
+            // Additional middleware
+            'agent.or.admin' => \App\Http\Middleware\AgentOrAdmin::class,
+            'verified' => \App\Http\Middleware\EnsureUserIsVerified::class,
         ]);
 
         // Existing CSRF exceptions

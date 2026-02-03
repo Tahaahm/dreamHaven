@@ -144,9 +144,52 @@ class AdminController extends Controller
     {
         $today = Carbon::today();
 
-        // 1. Core Stats
+        // ✅ 1. SUBSCRIPTION REVENUE CALCULATIONS (IQD)
+
+        // Total Subscription Revenue from ALL active subscriptions
+        $totalSubscriptionRevenue = Subscription::where('status', 'active')
+            ->sum('monthly_amount'); // This is in IQD as per your subscription table
+
+        // Agent Subscriptions Revenue
+        $agentSubscriptions = Subscription::where('status', 'active')
+            ->whereHas('agents') // Has relationship to agents
+            ->get();
+
+        $agentSubRevenue = $agentSubscriptions->sum('monthly_amount');
+        $agentSubCount = $agentSubscriptions->count();
+
+        // Office Subscriptions Revenue
+        $officeSubscriptions = Subscription::where('status', 'active')
+            ->whereHas('offices') // Has relationship to offices
+            ->get();
+
+        $officeSubRevenue = $officeSubscriptions->sum('monthly_amount');
+        $officeSubCount = $officeSubscriptions->count();
+
+        // This Month's New Subscriptions
+        $thisMonthRevenue = Subscription::where('status', 'active')
+            ->whereMonth('start_date', now()->month)
+            ->whereYear('start_date', now()->year)
+            ->sum('monthly_amount');
+
+        $newSubsThisMonth = Subscription::where('status', 'active')
+            ->whereMonth('start_date', now()->month)
+            ->whereYear('start_date', now()->year)
+            ->count();
+
+        // 2. Core Stats
         $stats = [
-            'total_revenue' => Transaction::where('status', 'completed')->sum('amount_usd') ?? 0,
+            // ✅ SUBSCRIPTION STATS (Primary Revenue Source)
+            'subscription_revenue_iqd' => $totalSubscriptionRevenue,
+            'active_subscriptions' => Subscription::where('status', 'active')->count(),
+            'agent_subscription_revenue' => $agentSubRevenue,
+            'agent_subscriptions_count' => $agentSubCount,
+            'office_subscription_revenue' => $officeSubRevenue,
+            'office_subscriptions_count' => $officeSubCount,
+            'this_month_revenue' => $thisMonthRevenue,
+            'new_subscriptions_this_month' => $newSubsThisMonth,
+
+            // Other Stats
             'total_users' => User::count(),
             'new_users_today' => User::whereDate('created_at', $today)->count(),
             'total_properties' => Property::count(),
@@ -157,14 +200,14 @@ class AdminController extends Controller
             'total_offices' => RealEstateOffice::count(),
         ];
 
-        // 2. Pending Actions (Action Center)
+        // 3. Pending Actions (Action Center)
         $pendingApprovals = [
             'properties' => Property::where('status', 'pending')->count(),
             'agents' => Agent::where('is_verified', false)->count(),
             'offices' => RealEstateOffice::where('is_verified', false)->count(),
         ];
 
-        // 3. Charts Data (User Growth)
+        // 4. Charts Data (User Growth)
         $user_registrations = User::select(DB::raw('MONTH(created_at) as month'), DB::raw('COUNT(*) as count'))
             ->where('created_at', '>=', now()->subYear())
             ->groupBy('month')
@@ -178,7 +221,7 @@ class AdminController extends Controller
             $monthlyData[] = $user_registrations[$i] ?? 0;
         }
 
-        // 4. Recent Data Fetching
+        // 5. Recent Data Fetching
         // Fetch Properties with Owner to avoid N+1 queries
         $recent_properties = Property::with('owner')
             ->orderBy('created_at', 'desc')
@@ -203,7 +246,6 @@ class AdminController extends Controller
             'recent_users'
         ));
     }
-
     /**
      * Get dashboard stats as JSON
      */
@@ -2220,5 +2262,31 @@ class AdminController extends Controller
         $category = Category::findOrFail($id);
         $category->update(['is_active' => !$category->is_active]);
         return back()->with('success', 'Category status updated');
+    }
+
+
+    /**
+     * Activate (Verify) a user
+     */
+    public function usersActivate($id)
+    {
+        $user = User::findOrFail($id);
+        $user->update([
+            'is_verified' => true,
+            'email_verified_at' => now(), // Also mark email as verified
+        ]);
+        return back()->with('success', 'User verified and activated successfully!');
+    }
+
+    /**
+     * Suspend (Unverify) a user
+     */
+    public function usersSuspend($id)
+    {
+        $user = User::findOrFail($id);
+        $user->update([
+            'is_verified' => false,
+        ]);
+        return back()->with('success', 'User suspended successfully!');
     }
 }
