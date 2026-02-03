@@ -1,6 +1,6 @@
 @extends('layouts.admin-layout')
 
-@section('title', 'Property Viewers')
+@section('title', 'Viewer Intelligence')
 
 @section('content')
 
@@ -55,6 +55,7 @@
                     <i class="fas fa-user-check text-xl"></i>
                 </div>
             </div>
+            {{-- Calculate unique users based on the interactions relationship --}}
             <p class="text-3xl font-black text-gray-900 mb-1">
                 {{ $property->interactions()->where('interaction_type', 'view')->distinct('user_id')->count('user_id') }}
             </p>
@@ -104,7 +105,6 @@
                 <p class="text-sm text-gray-500 mt-1">Detailed list of authenticated users who accessed this property details page.</p>
             </div>
             <div>
-               {{-- Optional: Export or Filter buttons could go here --}}
                <span class="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-600 border border-gray-200">
                    Showing {{ $viewers->count() }} records
                </span>
@@ -182,15 +182,17 @@
                             {{-- Engagement Column --}}
                             <td class="px-8 py-5 align-middle">
                                 @php
+                                    // Calculate how many times THIS user viewed THIS property
                                     $count = $property->interactions()->where('user_id', $interaction->user_id)->where('interaction_type', 'view')->count();
                                 @endphp
                                 <div class="flex items-center gap-3">
+                                    {{-- Visual Bar for Intensity --}}
                                     <div class="flex-1 h-1.5 w-24 bg-gray-100 rounded-full overflow-hidden">
                                         <div class="h-full bg-[#303b97] rounded-full" style="width: {{ min(($count / 10) * 100, 100) }}%"></div>
                                     </div>
                                     <span class="text-xs font-bold text-gray-700 whitespace-nowrap">{{ $count }} Views</span>
                                 </div>
-                                <p class="text-[10px] text-gray-400 mt-1">Frequency</p>
+                                <p class="text-[10px] text-gray-400 mt-1">Interest Level</p>
                             </td>
 
                             {{-- Time Column --}}
