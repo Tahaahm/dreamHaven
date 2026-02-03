@@ -929,7 +929,16 @@ class AdminController extends Controller
 
     public function propertiesShow($id)
     {
-        $property = Property::with('owner')->findOrFail($id);
+        // We add 'interactions.user' to the with() clause
+        // We specifically filter for 'view' interactions and order by latest
+        $property = Property::with(['owner', 'interactions' => function ($query) {
+            $query->where('interaction_type', 'view')
+                ->whereNotNull('user_id') // Only logged-in users
+                ->with('user')            // Load the user details
+                ->latest()
+                ->take(50);               // Limit to last 50 for performance
+        }])->findOrFail($id);
+
         return view('admin.properties.show', compact('property'));
     }
 

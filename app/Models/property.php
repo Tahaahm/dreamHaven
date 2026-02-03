@@ -120,4 +120,23 @@ class Property extends Model
     {
         return $this->is_boosted;
     }
+
+
+    public function interactions()
+    {
+        // This assumes you have a UserPropertyInteraction model
+        return $this->hasMany(\App\Models\UserPropertyInteraction::class, 'property_id');
+    }
+    public function viewers()
+    {
+        return $this->hasManyThrough(
+            \App\Models\User::class,
+            \App\Models\UserPropertyInteraction::class,
+            'property_id', // Foreign key on interactions table
+            'id',          // Foreign key on users table
+            'id',          // Local key on properties table
+            'user_id'      // Local key on interactions table
+        )->where('interaction_type', 'view')
+            ->distinct();
+    }
 }

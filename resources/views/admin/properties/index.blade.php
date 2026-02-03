@@ -194,10 +194,24 @@
             </p>
         </td>
 
-        {{-- Stats --}}
+        {{-- Stats (UPDATED with Auth View Tracking) --}}
         <td class="px-6 py-4 text-center">
-            <div class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg">
-                <i class="fas fa-eye text-indigo-400"></i> {{ number_format($property->views ?? 0) }}
+            <div class="flex flex-col gap-1 items-center">
+                {{-- Total Hits --}}
+                <div class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                    <i class="fas fa-eye text-indigo-300"></i> {{ number_format($property->views ?? 0) }}
+                </div>
+
+                {{-- Auth Viewers (Logic: Check interactions) --}}
+                @php
+                    $uniqueAuthViews = $property->interactions->where('interaction_type', 'view')->unique('user_id')->count();
+                @endphp
+
+                @if($uniqueAuthViews > 0)
+                <div class="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100" title="{{ $uniqueAuthViews }} Authenticated Users">
+                    <i class="fas fa-user-check"></i> {{ $uniqueAuthViews }} Auth
+                </div>
+                @endif
             </div>
         </td>
 
@@ -210,6 +224,7 @@
                     'sold' => 'bg-blue-50 text-blue-700 border-blue-100',
                     'rented' => 'bg-indigo-50 text-indigo-700 border-indigo-100',
                     'rejected' => 'bg-rose-50 text-rose-700 border-rose-100',
+                    'suspended' => 'bg-slate-100 text-slate-500 border-slate-200',
                     default => 'bg-slate-50 text-slate-600 border-slate-200'
                 };
                 $statusIcon = match($property->status) {
@@ -218,6 +233,7 @@
                     'sold' => 'fa-handshake',
                     'rented' => 'fa-key',
                     'rejected' => 'fa-ban',
+                    'suspended' => 'fa-pause-circle',
                     default => 'fa-circle'
                 };
             @endphp
