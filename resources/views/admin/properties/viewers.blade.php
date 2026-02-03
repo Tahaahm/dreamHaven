@@ -34,19 +34,24 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
 
         {{-- Card 1: Total Views (Primary) --}}
-        <div class="relative overflow-hidden bg-gradient-to-br from-[#303b97] to-[#4b56b2] rounded-2xl p-6 shadow-lg shadow-indigo-200 text-white group">
-            <div class="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition duration-500"></div>
-            <div class="relative z-10">
-                <div class="flex items-center justify-between mb-4">
-                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <i class="fas fa-eye text-xl"></i>
-                    </div>
-                    <span class="text-xs font-medium bg-white/20 px-2 py-1 rounded-md backdrop-blur-sm">All Time</span>
-                </div>
-                <p class="text-3xl font-black mb-1">{{ number_format($property->views ?? 0) }}</p>
-                <p class="text-indigo-100 text-sm font-medium">Total Page Impressions</p>
+<div class="relative overflow-hidden bg-gradient-to-br from-[#303b97] to-[#4b56b2] rounded-2xl p-6 shadow-lg shadow-indigo-200 text-white group">
+    {{-- ... background effects ... --}}
+    <div class="relative z-10">
+        <div class="flex items-center justify-between mb-4">
+            <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                <i class="fas fa-eye text-xl"></i>
             </div>
+            <span class="text-xs font-medium bg-white/20 px-2 py-1 rounded-md backdrop-blur-sm">All Time</span>
         </div>
+
+        {{-- ✅ FIX: Use the max value between the 'views' column and the actual interaction count --}}
+        <p class="text-3xl font-black mb-1">
+            {{ number_format(max($property->views ?? 0, $property->interactions()->count())) }}
+        </p>
+
+        <p class="text-indigo-100 text-sm font-medium">Total Page Impressions</p>
+    </div>
+</div>
 
         {{-- Card 2: Unique Authenticated --}}
         <div class="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition duration-300">
