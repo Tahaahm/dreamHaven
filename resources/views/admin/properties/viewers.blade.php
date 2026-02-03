@@ -39,7 +39,7 @@
                 <div>
                     <p class="text-sm text-gray-600 mb-1">Unique Viewers</p>
                     <p class="text-2xl font-bold text-gray-900">
-                        {{ $property->interactions()->where('interaction_type', 'view')->distinct('user_id')->count('user_id') }}
+                        {{ $property->interactions()->where('interaction_type', 'impression')->distinct('user_id')->count('user_id') }}
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
@@ -53,7 +53,7 @@
                 <div>
                     <p class="text-sm text-gray-600 mb-1">Today</p>
                     <p class="text-2xl font-bold text-gray-900">
-                        {{ $property->interactions()->where('interaction_type', 'view')->whereDate('created_at', today())->count() }}
+                        {{ $property->interactions()->where('interaction_type', 'impression')->whereDate('created_at', today())->count() }}
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center">
@@ -67,7 +67,7 @@
                 <div>
                     <p class="text-sm text-gray-600 mb-1">This Week</p>
                     <p class="text-2xl font-bold text-gray-900">
-                        {{ $property->interactions()->where('interaction_type', 'view')->where('created_at', '>=', now()->startOfWeek())->count() }}
+                        {{ $property->interactions()->where('interaction_type', 'impression')->where('created_at', '>=', now()->startOfWeek())->count() }}
                     </p>
                 </div>
                 <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
@@ -137,7 +137,7 @@
 
                             <td class="px-6 py-4 text-center">
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-indigo-50 text-indigo-700">
-                                    {{ $property->interactions()->where('user_id', $interaction->user_id)->where('interaction_type', 'view')->count() }}x
+                                    {{ $property->interactions()->where('user_id', $interaction->user_id)->where('interaction_type', 'impression')->count() }}x
                                 </span>
                             </td>
 

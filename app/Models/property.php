@@ -124,8 +124,14 @@ class Property extends Model
 
     public function interactions()
     {
-        // This assumes you have a UserPropertyInteraction model
         return $this->hasMany(\App\Models\UserPropertyInteraction::class, 'property_id');
+    }
+
+    // Add this new method for view interactions
+    public function viewInteractions()
+    {
+        return $this->hasMany(\App\Models\UserPropertyInteraction::class, 'property_id')
+            ->where('interaction_type', 'impression'); // Changed from 'view' to 'impression'
     }
     public function viewers()
     {
