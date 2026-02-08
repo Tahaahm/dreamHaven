@@ -2360,4 +2360,209 @@ class AdminController extends Controller
         // Return view with all necessary variables
         return view('admin.properties.create', compact('office', 'agent', 'offices', 'agents'));
     }
+
+    /**
+     * Store a newly created property in storage.
+     */
+    public function propertiesStore(Request $request)
+    {
+        // 1. Validation
+        $validator = Validator::make($request->all(), [
+            'name.en' => 'required|string|max:255',
+            'description.en' => 'required|string',
+            'price_usd' => 'required|numeric|min:0',
+            'price' => 'required|numeric|min:0', // IQD
+            'area' => 'required|numeric|min:1',
+            'listing_type' => 'required|in:sale,sell,rent',
+            'status' => 'required|in:available,pending,sold,rented,suspended',
+            'images' => 'required|array|min:1',
+            'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
+
+            // Locations
+            'locations.*.lat' => 'required|numeric|between:-90,90',
+            'locations.*.lng' => 'required|numeric|between:-180,180',
+
+            // Rooms
+            'rooms.bedroom.count' => 'required|integer|min:0',
+            'rooms.bathroom.count' => 'required|integer|min:0',
+            'rooms.living_room.count' => 'nullable|integer|min:0',
+
+            // Owner (Admin can assign to Agent or Office)
+            'owner_type' => 'required|in:Agent,RealEstateOffice,Admin',
+            'owner_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // 2. Handle Image Uploads
+            $imageUrls = [];
+            if ($request->hasFile('images')) {
+                foreach ($request->file('images') as $image) {
+                    $path = $image->store('properties', 'public');
+                    $imageUrls[] = asset('storage/' . $path);
+                }
+            }
+
+            // 3. Map Listing Type (Database uses 'sell', form might send 'sale')
+            $formListingType = $request->input('listing_type');
+            $dbListingType = ($formListingType === 'sale') ? 'sell' : $formListingType;
+
+            // 4. Resolve Owner Type Class
+            $ownerTypeClass = match ($request->input('owner_type')) {
+                'Agent' => 'App\\Models\\Agent',
+                'RealEstateOffice' => 'App\\Models\\RealEstateOffice',
+                default => 'App\\Models\\Admin', // Fallback or Admin ownership
+            };
+
+            // 5. Prepare Data Array
+            $propertyData = [
+                // Generate Custom ID
+                'id' => $this->generateUniquePropertyId(),
+
+                // Ownership
+                'owner_type' => $ownerTypeClass,
+                'owner_id' => $request->input('owner_id'),
+
+                // JSON: Name & Description
+                'name' => [
+                    'en' => $request->input('name.en'),
+                    'ar' => $request->input('name.ar'),
+                    'ku' => $request->input('name.ku'),
+                ],
+                'description' => [
+                    'en' => $request->input('description.en'),
+                    'ar' => $request->input('description.ar'),
+                    'ku' => $request->input('description.ku'),
+                ],
+
+                // JSON: Price (Dual Currency)
+                'price' => [
+                    'usd' => (float) $request->input('price_usd'),
+                    'iqd' => (float) $request->input('price'),
+                    'amount' => (float) $request->input('price_usd'), // Standard reference
+                    'currency' => 'USD'
+                ],
+
+                // Basic Fields
+                'listing_type' => $dbListingType,
+                'status' => $request->input('status'),
+                'area' => (float) $request->input('area'),
+                'floor_number' => $request->input('floor_number'),
+                'year_built' => $request->input('year_built'),
+                'energy_rating' => $request->input('energy_rating'),
+                'address' => $request->input('address'),
+                'virtual_tour_url' => $request->input('virtual_tour_url'),
+                'floor_plan_url' => $request->input('floor_plan_url'),
+                'rental_period' => $request->input('rental_period'),
+
+                // Booleans
+                'furnished' => $request->has('furnished'),
+                'electricity' => $request->has('electricity'),
+                'water' => $request->has('water'),
+                'internet' => $request->has('internet'),
+
+                // Admin specific flags
+                'is_active' => $request->has('is_active'),
+                'published' => $request->has('published'),
+                'verified' => $request->has('verified'),
+                'is_boosted' => $request->has('is_boosted'),
+                'boost_start_date' => $request->input('boost_start_date'),
+                'boost_end_date' => $request->input('boost_end_date'),
+
+                // JSON: Type
+                'type' => [
+                    'category' => $request->input('type.category')
+                ],
+
+                // JSON: Rooms
+                'rooms' => [
+                    'bedroom' => [
+                        'count' => (int)$request->input('rooms.bedroom.count')
+                    ],
+                    'bathroom' => [
+                        'count' => (int)$request->input('rooms.bathroom.count')
+                    ],
+                    'living_room' => [
+                        'count' => (int)$request->input('rooms.living_room.count')
+                    ],
+                ],
+
+                // JSON: Locations
+                'locations' => [
+                    [
+                        'lat' => (float) $request->input('locations.0.lat'),
+                        'lng' => (float) $request->input('locations.0.lng')
+                    ]
+                ],
+
+                // JSON: Address Details
+                'address_details' => [
+                    'city' => ['en' => $request->input('address_details.city.en')],
+                    'district' => ['en' => $request->input('address_details.district.en')],
+                ],
+
+                // Images array
+                'images' => $imageUrls,
+
+                // JSON: Availability
+                'availability' => [
+                    'from' => $request->input('availability.from'),
+                    'to' => $request->input('availability.to'),
+                    'status' => 'available'
+                ],
+
+                // JSON: Extra Details
+                'construction_details' => [
+                    'type' => $request->input('construction_details.type'),
+                    'quality' => $request->input('construction_details.quality'),
+                ],
+                'energy_details' => [
+                    'certificate' => $request->input('energy_details.certificate'),
+                    'consumption' => $request->input('energy_details.consumption'),
+                ],
+                'furnishing_details' => [
+                    'level' => $request->input('furnishing_details.level'),
+                    'items' => array_values(array_filter(explode(',', $request->input('furnishing_details.items', '')))),
+                ],
+                'seo_metadata' => [
+                    'title' => $request->input('seo_metadata.title'),
+                    'description' => $request->input('seo_metadata.description'),
+                    'keywords' => array_values(array_filter(explode(',', $request->input('seo_metadata.keywords', '')))),
+                ],
+
+                // Analytics Defaults
+                'views' => 0,
+                'favorites_count' => 0,
+                'rating' => 0,
+            ];
+
+            // 6. Create Property
+            Property::create($propertyData);
+
+            DB::commit();
+
+            return redirect()->route('admin.properties.index')->with('success', 'Property created successfully!');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Property Store Error: ' . $e->getMessage());
+            return back()->withInput()->with('error', 'Critical Error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Helper to generate unique ID (If not already present in the class)
+     */
+    private function generateUniquePropertyId(): string
+    {
+        do {
+            $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
+        } while (Property::where('id', $propertyId)->exists());
+
+        return $propertyId;
+    }
 }

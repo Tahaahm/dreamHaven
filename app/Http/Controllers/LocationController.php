@@ -65,8 +65,7 @@ class LocationController extends Controller
                 'data' => $branches
             ]);
         } catch (\Exception $e) {
-            \Log::error('Error loading branches: ' . $e->getMessage());
-            \Log::error($e->getTraceAsString());
+
 
             return response()->json([
                 'success' => false,
