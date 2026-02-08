@@ -620,24 +620,16 @@
 @section('content')
 <div class="property-form-container">
 
-    {{--
-        ========================================================
-        DYNAMIC HEADER: Handles BOTH Agents and Offices
-        ========================================================
-    --}}
     <div class="page-header-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
         <div>
             <h1>Add New Property</h1>
             <p>Fill in all required details to list the property</p>
 
-            {{-- Check if this property is for an Office --}}
             @if(isset($office) && $office)
                 <div class="owner-badge office">
                     <i class="fas fa-building"></i>
                     Property for Office: {{ $office->company_name }}
                 </div>
-
-            {{-- Check if this property is for an Agent --}}
             @elseif(isset($agent) && $agent)
                 <div class="owner-badge agent">
                     <i class="fas fa-user-tie"></i>
@@ -646,7 +638,6 @@
             @endif
         </div>
 
-        {{-- Dynamic Back Button --}}
         @php
             $backRoute = route('admin.properties.index');
             if(isset($office) && $office) {
@@ -685,11 +676,6 @@
         <form action="{{ route('admin.properties.store') }}" method="POST" enctype="multipart/form-data" id="propertyForm" novalidate>
             @csrf
 
-            {{--
-                ========================================================
-                DYNAMIC HIDDEN FIELDS: Injects Owner Type & ID
-                ========================================================
-            --}}
             @if(isset($office) && $office)
                 <input type="hidden" name="owner_type" value="App\Models\RealEstateOffice">
                 <input type="hidden" name="owner_id" value="{{ $office->id }}">
@@ -969,8 +955,9 @@ function updateLatLng(lat, lng) {
     document.getElementById('longitude').value = lng.toFixed(6);
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    loadCities();
+// ==================== LOCATION SELECTOR ====================
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadCities();
 
     const mapToggle = document.getElementById('mapToggle');
     if (mapToggle) {
@@ -986,23 +973,51 @@ document.addEventListener('DOMContentLoaded', function() {
                 }, 100);
             } else {
                 section.classList.add('hidden');
+                document.getElementById('latitude').value = '0';
+                document.getElementById('longitude').value = '0';
             }
         });
     }
 
     const citySelect = document.getElementById('city-select');
     if (citySelect) {
-        citySelect.addEventListener('change', function() {
-            const opt = this.options[this.selectedIndex];
-            if (opt.value) {
-                const data = JSON.parse(opt.dataset.city);
-                document.getElementById('city-en').value = data.name.en;
-                document.getElementById('city-ar').value = data.name.ar;
-                document.getElementById('city-ku').value = data.name.ku;
-                loadAreas(opt.value);
-            } else {
-                document.getElementById('area-select').disabled = true;
-                document.getElementById('area-select').innerHTML = '<option value="">Select City First</option>';
+        citySelect.addEventListener('change', async function() {
+            const cityId = this.value;
+            const selectedOption = this.options[this.selectedIndex];
+
+            // Clear area selection
+            document.getElementById('area-select').innerHTML = '<option value="">Select city first</option>';
+            document.getElementById('area-select').disabled = true;
+            document.getElementById('district-en').value = '';
+            document.getElementById('district-ar').value = '';
+            document.getElementById('district-ku').value = '';
+
+            if (!cityId) {
+                document.getElementById('city-en').value = '';
+                document.getElementById('city-ar').value = '';
+                document.getElementById('city-ku').value = '';
+                return;
+            }
+
+            // Set city values
+            document.getElementById('city-en').value = selectedOption.dataset.nameEn || '';
+            document.getElementById('city-ar').value = selectedOption.dataset.nameAr || '';
+            document.getElementById('city-ku').value = selectedOption.dataset.nameKu || '';
+
+            // Load areas
+            await loadAreas(cityId);
+
+            // Update map if coordinates available
+            if (selectedOption.dataset.lat && selectedOption.dataset.lng && document.getElementById('mapToggle').checked) {
+                const lat = parseFloat(selectedOption.dataset.lat);
+                const lng = parseFloat(selectedOption.dataset.lng);
+                if (marker && map) {
+                    const pos = { lat: lat, lng: lng };
+                    marker.setPosition(pos);
+                    map.panTo(pos);
+                    map.setZoom(13);
+                    updateLatLng(lat, lng);
+                }
             }
         });
     }
@@ -1010,12 +1025,31 @@ document.addEventListener('DOMContentLoaded', function() {
     const areaSelect = document.getElementById('area-select');
     if (areaSelect) {
         areaSelect.addEventListener('change', function() {
-            const opt = this.options[this.selectedIndex];
-            if (opt.value) {
-                const data = JSON.parse(opt.dataset.area);
-                document.getElementById('district-en').value = data.name.en;
-                document.getElementById('district-ar').value = data.name.ar;
-                document.getElementById('district-ku').value = data.name.ku;
+            const selectedOption = this.options[this.selectedIndex];
+
+            if (!this.value) {
+                document.getElementById('district-en').value = '';
+                document.getElementById('district-ar').value = '';
+                document.getElementById('district-ku').value = '';
+                return;
+            }
+
+            // Set district values
+            document.getElementById('district-en').value = selectedOption.dataset.nameEn || '';
+            document.getElementById('district-ar').value = selectedOption.dataset.nameAr || '';
+            document.getElementById('district-ku').value = selectedOption.dataset.nameKu || '';
+
+            // Update map if coordinates available
+            if (selectedOption.dataset.lat && selectedOption.dataset.lng && document.getElementById('mapToggle').checked) {
+                const lat = parseFloat(selectedOption.dataset.lat);
+                const lng = parseFloat(selectedOption.dataset.lng);
+                if (marker && map) {
+                    const pos = { lat: lat, lng: lng };
+                    marker.setPosition(pos);
+                    map.panTo(pos);
+                    map.setZoom(15);
+                    updateLatLng(lat, lng);
+                }
             }
         });
     }
@@ -1023,46 +1057,95 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function loadCities() {
     try {
-        // NOTE: Adjust this API endpoint to match your routes if different
-        const res = await fetch('/v1/api/location/branches');
-        const data = await res.json();
-        const sel = document.getElementById('city-select');
-        sel.innerHTML = '<option value="">-- Select City --</option>';
-        if (data.success && data.data) {
-            data.data.forEach(b => {
-                const opt = document.createElement('option');
-                opt.value = b.id;
-                opt.textContent = b.name.en;
-                opt.dataset.city = JSON.stringify(b);
-                sel.appendChild(opt);
-            });
+        console.log('🔄 Loading cities...');
+        const citySelect = document.getElementById('city-select');
+        citySelect.innerHTML = '<option value="">Loading cities...</option>';
+
+        const response = await fetch('/v1/api/location/branches', {
+            headers: {
+                'Accept-Language': 'en',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-    } catch (e) {
-        console.error('Error loading cities:', e);
+
+        const result = await response.json();
+
+        if (!result.success || !result.data) {
+            throw new Error('Invalid response format');
+        }
+
+        const cities = result.data;
+
+        let cityOptions = '<option value="">-- Select City --</option>';
+        cities.forEach(city => {
+            cityOptions += `<option value="${city.id}"
+                data-name-en="${city.city_name_en || ''}"
+                data-name-ar="${city.city_name_ar || ''}"
+                data-name-ku="${city.city_name_ku || ''}"
+                data-lat="${city.coordinates?.lat || city.latitude || ''}"
+                data-lng="${city.coordinates?.lng || city.longitude || ''}"
+            >${city.city_name_en} - ${city.city_name_ar}</option>`;
+        });
+
+        citySelect.innerHTML = cityOptions;
+        console.log(`✓ Loaded ${cities.length} cities`);
+
+    } catch (error) {
+        console.error('✗ Failed to load cities:', error);
+        document.getElementById('city-select').innerHTML = '<option value="">Error loading cities. Please refresh.</option>';
+        alert('Failed to load location data. Please refresh the page.');
     }
 }
 
-async function loadAreas(branchId) {
+async function loadAreas(cityId) {
     try {
-        const res = await fetch(`/v1/api/location/branches/${branchId}/areas`);
-        const data = await res.json();
-        const sel = document.getElementById('area-select');
-        sel.innerHTML = '<option value="">-- Select Area --</option>';
-        if (data.success && data.data) {
-            data.data.forEach(a => {
-                const opt = document.createElement('option');
-                opt.value = a.id;
-                opt.textContent = a.name.en;
-                opt.dataset.area = JSON.stringify(a);
-                sel.appendChild(opt);
-            });
-            sel.disabled = false;
+        console.log(`🔄 Loading areas for city ${cityId}...`);
+        const areaSelect = document.getElementById('area-select');
+        areaSelect.innerHTML = '<option value="">Loading areas...</option>';
+        areaSelect.disabled = true;
+
+        const response = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
+            headers: {
+                'Accept-Language': 'en',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to load areas');
         }
-    } catch (e) {
-        console.error('Error loading areas:', e);
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+            let areaOptions = '<option value="">-- Select Area --</option>';
+            result.data.forEach(area => {
+                areaOptions += `<option value="${area.id}"
+                    data-name-en="${area.area_name_en || ''}"
+                    data-name-ar="${area.area_name_ar || ''}"
+                    data-name-ku="${area.area_name_ku || ''}"
+                    data-lat="${area.coordinates?.lat || area.latitude || ''}"
+                    data-lng="${area.coordinates?.lng || area.longitude || ''}"
+                >${area.area_name_en}</option>`;
+            });
+
+            areaSelect.innerHTML = areaOptions;
+            areaSelect.disabled = false;
+            console.log(`✓ Loaded ${result.data.length} areas`);
+        } else {
+            areaSelect.innerHTML = '<option value="">No areas available</option>';
+        }
+    } catch (error) {
+        console.error('✗ Error loading areas:', error);
+        document.getElementById('area-select').innerHTML = '<option value="">Error loading areas</option>';
     }
 }
 
+// ==================== IMAGE HANDLING ====================
 function previewImages(event) {
     const files = Array.from(event.target.files);
     if (selectedImages.length + files.length > 10) {
@@ -1170,6 +1253,7 @@ function handleDragEnd() {
     document.querySelectorAll('.image-preview-item').forEach(i => i.classList.remove('dragging', 'drag-over'));
 }
 
+// ==================== FORM VALIDATION & SUBMISSION ====================
 document.getElementById('propertyForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const errors = [];
@@ -1196,7 +1280,6 @@ document.getElementById('propertyForm').addEventListener('submit', function(e) {
     if (!document.getElementById('price_iqd').value || parseFloat(document.getElementById('price_iqd').value) < 0) {
         errors.push('Please enter a valid price in IQD');
     }
-    // Location validation is strict
     if (!document.getElementById('city-en').value) errors.push('Please select a city');
     if (!document.getElementById('district-en').value) errors.push('Please select a district/area');
 
@@ -1221,6 +1304,7 @@ document.getElementById('propertyForm').addEventListener('submit', function(e) {
     this.submit();
 });
 
+// Real-time validation
 document.querySelectorAll('.form-input, .form-select, .form-textarea').forEach(input => {
     input.addEventListener('blur', function() {
         const val = this.value.trim();
@@ -1236,6 +1320,6 @@ document.querySelectorAll('.form-input, .form-select, .form-textarea').forEach(i
     });
 });
 
-console.log('Property form initialized');
+console.log('✓ Property form initialized');
 </script>
 @endpush

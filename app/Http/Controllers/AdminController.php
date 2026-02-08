@@ -2328,6 +2328,8 @@ class AdminController extends Controller
 
         $office = null;
         $agent = null;
+        $offices = null; // For dropdown
+        $agents = null;  // For dropdown
 
         // Fetch office if ID provided
         if ($officeId) {
@@ -2351,7 +2353,11 @@ class AdminController extends Controller
             }
         }
 
-        // Return view with office and agent variables
-        return view('admin.properties.create', compact('office', 'agent'));
+        // Load all offices and agents for dropdowns (needed for admin create view)
+        $offices = RealEstateOffice::where('is_verified', true)->get();
+        $agents = Agent::all();
+
+        // Return view with all necessary variables
+        return view('admin.properties.create', compact('office', 'agent', 'offices', 'agents'));
     }
 }

@@ -18,20 +18,62 @@ class LocationController extends Controller
      */
     public function getBranches(Request $request)
     {
-        $locale = $request->header('Accept-Language', 'en');
-        app()->setLocale($locale);
+        try {
+            $locale = $request->header('Accept-Language', 'en');
 
-        $branches = Branch::active()
-            ->with(['areas' => function ($query) use ($locale) {
-                $query->active()->orderBy("area_name_{$locale}");
-            }])
-            ->orderBy("city_name_{$locale}")
-            ->get();
+            // Simple query without scopes
+            $branches = Branch::where('is_active', true)
+                ->with(['areas' => function ($query) use ($locale) {
+                    $query->where('is_active', true)
+                        ->orderBy("area_name_{$locale}");
+                }])
+                ->orderBy("city_name_{$locale}")
+                ->get()
+                ->map(function ($branch) {
+                    return [
+                        'id' => $branch->id,
+                        'city_name_en' => $branch->city_name_en,
+                        'city_name_ar' => $branch->city_name_ar,
+                        'city_name_ku' => $branch->city_name_ku,
+                        'latitude' => $branch->latitude,
+                        'longitude' => $branch->longitude,
+                        'coordinates' => [
+                            'lat' => $branch->latitude,
+                            'lng' => $branch->longitude
+                        ],
+                        'is_active' => $branch->is_active,
+                        'areas' => $branch->areas->map(function ($area) {
+                            return [
+                                'id' => $area->id,
+                                'area_name_en' => $area->area_name_en,
+                                'area_name_ar' => $area->area_name_ar,
+                                'area_name_ku' => $area->area_name_ku,
+                                'latitude' => $area->latitude,
+                                'longitude' => $area->longitude,
+                                'coordinates' => [
+                                    'lat' => $area->latitude,
+                                    'lng' => $area->longitude
+                                ],
+                                'is_active' => $area->is_active
+                            ];
+                        })
+                    ];
+                });
 
-        return response()->json([
-            'success' => true,
-            'data' => $branches
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $branches
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error loading branches: ' . $e->getMessage());
+            \Log::error($e->getTraceAsString());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load branches',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
