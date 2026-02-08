@@ -30,6 +30,12 @@
             </h1>
         </div>
         <div class="flex gap-3">
+            {{-- ✅ ADD PROPERTY BUTTON FOR AGENTS --}}
+            <a href="{{ route('admin.properties.create') }}?agent_id={{ $agent->id }}"
+               class="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl hover:from-emerald-700 hover:to-emerald-800 transition transform active:scale-95 flex items-center gap-2">
+                <i class="fas fa-plus-circle"></i> Add Property
+            </a>
+
             <a href="{{ route('admin.agents.index') }}" class="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-50 transition shadow-sm">
                 Cancel
             </a>

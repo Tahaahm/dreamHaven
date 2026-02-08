@@ -26,12 +26,55 @@
             </h1>
         </div>
         <div class="flex gap-3">
+            {{-- ✅ ADD PROPERTY BUTTON --}}
+            <a href="{{ route('admin.properties.create') }}?office_id={{ $office->id }}"
+               class="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white text-sm font-bold rounded-xl shadow-lg hover:shadow-xl hover:from-indigo-700 hover:to-indigo-800 transition transform active:scale-95 flex items-center gap-2">
+                <i class="fas fa-plus-circle"></i> Add Property
+            </a>
+
             <a href="{{ route('admin.offices.index') }}" class="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-50 transition shadow-sm">
                 Cancel
             </a>
             <button type="button" onclick="submitOfficeForm()" class="px-6 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-slate-800 hover:shadow-xl transition transform active:scale-95 flex items-center gap-2">
                 <i class="fas fa-save"></i> Save Changes
             </button>
+        </div>
+    </div>
+
+    {{-- ✅ QUICK STATS CARD (NEW SECTION) --}}
+    <div class="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 shadow-sm mb-6 p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-100 text-indigo-600 mb-2">
+                    <i class="fas fa-building text-xl"></i>
+                </div>
+                <div class="text-2xl font-black text-slate-900">{{ $office->ownedProperties()->count() }}</div>
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Total Properties</div>
+            </div>
+
+            <div class="text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 mb-2">
+                    <i class="fas fa-check-circle text-xl"></i>
+                </div>
+                <div class="text-2xl font-black text-slate-900">{{ $office->ownedProperties()->where('status', 'available')->count() }}</div>
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Active Listings</div>
+            </div>
+
+            <div class="text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-amber-100 text-amber-600 mb-2">
+                    <i class="fas fa-clock text-xl"></i>
+                </div>
+                <div class="text-2xl font-black text-slate-900">{{ $office->ownedProperties()->where('status', 'pending')->count() }}</div>
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Pending Approval</div>
+            </div>
+
+            <div class="text-center">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-purple-100 text-purple-600 mb-2">
+                    <i class="fas fa-users text-xl"></i>
+                </div>
+                <div class="text-2xl font-black text-slate-900">{{ $office->agents()->count() }}</div>
+                <div class="text-xs font-bold text-slate-500 uppercase tracking-wide">Agents</div>
+            </div>
         </div>
     </div>
 
@@ -185,7 +228,7 @@
                         class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
                 </div>
 
-                {{-- NEW AVAILABILITY SCHEDULE UI --}}
+                {{-- AVAILABILITY SCHEDULE UI --}}
                 <div class="lg:col-span-3 mt-4">
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Weekly Schedule</label>
 
@@ -260,20 +303,14 @@
                         class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition" autocomplete="new-password">
                 </div>
                 <div class="flex items-center">
-    <label class="inline-flex items-center cursor-pointer select-none">
-
-        {{-- 1. ADD THIS HIDDEN INPUT --}}
-        {{-- This ensures "0" is sent if the box is unchecked --}}
-        <input type="hidden" name="is_verified" value="0">
-
-        {{-- 2. Your existing checkbox (Value 1 overwrites 0 if checked) --}}
-        <input type="checkbox" name="is_verified" value="1" {{ $office->is_verified ? 'checked' : '' }} class="sr-only peer">
-
-        {{-- 3. Visual Styling --}}
-        <div class="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-        <span class="ms-3 text-sm font-bold text-slate-700">Verified Office</span>
-    </label>
-</div>
+                    <label class="inline-flex items-center cursor-pointer select-none">
+                        <input type="hidden" name="is_verified" value="0">
+                        <input type="checkbox" name="is_verified" value="1" {{ $office->is_verified ? 'checked' : '' }} class="sr-only peer">
+                        <div class="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        <span class="ms-3 text-sm font-bold text-slate-700">Verified Office</span>
+                    </label>
+                </div>
+            </div>
         </div>
 
     </form>
@@ -296,7 +333,6 @@
     }
 
     // 2. Availability Schedule Logic
-    // Parse existing JSON from PHP or use default empty object
     let scheduleData = @json($office->availability_schedule ? json_decode(is_array($office->availability_schedule) ? json_encode($office->availability_schedule) : $office->availability_schedule, true) : []);
 
     const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -307,7 +343,6 @@
         container.innerHTML = '';
 
         days.forEach(day => {
-            // Get current data for this day or default
             const dayData = scheduleData[day] || { active: false, start: '09:00', end: '17:00' };
             const isActive = dayData.active === true || dayData.active === 'true' || dayData.active === 1;
 
@@ -336,22 +371,19 @@
             container.appendChild(row);
         });
 
-        // Update hidden input on every render/change
         hiddenInput.value = JSON.stringify(scheduleData);
     }
 
     function updateDay(day, field, value) {
         if (!scheduleData[day]) scheduleData[day] = { active: false, start: '09:00', end: '17:00' };
         scheduleData[day][field] = value;
-        renderSchedule(); // Re-render to update UI states (colors, opacity)
+        renderSchedule();
     }
 
-    // Initial render
     renderSchedule();
 
     // 3. Form Submit Handler
     function submitOfficeForm() {
-        // Ensure the latest JSON is in the input
         hiddenInput.value = JSON.stringify(scheduleData);
         document.getElementById('editOfficeForm').submit();
     }

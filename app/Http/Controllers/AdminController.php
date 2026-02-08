@@ -2315,4 +2315,43 @@ class AdminController extends Controller
 
         return view('admin.properties.viewers', compact('property', 'viewers'));
     }
+
+    // In AdminController@propertiesCreate or wherever you handle property creation
+    /**
+     * Show property creation form
+     */
+    public function propertiesCreate(Request $request)
+    {
+        // Get office_id from query parameter
+        $officeId = $request->query('office_id');
+        $agentId = $request->query('agent_id');
+
+        $office = null;
+        $agent = null;
+
+        // Fetch office if ID provided
+        if ($officeId) {
+            $office = RealEstateOffice::find($officeId);
+
+            // If office not found, redirect back with error
+            if (!$office) {
+                return redirect()->route('admin.offices.index')
+                    ->with('error', 'Office not found.');
+            }
+        }
+
+        // Fetch agent if ID provided
+        if ($agentId) {
+            $agent = Agent::find($agentId);
+
+            // If agent not found, redirect back with error
+            if (!$agent) {
+                return redirect()->route('admin.agents.index')
+                    ->with('error', 'Agent not found.');
+            }
+        }
+
+        // Return view with office and agent variables
+        return view('admin.properties.create', compact('office', 'agent'));
+    }
 }

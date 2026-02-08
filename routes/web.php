@@ -831,19 +831,25 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // ========== PROPERTIES ==========
         // ========== PROPERTIES ==========
+        // ========== PROPERTIES ==========
         Route::prefix('properties')->name('properties.')->group(function () {
             Route::get('/', [AdminController::class, 'propertiesIndex'])->name('index');
             Route::get('/pending', [AdminController::class, 'propertiesPending'])->name('pending');
+
+            // ✅ MOVE THESE TWO LINES TO THE TOP (before /{id} routes)
+            Route::get('/create', [AdminController::class, 'propertiesCreate'])->name('create');
+            Route::post('/store', [AdminController::class, 'propertiesStore'])->name('store');
+
+            // NOW the /{id} routes
             Route::get('/{id}', [AdminController::class, 'propertiesShow'])->name('show');
             Route::get('/{id}/edit', [AdminController::class, 'propertiesEdit'])->name('edit');
             Route::put('/{id}', [AdminController::class, 'propertiesUpdate'])->name('update');
             Route::delete('/{id}', [AdminController::class, 'propertiesDelete'])->name('delete');
             Route::post('/{id}/approve', [AdminController::class, 'propertiesApprove'])->name('approve');
             Route::post('/{id}/reject', [AdminController::class, 'propertiesReject'])->name('reject');
-            Route::get('/{id}/viewers', [AdminController::class, 'propertiesViewers'])->name('viewers'); // ✅ Fixed
+            Route::get('/{id}/viewers', [AdminController::class, 'propertiesViewers'])->name('viewers');
             Route::post('/{id}/toggle-active', [AdminController::class, 'propertiesToggleActive'])->name('toggle.active');
         });
-
         // ========== PROJECTS ==========
         Route::prefix('projects')->name('projects.')->group(function () {
             Route::get('/', [AdminController::class, 'projectsIndex'])->name('index');
