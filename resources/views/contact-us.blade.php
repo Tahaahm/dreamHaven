@@ -337,16 +337,6 @@
                         </div>
                     </div>
 
-                    <div class="contact-item">
-                        <div class="icon-box">
-                            <i class="fas fa-map-marked-alt"></i>
-                        </div>
-                        <div class="text-box">
-                            <h3>Headquarters</h3>
-                            <p>Dream Tower, Floor 12</p>
-                            <p>Erbil, Kurdistan Region, Iraq</p>
-                        </div>
-                    </div>
 
                 </div>
             </div>
