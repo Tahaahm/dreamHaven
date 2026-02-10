@@ -149,28 +149,53 @@
 
     <tr class="hover:bg-slate-50/50 transition-colors group">
         {{-- Listing Details --}}
-        <td class="px-6 py-4">
-            <div class="flex items-center gap-4">
-                <div class="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 relative">
-                    @if($firstImage)
-                        <img src="{{ $firstImage }}" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
-                    @else
-                        <div class="w-full h-full flex items-center justify-center text-slate-300">
-                            <i class="fas fa-image text-xl"></i>
-                        </div>
-                    @endif
+      {{-- Listing Details --}}
+<td class="px-6 py-4">
+    <div class="flex items-center gap-4">
+        <div class="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 relative group-hover:shadow-lg transition-shadow">
+            @if($firstImage)
+                <img src="{{ $firstImage }}" class="w-full h-full object-cover transform group-hover:scale-110 transition duration-500">
+                @if($property->is_boosted)
+                    <div class="absolute top-1 right-1 w-5 h-5 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center">
+                        <i class="fas fa-bolt text-white text-[8px]"></i>
+                    </div>
+                @endif
+            @else
+                <div class="w-full h-full flex items-center justify-center text-slate-300">
+                    <i class="fas fa-image text-xl"></i>
                 </div>
-                <div class="max-w-[220px]">
-                    <a href="{{ route('admin.properties.show', $property->id) }}" class="text-sm font-bold text-slate-900 hover:text-indigo-600 line-clamp-1 mb-1">
-                        {{ $propName }}
-                    </a>
-                    <p class="text-[10px] font-medium text-slate-500 line-clamp-1 mb-1">
-                        <i class="fas fa-map-marker-alt mr-1 text-slate-300"></i> {{ $cityName }}
-                    </p>
-                    <span class="text-[10px] text-slate-400 font-mono">{{ $property->created_at->format('M d, Y') }}</span>
-                </div>
+            @endif
+        </div>
+        <div class="flex flex-col gap-1.5 max-w-[220px]">
+            {{-- Property Name --}}
+            <a href="{{ route('admin.properties.show', $property->id) }}"
+               class="text-sm font-bold text-slate-900 hover:text-indigo-600 line-clamp-1 transition-colors">
+                {{ $propName }}
+            </a>
+
+            {{-- Location --}}
+            <div class="flex items-center gap-1.5 text-slate-500">
+                <i class="fas fa-map-marker-alt text-slate-400 text-[9px]"></i>
+                <span class="text-[10px] font-medium line-clamp-1">{{ $cityName }}</span>
             </div>
-        </td>
+
+            {{-- Created Date - UPDATED DESIGN --}}
+            <div class="flex items-center gap-2">
+                <div class="inline-flex items-center gap-1.5 px-2 py-0.5 bg-slate-50 border border-slate-200 rounded-md">
+                    <i class="fas fa-calendar-plus text-slate-400 text-[9px]"></i>
+                    <span class="text-[10px] text-slate-600 font-semibold">{{ $property->created_at->format('M d, Y') }}</span>
+                </div>
+
+                {{-- Optional: Show "New" badge if posted within 7 days --}}
+                @if($property->created_at->diffInDays() < 7)
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-700 rounded-md text-[9px] font-black uppercase tracking-wide">
+                        <i class="fas fa-sparkles text-emerald-500"></i> New
+                    </span>
+                @endif
+            </div>
+        </div>
+    </div>
+</td>
 
         {{-- Owner --}}
         <td class="px-6 py-4">

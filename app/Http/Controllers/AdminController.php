@@ -30,6 +30,7 @@ use Illuminate\Support\Str;
 use App\Models\ServiceProviderPlan;
 use App\Models\Category;
 
+
 class AdminController extends Controller
 {
     // ==========================================
@@ -2366,31 +2367,45 @@ class AdminController extends Controller
      */
     public function propertiesStore(Request $request)
     {
-        // 1. Validation
+        // 1. PRE-PROCESS: Extract multilingual data
+        $nameData = [
+            'en' => $request->input('name.en') ?: ($request->input('name_en') ?: ''),
+            'ar' => $request->input('name.ar') ?: ($request->input('name_ar') ?: ''),
+            'ku' => $request->input('name.ku') ?: ($request->input('name_ku') ?: ''),
+        ];
+
+        $descriptionData = [
+            'en' => $request->input('description.en') ?: ($request->input('description_en') ?: ''),
+            'ar' => $request->input('description.ar') ?: ($request->input('description_ar') ?: ''),
+            'ku' => $request->input('description.ku') ?: ($request->input('description_ku') ?: ''),
+        ];
+
+        // 2. VALIDATION
         $validator = Validator::make($request->all(), [
-            'name.en' => 'required|string|max:255',
-            'description.en' => 'required|string',
             'price_usd' => 'required|numeric|min:0',
-            'price' => 'required|numeric|min:0', // IQD
+            'price' => 'required|numeric|min:0',
             'area' => 'required|numeric|min:1',
             'listing_type' => 'required|in:sale,sell,rent',
             'status' => 'required|in:available,pending,sold,rented,suspended',
             'images' => 'required|array|min:1',
             'images.*' => 'image|mimes:jpeg,png,jpg,webp|max:5120',
-
-            // Locations
-            'locations.*.lat' => 'required|numeric|between:-90,90',
-            'locations.*.lng' => 'required|numeric|between:-180,180',
-
-            // Rooms
+            'locations.0.lat' => 'required|numeric|between:-90,90',
+            'locations.0.lng' => 'required|numeric|between:-180,180',
             'rooms.bedroom.count' => 'required|integer|min:0',
             'rooms.bathroom.count' => 'required|integer|min:0',
-            'rooms.living_room.count' => 'nullable|integer|min:0',
-
-            // Owner (Admin can assign to Agent or Office)
             'owner_type' => 'required|in:Agent,RealEstateOffice,Admin',
             'owner_id' => 'required|string',
         ]);
+
+        // Custom validation: At least one language must have name & description
+        $validator->after(function ($validator) use ($nameData, $descriptionData) {
+            if (empty(array_filter($nameData))) {
+                $validator->errors()->add('name', 'Property name is required in at least one language');
+            }
+            if (empty(array_filter($descriptionData))) {
+                $validator->errors()->add('description', 'Property description is required in at least one language');
+            }
+        });
 
         if ($validator->fails()) {
             return back()->withErrors($validator)->withInput();
@@ -2399,7 +2414,7 @@ class AdminController extends Controller
         DB::beginTransaction();
 
         try {
-            // 2. Handle Image Uploads
+            // 3. Handle Image Uploads
             $imageUrls = [];
             if ($request->hasFile('images')) {
                 foreach ($request->file('images') as $image) {
@@ -2408,52 +2423,54 @@ class AdminController extends Controller
                 }
             }
 
-            // 3. Map Listing Type (Database uses 'sell', form might send 'sale')
-            $formListingType = $request->input('listing_type');
-            $dbListingType = ($formListingType === 'sale') ? 'sell' : $formListingType;
+            // 4. Map Listing Type
+            $dbListingType = ($request->input('listing_type') === 'sale') ? 'sell' : $request->input('listing_type');
 
-            // 4. Resolve Owner Type Class
+            // 5. Resolve Owner Type Class
             $ownerTypeClass = match ($request->input('owner_type')) {
                 'Agent' => 'App\\Models\\Agent',
                 'RealEstateOffice' => 'App\\Models\\RealEstateOffice',
-                default => 'App\\Models\\Admin', // Fallback or Admin ownership
+                default => 'App\\Models\\Admin',
             };
 
-            // 5. Prepare Data Array
-            $propertyData = [
-                // Generate Custom ID
-                'id' => $this->generateUniquePropertyId(),
+            // 6. SMART FILL: If any language is missing, copy from available one
+            $fallbackName = $nameData['en'] ?: ($nameData['ar'] ?: $nameData['ku']);
+            $fallbackDesc = $descriptionData['en'] ?: ($descriptionData['ar'] ?: $descriptionData['ku']);
 
-                // Ownership
+            $finalName = [
+                'en' => $nameData['en'] ?: $fallbackName,
+                'ar' => $nameData['ar'] ?: $fallbackName,
+                'ku' => $nameData['ku'] ?: $fallbackName,
+            ];
+
+            $finalDescription = [
+                'en' => $descriptionData['en'] ?: $fallbackDesc,
+                'ar' => $descriptionData['ar'] ?: $fallbackDesc,
+                'ku' => $descriptionData['ku'] ?: $fallbackDesc,
+            ];
+
+            // 7. Prepare Property Data - CRITICAL: Use json_encode for nested arrays
+            $propertyData = [
+                'id' => $this->generateUniquePropertyId(),
                 'owner_type' => $ownerTypeClass,
                 'owner_id' => $request->input('owner_id'),
 
-                // JSON: Name & Description
-                'name' => [
-                    'en' => $request->input('name.en'),
-                    'ar' => $request->input('name.ar'),
-                    'ku' => $request->input('name.ku'),
-                ],
-                'description' => [
-                    'en' => $request->input('description.en'),
-                    'ar' => $request->input('description.ar'),
-                    'ku' => $request->input('description.ku'),
-                ],
-
-                // JSON: Price (Dual Currency)
-                'price' => [
+                // JSON Fields - Must be JSON strings
+                'name' => json_encode($finalName, JSON_UNESCAPED_UNICODE),
+                'description' => json_encode($finalDescription, JSON_UNESCAPED_UNICODE),
+                'price' => json_encode([
                     'usd' => (float) $request->input('price_usd'),
                     'iqd' => (float) $request->input('price'),
-                    'amount' => (float) $request->input('price_usd'), // Standard reference
+                    'amount' => (float) $request->input('price_usd'),
                     'currency' => 'USD'
-                ],
+                ]),
 
                 // Basic Fields
                 'listing_type' => $dbListingType,
                 'status' => $request->input('status'),
                 'area' => (float) $request->input('area'),
-                'floor_number' => $request->input('floor_number'),
-                'year_built' => $request->input('year_built'),
+                'floor_number' => $request->input('floor_number') ?: null,
+                'year_built' => $request->input('year_built') ?: null,
                 'energy_rating' => $request->input('energy_rating'),
                 'address' => $request->input('address'),
                 'virtual_tour_url' => $request->input('virtual_tour_url'),
@@ -2461,107 +2478,108 @@ class AdminController extends Controller
                 'rental_period' => $request->input('rental_period'),
 
                 // Booleans
-                'furnished' => $request->has('furnished'),
-                'electricity' => $request->has('electricity'),
-                'water' => $request->has('water'),
-                'internet' => $request->has('internet'),
-
-                // Admin specific flags
-                'is_active' => $request->has('is_active'),
-                'published' => $request->has('published'),
-                'verified' => $request->has('verified'),
-                'is_boosted' => $request->has('is_boosted'),
+                'furnished' => $request->has('furnished') ? 1 : 0,
+                'electricity' => $request->has('electricity') ? 1 : 0,
+                'water' => $request->has('water') ? 1 : 0,
+                'internet' => $request->has('internet') ? 1 : 0,
+                'is_active' => true,
+                'published' => true,
+                'verified' => true,
+                'is_boosted' => $request->has('is_boosted') ? 1 : 0,
                 'boost_start_date' => $request->input('boost_start_date'),
                 'boost_end_date' => $request->input('boost_end_date'),
+                'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
 
-                // JSON: Type
-                'type' => [
+                // JSON Fields - encoded
+                'type' => json_encode([
                     'category' => $request->input('type.category')
-                ],
+                ]),
 
-                // JSON: Rooms
-                'rooms' => [
-                    'bedroom' => [
-                        'count' => (int)$request->input('rooms.bedroom.count')
-                    ],
-                    'bathroom' => [
-                        'count' => (int)$request->input('rooms.bathroom.count')
-                    ],
-                    'living_room' => [
-                        'count' => (int)$request->input('rooms.living_room.count')
-                    ],
-                ],
+                'rooms' => json_encode([
+                    'bedroom' => ['count' => (int)$request->input('rooms.bedroom.count', 0)],
+                    'bathroom' => ['count' => (int)$request->input('rooms.bathroom.count', 0)],
+                    'living_room' => ['count' => (int)$request->input('rooms.living_room.count', 0)],
+                ]),
 
-                // JSON: Locations
-                'locations' => [
+                'locations' => json_encode([
                     [
                         'lat' => (float) $request->input('locations.0.lat'),
                         'lng' => (float) $request->input('locations.0.lng')
                     ]
-                ],
+                ]),
 
-                // JSON: Address Details
-                'address_details' => [
-                    'city' => ['en' => $request->input('address_details.city.en')],
-                    'district' => ['en' => $request->input('address_details.district.en')],
-                ],
+                'address_details' => json_encode([
+                    'city' => [
+                        'en' => $request->input('address_details.city.en'),
+                        'ar' => $request->input('address_details.city.ar'),
+                        'ku' => $request->input('address_details.city.ku'),
+                    ],
+                    'district' => [
+                        'en' => $request->input('address_details.district.en'),
+                        'ar' => $request->input('address_details.district.ar'),
+                        'ku' => $request->input('address_details.district.ku'),
+                    ],
+                ], JSON_UNESCAPED_UNICODE),
 
-                // Images array
-                'images' => $imageUrls,
+                'images' => json_encode($imageUrls),
 
-                // JSON: Availability
-                'availability' => [
+                'availability' => json_encode([
                     'from' => $request->input('availability.from'),
                     'to' => $request->input('availability.to'),
                     'status' => 'available'
-                ],
+                ]),
 
-                // JSON: Extra Details
-                'construction_details' => [
+                'construction_details' => json_encode([
                     'type' => $request->input('construction_details.type'),
                     'quality' => $request->input('construction_details.quality'),
-                ],
-                'energy_details' => [
+                ]),
+
+                'energy_details' => json_encode([
                     'certificate' => $request->input('energy_details.certificate'),
                     'consumption' => $request->input('energy_details.consumption'),
-                ],
-                'furnishing_details' => [
-                    'level' => $request->input('furnishing_details.level'),
-                    'items' => array_values(array_filter(explode(',', $request->input('furnishing_details.items', '')))),
-                ],
-                'seo_metadata' => [
-                    'title' => $request->input('seo_metadata.title'),
-                    'description' => $request->input('seo_metadata.description'),
-                    'keywords' => array_values(array_filter(explode(',', $request->input('seo_metadata.keywords', '')))),
-                ],
+                ]),
 
-                // Analytics Defaults
+                'furnishing_details' => json_encode([
+                    'level' => $request->input('furnishing_details.level'),
+                    'items' => [],
+                ]),
+
+                'seo_metadata' => json_encode([
+                    'title' => $finalName['en'],
+                    'description' => substr($finalDescription['en'], 0, 160),
+                    'keywords' => [],
+                ], JSON_UNESCAPED_UNICODE),
+
+                // Analytics
                 'views' => 0,
                 'favorites_count' => 0,
                 'rating' => 0,
             ];
 
-            // 6. Create Property
-            Property::create($propertyData);
+            // 8. Create Property using DB::table (bypasses model casting issues)
+            DB::table('properties')->insert($propertyData);
 
             DB::commit();
 
-            return redirect()->route('admin.properties.index')->with('success', 'Property created successfully!');
+            return redirect()->route('admin.properties.index')
+                ->with('success', 'Property created successfully!');
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Property Store Error: ' . $e->getMessage());
-            return back()->withInput()->with('error', 'Critical Error: ' . $e->getMessage());
+            Log::error('Line: ' . $e->getLine());
+            Log::error('Stack: ' . $e->getTraceAsString());
+
+            return back()->withInput()
+                ->with('error', 'Error creating property: ' . $e->getMessage());
         }
     }
 
-    /**
-     * Helper to generate unique ID (If not already present in the class)
-     */
     private function generateUniquePropertyId(): string
     {
         do {
             $propertyId = 'prop_' . date('Y_m_d') . '_' . str_pad(random_int(1, 99999), 5, '0', STR_PAD_LEFT);
-        } while (Property::where('id', $propertyId)->exists());
+        } while (DB::table('properties')->where('id', $propertyId)->exists());
 
         return $propertyId;
     }

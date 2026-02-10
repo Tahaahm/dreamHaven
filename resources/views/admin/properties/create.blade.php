@@ -4,13 +4,18 @@
 
 @push('styles')
 <style>
-    /* Property Form Custom Styles */
+    /* ============================================
+       PROPERTY FORM - COMPLETE STYLING
+       ============================================ */
+
+    /* Container */
     .property-form-container {
         max-width: 1400px;
         margin: 0 auto;
+        padding: 20px;
     }
 
-    /* Page Header Card */
+    /* Page Header */
     .page-header-card {
         background: white;
         border-radius: 16px;
@@ -18,18 +23,24 @@
         margin-bottom: 24px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         border: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
     }
 
     .page-header-card h1 {
         font-size: 28px;
         font-weight: 700;
         color: #1f2937;
-        margin-bottom: 4px;
+        margin: 0 0 4px 0;
     }
 
     .page-header-card p {
         color: #6b7280;
         font-size: 14px;
+        margin: 0;
     }
 
     .owner-badge {
@@ -43,14 +54,12 @@
         margin-top: 8px;
     }
 
-    /* Style for Office */
     .owner-badge.office {
         background: linear-gradient(135deg, rgba(48,59,151,0.1), rgba(75,86,178,0.05));
         border: 2px solid #303b97;
         color: #303b97;
     }
 
-    /* Style for Agent */
     .owner-badge.agent {
         background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(52, 211, 153, 0.05));
         border: 2px solid #059669;
@@ -88,7 +97,32 @@
         border: 1px solid #e5e7eb;
     }
 
-    /* Alert Messages */
+    /* AI Helper Badge */
+    .ai-helper-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        color: white;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .ai-helper-badge i {
+        font-size: 18px;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+    }
+
+    /* Alerts */
     .alert {
         padding: 16px 20px;
         border-radius: 12px;
@@ -99,13 +133,31 @@
         font-weight: 500;
     }
 
+    .alert-info {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(96, 165, 250, 0.05));
+        border: 2px solid #3b82f6;
+        color: #1e40af;
+    }
+
     .alert-danger {
         background: #fef2f2;
         border: 2px solid #ef4444;
         color: #991b1b;
     }
 
-    .alert i { font-size: 20px; margin-top: 2px; }
+    .alert i {
+        font-size: 20px;
+        margin-top: 2px;
+    }
+
+    .alert ul {
+        margin: 8px 0 0 20px;
+        padding: 0;
+    }
+
+    .alert li {
+        margin-bottom: 4px;
+    }
 
     /* Section Headers */
     .section-title {
@@ -120,8 +172,14 @@
         gap: 10px;
     }
 
-    .section-title:first-child { margin-top: 0; }
-    .section-title i { color: #303b97; font-size: 22px; }
+    .section-title:first-of-type {
+        margin-top: 0;
+    }
+
+    .section-title i {
+        color: #303b97;
+        font-size: 22px;
+    }
 
     .section-subtitle {
         color: #6b7280;
@@ -130,7 +188,69 @@
         margin-bottom: 24px;
     }
 
-    /* Form Elements */
+    /* Smart Input Wrapper */
+    .smart-input-wrapper {
+        position: relative;
+        margin-bottom: 24px;
+    }
+
+    .language-indicator {
+        position: absolute;
+        top: -8px;
+        right: 12px;
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        color: white;
+        padding: 4px 12px;
+        border-radius: 8px;
+        font-size: 11px;
+        font-weight: 700;
+        z-index: 10;
+        display: none;
+        box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+    }
+
+    .language-indicator.show {
+        display: block;
+        animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Translation Loader */
+    .translation-loader {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: none;
+        pointer-events: none;
+    }
+
+    .translation-loader.show {
+        display: block;
+    }
+
+    .translation-loader i {
+        color: #8b5cf6;
+        font-size: 18px;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    /* Form Grid */
     .form-grid {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
@@ -144,8 +264,11 @@
         position: relative;
     }
 
-    .form-group.full-width { grid-column: 1 / -1; }
+    .form-group.full-width {
+        grid-column: 1 / -1;
+    }
 
+    /* Form Labels */
     .form-label {
         font-size: 13px;
         font-weight: 600;
@@ -156,9 +279,15 @@
         gap: 4px;
     }
 
-    .required { color: #ef4444; font-size: 14px; }
+    .required {
+        color: #ef4444;
+        font-size: 14px;
+    }
 
-    .form-input, .form-select, .form-textarea {
+    /* Form Inputs */
+    .form-input,
+    .form-select,
+    .form-textarea {
         width: 100%;
         padding: 12px 16px;
         border: 2px solid #e5e7eb;
@@ -170,56 +299,104 @@
         font-family: inherit;
     }
 
-    .form-input:focus, .form-select:focus, .form-textarea:focus {
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
         outline: none;
         border-color: #303b97;
         background: white;
         box-shadow: 0 0 0 3px rgba(48,59,151,0.1);
     }
 
-    .form-input.error, .form-select.error, .form-textarea.error {
+    .form-input.processing {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), white);
+    }
+
+    .form-input.error,
+    .form-select.error,
+    .form-textarea.error {
         border-color: #ef4444;
         background: #fef2f2;
     }
 
-    .form-input.valid, .form-select.valid, .form-textarea.valid {
+    .form-input.valid,
+    .form-select.valid,
+    .form-textarea.valid {
         border-color: #10b981;
     }
 
-    .form-textarea { min-height: 110px; resize: vertical; }
-    .input-hint { font-size: 11px; color: #6b7280; margin-top: 4px; }
-
-    /* Language Tabs */
-    .language-tabs {
-        display: flex;
-        gap: 6px;
-        margin-bottom: 16px;
-        background: #f3f4f6;
-        padding: 5px;
-        border-radius: 10px;
-        width: fit-content;
+    .form-textarea {
+        min-height: 110px;
+        resize: vertical;
     }
 
-    .lang-tab {
-        padding: 8px 18px;
-        border: none;
-        background: transparent;
+    .input-hint {
+        font-size: 11px;
         color: #6b7280;
+        margin-top: 4px;
+    }
+
+    .input-hint.ai-hint {
+        color: #8b5cf6;
         font-weight: 600;
-        font-size: 13px;
-        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* Manual Override Section */
+    details {
+        margin-top: 16px;
+        margin-bottom: 24px;
+    }
+
+    details summary {
         cursor: pointer;
+        color: #6b7280;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 12px 16px;
+        background: #f9fafb;
+        border-radius: 10px;
+        border: 2px solid #e5e7eb;
         transition: all 0.3s ease;
+        list-style: none;
     }
 
-    .lang-tab.active {
+    details summary::-webkit-details-marker {
+        display: none;
+    }
+
+    details summary:hover {
         background: white;
+        border-color: #303b97;
         color: #303b97;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
     }
 
-    .lang-content { display: none; }
-    .lang-content.active { display: block; }
+    details summary i {
+        margin-right: 8px;
+    }
+
+    details[open] summary {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        border-bottom-color: transparent;
+    }
+
+    .manual-edit-panel {
+        padding: 20px;
+        background: #f9fafb;
+        border: 2px solid #e5e7eb;
+        border-top: none;
+        border-bottom-left-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+
+    /* Hidden Fields */
+    .hidden-translations {
+        display: none;
+    }
 
     /* Toggle Switch */
     .toggle-wrapper-box {
@@ -240,7 +417,9 @@
         border-color: #303b97;
     }
 
-    .toggle-wrapper-box input[type="checkbox"] { display: none; }
+    .toggle-wrapper-box input[type="checkbox"] {
+        display: none;
+    }
 
     .toggle-switch {
         position: relative;
@@ -282,16 +461,22 @@
     /* Map Section */
     .map-section {
         transition: all 0.3s ease;
-        overflow: hidden;
     }
 
     .map-section.hidden {
         display: none;
         opacity: 0;
-        max-height: 0;
     }
 
-    /* Image Upload */
+    #map-preview {
+        height: 400px;
+        width: 100%;
+        border-radius: 12px;
+        border: 2px solid #e5e7eb;
+        margin-top: 10px;
+    }
+
+    /* Image Upload Area */
     .image-upload-area {
         border: 3px dashed #e5e7eb;
         border-radius: 16px;
@@ -306,6 +491,7 @@
     .image-upload-area:hover {
         border-color: #303b97;
         background: white;
+        transform: translateY(-2px);
     }
 
     .image-upload-area.error {
@@ -326,8 +512,12 @@
         margin-bottom: 6px;
     }
 
-    .upload-hint { color: #6b7280; font-size: 13px; }
+    .upload-hint {
+        color: #6b7280;
+        font-size: 13px;
+    }
 
+    /* Sort Instructions */
     .sort-instructions {
         background: linear-gradient(135deg, rgba(48,59,151,0.05), rgba(48,59,151,0.02));
         border: 1px dashed #303b97;
@@ -343,9 +533,11 @@
         font-size: 13px;
     }
 
-    .sort-instructions.show { display: flex; }
+    .sort-instructions.show {
+        display: flex;
+    }
 
-    /* Image Preview */
+    /* Image Preview Grid */
     .image-preview-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -365,7 +557,9 @@
         border: 3px solid #e5e7eb;
     }
 
-    .image-preview-item:active { cursor: grabbing; }
+    .image-preview-item:active {
+        cursor: grabbing;
+    }
 
     .image-preview-item.dragging {
         opacity: 0.5;
@@ -444,9 +638,11 @@
         cursor: grab;
     }
 
-    .drag-handle:active { cursor: grabbing; }
+    .drag-handle:active {
+        cursor: grabbing;
+    }
 
-    /* Features */
+    /* Features Grid */
     .feature-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -511,6 +707,7 @@
         display: flex;
         justify-content: flex-end;
         gap: 12px;
+        flex-wrap: wrap;
     }
 
     .btn {
@@ -559,13 +756,15 @@
         border-top: 3px solid white;
         width: 18px;
         height: 18px;
-        animation: spin 1s linear infinite;
+        animation: spinRotate 1s linear infinite;
         display: none;
     }
 
-    .btn:disabled .spinner { display: block; }
+    .btn:disabled .spinner {
+        display: block;
+    }
 
-    @keyframes spin {
+    @keyframes spinRotate {
         0% { transform: rotate(0deg); }
         100% { transform: rotate(360deg); }
     }
@@ -580,7 +779,9 @@
         display: none;
     }
 
-    .validation-summary.show { display: block; }
+    .validation-summary.show {
+        display: block;
+    }
 
     .validation-summary h4 {
         color: #ef4444;
@@ -604,15 +805,33 @@
         font-size: 13px;
     }
 
+    /* Responsive Design */
     @media (max-width: 768px) {
-        .form-grid { grid-template-columns: 1fr; }
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
         .page-header-card {
             flex-direction: column;
-            gap: 16px;
             text-align: center;
         }
-        .form-container { padding: 24px 20px; }
-        .feature-grid { grid-template-columns: 1fr; }
+
+        .form-container {
+            padding: 24px 20px;
+        }
+
+        .feature-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .submit-section {
+            flex-direction: column-reverse;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
     }
 </style>
 @endpush
@@ -620,10 +839,11 @@
 @section('content')
 <div class="property-form-container">
 
-    <div class="page-header-card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
+    <!-- Page Header -->
+    <div class="page-header-card">
         <div>
             <h1>Add New Property</h1>
-            <p>Fill in all required details to list the property</p>
+            <p>Enter details in any language - translations handled automatically</p>
 
             @if(isset($office) && $office)
                 <div class="owner-badge office">
@@ -648,23 +868,41 @@
         @endphp
 
         <a href="{{ $backRoute }}" class="back-button">
-            <i class="fas fa-arrow-left"></i> Back to Profile
+            <i class="fas fa-arrow-left"></i> Back
         </a>
     </div>
 
+    <!-- Form Container -->
     <div class="form-container">
 
+        <!-- AI Helper Badge -->
+        <div class="ai-helper-badge">
+            <i class="fas fa-magic"></i>
+            <span>AI-Powered Form - Write in Kurdish, English, or Arabic!</span>
+        </div>
+
+        <!-- Info Alert -->
+        <div class="alert alert-info">
+            <i class="fas fa-lightbulb"></i>
+            <div>
+                <strong>Smart Entry:</strong> Type property name/description in <strong>any language</strong> (Kurdish, English, Arabic).
+                Other languages will be auto-translated. Just fill what you know!
+            </div>
+        </div>
+
+        <!-- Validation Summary -->
         <div class="validation-summary" id="validationSummary">
             <h4><i class="fas fa-exclamation-triangle"></i> Please fix the following errors:</h4>
             <ul id="errorList"></ul>
         </div>
 
+        <!-- Laravel Errors -->
         @if($errors->any())
         <div class="alert alert-danger">
             <i class="fas fa-exclamation-circle"></i>
             <div>
                 <strong>Error!</strong> Please check the form for errors.
-                <ul style="margin: 8px 0 0 20px;">
+                <ul>
                     @foreach($errors->all() as $error)
                         <li>{{ $error }}</li>
                     @endforeach
@@ -673,135 +911,225 @@
         </div>
         @endif
 
+        <!-- Form -->
         <form action="{{ route('admin.properties.store') }}" method="POST" enctype="multipart/form-data" id="propertyForm" novalidate>
             @csrf
 
+            <!-- Owner Type (Hidden or Visible based on context) -->
             @if(isset($office) && $office)
-                <input type="hidden" name="owner_type" value="App\Models\RealEstateOffice">
+                <input type="hidden" name="owner_type" value="RealEstateOffice">
                 <input type="hidden" name="owner_id" value="{{ $office->id }}">
             @elseif(isset($agent) && $agent)
-                <input type="hidden" name="owner_type" value="App\Models\Agent">
+                <input type="hidden" name="owner_type" value="Agent">
                 <input type="hidden" name="owner_id" value="{{ $agent->id }}">
+            @else
+                <!-- Admin adding property -->
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label">Owner Type <span class="required">*</span></label>
+                        <select name="owner_type" id="owner_type" class="form-select" required>
+                            <option value="">-- Select Owner --</option>
+                            <option value="Agent">Agent</option>
+                            <option value="RealEstateOffice">Real Estate Office</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Select Owner <span class="required">*</span></label>
+                        <select name="owner_id" id="owner_id" class="form-select" required disabled>
+                            <option value="">Select owner type first</option>
+                        </select>
+                    </div>
+                </div>
             @endif
 
-            <h2 class="section-title"><i class="fas fa-info-circle"></i> Basic Information</h2>
-            <p class="section-subtitle">Enter the primary details in English (required) and optionally in Arabic and Kurdish</p>
+            <!-- ========================================
+                 SECTION 1: BASIC INFORMATION
+                 ======================================== -->
+            <h2 class="section-title">
+                <i class="fas fa-info-circle"></i> Basic Information
+            </h2>
+            <p class="section-subtitle">Type in any language - we'll auto-translate (or enter manually below)</p>
 
-            <div class="language-tabs">
-                <button type="button" class="lang-tab active" onclick="switchLang(event, 'en')">English *</button>
-                <button type="button" class="lang-tab" onclick="switchLang(event, 'ar')">العربية</button>
-                <button type="button" class="lang-tab" onclick="switchLang(event, 'ku')">کوردی</button>
+            <!-- Smart Property Name Input -->
+            <div class="form-group smart-input-wrapper">
+                <label class="form-label">Property Name <span class="required">*</span></label>
+                <div class="language-indicator" id="nameLanguageIndicator"></div>
+                <input
+                    type="text"
+                    id="smartPropertyName"
+                    class="form-input"
+                    placeholder="مثال: شقة فاخرة في أربيل | Example: Luxury Apartment in Erbil | نموونە: شوقەی لوکس لە هەولێر"
+                    minlength="3"
+                    maxlength="255"
+                >
+                <div class="translation-loader"><i class="fas fa-spinner fa-spin"></i></div>
+                <span class="input-hint ai-hint">
+                    <i class="fas fa-magic"></i>
+                    Type in any language - auto-translates OR manually fill fields below
+                </span>
             </div>
 
-            <div class="lang-content active" id="lang-en">
-                <div class="form-group">
-                    <label class="form-label">Property Name (English) <span class="required">*</span></label>
-                    <input type="text" name="name_en" id="name_en" class="form-input" value="{{ old('name_en') }}" required minlength="3" maxlength="255">
-                    <span class="input-hint">Minimum 3 characters, maximum 255</span>
+            <!-- Manual Name Override -->
+            <details>
+                <summary>
+                    <i class="fas fa-edit"></i> Manually Edit Name Translations (Optional)
+                </summary>
+                <div class="manual-edit-panel">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Name (English)</label>
+                            <input type="text" name="name[en]" id="name_en_manual" class="form-input" placeholder="e.g., Luxury Apartment">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Name (العربية)</label>
+                            <input type="text" name="name[ar]" id="name_ar_manual" class="form-input" placeholder="مثال: شقة فاخرة" dir="rtl">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Name (کوردی)</label>
+                            <input type="text" name="name[ku]" id="name_ku_manual" class="form-input" placeholder="نموونە: شوقەی لوکس">
+                        </div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Description (English) <span class="required">*</span></label>
-                    <textarea name="description_en" id="description_en" class="form-textarea" required minlength="5">{{ old('description_en') }}</textarea>
-                    <span class="input-hint">Minimum 5 characters - Describe the property features and location</span>
-                </div>
+            </details>
+
+            <!-- Smart Description Input -->
+            <div class="form-group smart-input-wrapper">
+                <label class="form-label">Description <span class="required">*</span></label>
+                <div class="language-indicator" id="descLanguageIndicator"></div>
+                <textarea
+                    id="smartDescription"
+                    class="form-textarea"
+                    placeholder="Describe the property in your preferred language..."
+                    minlength="5"
+                ></textarea>
+                <div class="translation-loader"><i class="fas fa-spinner fa-spin"></i></div>
+                <span class="input-hint ai-hint">
+                    <i class="fas fa-magic"></i>
+                    Describe property features, location, nearby facilities
+                </span>
             </div>
 
-            <div class="lang-content" id="lang-ar">
-                <div class="form-group">
-                    <label class="form-label">اسم العقار (عربي)</label>
-                    <input type="text" name="name_ar" id="name_ar" class="form-input" value="{{ old('name_ar') }}" dir="rtl" maxlength="255">
+            <!-- Manual Description Override -->
+            <details>
+                <summary>
+                    <i class="fas fa-edit"></i> Manually Edit Description Translations (Optional)
+                </summary>
+                <div class="manual-edit-panel">
+                    <div class="form-group">
+                        <label class="form-label">Description (English)</label>
+                        <textarea name="description[en]" id="description_en_manual" class="form-textarea" placeholder="Describe in English..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description (العربية)</label>
+                        <textarea name="description[ar]" id="description_ar_manual" class="form-textarea" placeholder="وصف بالعربية..." dir="rtl"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description (کوردی)</label>
+                        <textarea name="description[ku]" id="description_ku_manual" class="form-textarea" placeholder="وەسفکردن بە کوردی..."></textarea>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">الوصف (عربي)</label>
-                    <textarea name="description_ar" id="description_ar" class="form-textarea" dir="rtl">{{ old('description_ar') }}</textarea>
-                </div>
+            </details>
+
+            <!-- Hidden Auto-Translation Fields -->
+            <div class="hidden-translations">
+                <input type="hidden" id="name_en" value="">
+                <input type="hidden" id="name_ar" value="">
+                <input type="hidden" id="name_ku" value="">
+                <input type="hidden" id="description_en" value="">
+                <input type="hidden" id="description_ar" value="">
+                <input type="hidden" id="description_ku" value="">
             </div>
 
-            <div class="lang-content" id="lang-ku">
-                <div class="form-group">
-                    <label class="form-label">ناوی موڵک (کوردی)</label>
-                    <input type="text" name="name_ku" id="name_ku" class="form-input" value="{{ old('name_ku') }}" maxlength="255">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">وەسف (کوردی)</label>
-                    <textarea name="description_ku" id="description_ku" class="form-textarea">{{ old('description_ku') }}</textarea>
-                </div>
-            </div>
-
-            <h2 class="section-title"><i class="fas fa-home"></i> Property Details</h2>
-            <p class="section-subtitle">Specify property type, size, rooms, and pricing</p>
+            <!-- ========================================
+                 SECTION 2: PROPERTY DETAILS
+                 ======================================== -->
+            <h2 class="section-title">
+                <i class="fas fa-home"></i> Property Details
+            </h2>
+            <p class="section-subtitle">Basic property information</p>
 
             <div class="form-grid">
                 <div class="form-group">
                     <label class="form-label">Property Type <span class="required">*</span></label>
-                    <select name="property_type" id="property_type" class="form-select" required>
+                    <select name="type[category]" id="property_type" class="form-select" required>
                         <option value="">-- Select Type --</option>
-                        <option value="apartment" {{ old('property_type') == 'apartment' ? 'selected' : '' }}>Apartment</option>
-                        <option value="house" {{ old('property_type') == 'house' ? 'selected' : '' }}>House</option>
-                        <option value="villa" {{ old('property_type') == 'villa' ? 'selected' : '' }}>Villa</option>
-                        <option value="land" {{ old('property_type') == 'land' ? 'selected' : '' }}>Land</option>
-                        <option value="commercial" {{ old('property_type') == 'commercial' ? 'selected' : '' }}>Commercial</option>
+                        <option value="apartment">🏢 Apartment / شقة / شوقە</option>
+                        <option value="house">🏠 House / منزل / خانوو</option>
+                        <option value="villa">🏰 Villa / فيلا / ڤیلا</option>
+                        <option value="land">🌍 Land / أرض / زەوی</option>
+                        <option value="commercial">🏪 Commercial / تجاري / بازرگانی</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Listing Type <span class="required">*</span></label>
                     <select name="listing_type" id="listing_type" class="form-select" required>
-                        <option value="sell" {{ old('listing_type') == 'sell' ? 'selected' : '' }}>For Sale</option>
-                        <option value="rent" {{ old('listing_type') == 'rent' ? 'selected' : '' }}>For Rent</option>
+                        <option value="sell">For Sale / للبيع / بۆ فرۆشتن</option>
+                        <option value="rent">For Rent / للإيجار / بۆ کرێ</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Area (m²) <span class="required">*</span></label>
-                    <input type="number" name="area" id="area" class="form-input" value="{{ old('area') }}" step="0.01" required min="1">
-                    <span class="input-hint">Must be at least 1 m²</span>
+                    <input type="number" name="area" id="area" class="form-input" placeholder="e.g., 120" step="0.01" required min="1">
+                    <span class="input-hint">Property size in square meters</span>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Status <span class="required">*</span></label>
                     <select name="status" id="status" class="form-select" required>
-                        <option value="available" {{ old('status', 'available') == 'available' ? 'selected' : '' }}>Available</option>
-                        <option value="sold" {{ old('status') == 'sold' ? 'selected' : '' }}>Sold</option>
-                        <option value="rented" {{ old('status') == 'rented' ? 'selected' : '' }}>Rented</option>
+                        <option value="available">✅ Available</option>
+                        <option value="pending">⏳ Pending</option>
+                        <option value="sold">💰 Sold</option>
+                        <option value="rented">🔑 Rented</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Bedrooms <span class="required">*</span></label>
-                    <input type="number" name="bedrooms" id="bedrooms" class="form-input" value="{{ old('bedrooms', 0) }}" min="0" required>
+                    <input type="number" name="rooms[bedroom][count]" id="bedrooms" class="form-input" value="0" min="0" required>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Bathrooms <span class="required">*</span></label>
-                    <input type="number" name="bathrooms" id="bathrooms" class="form-input" value="{{ old('bathrooms', 0) }}" min="0" required>
+                    <input type="number" name="rooms[bathroom][count]" id="bathrooms" class="form-input" value="0" min="0" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Living Rooms</label>
+                    <input type="number" name="rooms[living_room][count]" id="living_rooms" class="form-input" value="0" min="0">
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Floor Number</label>
-                    <input type="number" name="floor_number" id="floor_number" class="form-input" value="{{ old('floor_number') }}" min="0">
-                    <span class="input-hint">Optional</span>
+                    <input type="number" name="floor_number" id="floor_number" class="form-input" placeholder="e.g., 3" min="0">
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Year Built</label>
-                    <input type="number" name="year_built" id="year_built" class="form-input" value="{{ old('year_built') }}" min="1900" max="2030">
-                    <span class="input-hint">Between 1900 and 2030</span>
+                    <input type="number" name="year_built" id="year_built" class="form-input" placeholder="e.g., 2020" min="1900" max="2030">
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Price (USD) <span class="required">*</span></label>
-                    <input type="number" name="price_usd" id="price_usd" class="form-input" value="{{ old('price_usd') }}" step="0.01" required min="0">
+                    <input type="number" name="price_usd" id="price_usd" class="form-input" placeholder="e.g., 150000" step="0.01" required min="0">
+                    <span class="input-hint">Price in US Dollars</span>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">Price (IQD) <span class="required">*</span></label>
-                    <input type="number" name="price_iqd" id="price_iqd" class="form-input" value="{{ old('price_iqd') }}" step="0.01" required min="0">
+                    <input type="number" name="price" id="price_iqd" class="form-input" placeholder="e.g., 196500000" step="0.01" required min="0">
+                    <span class="input-hint">Price in Iraqi Dinar</span>
                 </div>
             </div>
 
-            <h2 class="section-title"><i class="fas fa-map-marker-alt"></i> Location</h2>
-            <p class="section-subtitle">Specify where the property is located</p>
+            <!-- ========================================
+                 SECTION 3: LOCATION
+                 ======================================== -->
+            <h2 class="section-title">
+                <i class="fas fa-map-marker-alt"></i> Location
+            </h2>
+            <p class="section-subtitle">Where is the property located?</p>
 
             <div class="form-grid">
                 <div class="form-group">
@@ -812,30 +1140,32 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Area/District <span class="required">*</span></label>
+                    <label class="form-label">District/Area <span class="required">*</span></label>
                     <select id="area-select" class="form-select" disabled required>
                         <option value="">Select City First</option>
                     </select>
                 </div>
 
-                <input type="hidden" id="city-en" name="city_en">
-                <input type="hidden" id="city-ar" name="city_ar">
-                <input type="hidden" id="city-ku" name="city_ku">
-                <input type="hidden" id="district-en" name="district_en">
-                <input type="hidden" id="district-ar" name="district_ar">
-                <input type="hidden" id="district-ku" name="district_ku">
+                <!-- Hidden Location Fields -->
+                <input type="hidden" name="address_details[city][en]" id="city-en">
+                <input type="hidden" name="address_details[city][ar]" id="city-ar">
+                <input type="hidden" name="address_details[city][ku]" id="city-ku">
+                <input type="hidden" name="address_details[district][en]" id="district-en">
+                <input type="hidden" name="address_details[district][ar]" id="district-ar">
+                <input type="hidden" name="address_details[district][ku]" id="district-ku">
 
                 <div class="form-group full-width">
-                    <label class="form-label">Full Address</label>
-                    <input type="text" name="address" id="address" class="form-input" value="{{ old('address') }}" placeholder="Street name, building number, additional details...">
-                    <span class="input-hint">Optional - Additional address details</span>
+                    <label class="form-label">Street Address (Optional)</label>
+                    <input type="text" name="address" id="address" class="form-input" placeholder="Building number, street name...">
                 </div>
 
                 <div class="form-group full-width">
                     <label class="toggle-wrapper-box">
                         <input type="checkbox" name="has_map" id="mapToggle" value="1" checked>
                         <div class="toggle-switch"></div>
-                        <span class="toggle-label"><i class="fas fa-map-marked-alt"></i> Pin Exact Location on Map</span>
+                        <span class="toggle-label">
+                            <i class="fas fa-map-marked-alt"></i> Pin Location on Map
+                        </span>
                     </label>
                 </div>
 
@@ -843,48 +1173,49 @@
                     <div class="form-grid">
                         <div class="form-group">
                             <label class="form-label">Latitude</label>
-                            <input type="number" id="latitude" name="latitude" class="form-input" value="{{ old('latitude', '0') }}" step="0.000001" readonly>
-                            <span class="input-hint">Click on the map to set location</span>
+                            <input type="number" name="locations[0][lat]" id="latitude" class="form-input" value="0" step="0.000001" readonly>
                         </div>
-
                         <div class="form-group">
                             <label class="form-label">Longitude</label>
-                            <input type="number" id="longitude" name="longitude" class="form-input" value="{{ old('longitude', '0') }}" step="0.000001" readonly>
-                            <span class="input-hint">Click on the map to set location</span>
+                            <input type="number" name="locations[0][lng]" id="longitude" class="form-input" value="0" step="0.000001" readonly>
                         </div>
                     </div>
-
-                    <div id="map-preview" style="height: 400px; width: 100%; border-radius: 12px; border: 2px solid #e5e7eb; margin-top: 10px;"></div>
+                    <div id="map-preview"></div>
                 </div>
             </div>
 
-            <h2 class="section-title"><i class="fas fa-star"></i> Features & Amenities</h2>
-            <p class="section-subtitle">Select available amenities and utilities</p>
+            <!-- ========================================
+                 SECTION 4: FEATURES
+                 ======================================== -->
+            <h2 class="section-title">
+                <i class="fas fa-star"></i> Features & Amenities
+            </h2>
+            <p class="section-subtitle">What utilities are available?</p>
 
             <div class="feature-grid">
                 <label class="feature-checkbox">
-                    <input type="checkbox" name="furnished" value="1" {{ old('furnished') ? 'checked' : '' }}>
+                    <input type="checkbox" name="furnished" value="1">
                     <div class="feature-box">
                         <div class="feature-icon"><i class="fas fa-couch"></i></div>
                         <span class="feature-label">Furnished</span>
                     </div>
                 </label>
                 <label class="feature-checkbox">
-                    <input type="checkbox" name="electricity" value="1" {{ old('electricity') ? 'checked' : '' }}>
+                    <input type="checkbox" name="electricity" value="1">
                     <div class="feature-box">
                         <div class="feature-icon"><i class="fas fa-bolt"></i></div>
                         <span class="feature-label">Electricity</span>
                     </div>
                 </label>
                 <label class="feature-checkbox">
-                    <input type="checkbox" name="water" value="1" {{ old('water') ? 'checked' : '' }}>
+                    <input type="checkbox" name="water" value="1">
                     <div class="feature-box">
                         <div class="feature-icon"><i class="fas fa-tint"></i></div>
                         <span class="feature-label">Water</span>
                     </div>
                 </label>
                 <label class="feature-checkbox">
-                    <input type="checkbox" name="internet" value="1" {{ old('internet') ? 'checked' : '' }}>
+                    <input type="checkbox" name="internet" value="1">
                     <div class="feature-box">
                         <div class="feature-icon"><i class="fas fa-wifi"></i></div>
                         <span class="feature-label">Internet</span>
@@ -892,23 +1223,31 @@
                 </label>
             </div>
 
-            <h2 class="section-title"><i class="fas fa-images"></i> Property Images</h2>
-            <p class="section-subtitle">Upload property photos - Minimum 1, Maximum 10 images (JPG or PNG only, max 5MB each)</p>
+            <!-- ========================================
+                 SECTION 5: IMAGES
+                 ======================================== -->
+            <h2 class="section-title">
+                <i class="fas fa-images"></i> Property Images
+            </h2>
+            <p class="section-subtitle">Upload 1-10 images (JPG/PNG, max 5MB each) - First image = Cover Photo</p>
 
             <div class="image-upload-area" id="uploadArea" onclick="document.getElementById('imageInput').click()">
                 <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
-                <div class="upload-text">Click to upload images</div>
-                <div class="upload-hint">JPG or PNG only (Max: 5MB per image)</div>
+                <div class="upload-text">Click to Upload Images</div>
+                <div class="upload-hint">Drag & drop to reorder after upload</div>
                 <input type="file" id="imageInput" name="images[]" multiple accept="image/jpeg,image/jpg,image/png" style="display:none" onchange="previewImages(event)">
             </div>
 
             <div class="sort-instructions" id="sortInstructions">
                 <i class="fas fa-arrows-alt" style="font-size: 18px;"></i>
-                <span>Drag and drop images to reorder. First image will be the cover photo.</span>
+                <span>Drag images to reorder. First image = Cover photo</span>
             </div>
 
             <div id="imagePreview" class="image-preview-grid"></div>
 
+            <!-- ========================================
+                 SUBMIT SECTION
+                 ======================================== -->
             <div class="submit-section">
                 <button type="button" class="btn btn-secondary" onclick="window.location.href='{{ $backRoute }}'">
                     <i class="fas fa-times"></i> Cancel
@@ -926,24 +1265,197 @@
 @push('scripts')
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
 <script>
-let map, marker, selectedImages = [], draggedIndex = null;
+// ============================================
+// GLOBAL VARIABLES
+// ============================================
+let map, marker, selectedImages = [], draggedIndex = null, translationTimeout = null;
 
-function switchLang(e, lang) {
-    e.preventDefault();
-    document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
-    e.target.classList.add('active');
-    document.querySelectorAll('.lang-content').forEach(c => c.classList.remove('active'));
-    document.getElementById('lang-' + lang).classList.add('active');
+// ============================================
+// LANGUAGE DETECTION
+// ============================================
+function detectLanguage(text) {
+    const arabicPattern = /[\u0600-\u06FF]/;
+    const kurdishPattern = /[ئابپتجچحخدرڕزژسشعغفڤقکگلڵمنوۆهھەیێ]/;
+
+    if (arabicPattern.test(text) && !kurdishPattern.test(text)) return 'ar';
+    if (kurdishPattern.test(text)) return 'ku';
+    return 'en';
 }
 
+// ============================================
+// SMART TRANSLATION SYSTEM
+// ============================================
+
+// Property Name Handler
+document.getElementById('smartPropertyName')?.addEventListener('input', function(e) {
+    const value = this.value.trim();
+    const indicator = document.getElementById('nameLanguageIndicator');
+
+    if (!value) {
+        indicator.classList.remove('show');
+        return;
+    }
+
+    const detectedLang = detectLanguage(value);
+    const langNames = { 'en': 'English', 'ar': 'العربية', 'ku': 'کوردی' };
+
+    indicator.textContent = langNames[detectedLang];
+    indicator.classList.add('show');
+    this.classList.add('processing');
+
+    clearTimeout(translationTimeout);
+    translationTimeout = setTimeout(() => {
+        translateText(value, detectedLang, 'name');
+    }, 1000);
+});
+
+// Description Handler
+document.getElementById('smartDescription')?.addEventListener('input', function(e) {
+    const value = this.value.trim();
+    const indicator = document.getElementById('descLanguageIndicator');
+
+    if (!value) {
+        indicator.classList.remove('show');
+        return;
+    }
+
+    const detectedLang = detectLanguage(value);
+    const langNames = { 'en': 'English', 'ar': 'العربية', 'ku': 'کوردی' };
+
+    indicator.textContent = langNames[detectedLang];
+    indicator.classList.add('show');
+    this.classList.add('processing');
+
+    clearTimeout(translationTimeout);
+    translationTimeout = setTimeout(() => {
+        translateText(value, detectedLang, 'description');
+    }, 1500);
+});
+
+// Translation Function
+async function translateText(text, sourceLang, fieldType) {
+    const inputId = fieldType === 'name' ? 'smartPropertyName' : 'smartDescription';
+    const loader = document.querySelector(`#${inputId} + .translation-loader`);
+    loader?.classList.add('show');
+
+    try {
+        const targetLangs = ['en', 'ar', 'ku'].filter(lang => lang !== sourceLang);
+
+        // Set source language in hidden field
+        document.getElementById(`${fieldType}_${sourceLang}`).value = text;
+
+        // Translate to other languages
+        for (const targetLang of targetLangs) {
+            const response = await fetch('/v1/api/translate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    text: text,
+                    source: sourceLang,
+                    target: targetLang
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data.translated_text) {
+                    document.getElementById(`${fieldType}_${targetLang}`).value = result.data.translated_text;
+                }
+            } else {
+                // Fallback: copy source text
+                document.getElementById(`${fieldType}_${targetLang}`).value = text;
+            }
+        }
+
+        // Sync to manual fields
+        syncToManualFields(fieldType);
+
+        loader?.classList.remove('show');
+        document.getElementById(inputId).classList.remove('processing');
+
+        console.log(`✓ ${fieldType} translated from ${sourceLang}`);
+    } catch (error) {
+        console.error('Translation error:', error);
+        loader?.classList.remove('show');
+
+        // Fallback: copy to all languages
+        ['en', 'ar', 'ku'].forEach(lang => {
+            document.getElementById(`${fieldType}_${lang}`).value = text;
+        });
+        syncToManualFields(fieldType);
+    }
+}
+
+// Sync hidden fields to manual input fields
+function syncToManualFields(fieldType) {
+    ['en', 'ar', 'ku'].forEach(lang => {
+        const hiddenValue = document.getElementById(`${fieldType}_${lang}`).value;
+        const manualField = document.getElementById(`${fieldType}_${lang}_manual`);
+        if (manualField && hiddenValue && !manualField.value) {
+            manualField.value = hiddenValue;
+        }
+    });
+}
+
+// ============================================
+// OWNER TYPE HANDLER (Admin Only)
+// ============================================
+@if(!isset($office) && !isset($agent))
+document.getElementById('owner_type')?.addEventListener('change', async function() {
+    const ownerSelect = document.getElementById('owner_id');
+    const ownerType = this.value;
+
+    ownerSelect.innerHTML = '<option value="">Loading...</option>';
+    ownerSelect.disabled = true;
+
+    if (!ownerType) {
+        ownerSelect.innerHTML = '<option value="">Select owner type first</option>';
+        return;
+    }
+
+    try {
+        const endpoint = ownerType === 'Agent' ? '/admin/api/agents' : '/admin/api/offices';
+        const response = await fetch(endpoint);
+        const data = await response.json();
+
+        let options = '<option value="">-- Select --</option>';
+        data.forEach(item => {
+            const name = ownerType === 'Agent' ? item.agent_name : item.company_name;
+            options += `<option value="${item.id}">${name}</option>`;
+        });
+
+        ownerSelect.innerHTML = options;
+        ownerSelect.disabled = false;
+    } catch (error) {
+        console.error('Error loading owners:', error);
+        ownerSelect.innerHTML = '<option value="">Error loading options</option>';
+    }
+});
+@endif
+
+// ============================================
+// MAP INITIALIZATION
+// ============================================
 function initMap() {
     const erbil = {lat: 36.1911, lng: 44.0091};
     map = new google.maps.Map(document.getElementById('map-preview'), {
-        center: erbil, zoom: 12,
+        center: erbil,
+        zoom: 12,
         styles: [{featureType: "poi", elementType: "labels", stylers: [{visibility: "off"}]}]
     });
-    marker = new google.maps.Marker({position: erbil, map: map, draggable: true, animation: google.maps.Animation.DROP});
+
+    marker = new google.maps.Marker({
+        position: erbil,
+        map: map,
+        draggable: true,
+        animation: google.maps.Animation.DROP
+    });
+
     google.maps.event.addListener(marker, 'dragend', e => updateLatLng(e.latLng.lat(), e.latLng.lng()));
+
     map.addListener('click', e => {
         marker.setPosition(e.latLng);
         updateLatLng(e.latLng.lat(), e.latLng.lng());
@@ -955,134 +1467,100 @@ function updateLatLng(lat, lng) {
     document.getElementById('longitude').value = lng.toFixed(6);
 }
 
-// ==================== LOCATION SELECTOR ====================
+// ============================================
+// LOCATION SYSTEM
+// ============================================
 document.addEventListener('DOMContentLoaded', async function() {
     await loadCities();
 
+    // Map Toggle
     const mapToggle = document.getElementById('mapToggle');
-    if (mapToggle) {
-        mapToggle.addEventListener('change', function() {
-            const section = document.getElementById('mapSection');
-            if (this.checked) {
-                section.classList.remove('hidden');
-                setTimeout(() => {
-                    if (map) {
-                        google.maps.event.trigger(map, 'resize');
-                        map.setCenter(marker.getPosition());
-                    }
-                }, 100);
-            } else {
-                section.classList.add('hidden');
-                document.getElementById('latitude').value = '0';
-                document.getElementById('longitude').value = '0';
-            }
-        });
-    }
-
-    const citySelect = document.getElementById('city-select');
-    if (citySelect) {
-        citySelect.addEventListener('change', async function() {
-            const cityId = this.value;
-            const selectedOption = this.options[this.selectedIndex];
-
-            // Clear area selection
-            document.getElementById('area-select').innerHTML = '<option value="">Select city first</option>';
-            document.getElementById('area-select').disabled = true;
-            document.getElementById('district-en').value = '';
-            document.getElementById('district-ar').value = '';
-            document.getElementById('district-ku').value = '';
-
-            if (!cityId) {
-                document.getElementById('city-en').value = '';
-                document.getElementById('city-ar').value = '';
-                document.getElementById('city-ku').value = '';
-                return;
-            }
-
-            // Set city values
-            document.getElementById('city-en').value = selectedOption.dataset.nameEn || '';
-            document.getElementById('city-ar').value = selectedOption.dataset.nameAr || '';
-            document.getElementById('city-ku').value = selectedOption.dataset.nameKu || '';
-
-            // Load areas
-            await loadAreas(cityId);
-
-            // Update map if coordinates available
-            if (selectedOption.dataset.lat && selectedOption.dataset.lng && document.getElementById('mapToggle').checked) {
-                const lat = parseFloat(selectedOption.dataset.lat);
-                const lng = parseFloat(selectedOption.dataset.lng);
-                if (marker && map) {
-                    const pos = { lat: lat, lng: lng };
-                    marker.setPosition(pos);
-                    map.panTo(pos);
-                    map.setZoom(13);
-                    updateLatLng(lat, lng);
+    mapToggle?.addEventListener('change', function() {
+        const section = document.getElementById('mapSection');
+        if (this.checked) {
+            section.classList.remove('hidden');
+            setTimeout(() => {
+                if (map) {
+                    google.maps.event.trigger(map, 'resize');
+                    map.setCenter(marker.getPosition());
                 }
+            }, 100);
+        } else {
+            section.classList.add('hidden');
+        }
+    });
+
+    // City Selection
+    document.getElementById('city-select')?.addEventListener('change', async function() {
+        const cityId = this.value;
+        const selectedOption = this.options[this.selectedIndex];
+
+        document.getElementById('area-select').innerHTML = '<option value="">Select city first</option>';
+        document.getElementById('area-select').disabled = true;
+
+        if (!cityId) return;
+
+        document.getElementById('city-en').value = selectedOption.dataset.nameEn || '';
+        document.getElementById('city-ar').value = selectedOption.dataset.nameAr || '';
+        document.getElementById('city-ku').value = selectedOption.dataset.nameKu || '';
+
+        await loadAreas(cityId);
+
+        if (selectedOption.dataset.lat && selectedOption.dataset.lng && mapToggle.checked) {
+            const lat = parseFloat(selectedOption.dataset.lat);
+            const lng = parseFloat(selectedOption.dataset.lng);
+            if (marker && map) {
+                const pos = { lat, lng };
+                marker.setPosition(pos);
+                map.panTo(pos);
+                map.setZoom(13);
+                updateLatLng(lat, lng);
             }
-        });
-    }
+        }
+    });
 
-    const areaSelect = document.getElementById('area-select');
-    if (areaSelect) {
-        areaSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
+    // Area Selection
+    document.getElementById('area-select')?.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
 
-            if (!this.value) {
-                document.getElementById('district-en').value = '';
-                document.getElementById('district-ar').value = '';
-                document.getElementById('district-ku').value = '';
-                return;
+        if (!this.value) return;
+
+        document.getElementById('district-en').value = selectedOption.dataset.nameEn || '';
+        document.getElementById('district-ar').value = selectedOption.dataset.nameAr || '';
+        document.getElementById('district-ku').value = selectedOption.dataset.nameKu || '';
+
+        if (selectedOption.dataset.lat && selectedOption.dataset.lng && mapToggle.checked) {
+            const lat = parseFloat(selectedOption.dataset.lat);
+            const lng = parseFloat(selectedOption.dataset.lng);
+            if (marker && map) {
+                const pos = { lat, lng };
+                marker.setPosition(pos);
+                map.panTo(pos);
+                map.setZoom(15);
+                updateLatLng(lat, lng);
             }
-
-            // Set district values
-            document.getElementById('district-en').value = selectedOption.dataset.nameEn || '';
-            document.getElementById('district-ar').value = selectedOption.dataset.nameAr || '';
-            document.getElementById('district-ku').value = selectedOption.dataset.nameKu || '';
-
-            // Update map if coordinates available
-            if (selectedOption.dataset.lat && selectedOption.dataset.lng && document.getElementById('mapToggle').checked) {
-                const lat = parseFloat(selectedOption.dataset.lat);
-                const lng = parseFloat(selectedOption.dataset.lng);
-                if (marker && map) {
-                    const pos = { lat: lat, lng: lng };
-                    marker.setPosition(pos);
-                    map.panTo(pos);
-                    map.setZoom(15);
-                    updateLatLng(lat, lng);
-                }
-            }
-        });
-    }
+        }
+    });
 });
 
 async function loadCities() {
     try {
-        console.log('🔄 Loading cities...');
         const citySelect = document.getElementById('city-select');
-        citySelect.innerHTML = '<option value="">Loading cities...</option>';
+        citySelect.innerHTML = '<option value="">Loading...</option>';
 
         const response = await fetch('/v1/api/location/branches', {
-            headers: {
-                'Accept-Language': 'en',
-                'Accept': 'application/json'
-            }
+            headers: { 'Accept-Language': 'en', 'Accept': 'application/json' }
         });
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        if (!response.ok) throw new Error('Failed to load cities');
 
         const result = await response.json();
-
-        if (!result.success || !result.data) {
-            throw new Error('Invalid response format');
-        }
+        if (!result.success || !result.data) throw new Error('Invalid response');
 
         const cities = result.data;
-
-        let cityOptions = '<option value="">-- Select City --</option>';
+        let options = '<option value="">-- Select City --</option>';
         cities.forEach(city => {
-            cityOptions += `<option value="${city.id}"
+            options += `<option value="${city.id}"
                 data-name-en="${city.city_name_en || ''}"
                 data-name-ar="${city.city_name_ar || ''}"
                 data-name-ku="${city.city_name_ku || ''}"
@@ -1091,40 +1569,32 @@ async function loadCities() {
             >${city.city_name_en} - ${city.city_name_ar}</option>`;
         });
 
-        citySelect.innerHTML = cityOptions;
+        citySelect.innerHTML = options;
         console.log(`✓ Loaded ${cities.length} cities`);
-
     } catch (error) {
-        console.error('✗ Failed to load cities:', error);
-        document.getElementById('city-select').innerHTML = '<option value="">Error loading cities. Please refresh.</option>';
-        alert('Failed to load location data. Please refresh the page.');
+        console.error('Error loading cities:', error);
+        document.getElementById('city-select').innerHTML = '<option value="">Error loading cities</option>';
     }
 }
 
 async function loadAreas(cityId) {
     try {
-        console.log(`🔄 Loading areas for city ${cityId}...`);
         const areaSelect = document.getElementById('area-select');
-        areaSelect.innerHTML = '<option value="">Loading areas...</option>';
+        areaSelect.innerHTML = '<option value="">Loading...</option>';
         areaSelect.disabled = true;
 
         const response = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
-            headers: {
-                'Accept-Language': 'en',
-                'Accept': 'application/json'
-            }
+            headers: { 'Accept-Language': 'en', 'Accept': 'application/json' }
         });
 
-        if (!response.ok) {
-            throw new Error('Failed to load areas');
-        }
+        if (!response.ok) throw new Error('Failed to load areas');
 
         const result = await response.json();
 
         if (result.success && result.data) {
-            let areaOptions = '<option value="">-- Select Area --</option>';
+            let options = '<option value="">-- Select Area --</option>';
             result.data.forEach(area => {
-                areaOptions += `<option value="${area.id}"
+                options += `<option value="${area.id}"
                     data-name-en="${area.area_name_en || ''}"
                     data-name-ar="${area.area_name_ar || ''}"
                     data-name-ku="${area.area_name_ku || ''}"
@@ -1133,19 +1603,18 @@ async function loadAreas(cityId) {
                 >${area.area_name_en}</option>`;
             });
 
-            areaSelect.innerHTML = areaOptions;
+            areaSelect.innerHTML = options;
             areaSelect.disabled = false;
-            console.log(`✓ Loaded ${result.data.length} areas`);
-        } else {
-            areaSelect.innerHTML = '<option value="">No areas available</option>';
         }
     } catch (error) {
-        console.error('✗ Error loading areas:', error);
-        document.getElementById('area-select').innerHTML = '<option value="">Error loading areas</option>';
+        console.error('Error loading areas:', error);
+        document.getElementById('area-select').innerHTML = '<option value="">Error</option>';
     }
 }
 
-// ==================== IMAGE HANDLING ====================
+// ============================================
+// IMAGE HANDLING
+// ============================================
 function previewImages(event) {
     const files = Array.from(event.target.files);
     if (selectedImages.length + files.length > 10) {
@@ -1157,7 +1626,7 @@ function previewImages(event) {
     let hasError = false;
     files.forEach(file => {
         if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
-            alert(`Invalid file type: ${file.name}`);
+            alert(`Invalid file: ${file.name}`);
             hasError = true;
             return;
         }
@@ -1194,7 +1663,7 @@ function renderImagePreviews() {
             div.draggable = true;
             div.dataset.index = idx;
             div.innerHTML = `
-                <button type="button" class="drag-handle" title="Drag"><i class="fas fa-arrows-alt"></i></button>
+                <button type="button" class="drag-handle"><i class="fas fa-arrows-alt"></i></button>
                 <img src="${e.target.result}" alt="Preview ${idx + 1}">
                 <button type="button" class="remove-image" onclick="removeImage(${idx})"><i class="fas fa-times"></i></button>
             `;
@@ -1253,41 +1722,57 @@ function handleDragEnd() {
     document.querySelectorAll('.image-preview-item').forEach(i => i.classList.remove('dragging', 'drag-over'));
 }
 
-// ==================== FORM VALIDATION & SUBMISSION ====================
+// ============================================
+// FORM VALIDATION & SUBMISSION
+// ============================================
 document.getElementById('propertyForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const errors = [];
 
-    if (!document.getElementById('name_en').value.trim() || document.getElementById('name_en').value.length < 3) {
-        errors.push('Property name (English) must be at least 3 characters');
+    // Check manual fields first, then hidden fields
+    const nameEn = document.getElementById('name_en_manual').value || document.getElementById('name_en').value;
+    const nameAr = document.getElementById('name_ar_manual').value || document.getElementById('name_ar').value;
+    const nameKu = document.getElementById('name_ku_manual').value || document.getElementById('name_ku').value;
+
+    const descEn = document.getElementById('description_en_manual').value || document.getElementById('description_en').value;
+    const descAr = document.getElementById('description_ar_manual').value || document.getElementById('description_ar').value;
+    const descKu = document.getElementById('description_ku_manual').value || document.getElementById('description_ku').value;
+
+    if (!nameEn && !nameAr && !nameKu) {
+        errors.push('Please enter property name in at least one language');
     }
-    if (!document.getElementById('description_en').value.trim() || document.getElementById('description_en').value.length < 5) {
-        errors.push('Description (English) must be at least 5 characters');
+
+    if (!descEn && !descAr && !descKu) {
+        errors.push('Please enter property description in at least one language');
     }
-    if (!document.getElementById('property_type').value) errors.push('Please select a property type');
+
+    if (!document.getElementById('property_type').value) {
+        errors.push('Please select property type');
+    }
+
     if (!document.getElementById('area').value || parseFloat(document.getElementById('area').value) < 1) {
         errors.push('Area must be at least 1 m²');
     }
-    if (document.getElementById('bedrooms').value === '' || document.getElementById('bedrooms').value < 0) {
-        errors.push('Please enter number of bedrooms');
-    }
-    if (document.getElementById('bathrooms').value === '' || document.getElementById('bathrooms').value < 0) {
-        errors.push('Please enter number of bathrooms');
-    }
+
     if (!document.getElementById('price_usd').value || parseFloat(document.getElementById('price_usd').value) < 0) {
-        errors.push('Please enter a valid price in USD');
+        errors.push('Please enter valid USD price');
     }
+
     if (!document.getElementById('price_iqd').value || parseFloat(document.getElementById('price_iqd').value) < 0) {
-        errors.push('Please enter a valid price in IQD');
+        errors.push('Please enter valid IQD price');
     }
-    if (!document.getElementById('city-en').value) errors.push('Please select a city');
-    if (!document.getElementById('district-en').value) errors.push('Please select a district/area');
+
+    if (!document.getElementById('city-en').value) {
+        errors.push('Please select city');
+    }
+
+    if (!document.getElementById('district-en').value) {
+        errors.push('Please select district');
+    }
 
     if (selectedImages.length === 0) {
-        errors.push('Please upload at least 1 property image');
+        errors.push('Please upload at least 1 image');
         document.getElementById('uploadArea').classList.add('error');
-    } else if (selectedImages.length > 10) {
-        errors.push('Maximum 10 images allowed');
     }
 
     if (errors.length > 0) {
@@ -1304,22 +1789,6 @@ document.getElementById('propertyForm').addEventListener('submit', function(e) {
     this.submit();
 });
 
-// Real-time validation
-document.querySelectorAll('.form-input, .form-select, .form-textarea').forEach(input => {
-    input.addEventListener('blur', function() {
-        const val = this.value.trim();
-        let valid = true;
-        if (this.hasAttribute('required') && !val) valid = false;
-        if (this.hasAttribute('minlength') && val.length < parseInt(this.getAttribute('minlength'))) valid = false;
-        if (this.type === 'number') {
-            const min = parseFloat(this.getAttribute('min'));
-            if (min !== null && parseFloat(val) < min) valid = false;
-        }
-        this.classList.toggle('error', !valid);
-        this.classList.toggle('valid', valid);
-    });
-});
-
-console.log('✓ Property form initialized');
+console.log('✓ Smart property form initialized');
 </script>
 @endpush
