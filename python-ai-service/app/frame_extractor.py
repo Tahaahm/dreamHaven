@@ -1,6 +1,6 @@
 """
-Frame Extractor Module
-Main logic for extracting best frames from videos
+Frame Extractor Module with Diversity Filtering
+Main logic for extracting best frames from videos - PREVENTS REPETITIVE FRAMES
 """
 
 import cv2
@@ -27,12 +27,14 @@ from app.quality_scorer import get_scorer
 
 class VideoFrameExtractor:
     """
-    Extract and rank frames from video files
+    Extract and rank frames from video files with diversity filtering
     """
 
     def __init__(self):
         """Initialize the extractor"""
         self.scorer = get_scorer()
+        # Similarity threshold - frames more similar than this will be rejected
+        self.similarity_threshold = 0.85  # 85% similarity = too similar
 
     def validate_video(self, video_path: Path) -> Tuple[bool, Optional[str]]:
         """
@@ -72,6 +74,55 @@ class VideoFrameExtractor:
 
         cap.release()
         return True, None
+
+    def calculate_histogram_similarity(self, frame1: np.ndarray, frame2: np.ndarray) -> float:
+        """
+        Calculate similarity between two frames using histogram comparison
+        Returns value between 0 (completely different) and 1 (identical)
+
+        Args:
+            frame1: First frame (OpenCV BGR image)
+            frame2: Second frame (OpenCV BGR image)
+
+        Returns:
+            Similarity score (0-1, where 1 = identical)
+        """
+        # Convert to HSV for better color comparison
+        hsv1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2HSV)
+        hsv2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2HSV)
+
+        # Calculate histograms
+        hist1 = cv2.calcHist([hsv1], [0, 1], None, [50, 60], [0, 180, 0, 256])
+        hist2 = cv2.calcHist([hsv2], [0, 1], None, [50, 60], [0, 180, 0, 256])
+
+        # Normalize histograms
+        cv2.normalize(hist1, hist1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+        cv2.normalize(hist2, hist2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+
+        # Compare using correlation (returns 0-1, 1 = identical)
+        similarity = cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL)
+        return similarity
+
+    def is_diverse_enough(self, new_frame: np.ndarray, selected_frames: List[np.ndarray]) -> bool:
+        """
+        Check if new frame is diverse enough compared to already selected frames
+
+        Args:
+            new_frame: Frame to check
+            selected_frames: List of already selected frames
+
+        Returns:
+            True if frame is different enough to be included
+        """
+        if not selected_frames:
+            return True  # First frame is always included
+
+        for existing_frame in selected_frames:
+            similarity = self.calculate_histogram_similarity(new_frame, existing_frame)
+            if similarity > self.similarity_threshold:
+                return False  # Too similar to an existing frame
+
+        return True  # Diverse enough from all selected frames
 
     def extract_candidate_frames(
         self,
@@ -213,6 +264,88 @@ class VideoFrameExtractor:
 
         return output_path
 
+    def filter_for_diversity(
+        self,
+        ranked_frames: List[Tuple[int, Dict]],
+        candidates: List[np.ndarray],
+        num_frames: int,
+        verbose: bool = True
+    ) -> List[Tuple[int, Dict]]:
+        """
+        Filter ranked frames to ensure visual diversity
+
+        Args:
+            ranked_frames: List of (frame_idx, scores) tuples sorted by quality
+            candidates: Original candidate frames
+            num_frames: Target number of frames
+            verbose: Print filtering progress
+
+        Returns:
+            Filtered list of diverse frames
+        """
+        if verbose:
+            print("\n" + "="*60)
+            print("🎨 DIVERSITY FILTERING - Removing Similar Frames")
+            print("="*60)
+
+        selected = []
+        selected_frames = []  # Store actual frame data for comparison
+        skipped_count = 0
+
+        for frame_idx, scores in ranked_frames:
+            if len(selected) >= num_frames:
+                break
+
+            frame = candidates[frame_idx]
+
+            # Check if this frame is diverse enough
+            if self.is_diverse_enough(frame, selected_frames):
+                selected.append((frame_idx, scores))
+                selected_frames.append(frame)
+
+                diversity_status = "FIRST FRAME" if len(selected) == 1 else "✓ DIVERSE"
+                if verbose:
+                    print(f"  ✅ Frame #{len(selected)}: Quality={scores['total']:.1f} | {diversity_status}")
+            else:
+                skipped_count += 1
+                if verbose:
+                    print(f"  ❌ Skipped: Quality={scores['total']:.1f} | TOO SIMILAR (>{self.similarity_threshold*100:.0f}% match)")
+
+        # If we don't have enough diverse frames, lower threshold and try again
+        if len(selected) < num_frames and len(ranked_frames) > len(selected):
+            if verbose:
+                print(f"\n  ⚠️  Only {len(selected)} diverse frames found at {self.similarity_threshold*100:.0f}% threshold")
+                print(f"  🔄 Lowering threshold to 75% to fill remaining slots...")
+
+            # Temporarily lower threshold
+            original_threshold = self.similarity_threshold
+            self.similarity_threshold = 0.75
+
+            for frame_idx, scores in ranked_frames:
+                if len(selected) >= num_frames:
+                    break
+
+                # Skip already selected frames
+                if any(idx == frame_idx for idx, _ in selected):
+                    continue
+
+                frame = candidates[frame_idx]
+
+                if self.is_diverse_enough(frame, selected_frames):
+                    selected.append((frame_idx, scores))
+                    selected_frames.append(frame)
+
+                    if verbose:
+                        print(f"  ➕ Frame #{len(selected)}: Quality={scores['total']:.1f} | ACCEPTABLE (75% threshold)")
+
+            # Restore original threshold
+            self.similarity_threshold = original_threshold
+
+        if verbose:
+            print(f"\n✨ Diversity filtering complete: {len(selected)} unique frames selected ({skipped_count} similar frames removed)")
+
+        return selected
+
     def extract_best_frames(
         self,
         video_path: Path,
@@ -220,7 +353,7 @@ class VideoFrameExtractor:
         verbose: bool = True
     ) -> Dict:
         """
-        Main method: Extract best N frames from video
+        Main method: Extract best N frames from video with diversity filtering
 
         Args:
             video_path: Path to video file
@@ -263,22 +396,33 @@ class VideoFrameExtractor:
                 print(f"⚠️  Warning: Only {len(candidates)} frames available (requested {num_frames})")
                 num_frames = len(candidates)
 
-            # Step 2: Score and rank frames
+            # Step 2: Score and rank frames (get more than needed for diversity filtering)
             if verbose:
                 print("\n" + "="*60)
                 print("🎯 STEP 2: Scoring & Ranking Frames")
                 print("="*60)
 
+            # Request more frames than needed for diversity filtering
+            num_to_score = min(len(candidates), num_frames * 3)
+
             ranked_frames = self.scorer.rank_frames(
                 candidates,
-                num_best=num_frames,
+                num_best=num_to_score,
                 verbose=verbose
             )
 
-            # Step 3: Save best frames
+            # Step 2.5: Apply diversity filtering
+            diverse_frames = self.filter_for_diversity(
+                ranked_frames,
+                candidates,
+                num_frames,
+                verbose=verbose
+            )
+
+            # Step 3: Save best diverse frames
             if verbose:
                 print("\n" + "="*60)
-                print("💾 STEP 3: Saving Best Frames")
+                print("💾 STEP 3: Saving Best Diverse Frames")
                 print("="*60)
 
             video_hash = hashlib.md5(video_path.name.encode()).hexdigest()[:12]
@@ -286,7 +430,7 @@ class VideoFrameExtractor:
             saved_frames = []
             frame_scores = []
 
-            for rank, (frame_idx, scores) in enumerate(ranked_frames, 1):
+            for rank, (frame_idx, scores) in enumerate(diverse_frames, 1):
                 frame = candidates[frame_idx]
 
                 output_path = self.save_frame(frame, video_hash, rank)
@@ -316,14 +460,14 @@ class VideoFrameExtractor:
                 "height": int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)),
                 "total_frames": int(cap.get(cv2.CAP_PROP_FRAME_COUNT)),
                 "candidates_evaluated": len(candidates),
-                "frames_extracted": num_frames,
+                "frames_extracted": len(diverse_frames),
                 "processing_time_seconds": round(elapsed_time, 2)
             }
             cap.release()
 
             if verbose:
                 print("\n" + "="*60)
-                print(f"✨ SUCCESS! Extracted {num_frames} best frames in {elapsed_time:.1f}s")
+                print(f"✨ SUCCESS! Extracted {len(diverse_frames)} diverse, high-quality frames in {elapsed_time:.1f}s")
                 print("="*60)
 
             return {

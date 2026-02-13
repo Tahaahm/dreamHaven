@@ -4,6 +4,10 @@
 
 @section('styles')
 <style>
+    /* ============================================
+       AGENT PROPERTY FORM - AI POWERED DESIGN
+       ============================================ */
+
     /* --- Page Layout & Header --- */
     .page-header {
         background: linear-gradient(135deg, #303b97 0%, #1e2875 100%);
@@ -13,6 +17,7 @@
         color: white;
         position: relative;
         overflow: hidden;
+        box-shadow: 0 4px 20px rgba(48,59,151,0.3);
     }
 
     .page-header::before {
@@ -41,6 +46,31 @@
         opacity: 0.9;
     }
 
+    /* AI Helper Badge */
+    .ai-helper-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        color: white;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 14px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.9; }
+    }
+
+    .ai-helper-badge i {
+        font-size: 18px;
+    }
+
     /* --- Form Containers --- */
     .form-container {
         background: white;
@@ -57,6 +87,7 @@
 
     .form-section:last-child {
         border-bottom: none;
+        padding-bottom: 0;
     }
 
     .section-title {
@@ -74,6 +105,13 @@
     .section-title i {
         color: #303b97;
         font-size: 22px;
+    }
+
+    .section-subtitle {
+        color: #6b7280;
+        font-size: 13px;
+        margin-top: -14px;
+        margin-bottom: 24px;
     }
 
     /* --- Grid System --- */
@@ -229,6 +267,148 @@
         font-size: 14px;
     }
 
+    /* === VIDEO UPLOAD SECTION (AI POWERED) === */
+    .video-upload-section {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(167, 139, 250, 0.02));
+        border: 2px dashed #8b5cf6;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+
+    .video-upload-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .video-upload-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 24px;
+    }
+
+    .video-upload-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .video-upload-subtitle {
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .video-upload-area {
+        border: 3px dashed #d1d5db;
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .video-upload-area:hover {
+        border-color: #8b5cf6;
+        background: #faf5ff;
+    }
+
+    .video-upload-area.processing {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), white);
+        pointer-events: none;
+    }
+
+    .upload-video-icon {
+        font-size: 48px;
+        color: #8b5cf6;
+        margin-bottom: 12px;
+    }
+
+    .upload-video-text {
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+    }
+
+    .upload-video-hint {
+        color: #6b7280;
+        font-size: 13px;
+    }
+
+    /* Video Processing Status */
+    .video-processing-status {
+        display: none;
+        padding: 20px;
+        background: white;
+        border-radius: 12px;
+        margin-top: 16px;
+    }
+
+    .video-processing-status.show {
+        display: block;
+    }
+
+    .processing-progress {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .processing-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f4f6;
+        border-top-color: #8b5cf6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .processing-text {
+        flex: 1;
+    }
+
+    .processing-title {
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 4px;
+    }
+
+    .processing-subtitle {
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .progress-bar-container {
+        width: 100%;
+        height: 8px;
+        background: #f3f4f6;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+
     /* --- Image Upload --- */
     .image-upload-zone {
         border: 3px dashed #cbd5e1;
@@ -285,12 +465,16 @@
         padding: 16px;
         margin-top: 20px;
         margin-bottom: 10px;
-        display: flex;
+        display: none;
         align-items: center;
         gap: 12px;
         color: #303b97;
         font-weight: 600;
         font-size: 14px;
+    }
+
+    .sort-instructions.show {
+        display: flex;
     }
 
     .image-preview-grid {
@@ -462,7 +646,7 @@
         <h1 class="page-title">
             <i class="fas fa-plus-circle"></i> Add New Property
         </h1>
-        <p class="page-subtitle">Fill in the details below to list your property on Dream Mulk</p>
+        <p class="page-subtitle">List your property on Dream Mulk - Fill in details in any language</p>
     </div>
 </div>
 
@@ -472,10 +656,17 @@
 
     <div class="form-container">
 
+        {{-- AI Helper Badge --}}
+        <div class="ai-helper-badge">
+            <i class="fas fa-magic"></i>
+            <span>AI-Powered Form - Video Frame Extraction Available!</span>
+        </div>
+
         <div class="form-section">
             <h3 class="section-title">
                 <i class="fas fa-info-circle"></i> Basic Information
             </h3>
+            <p class="section-subtitle">Enter property details in your preferred language</p>
 
             {{-- Language Switcher --}}
             <div class="language-tabs">
@@ -680,23 +871,70 @@
             </div>
         </div>
 
+        {{-- ========================================
+             VIDEO UPLOAD SECTION (AI POWERED)
+             ======================================== --}}
+        <div class="form-section">
+            <h3 class="section-title">
+                <i class="fas fa-video"></i> Property Video (Optional - AI Powered)
+            </h3>
+            <p class="section-subtitle">Upload a property tour video and AI will extract the 10 best frames automatically</p>
+
+            <div class="video-upload-section">
+                <div class="video-upload-header">
+                    <div class="video-upload-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div>
+                        <div class="video-upload-title">AI Frame Extraction</div>
+                        <div class="video-upload-subtitle">Upload video → AI selects best 10 frames → Auto-added to gallery</div>
+                    </div>
+                </div>
+
+                <div class="video-upload-area" id="videoUploadArea" onclick="document.getElementById('videoInput').click()">
+                    <div class="upload-video-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                    <div class="upload-video-text">Click to Upload Property Video</div>
+                    <div class="upload-video-hint">MP4, MOV, AVI (Max 500MB) • AI extracts 10 best quality frames</div>
+                    <input type="file" id="videoInput" accept="video/mp4,video/quicktime,video/x-msvideo" style="display:none" onchange="handleVideoUpload(event)">
+                </div>
+
+                {{-- Video Processing Status --}}
+                <div class="video-processing-status" id="videoProcessingStatus">
+                    <div class="processing-progress">
+                        <div class="processing-spinner"></div>
+                        <div class="processing-text">
+                            <div class="processing-title" id="processingTitle">Uploading video...</div>
+                            <div class="processing-subtitle" id="processingSubtitle">Please wait</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ========================================
+             IMAGES SECTION (MANUAL OR FROM VIDEO)
+             ======================================== --}}
         <div class="form-section">
             <h3 class="section-title">
                 <i class="fas fa-images"></i> Property Images
             </h3>
+            <p class="section-subtitle">Upload images manually OR use video above for AI extraction (Min 1 required)</p>
 
             <div class="image-upload-zone" id="uploadZone">
                 <div class="upload-icon">
                     <i class="fas fa-cloud-upload-alt"></i>
                 </div>
                 <div class="upload-text">Click to upload or drag and drop</div>
-                <div class="upload-hint">PNG, JPG, WEBP up to 30MB each (Min 1 required)</div>
+                <div class="upload-hint">PNG, JPG, WEBP up to 30MB each • Or use video for AI extraction</div>
                 <input type="file" name="images[]" id="imageInput" accept="image/*" multiple hidden>
             </div>
 
-            <div class="sort-instructions" id="sortInstructions" style="display: none;">
+            <div class="sort-instructions" id="sortInstructions">
                 <i class="fas fa-arrows-alt" style="font-size: 20px;"></i>
-                <span>Drag and drop images to reorder. First image will be the cover photo.</span>
+                <span>Drag images to reorder. First image = Cover photo</span>
             </div>
 
             <div class="image-preview-grid" id="imagePreviewGrid">
@@ -718,10 +956,150 @@
 <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
 
 <script>
-// --- GLOBAL VARS ---
-let map, marker;
+// ============================================
+// GLOBAL VARIABLES
+// ============================================
+let map, marker, selectedFiles = [], draggedItem = null;
+let videoFramesExtracted = false;
 
-// --- UTILS ---
+// ============================================
+// VIDEO UPLOAD & AI FRAME EXTRACTION
+// ============================================
+async function handleVideoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    console.log('📹 Video selected:', file.name, '(' + (file.size / 1024 / 1024).toFixed(2) + ' MB)');
+
+    // Validate file
+    const maxSize = 500 * 1024 * 1024; // 500MB
+    if (file.size > maxSize) {
+        alert('Video file is too large! Maximum size is 500MB.');
+        event.target.value = '';
+        return;
+    }
+
+    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('Unsupported video format! Please use MP4, MOV, or AVI.');
+        event.target.value = '';
+        return;
+    }
+
+    // Update UI
+    const uploadArea = document.getElementById('videoUploadArea');
+    const statusDiv = document.getElementById('videoProcessingStatus');
+    const progressBar = document.getElementById('progressBar');
+    const titleEl = document.getElementById('processingTitle');
+    const subtitleEl = document.getElementById('processingSubtitle');
+
+    uploadArea.classList.add('processing');
+    statusDiv.classList.add('show');
+    progressBar.style.width = '10%';
+    titleEl.textContent = 'Uploading video to AI service...';
+    subtitleEl.textContent = 'Preparing for frame extraction';
+
+    // Create FormData
+    const formData = new FormData();
+    formData.append('video', file);
+    formData.append('num_frames', 10);
+
+    try {
+        // Call Python AI Service via Laravel proxy
+        progressBar.style.width = '30%';
+        titleEl.textContent = 'Processing video with AI...';
+        subtitleEl.textContent = 'Analyzing frames and extracting best quality images (30-60 seconds)';
+
+        // 3-minute timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000);
+
+        const response = await fetch('/api/video/extract-frames', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            }
+        });
+
+        clearTimeout(timeoutId);
+        progressBar.style.width = '60%';
+
+        if (!response.ok) {
+            throw new Error('AI service returned error: ' + response.status);
+        }
+
+        const result = await response.json();
+        console.log('✅ AI Response:', result);
+
+        if (!result.success || !result.data || !result.data.frames) {
+            throw new Error(result.message || 'Frame extraction failed');
+        }
+
+        progressBar.style.width = '80%';
+        titleEl.textContent = 'Downloading extracted frames...';
+        subtitleEl.textContent = `Got ${result.data.frames.length} high-quality frames`;
+
+        // Download frames
+        const frameFiles = [];
+        for (let i = 0; i < result.data.frames.length; i++) {
+            const frameUrl = result.data.frames[i];
+            const proxyUrl = frameUrl.replace('http://127.0.0.1:8001/', '/api/video/');
+
+            const frameResponse = await fetch(proxyUrl);
+            const blob = await frameResponse.blob();
+            const fileName = `ai_frame_${i + 1}.jpg`;
+            const frameFile = new File([blob], fileName, { type: 'image/jpeg' });
+            frameFiles.push(frameFile);
+        }
+
+        progressBar.style.width = '90%';
+
+        // Clear existing images
+        selectedFiles = [];
+
+        // Add extracted frames
+        selectedFiles = frameFiles;
+
+        // Render previews
+        renderPreviews();
+        syncInputFiles();
+
+        videoFramesExtracted = true;
+
+        // Success
+        progressBar.style.width = '100%';
+        titleEl.textContent = '✅ Success! Extracted ' + frameFiles.length + ' frames';
+        subtitleEl.textContent = 'High-quality frames ready';
+
+        setTimeout(() => {
+            statusDiv.classList.remove('show');
+            uploadArea.classList.remove('processing');
+            progressBar.style.width = '0%';
+        }, 3000);
+
+        console.log('✅ Video processing complete. Frames:', frameFiles.length);
+
+    } catch (error) {
+        console.error('❌ Video processing error:', error);
+
+        titleEl.textContent = '❌ Error processing video';
+        subtitleEl.textContent = error.message || 'Failed to extract frames';
+        progressBar.style.width = '0%';
+
+        setTimeout(() => {
+            statusDiv.classList.remove('show');
+            uploadArea.classList.remove('processing');
+        }, 3000);
+
+        alert('Error processing video: ' + error.message);
+    }
+}
+
+// ============================================
+// UTILITY FUNCTIONS
+// ============================================
 function normalizeNumber(value) {
     const arabicNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
     const kurdishNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
@@ -732,7 +1110,9 @@ function normalizeNumber(value) {
     return normalized;
 }
 
-// --- LOCATION SELECTOR CLASS ---
+// ============================================
+// LOCATION SELECTOR CLASS
+// ============================================
 class LocationSelector {
     constructor(options = {}) {
         this.citySelectId = options.citySelectId || "city-select";
@@ -933,76 +1313,9 @@ class LocationSelector {
     }
 }
 
-// --- INIT SCRIPT ---
-document.addEventListener('DOMContentLoaded', function() {
-    // 1. Initialize Numeric Inputs
-    const numericInputs = document.querySelectorAll('.numeric-input');
-    numericInputs.forEach(input => {
-        input.addEventListener('input', function(e) {
-            this.value = normalizeNumber(this.value);
-        });
-        input.addEventListener('blur', function() {
-            this.value = normalizeNumber(this.value);
-        });
-    });
-
-    // 2. Initialize Language Tabs
-    document.querySelectorAll('.language-tab').forEach(tab => {
-        tab.addEventListener('click', function(e) {
-            e.preventDefault();
-            const lang = this.dataset.lang;
-            document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            document.querySelector(`[data-content="${lang}"]`).classList.add('active');
-        });
-    });
-
-    // 3. Initialize Location Selector
-    const locationSelector = new LocationSelector({
-        citySelectId: 'location-city-select',
-        areaSelectId: 'location-area-select',
-        cityInputId: 'city_en',
-        districtInputId: 'district_en',
-
-        onCityChange: (data) => {
-            document.getElementById('city_ar').value = data.nameAr || '';
-            document.getElementById('city_ku').value = data.nameKu || '';
-
-            if(data.lat && data.lng && window.map) {
-                moveMapTo(data.lat, data.lng);
-            }
-        },
-
-        onAreaChange: (data) => {
-            document.getElementById('district_ar').value = data.nameAr || '';
-            document.getElementById('district_ku').value = data.nameKu || '';
-
-            if(data.lat && data.lng && window.map) {
-                moveMapTo(data.lat, data.lng);
-                window.map.setZoom(15);
-            }
-        }
-    });
-
-    locationSelector.init();
-
-    // 4. Initialize Map Toggle
-    const mapToggle = document.getElementById('has_map_toggle');
-    if(mapToggle) {
-        mapToggle.addEventListener('change', toggleMap);
-        toggleMap();
-    }
-
-    // 5. Initialize Image Upload with Sortable
-    setupImageUpload();
-
-    // 6. Form Validation
-    const form = document.getElementById('propertyForm');
-    form.addEventListener('submit', validateForm);
-});
-
-// --- GOOGLE MAPS FUNCTIONS ---
+// ============================================
+// GOOGLE MAPS
+// ============================================
 function initMap() {
     const defaultLoc = { lat: 36.1911, lng: 44.0091 };
     window.map = new google.maps.Map(document.getElementById("map"), {
@@ -1077,7 +1390,9 @@ function toggleMap() {
     }
 }
 
-// --- IMAGE UPLOAD WITH DRAG & DROP SORTING ---
+// ============================================
+// IMAGE UPLOAD WITH DRAG & DROP
+// ============================================
 function setupImageUpload() {
     const uploadZone = document.getElementById('uploadZone');
     const imageInput = document.getElementById('imageInput');
@@ -1085,9 +1400,6 @@ function setupImageUpload() {
     const sortInstructions = document.getElementById('sortInstructions');
 
     if (!uploadZone || !imageInput) return;
-
-    let selectedFiles = [];
-    let draggedItem = null;
 
     uploadZone.onclick = () => imageInput.click();
     imageInput.onchange = (e) => handleNewFiles(e.target.files);
@@ -1113,9 +1425,8 @@ function setupImageUpload() {
         renderPreviews();
         syncInputFiles();
 
-        // Show sort instructions if we have images
         if (selectedFiles.length > 0) {
-            sortInstructions.style.display = 'flex';
+            sortInstructions.classList.add('show');
         }
     }
 
@@ -1137,7 +1448,6 @@ function setupImageUpload() {
                     </button>
                 `;
 
-                // Drag events
                 div.addEventListener('dragstart', handleDragStart);
                 div.addEventListener('dragover', handleDragOver);
                 div.addEventListener('drop', handleDrop);
@@ -1145,7 +1455,6 @@ function setupImageUpload() {
                 div.addEventListener('dragenter', handleDragEnter);
                 div.addEventListener('dragleave', handleDragLeave);
 
-                // Remove button
                 const removeBtn = div.querySelector('.image-remove-btn');
                 removeBtn.addEventListener('click', () => removeImage(index));
 
@@ -1189,12 +1498,10 @@ function setupImageUpload() {
             const draggedIndex = parseInt(draggedItem.dataset.index);
             const targetIndex = parseInt(this.dataset.index);
 
-            // Swap files in array
             const temp = selectedFiles[draggedIndex];
             selectedFiles[draggedIndex] = selectedFiles[targetIndex];
             selectedFiles[targetIndex] = temp;
 
-            // Re-render
             renderPreviews();
             syncInputFiles();
         }
@@ -1215,9 +1522,8 @@ function setupImageUpload() {
         renderPreviews();
         syncInputFiles();
 
-        // Hide instructions if no images
         if (selectedFiles.length === 0) {
-            sortInstructions.style.display = 'none';
+            sortInstructions.classList.remove('show');
         }
     }
 
@@ -1228,42 +1534,36 @@ function setupImageUpload() {
     }
 }
 
-// --- FORM VALIDATION WITH AUTO-FILL ---
+// ============================================
+// FORM VALIDATION
+// ============================================
 function validateForm(e) {
-    // Get all title values
     const titleEn = document.querySelector('input[name="title_en"]').value.trim();
     const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
     const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
 
-    // Get all description values
     const descEn = document.querySelector('textarea[name="description_en"]').value.trim();
     const descAr = document.querySelector('textarea[name="description_ar"]').value.trim();
     const descKu = document.querySelector('textarea[name="description_ku"]').value.trim();
 
-    // Check if at least one title exists
     if (!titleEn && !titleAr && !titleKu) {
         e.preventDefault();
         alert('⚠️ Please provide a property title in at least one language.');
         return false;
     }
 
-    // AUTO-FILL TITLES: Priority order (English > Arabic > Kurdish)
     const primaryTitle = titleEn || titleAr || titleKu;
-
     if (!titleEn) document.querySelector('input[name="title_en"]').value = primaryTitle;
     if (!titleAr) document.querySelector('input[name="title_ar"]').value = primaryTitle;
     if (!titleKu) document.querySelector('input[name="title_ku"]').value = primaryTitle;
 
-    // AUTO-FILL DESCRIPTIONS: Priority order (English > Arabic > Kurdish)
     const primaryDesc = descEn || descAr || descKu;
-
     if (primaryDesc) {
         if (!descEn) document.querySelector('textarea[name="description_en"]').value = primaryDesc;
         if (!descAr) document.querySelector('textarea[name="description_ar"]').value = primaryDesc;
         if (!descKu) document.querySelector('textarea[name="description_ku"]').value = primaryDesc;
     }
 
-    // ENSURE LAT/LNG ARE SET (0 if map disabled or empty)
     const mapToggle = document.getElementById('has_map_toggle');
     const latInput = document.getElementById('latitude');
     const lngInput = document.getElementById('longitude');
@@ -1273,15 +1573,87 @@ function validateForm(e) {
         lngInput.value = '0';
     }
 
-    // Validate images
     const imageInput = document.getElementById('imageInput');
     if(imageInput.files.length === 0) {
          e.preventDefault();
-         alert('⚠️ Please upload at least one image of the property.');
+         alert('⚠️ Please upload at least one image or extract frames from video.');
          return false;
     }
 
     return true;
 }
+
+// ============================================
+// INIT ON DOM READY
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Numeric inputs
+    const numericInputs = document.querySelectorAll('.numeric-input');
+    numericInputs.forEach(input => {
+        input.addEventListener('input', function(e) {
+            this.value = normalizeNumber(this.value);
+        });
+        input.addEventListener('blur', function() {
+            this.value = normalizeNumber(this.value);
+        });
+    });
+
+    // Language tabs
+    document.querySelectorAll('.language-tab').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const lang = this.dataset.lang;
+            document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
+            this.classList.add('active');
+            document.querySelector(`[data-content="${lang}"]`).classList.add('active');
+        });
+    });
+
+    // Location selector
+    const locationSelector = new LocationSelector({
+        citySelectId: 'location-city-select',
+        areaSelectId: 'location-area-select',
+        cityInputId: 'city_en',
+        districtInputId: 'district_en',
+
+        onCityChange: (data) => {
+            document.getElementById('city_ar').value = data.nameAr || '';
+            document.getElementById('city_ku').value = data.nameKu || '';
+
+            if(data.lat && data.lng && window.map) {
+                moveMapTo(data.lat, data.lng);
+            }
+        },
+
+        onAreaChange: (data) => {
+            document.getElementById('district_ar').value = data.nameAr || '';
+            document.getElementById('district_ku').value = data.nameKu || '';
+
+            if(data.lat && data.lng && window.map) {
+                moveMapTo(data.lat, data.lng);
+                window.map.setZoom(15);
+            }
+        }
+    });
+
+    locationSelector.init();
+
+    // Map toggle
+    const mapToggle = document.getElementById('has_map_toggle');
+    if(mapToggle) {
+        mapToggle.addEventListener('change', toggleMap);
+        toggleMap();
+    }
+
+    // Image upload
+    setupImageUpload();
+
+    // Form validation
+    const form = document.getElementById('propertyForm');
+    form.addEventListener('submit', validateForm);
+});
+
+console.log('✓ Agent property form with AI Video Frame Extraction initialized');
 </script>
 @endsection
