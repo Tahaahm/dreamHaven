@@ -493,6 +493,9 @@ class UltimateFrameExtractor:
 # Singleton
 _extractor_instance = None
 
+# Alias for backward compatibility
+VideoFrameExtractor = UltimateFrameExtractor
+
 def get_extractor() -> UltimateFrameExtractor:
     """Get singleton instance"""
     global _extractor_instance
