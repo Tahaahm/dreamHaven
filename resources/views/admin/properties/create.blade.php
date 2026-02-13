@@ -1504,14 +1504,17 @@ async function handleVideoUpload(event) {
     formData.append('num_frames', 10);
 
     try {
-        // Call Python AI Service
+        // Call Python AI Service via Laravel proxy
         progressBar.style.width = '30%';
         titleEl.textContent = 'Processing video with AI...';
         subtitleEl.textContent = 'Analyzing frames and extracting best quality images';
 
-        const response = await fetch('http://127.0.0.1:8001/extract-frames', {
+        const response = await fetch('/api/video/extract-frames', {
             method: 'POST',
-            body: formData
+            body: formData,
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
+            }
         });
 
         progressBar.style.width = '60%';

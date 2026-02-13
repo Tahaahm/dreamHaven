@@ -18,6 +18,7 @@ use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\OfficeAuthController;
 use App\Http\Controllers\SubscriptionPlanController;
+use App\Http\Controllers\VideoProcessingController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\AgentOrAdmin;
 use Illuminate\Http\Request;
@@ -975,3 +976,14 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::put('/profile/password', [AdminController::class, 'profilePasswordUpdate'])->name('profile.password.update');
     });
 });
+
+
+
+
+//ai video
+
+Route::post('/api/video/extract-frames', [VideoProcessingController::class, 'extractFrames'])
+    ->name('video.extract-frames');
+
+Route::get('/api/video/health', [VideoProcessingController::class, 'checkServiceHealth'])
+    ->name('video.health');
