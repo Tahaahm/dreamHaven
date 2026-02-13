@@ -139,6 +139,12 @@
         color: #1e40af;
     }
 
+    .alert-success {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(52, 211, 153, 0.05));
+        border: 2px solid #10b981;
+        color: #065f46;
+    }
+
     .alert-danger {
         background: #fef2f2;
         border: 2px solid #ef4444;
@@ -343,6 +349,149 @@
         display: flex;
         align-items: center;
         gap: 6px;
+    }
+
+    /* Video Upload Section */
+    .video-upload-section {
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(167, 139, 250, 0.02));
+        border: 2px dashed #8b5cf6;
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+
+    .video-upload-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .video-upload-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 24px;
+    }
+
+    .video-upload-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #1f2937;
+    }
+
+    .video-upload-subtitle {
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .video-upload-area {
+        border: 3px dashed #d1d5db;
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        background: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .video-upload-area:hover {
+        border-color: #8b5cf6;
+        background: #faf5ff;
+    }
+
+    .video-upload-area.processing {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), white);
+        pointer-events: none;
+    }
+
+    .upload-video-icon {
+        font-size: 48px;
+        color: #8b5cf6;
+        margin-bottom: 12px;
+    }
+
+    .upload-video-text {
+        font-size: 16px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+    }
+
+    .upload-video-hint {
+        color: #6b7280;
+        font-size: 13px;
+    }
+
+    /* Video Processing Status */
+    .video-processing-status {
+        display: none;
+        padding: 20px;
+        background: white;
+        border-radius: 12px;
+        margin-top: 16px;
+    }
+
+    .video-processing-status.show {
+        display: block;
+    }
+
+    .processing-progress {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+
+    .processing-spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f3f4f6;
+        border-top-color: #8b5cf6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    .processing-text {
+        flex: 1;
+    }
+
+    .processing-title {
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 4px;
+    }
+
+    .processing-subtitle {
+        font-size: 13px;
+        color: #6b7280;
+    }
+
+    .progress-bar-container {
+        width: 100%;
+        height: 8px;
+        background: #f3f4f6;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+        border-radius: 4px;
+        transition: width 0.3s ease;
+        animation: progressShine 2s linear infinite;
+    }
+
+    @keyframes progressShine {
+        0% { background-position: -200px 0; }
+        100% { background-position: 200px 0; }
     }
 
     /* Manual Override Section */
@@ -1224,17 +1373,58 @@
             </div>
 
             <!-- ========================================
-                 SECTION 5: IMAGES
+                 SECTION 5: VIDEO UPLOAD (AI FRAME EXTRACTION)
+                 ======================================== -->
+            <h2 class="section-title">
+                <i class="fas fa-video"></i> Property Video (Optional - AI Powered)
+            </h2>
+            <p class="section-subtitle">Upload a video and AI will automatically extract the 10 best quality frames</p>
+
+            <div class="video-upload-section">
+                <div class="video-upload-header">
+                    <div class="video-upload-icon">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div>
+                        <div class="video-upload-title">AI-Powered Frame Extraction</div>
+                        <div class="video-upload-subtitle">Upload a property video and let AI select the best frames automatically</div>
+                    </div>
+                </div>
+
+                <div class="video-upload-area" id="videoUploadArea" onclick="document.getElementById('videoInput').click()">
+                    <div class="upload-video-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                    <div class="upload-video-text">Click to Upload Property Video</div>
+                    <div class="upload-video-hint">Supported: MP4, MOV, AVI (Max 500MB) • AI will extract 10 best quality frames</div>
+                    <input type="file" id="videoInput" accept="video/mp4,video/quicktime,video/x-msvideo" style="display:none" onchange="handleVideoUpload(event)">
+                </div>
+
+                <!-- Video Processing Status -->
+                <div class="video-processing-status" id="videoProcessingStatus">
+                    <div class="processing-progress">
+                        <div class="processing-spinner"></div>
+                        <div class="processing-text">
+                            <div class="processing-title" id="processingTitle">Uploading video...</div>
+                            <div class="processing-subtitle" id="processingSubtitle">This may take a few moments</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================
+                 SECTION 6: IMAGES (MANUAL OR FROM VIDEO)
                  ======================================== -->
             <h2 class="section-title">
                 <i class="fas fa-images"></i> Property Images
             </h2>
-            <p class="section-subtitle">Upload 1-10 images (JPG/PNG, max 5MB each) - First image = Cover Photo</p>
+            <p class="section-subtitle">Upload 1-10 images manually OR they'll be auto-filled from video above</p>
 
             <div class="image-upload-area" id="uploadArea" onclick="document.getElementById('imageInput').click()">
                 <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
                 <div class="upload-text">Click to Upload Images</div>
-                <div class="upload-hint">Drag & drop to reorder after upload</div>
+                <div class="upload-hint">Drag & drop to reorder after upload • Or use video above for auto-extraction</div>
                 <input type="file" id="imageInput" name="images[]" multiple accept="image/jpeg,image/jpg,image/png" style="display:none" onchange="previewImages(event)">
             </div>
 
@@ -1269,6 +1459,138 @@
 // GLOBAL VARIABLES
 // ============================================
 let map, marker, selectedImages = [], draggedIndex = null, translationTimeout = null;
+let videoFramesExtracted = false; // Track if video frames were extracted
+
+// ============================================
+// VIDEO UPLOAD & AI FRAME EXTRACTION
+// ============================================
+async function handleVideoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    console.log('📹 Video selected:', file.name, '(' + (file.size / 1024 / 1024).toFixed(2) + ' MB)');
+
+    // Validate file
+    const maxSize = 500 * 1024 * 1024; // 500MB
+    if (file.size > maxSize) {
+        alert('Video file is too large! Maximum size is 500MB.');
+        event.target.value = '';
+        return;
+    }
+
+    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('Unsupported video format! Please use MP4, MOV, or AVI.');
+        event.target.value = '';
+        return;
+    }
+
+    // Update UI
+    const uploadArea = document.getElementById('videoUploadArea');
+    const statusDiv = document.getElementById('videoProcessingStatus');
+    const progressBar = document.getElementById('progressBar');
+    const titleEl = document.getElementById('processingTitle');
+    const subtitleEl = document.getElementById('processingSubtitle');
+
+    uploadArea.classList.add('processing');
+    statusDiv.classList.add('show');
+    progressBar.style.width = '10%';
+    titleEl.textContent = 'Uploading video to AI service...';
+    subtitleEl.textContent = 'Preparing for frame extraction';
+
+    // Create FormData
+    const formData = new FormData();
+    formData.append('video', file);
+    formData.append('num_frames', 10);
+
+    try {
+        // Call Python AI Service
+        progressBar.style.width = '30%';
+        titleEl.textContent = 'Processing video with AI...';
+        subtitleEl.textContent = 'Analyzing frames and extracting best quality images';
+
+        const response = await fetch('http://127.0.0.1:8001/extract-frames', {
+            method: 'POST',
+            body: formData
+        });
+
+        progressBar.style.width = '60%';
+
+        if (!response.ok) {
+            throw new Error('AI service returned error: ' + response.status);
+        }
+
+        const result = await response.json();
+
+        console.log('✅ AI Response:', result);
+
+        if (!result.success || !result.data || !result.data.frames) {
+            throw new Error(result.message || 'Frame extraction failed');
+        }
+
+        progressBar.style.width = '80%';
+        titleEl.textContent = 'Downloading extracted frames...';
+        subtitleEl.textContent = `Got ${result.data.frames.length} high-quality frames`;
+
+        // Download frames and convert to File objects
+        const frameFiles = [];
+        for (let i = 0; i < result.data.frames.length; i++) {
+            const frameUrl = result.data.frames[i];
+
+            // Fetch frame as blob
+            const frameResponse = await fetch(frameUrl);
+            const blob = await frameResponse.blob();
+
+            // Create File object
+            const fileName = `ai_frame_${i + 1}.jpg`;
+            const frameFile = new File([blob], fileName, { type: 'image/jpeg' });
+
+            frameFiles.push(frameFile);
+        }
+
+        progressBar.style.width = '90%';
+
+        // Clear existing images if any
+        selectedImages = [];
+
+        // Add extracted frames to selectedImages
+        selectedImages = frameFiles;
+
+        // Render previews
+        renderImagePreviews();
+        updateFileInput();
+
+        // Mark as extracted
+        videoFramesExtracted = true;
+
+        // Success state
+        progressBar.style.width = '100%';
+        titleEl.textContent = '✅ Success! Extracted ' + frameFiles.length + ' frames';
+        subtitleEl.textContent = 'High-quality frames ready for upload';
+
+        setTimeout(() => {
+            statusDiv.classList.remove('show');
+            uploadArea.classList.remove('processing');
+            progressBar.style.width = '0%';
+        }, 3000);
+
+        console.log('✅ Video processing complete. Frames:', frameFiles.length);
+
+    } catch (error) {
+        console.error('❌ Video processing error:', error);
+
+        titleEl.textContent = '❌ Error processing video';
+        subtitleEl.textContent = error.message || 'Failed to extract frames';
+        progressBar.style.width = '0%';
+
+        setTimeout(() => {
+            statusDiv.classList.remove('show');
+            uploadArea.classList.remove('processing');
+        }, 3000);
+
+        alert('Error processing video: ' + error.message);
+    }
+}
 
 // ============================================
 // LANGUAGE DETECTION
@@ -1365,12 +1687,10 @@ async function translateText(text, sourceLang, fieldType) {
                     document.getElementById(`${fieldType}_${targetLang}`).value = result.data.translated_text;
                 }
             } else {
-                // Fallback: copy source text
                 document.getElementById(`${fieldType}_${targetLang}`).value = text;
             }
         }
 
-        // Sync to manual fields
         syncToManualFields(fieldType);
 
         loader?.classList.remove('show');
@@ -1381,7 +1701,6 @@ async function translateText(text, sourceLang, fieldType) {
         console.error('Translation error:', error);
         loader?.classList.remove('show');
 
-        // Fallback: copy to all languages
         ['en', 'ar', 'ku'].forEach(lang => {
             document.getElementById(`${fieldType}_${lang}`).value = text;
         });
@@ -1473,7 +1792,6 @@ function updateLatLng(lat, lng) {
 document.addEventListener('DOMContentLoaded', async function() {
     await loadCities();
 
-    // Map Toggle
     const mapToggle = document.getElementById('mapToggle');
     mapToggle?.addEventListener('change', function() {
         const section = document.getElementById('mapSection');
@@ -1490,7 +1808,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    // City Selection
     document.getElementById('city-select')?.addEventListener('change', async function() {
         const cityId = this.value;
         const selectedOption = this.options[this.selectedIndex];
@@ -1519,7 +1836,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    // Area Selection
     document.getElementById('area-select')?.addEventListener('change', function() {
         const selectedOption = this.options[this.selectedIndex];
 
@@ -1729,7 +2045,6 @@ document.getElementById('propertyForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const errors = [];
 
-    // Check manual fields first, then hidden fields
     const nameEn = document.getElementById('name_en_manual').value || document.getElementById('name_en').value;
     const nameAr = document.getElementById('name_ar_manual').value || document.getElementById('name_ar').value;
     const nameKu = document.getElementById('name_ku_manual').value || document.getElementById('name_ku').value;
@@ -1771,7 +2086,7 @@ document.getElementById('propertyForm').addEventListener('submit', function(e) {
     }
 
     if (selectedImages.length === 0) {
-        errors.push('Please upload at least 1 image');
+        errors.push('Please upload at least 1 image or extract frames from video');
         document.getElementById('uploadArea').classList.add('error');
     }
 
@@ -1789,6 +2104,6 @@ document.getElementById('propertyForm').addEventListener('submit', function(e) {
     this.submit();
 });
 
-console.log('✓ Smart property form initialized');
+console.log('✓ Smart property form with Video AI initialized');
 </script>
 @endpush
