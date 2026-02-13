@@ -1507,16 +1507,22 @@ async function handleVideoUpload(event) {
         // Call Python AI Service via Laravel proxy
         progressBar.style.width = '30%';
         titleEl.textContent = 'Processing video with AI...';
-        subtitleEl.textContent = 'Analyzing frames and extracting best quality images';
+        subtitleEl.textContent = 'Analyzing frames and extracting best quality images (this may take 30-60 seconds)';
+
+        // Create abort controller with 3-minute timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes timeout
 
         const response = await fetch('/api/video/extract-frames', {
             method: 'POST',
             body: formData,
+            signal: controller.signal,
             headers: {
                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
             }
         });
 
+        clearTimeout(timeoutId);
         progressBar.style.width = '60%';
 
         if (!response.ok) {
