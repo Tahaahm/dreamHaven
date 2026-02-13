@@ -1542,12 +1542,16 @@ async function handleVideoUpload(event) {
         subtitleEl.textContent = `Got ${result.data.frames.length} high-quality frames`;
 
         // Download frames and convert to File objects
-        const frameFiles = [];
-        for (let i = 0; i < result.data.frames.length; i++) {
-            const frameUrl = result.data.frames[i];
+        // Download frames and convert to File objects
+const frameFiles = [];
+for (let i = 0; i < result.data.frames.length; i++) {
+    const frameUrl = result.data.frames[i];
 
-            // Fetch frame as blob
-            const frameResponse = await fetch(frameUrl);
+    // Convert Python service URL to Laravel proxy URL
+    const proxyUrl = frameUrl.replace('http://127.0.0.1:8001', '/api/video');
+
+    // Fetch frame as blob through Laravel proxy
+    const frameResponse = await fetch(proxyUrl);
             const blob = await frameResponse.blob();
 
             // Create File object
