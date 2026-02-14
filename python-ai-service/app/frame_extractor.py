@@ -36,13 +36,13 @@ class VideoFrameExtractor:
     """
 
     def __init__(self):
-        """Initialize with advanced scoring"""
+        """Initialize with balanced scoring"""
         self.scorer = get_scorer()
 
-        # TRIPLE-CHECK DIVERSITY THRESHOLDS
-        self.color_similarity_threshold = 0.82      # Color histogram
-        self.structure_similarity_threshold = 0.88  # Layout/composition
-        self.motion_change_threshold = 25.0         # Scene transition detection
+        # BALANCED DIVERSITY THRESHOLDS (not too strict, not too loose)
+        self.color_similarity_threshold = 0.88      # Color histogram (was 0.82 - too strict)
+        self.structure_similarity_threshold = 0.92  # Layout/composition (was 0.88 - too strict)
+        self.motion_change_threshold = 20.0         # Scene transition (was 25.0)
 
     def validate_video(self, video_path: Path) -> Tuple[bool, Optional[str]]:
         """Validate video file"""
@@ -159,12 +159,12 @@ class VideoFrameExtractor:
             if color_sim > self.color_similarity_threshold and struct_sim > self.structure_similarity_threshold:
                 return False, f"❌ Duplicate #{idx+1} (C:{color_sim*100:.0f}% S:{struct_sim*100:.0f}%)"
 
-            # Reject if color VERY similar (same room)
-            if color_sim > 0.92:
+            # Reject if color EXTREMELY similar (exact same spot)
+            if color_sim > 0.95:
                 return False, f"❌ Same room #{idx+1} ({color_sim*100:.0f}%)"
 
-            # Reject if structure VERY similar (same angle)
-            if struct_sim > 0.93:
+            # Reject if structure EXTREMELY similar (exact same angle)
+            if struct_sim > 0.96:
                 return False, f"❌ Same angle #{idx+1} ({struct_sim*100:.0f}%)"
 
         return True, "✓ Unique"
@@ -276,8 +276,8 @@ class VideoFrameExtractor:
             orig_color = self.color_similarity_threshold
             orig_struct = self.structure_similarity_threshold
 
-            self.color_similarity_threshold = 0.70
-            self.structure_similarity_threshold = 0.75
+            self.color_similarity_threshold = 0.80  # Was 0.70 - too loose
+            self.structure_similarity_threshold = 0.85  # Was 0.75 - too loose
 
             for frame_idx, scores in ranked_frames:
                 if len(selected) >= num_frames:
