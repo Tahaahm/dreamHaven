@@ -1,13 +1,3 @@
-"""
-ULTIMATE FRAME EXTRACTOR - FASTEST & SMARTEST 2024
-✓ Scene change detection (catches room transitions)
-✓ Multi-metric diversity (color + structure + content)
-✓ Motion analysis (skips boring static frames)
-✓ Smart quality scoring (sharpness + brightness + composition)
-✓ ULTRA-FAST processing with optimizations
-✓ ZERO REPETITION guarantee
-"""
-
 import cv2
 import numpy as np
 from pathlib import Path
@@ -31,153 +21,77 @@ from app.quality_scorer import get_scorer
 
 
 class VideoFrameExtractor:
-    """
-    ULTIMATE frame extraction with zero repetition guarantee
-    """
+    """Simple, fast frame extraction"""
 
     def __init__(self):
-        """Initialize with balanced scoring"""
+        """Initialize"""
         self.scorer = get_scorer()
-
-        # BALANCED DIVERSITY THRESHOLDS (not too strict, not too loose)
-        self.color_similarity_threshold = 0.88      # Color histogram (was 0.82 - too strict)
-        self.structure_similarity_threshold = 0.92  # Layout/composition (was 0.88 - too strict)
-        self.motion_change_threshold = 20.0         # Scene transition (was 25.0)
+        # Simple threshold - only block VERY similar frames
+        self.similarity_threshold = 0.90  # Only block 90%+ similar
 
     def validate_video(self, video_path: Path) -> Tuple[bool, Optional[str]]:
-        """Validate video file"""
+        """Validate video"""
         if not video_path.exists():
-            return False, "Video file not found"
+            return False, "Video not found"
         if not video_path.is_file():
-            return False, "Path is not a file"
+            return False, "Not a file"
 
         cap = cv2.VideoCapture(str(video_path))
         if not cap.isOpened():
-            return False, "Cannot open video - may be corrupted"
+            return False, "Cannot open video"
 
         fps = cap.get(cv2.CAP_PROP_FPS)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         if fps == 0:
             cap.release()
-            return False, "Invalid video - FPS is zero"
+            return False, "Invalid FPS"
 
         duration = frame_count / fps
         if duration > MAX_VIDEO_DURATION_SECONDS:
             cap.release()
-            return False, f"Video too long (max {MAX_VIDEO_DURATION_SECONDS}s)"
+            return False, f"Too long (max {MAX_VIDEO_DURATION_SECONDS}s)"
 
         cap.release()
         return True, None
 
-    def calculate_histogram_similarity(self, frame1: np.ndarray, frame2: np.ndarray) -> float:
+    def calculate_similarity(self, frame1: np.ndarray, frame2: np.ndarray) -> float:
         """
-        Advanced HSV color histogram comparison
-        Returns: 0-1 (1 = identical colors)
+        SIMPLE histogram comparison - FAST!
+        Returns: 0-1 (1 = identical)
         """
-        # Resize for speed
-        h1 = cv2.resize(frame1, (256, 256))
-        h2 = cv2.resize(frame2, (256, 256))
+        # Small resize for speed
+        h1 = cv2.resize(frame1, (128, 128))
+        h2 = cv2.resize(frame2, (128, 128))
 
+        # Simple HSV histogram
         hsv1 = cv2.cvtColor(h1, cv2.COLOR_BGR2HSV)
         hsv2 = cv2.cvtColor(h2, cv2.COLOR_BGR2HSV)
 
-        # 3D histogram (Hue + Saturation + Value)
-        hist1 = cv2.calcHist([hsv1], [0, 1, 2], None, [50, 60, 60], [0, 180, 0, 256, 0, 256])
-        hist2 = cv2.calcHist([hsv2], [0, 1, 2], None, [50, 60, 60], [0, 180, 0, 256, 0, 256])
+        hist1 = cv2.calcHist([hsv1], [0, 1], None, [30, 32], [0, 180, 0, 256])
+        hist2 = cv2.calcHist([hsv2], [0, 1], None, [30, 32], [0, 180, 0, 256])
 
-        cv2.normalize(hist1, hist1, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
-        cv2.normalize(hist2, hist2, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX)
+        cv2.normalize(hist1, hist1, 0, 1, cv2.NORM_MINMAX)
+        cv2.normalize(hist2, hist2, 0, 1, cv2.NORM_MINMAX)
 
         return cv2.compareHist(hist1, hist2, cv2.HISTCMP_CORREL)
 
-    def calculate_structural_similarity(self, frame1: np.ndarray, frame2: np.ndarray) -> float:
+    def is_diverse(self, new_frame: np.ndarray, selected: List[np.ndarray]) -> bool:
         """
-        Fast structure check - detects same angle/composition
-        Returns: 0-1 (1 = same structure)
+        Simple diversity check - only block VERY similar frames
         """
-        # Downscale for speed
-        f1 = cv2.resize(frame1, (160, 160))
-        f2 = cv2.resize(frame2, (160, 160))
+        if not selected:
+            return True
 
-        gray1 = cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY).astype(np.float32)
-        gray2 = cv2.cvtColor(f2, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        for existing in selected:
+            sim = self.calculate_similarity(new_frame, existing)
+            if sim > self.similarity_threshold:
+                return False  # Too similar
 
-        # Mean squared error (fast)
-        mse = np.mean((gray1 - gray2) ** 2)
+        return True
 
-        if mse == 0:
-            return 1.0
-
-        # Convert to similarity (0-1)
-        similarity = 1 - (mse / (255.0 ** 2))
-        return max(0.0, min(1.0, similarity))
-
-    def detect_scene_change(self, frame1: np.ndarray, frame2: np.ndarray) -> bool:
-        """
-        Detect camera movement to new room/area
-        """
-        gray1 = cv2.cvtColor(cv2.resize(frame1, (320, 240)), cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.cvtColor(cv2.resize(frame2, (320, 240)), cv2.COLOR_BGR2GRAY)
-
-        # Absolute difference
-        diff = cv2.absdiff(gray1, gray2)
-        mean_diff = np.mean(diff)
-
-        # Edge change
-        edges1 = cv2.Canny(gray1, 50, 150)
-        edges2 = cv2.Canny(gray2, 50, 150)
-        edge_diff = np.mean(cv2.absdiff(edges1, edges2))
-
-        return (mean_diff > self.motion_change_threshold) or (edge_diff > 30)
-
-    def is_diverse_enough(
-        self,
-        new_frame: np.ndarray,
-        selected_frames: List[np.ndarray],
-        verbose: bool = False
-    ) -> Tuple[bool, str]:
-        """
-        ULTIMATE DIVERSITY CHECK:
-        - Color histogram test
-        - Structural similarity test
-        - Combined decision logic
-
-        Returns: (is_diverse, reason)
-        """
-        if not selected_frames:
-            return True, "✓ First frame"
-
-        for idx, existing_frame in enumerate(selected_frames):
-            # Test 1: Color similarity
-            color_sim = self.calculate_histogram_similarity(new_frame, existing_frame)
-
-            # Test 2: Structural similarity
-            struct_sim = self.calculate_structural_similarity(new_frame, existing_frame)
-
-            # Reject if BOTH metrics show high similarity (identical frame)
-            if color_sim > self.color_similarity_threshold and struct_sim > self.structure_similarity_threshold:
-                return False, f"❌ Duplicate #{idx+1} (C:{color_sim*100:.0f}% S:{struct_sim*100:.0f}%)"
-
-            # Reject if color EXTREMELY similar (exact same spot)
-            if color_sim > 0.95:
-                return False, f"❌ Same room #{idx+1} ({color_sim*100:.0f}%)"
-
-            # Reject if structure EXTREMELY similar (exact same angle)
-            if struct_sim > 0.96:
-                return False, f"❌ Same angle #{idx+1} ({struct_sim*100:.0f}%)"
-
-        return True, "✓ Unique"
-
-    def extract_candidate_frames(
-        self,
-        video_path: Path,
-        interval: int = FRAME_SAMPLE_INTERVAL
-    ) -> Tuple[List[np.ndarray], List[int]]:
-        """
-        Extract candidates WITH scene detection
-        Returns: (frames, indices)
-        """
+    def extract_candidate_frames(self, video_path: Path, interval: int = FRAME_SAMPLE_INTERVAL) -> List[np.ndarray]:
+        """Extract frames at intervals"""
         print(f"\n📹 Opening: {video_path.name}")
 
         cap = cv2.VideoCapture(str(video_path))
@@ -185,125 +99,94 @@ class VideoFrameExtractor:
             raise ValueError("Cannot open video")
 
         fps = cap.get(cv2.CAP_PROP_FPS)
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = total_frames / fps if fps > 0 else 0
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = total / fps if fps > 0 else 0
 
-        print(f"  {duration:.1f}s | {fps:.1f}fps | {total_frames} frames")
+        print(f"  {duration:.1f}s | {fps:.1f}fps | {total} frames")
 
         frames = []
-        indices = []
-        prev_frame = None
         idx = 0
+        start = int(total * 0.05)
+        end = int(total * 0.95)
 
-        # Skip first/last 5%
-        start = int(total_frames * 0.05)
-        end = int(total_frames * 0.95)
-
-        print(f"  Sampling {start}-{end} + scene detection")
+        print(f"  Sampling {start}-{end}")
 
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
 
-            if start <= idx <= end:
-                if not self._is_blank_frame(frame):
-                    # Include if: interval match OR scene change
-                    include = False
-
-                    if idx % interval == 0:
-                        include = True
-                    elif prev_frame is not None and self.detect_scene_change(prev_frame, frame):
-                        include = True
-
-                    if include:
-                        frames.append(frame.copy())
-                        indices.append(idx)
-                        prev_frame = frame.copy()
+            if start <= idx <= end and idx % interval == 0:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                if gray.std() > 10:  # Not blank
+                    frames.append(frame)
 
             idx += 1
 
         cap.release()
         print(f"✅ {len(frames)} candidates")
-        return frames, indices
+        return frames
 
-    def _is_blank_frame(self, frame: np.ndarray) -> bool:
-        """Check if blank/black"""
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        return gray.std() < 10.0
-
-    def filter_for_diversity(
+    def filter_diverse(
         self,
-        ranked_frames: List[Tuple[int, Dict]],
+        ranked: List[Tuple[int, Dict]],
         candidates: List[np.ndarray],
-        num_frames: int,
+        num: int,
         verbose: bool = True
     ) -> List[Tuple[int, Dict]]:
-        """
-        ULTIMATE diversity filtering with fallback
-        """
+        """Simple diversity filter"""
         if verbose:
-            print("\n" + "="*70)
-            print("🎨 ULTIMATE DIVERSITY FILTER")
-            print("="*70)
+            print("\n" + "="*60)
+            print("🎨 DIVERSITY FILTER")
+            print("="*60)
 
         selected = []
         selected_frames = []
-        rejected = 0
 
-        for frame_idx, scores in ranked_frames:
-            if len(selected) >= num_frames:
+        for frame_idx, scores in ranked:
+            if len(selected) >= num:
                 break
 
             frame = candidates[frame_idx]
-            is_diverse, reason = self.is_diverse_enough(frame, selected_frames, verbose)
 
-            if is_diverse:
+            if self.is_diverse(frame, selected_frames):
                 selected.append((frame_idx, scores))
                 selected_frames.append(frame)
                 if verbose:
-                    print(f"  ✅ #{len(selected)}: Q={scores['total']:.1f} | {reason}")
-            else:
-                rejected += 1
-                if verbose:
-                    print(f"  {reason}")
+                    print(f"  ✅ #{len(selected)}: Q={scores['total']:.1f}")
+            elif verbose:
+                print(f"  ❌ Skip: Q={scores['total']:.1f} (duplicate)")
 
-        # Fallback: Lower thresholds if needed
-        if len(selected) < num_frames:
+        # If not enough, lower threshold
+        if len(selected) < num:
             if verbose:
-                print(f"\n  ⚠️ Only {len(selected)} diverse → Lowering thresholds...")
+                print(f"\n  ⚠️ Only {len(selected)}, lowering threshold...")
 
-            orig_color = self.color_similarity_threshold
-            orig_struct = self.structure_similarity_threshold
+            orig = self.similarity_threshold
+            self.similarity_threshold = 0.85
 
-            self.color_similarity_threshold = 0.80  # Was 0.70 - too loose
-            self.structure_similarity_threshold = 0.85  # Was 0.75 - too loose
-
-            for frame_idx, scores in ranked_frames:
-                if len(selected) >= num_frames:
+            for frame_idx, scores in ranked:
+                if len(selected) >= num:
                     break
                 if any(i == frame_idx for i, _ in selected):
                     continue
 
                 frame = candidates[frame_idx]
-                is_diverse, reason = self.is_diverse_enough(frame, selected_frames)
-
-                if is_diverse:
+                if self.is_diverse(frame, selected_frames):
                     selected.append((frame_idx, scores))
                     selected_frames.append(frame)
                     if verbose:
-                        print(f"  ➕ #{len(selected)}: Q={scores['total']:.1f} | Acceptable")
+                        print(f"  ➕ #{len(selected)}: Q={scores['total']:.1f}")
 
-            self.color_similarity_threshold = orig_color
-            self.structure_similarity_threshold = orig_struct
+            self.similarity_threshold = orig
 
         if verbose:
-            print(f"\n✨ {len(selected)} unique | {rejected} rejected")
+            print(f"\n✨ Selected {len(selected)} frames")
 
         return selected
 
     def resize_frame(self, frame: np.ndarray) -> np.ndarray:
-        """Resize maintaining aspect"""
+        """Resize frame"""
         h, w = frame.shape[:2]
         if max(h, w) <= MAX_IMAGE_DIMENSION:
             return frame
@@ -318,7 +201,7 @@ class VideoFrameExtractor:
         return cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
 
     def save_frame(self, frame: np.ndarray, video_hash: str, num: int) -> Path:
-        """Save as high-quality JPEG"""
+        """Save frame"""
         frame = self.resize_frame(frame)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = Image.fromarray(rgb)
@@ -337,7 +220,7 @@ class VideoFrameExtractor:
         verbose: bool = True
     ) -> Dict:
         """
-        MAIN: Extract best diverse frames
+        Extract best frames - SIMPLE & FAST
         """
         start = time.time()
         num_frames = max(MIN_FRAMES, min(MAX_FRAMES, num_frames))
@@ -347,34 +230,34 @@ class VideoFrameExtractor:
             return {"success": False, "error": err, "frames": [], "scores": []}
 
         try:
-            # STEP 1: Extract with scene detection
+            # STEP 1: Extract candidates
             if verbose:
-                print("\n" + "="*70)
-                print("🎬 STEP 1: Smart Extraction")
-                print("="*70)
+                print("\n" + "="*60)
+                print("🎬 STEP 1: Extract Candidates")
+                print("="*60)
 
-            candidates, _ = self.extract_candidate_frames(video_path)
+            candidates = self.extract_candidate_frames(video_path)
 
             if len(candidates) < num_frames:
                 num_frames = len(candidates)
 
-            # STEP 2: Score (3x more for diversity)
+            # STEP 2: Score (2x for diversity)
             if verbose:
-                print("\n" + "="*70)
-                print("🎯 STEP 2: AI Quality Scoring")
-                print("="*70)
+                print("\n" + "="*60)
+                print("🎯 STEP 2: AI Scoring")
+                print("="*60)
 
-            num_to_score = min(len(candidates), num_frames * 3)
+            num_to_score = min(len(candidates), num_frames * 2)
             ranked = self.scorer.rank_frames(candidates, num_best=num_to_score, verbose=verbose)
 
             # STEP 3: Diversity filter
-            diverse = self.filter_for_diversity(ranked, candidates, num_frames, verbose)
+            diverse = self.filter_diverse(ranked, candidates, num_frames, verbose)
 
             # STEP 4: Save
             if verbose:
-                print("\n" + "="*70)
+                print("\n" + "="*60)
                 print("💾 STEP 3: Saving")
-                print("="*70)
+                print("="*60)
 
             video_hash = hashlib.md5(video_path.name.encode()).hexdigest()[:12]
             saved = []
@@ -396,7 +279,7 @@ class VideoFrameExtractor:
                 })
 
                 if verbose:
-                    print(f"  ✅ #{rank}: {path.name} (Q={score_dict['total']:.1f})")
+                    print(f"  ✅ #{rank}: {path.name}")
 
             elapsed = time.time() - start
 
@@ -414,9 +297,9 @@ class VideoFrameExtractor:
             cap.release()
 
             if verbose:
-                print("\n" + "="*70)
-                print(f"✨ SUCCESS! {len(diverse)} perfect frames in {elapsed:.1f}s")
-                print("="*70)
+                print("\n" + "="*60)
+                print(f"✨ SUCCESS! {len(diverse)} frames in {elapsed:.1f}s")
+                print("="*60)
 
             return {
                 "success": True,
