@@ -15,6 +15,8 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use App\Services\PropertyInteractionService; // <--- ADD THIS
+use Illuminate\Support\Facades\Cache;
+
 
 class PropertyController extends Controller
 {
@@ -35,17 +37,17 @@ class PropertyController extends Controller
                 ->published()
                 ->whereNotIn('status', ['cancelled', 'pending']);
 
-            // Apply user exclusion for viewed properties
+            // ✅ ONLY exclude properties viewed in LAST 24 HOURS
             if ($user) {
-                $viewedProperties = $user->recently_viewed_properties ?? [];
-                if (count($viewedProperties) > 0) {
-                    $query->whereNotIn('id', $viewedProperties);
+                $todayViewed = $this->getRecentlyViewedIds($user, 24);
+                if (count($todayViewed) > 0) {
+                    $query->whereNotIn('id', $todayViewed);
                 }
             }
 
-            $properties = $query->paginate($perPage);
+            $properties = $query->orderByDesc('created_at')->paginate($perPage);
 
-            // ✅ TRACK IMPRESSIONS - Track what we show on the main feed
+            // Track impressions
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions(
                     $user->id,
@@ -95,22 +97,16 @@ class PropertyController extends Controller
 
             $query = Property::query()->active()->published();
 
-            // Apply user exclusion for viewed properties
-            if ($user) {
-                $viewedProperties = $user->recently_viewed_properties ?? [];
-                if (count($viewedProperties) > 0) {
-                    $query->whereNotIn('id', $viewedProperties);
-                }
-            }
+            // ❌ REMOVED: View exclusion logic
+            // Users MUST be able to search for properties they've seen before!
 
-            // ✅ IMPROVED MULTILINGUAL SEARCH (English, Arabic, Kurdish)
             $this->applyMultilingualSearchFilters($query, $request);
             $this->applySorting($query, $request->get('sort', 'newest'), $request->get('currency', 'usd'));
 
             $perPage = $request->get('per_page', 20);
             $properties = $query->paginate($perPage);
 
-            // ✅ TRACK IMPRESSIONS - Track search results
+            // Track impressions
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions(
                     $user->id,
@@ -155,42 +151,30 @@ class PropertyController extends Controller
 
     private function applyMultilingualSearchFilters($query, $request)
     {
-        // 1. SEARCH TERM (Multilingual)
         if ($request->filled('search')) {
             $searchTerm = $request->search;
 
             $query->where(function ($q) use ($searchTerm) {
-                // Search in Name (EN, AR, KU)
                 $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(name, '$.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ar')) LIKE ?", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ku')) LIKE ?", ["%{$searchTerm}%"])
-
-                    // Search in Description (EN, AR, KU)
                     ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(description, '$.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(description, '$.ar')) LIKE ?", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(description, '$.ku')) LIKE ?", ["%{$searchTerm}%"])
-
-                    // Search in City (EN, AR, KU)
                     ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar')) LIKE ?", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku')) LIKE ?", ["%{$searchTerm}%"])
-
-                    // Search in Neighborhood (EN, AR, KU)
                     ->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.en'))) LIKE LOWER(?)", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.ar')) LIKE ?", ["%{$searchTerm}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.ku')) LIKE ?", ["%{$searchTerm}%"])
-
-                    // Search in Address (plain text)
                     ->orWhere('address', 'LIKE', "%{$searchTerm}%");
             });
         }
 
-        // 2. LISTING TYPE
         if ($request->has('listing_type')) {
             $query->where('listing_type', $request->listing_type);
         }
 
-        // 3. PRICE FILTERS
         $currency = strtolower($request->get('currency', 'usd'));
         if ($request->has('min_price')) {
             $query->whereRaw("JSON_EXTRACT(price, '$.{$currency}') >= ?", [$request->min_price]);
@@ -199,17 +183,14 @@ class PropertyController extends Controller
             $query->whereRaw("JSON_EXTRACT(price, '$.{$currency}') <= ?", [$request->max_price]);
         }
 
-        // 4. BEDROOMS
         if ($request->has('bedrooms')) {
             $query->whereRaw("JSON_EXTRACT(rooms, '$.bedroom.count') = ?", [$request->bedrooms]);
         }
 
-        // 5. BATHROOMS
         if ($request->has('bathrooms')) {
             $query->whereRaw("JSON_EXTRACT(rooms, '$.bathroom.count') = ?", [$request->bathrooms]);
         }
 
-        // 6. AREA FILTERS
         if ($request->has('min_area')) {
             $query->where('area', '>=', $request->min_area);
         }
@@ -217,18 +198,15 @@ class PropertyController extends Controller
             $query->where('area', '<=', $request->max_area);
         }
 
-        // 7. PROPERTY TYPE
         if ($request->has('property_type')) {
             $type = strtolower($request->property_type);
             $query->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?", [$type]);
         }
 
-        // 8. FURNISHED
         if ($request->has('furnished')) {
             $query->where('furnished', $request->boolean('furnished'));
         }
 
-        // 9. CITY FILTER (Multilingual)
         if ($request->has('city')) {
             $city = $request->city;
             $query->where(function ($q) use ($city) {
@@ -238,7 +216,6 @@ class PropertyController extends Controller
             });
         }
 
-        // 10. UTILITIES
         if ($request->has('electricity')) {
             $query->where('electricity', $request->boolean('electricity'));
         }
@@ -260,7 +237,6 @@ class PropertyController extends Controller
             $property->increment('views');
             $user = auth('sanctum')->user();
 
-            // ✅ TRACK VIEW (Insert to property_views table)
             if ($user) {
                 $this->interactionService->trackView($user->id, $property->id, [
                     'source' => request()->header('X-Source', 'app'),
@@ -690,17 +666,16 @@ class PropertyController extends Controller
                 [$lat, $lng, $lat, $radius]
             )->where('is_active', true);
 
-            // Apply user exclusion for viewed properties
+            // ✅ Only exclude for nearby (location-based discovery)
             if ($user) {
-                $viewedProperties = $user->recently_viewed_properties ?? [];
-                if (count($viewedProperties) > 0) {
-                    $query->whereNotIn('id', $viewedProperties);
+                $todayViewed = $this->getRecentlyViewedIds($user, 24);
+                if (count($todayViewed) > 0) {
+                    $query->whereNotIn('id', $todayViewed);
                 }
             }
 
             $properties = $query->limit($limit)->get();
 
-            // ✅ TRACK IMPRESSIONS - Track nearby search results
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions(
                     $user->id,
@@ -734,6 +709,7 @@ class PropertyController extends Controller
             return ApiResponse::error('Failed to find nearby properties', $e->getMessage(), 500);
         }
     }
+
     /**
      * Get property statistics
      */
@@ -909,80 +885,54 @@ class PropertyController extends Controller
             'id' => $property->id,
             'owner_id' => $property->owner_id,
             'owner_type' => $property->owner_type,
-
-            // Basic info
             'name' => $property->name,
             'description' => $property->description,
             'images' => $property->images ?? [],
             'main_image' => isset($property->images) && is_array($property->images) ? ($property->images[0] ?? null) : null,
-
-            // Property details
             'availability' => $property->availability ?? [],
             'type' => $property->type ?? [],
             'area' => $property->area,
             'furnished' => $property->furnished,
             'furnishing_details' => $property->furnishing_details ?? [],
-
-            // Pricing and listing
             'price' => $property->price ?? [],
             'listing_type' => $property->listing_type,
             'rental_period' => $property->rental_period,
-
-            // Structure
             'rooms' => $property->rooms ?? [],
             'features' => $property->features ?? [],
             'amenities' => $property->amenities ?? [],
-
-            // Location
             'locations' => $property->locations ?? [],
             'address_details' => $property->address_details ?? [],
             'address' => $property->address,
-
-            // Building details
             'floor_number' => $property->floor_number,
             'floor_details' => $property->floor_details ?? [],
             'year_built' => $property->year_built,
             'construction_details' => $property->construction_details ?? [],
-
-            // Energy and utilities
             'energy_rating' => $property->energy_rating,
             'energy_details' => $property->energy_details ?? [],
             'electricity' => $property->electricity,
             'water' => $property->water,
             'internet' => $property->internet,
-
-            // Media
             'virtual_tour_url' => $property->virtual_tour_url,
             'virtual_tour_details' => $property->virtual_tour_details ?? [],
             'floor_plan_url' => $property->floor_plan_url,
             'additional_media' => $property->additional_media ?? [],
-
-            // Status and verification
             'verified' => $property->verified,
             'verification_details' => $property->verification_details ?? [],
             'is_active' => $property->is_active,
             'published' => $property->published,
             'status' => $property->status,
-
-            // Analytics
             'views' => $property->views,
             'view_analytics' => $property->view_analytics ?? [],
             'favorites_count' => $property->favorites_count,
             'favorites_analytics' => $property->favorites_analytics ?? [],
             'rating' => $property->rating,
-
-            // Promotion
             'is_boosted' => $property->is_boosted,
             'boost_start_date' => $property->boost_start_date,
             'boost_end_date' => $property->boost_end_date,
-
-            // Additional data
             'nearby_amenities' => $property->nearby_amenities ?? [],
             'legal_information' => $property->legal_information ?? [],
             'investment_analysis' => $property->investment_analysis ?? [],
             'seo_metadata' => $property->seo_metadata ?? [],
-
-            // Timestamps
             'created_at' => $property->created_at,
             'updated_at' => $property->updated_at,
         ];
@@ -1004,8 +954,8 @@ class PropertyController extends Controller
             'price' => [
                 'iqd' => $property->price['iqd'] ?? 0,
                 'usd' => $property->price['usd'] ?? 0,
-                'formatted_iqd' => $this->formatPrice($property->price['iqd'] ?? 0, 'IQD'),
-                'formatted_usd' => $this->formatPrice($property->price['usd'] ?? 0, 'USD'),
+                'formatted_iqd' => $this->formatPrice($property->price['iqd'] ?? 0,),
+                'formatted_usd' => $this->formatPrice($property->price['usd'] ?? 0,),
             ],
             'listing_type' => $property->listing_type,
             'rental_period' => $property->rental_period,
@@ -1256,19 +1206,10 @@ class PropertyController extends Controller
             'city' => $request->get('city'),
         ]);
     }
-
-    /**
-     * Calculate distance between two coordinates
-     */
     private function calculateDistance($lat1, $lng1, $lat2, $lng2)
     {
         return sqrt(pow($lat2 - $lat1, 2) + pow($lng2 - $lng1, 2));
     }
-
-
-
-
-
 
     /**
      * Get featured properties based on different strategies
@@ -1278,48 +1219,98 @@ class PropertyController extends Controller
         switch ($strategy) {
             case 'premium':
                 return $this->getPremiumFeatured($baseQuery, $limit);
-
             case 'engagement':
                 return $this->getEngagementFeatured($baseQuery, $limit);
-
             case 'recent':
                 return $this->getRecentFeatured($baseQuery, $limit);
-
             case 'balanced':
             default:
                 return $this->getBalancedFeatured($baseQuery, $limit);
         }
     }
+
     public function getRecommended(Request $request)
     {
         try {
             $limit = $request->get('limit', 20);
             $user = auth('sanctum')->user();
 
+            Log::info('🎯 RECOMMENDED: Request started', [
+                'endpoint' => 'getRecommended',
+                'user_authenticated' => $user ? 'YES' : 'NO',
+                'user_id' => $user?->id,
+                'limit' => $limit,
+            ]);
+
             if ($user) {
+                // ✅ PERSONALIZED RECOMMENDATIONS (70% of results)
+                $personalizedLimit = intval($limit * 0.7);
+
                 try {
-                    $properties = $this->interactionService->getPersonalizedRecommendations($user->id, $limit);
+                    $personalized = $this->interactionService->getPersonalizedRecommendations(
+                        $user->id,
+                        $personalizedLimit
+                    );
                 } catch (\Exception $e) {
-                    // Fallback to general recommendations
-                    $properties = Property::query()
-                        ->where('is_active', true)
-                        ->where('published', true)
-                        ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                        ->orderByDesc('created_at')
-                        ->limit($limit)
-                        ->get();
+                    Log::warning('Personalized recommendations failed, using fallback', [
+                        'error' => $e->getMessage()
+                    ]);
+                    $personalized = collect();
                 }
-            } else {
-                $properties = Property::query()
+
+                // ✅ TRENDING/DISCOVERY (30% of results)
+                $trendingLimit = $limit - $personalized->count();
+
+                $trending = Property::query()
                     ->where('is_active', true)
                     ->where('published', true)
                     ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                    ->orderByDesc('created_at')
-                    ->limit($limit)
+                    ->whereNotIn('id', $personalized->pluck('id')) // Avoid duplicates
+                    // ✅ Smart trending score: Recent + Engagement
+                    ->selectRaw('properties.*,
+                        (
+                            (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 50 ELSE 0 END) +
+                            (views * 0.3) +
+                            (favorites_count * 2) +
+                            (CASE WHEN is_boosted = 1 THEN 30 ELSE 0 END) +
+                            (CASE WHEN verified = 1 THEN 20 ELSE 0 END)
+                        ) as trending_score
+                    ')
+                    ->orderByDesc('trending_score')
+                    ->limit($trendingLimit)
                     ->get();
+
+                $properties = $personalized->merge($trending);
+            } else {
+                // ✅ NON-LOGGED-IN USERS: Show BEST properties (cached)
+                $cacheKey = "guest_recommended_{$limit}";
+
+                $properties = Cache::remember($cacheKey, 600, function () use ($limit) {
+                    return Property::query()
+                        ->where('is_active', true)
+                        ->where('published', true)
+                        ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                        ->where(function ($q) {
+                            $q->where('is_boosted', true)
+                                ->orWhere('verified', true)
+                                ->orWhere('views', '>', 50)
+                                ->orWhere('favorites_count', '>', 5);
+                        })
+                        ->orderByDesc('is_boosted')
+                        ->orderByDesc('verified')
+                        ->orderByDesc('created_at')
+                        ->limit($limit)
+                        ->get();
+                });
             }
 
-            // ✅ TRACK IMPRESSIONS - Track recommended properties
+            Log::info('✅ RECOMMENDED: Success', [
+                'properties_found' => $properties->count(),
+                'personalized_count' => $user ? $personalized->count() : 0,
+                'trending_count' => $user ? $trending->count() : 0,
+            ]);
+
+            // Track impressions
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions(
                     $user->id,
@@ -1338,11 +1329,16 @@ class PropertyController extends Controller
                     'data' => $transformedData,
                     'total' => $transformedData->count(),
                     'personalized' => $user ? true : false,
+                    'algorithm' => $user ? 'hybrid' : 'curated',
                 ],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Recommended error', ['message' => $e->getMessage()]);
+            Log::error('❌ RECOMMENDED: Error', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
             return ApiResponse::error('Failed to get recommended properties', $e->getMessage(), 500);
         }
     }
@@ -1352,20 +1348,20 @@ class PropertyController extends Controller
     private function getBalancedFeatured($baseQuery, $limit)
     {
         $totalCount = $baseQuery->count();
-        $topPercentile = max(1, intval($totalCount * 0.15)); // Top 15%
+        $topPercentile = max(1, intval($totalCount * 0.20)); // Top 20%
 
         $candidates = $baseQuery
             ->select('*')
             ->selectRaw('
             (
-                -- ✅ FRESHNESS BONUS (0-40 points)
+                -- ✅ FRESHNESS BONUS (0-50 points) - INCREASED WEIGHT
                 (CASE
-                    WHEN DATEDIFF(NOW(), created_at) <= 1 THEN 40
-                    WHEN DATEDIFF(NOW(), created_at) <= 3 THEN 35
-                    WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 30
-                    WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 20
-                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
-                    ELSE 0
+                    WHEN DATEDIFF(NOW(), created_at) <= 1 THEN 50
+                    WHEN DATEDIFF(NOW(), created_at) <= 3 THEN 45
+                    WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 40
+                    WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 30
+                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 20
+                    ELSE 5
                 END) +
 
                 -- Boost score (40 points)
@@ -1373,8 +1369,9 @@ class PropertyController extends Controller
                       AND (boost_end_date IS NULL OR boost_end_date >= NOW())
                  THEN 40 ELSE 0 END) +
 
-                -- Performance score (25 points)
+                -- Performance score (30 points)
                 (CASE
+                    WHEN views >= 100 THEN 20
                     WHEN views >= 50 THEN 15
                     WHEN views >= 25 THEN 12
                     WHEN views >= 10 THEN 8
@@ -1393,25 +1390,32 @@ class PropertyController extends Controller
                       WHEN rating >= 4.0 THEN 6
                       WHEN rating >= 3.5 THEN 4
                       ELSE rating END) +
-                (CASE WHEN JSON_LENGTH(images) >= 5 THEN 5 ELSE 0 END) +
 
                 -- Premium content (10 points)
-                (CASE WHEN virtual_tour_url IS NOT NULL THEN 5 ELSE 0 END) +
-                (CASE WHEN floor_plan_url IS NOT NULL THEN 3 ELSE 0 END) +
-                (CASE WHEN energy_rating IN ("A+", "A") THEN 2 ELSE 0 END)
+                (CASE WHEN JSON_LENGTH(images) >= 5 THEN 3 ELSE 0 END) +
+                (CASE WHEN virtual_tour_url IS NOT NULL THEN 4 ELSE 0 END) +
+                (CASE WHEN floor_plan_url IS NOT NULL THEN 3 ELSE 0 END)
 
             ) as featured_score
         ')
-            // ✅ LOWERED threshold: 15 points (was 35)
-            ->having('featured_score', '>=', 15)
+            // ✅ LOWERED threshold: 10 points (was 15)
+            ->having('featured_score', '>=', 10)
             ->orderByDesc('featured_score')
             ->orderByDesc('is_boosted')
-            ->orderByDesc('created_at') // ✅ NEW: Recent properties first
-            ->limit(min($limit, $topPercentile * 2))
+            ->orderByDesc('created_at')
+            ->limit(min($limit * 3, $topPercentile * 2)) // Get more candidates
             ->get();
+
+        Log::info('Featured candidates', [
+            'total_properties' => $totalCount,
+            'candidates_found' => $candidates->count(),
+            'min_score' => $candidates->min('featured_score'),
+            'max_score' => $candidates->max('featured_score'),
+        ]);
 
         return $this->diversifyFeaturedProperties($candidates, $limit);
     }
+
 
     /**
      * Premium strategy - prioritize paid and high-quality
@@ -1479,7 +1483,6 @@ class PropertyController extends Controller
 
             Log::info('🆕 RECENT: Request started', [
                 'endpoint' => 'getRecent',
-                'user_authenticated' => $user ? 'YES' : 'NO',
                 'user_id' => $user?->id,
                 'limit' => $limit,
                 'days' => $days,
@@ -1491,14 +1494,9 @@ class PropertyController extends Controller
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
                 ->where('created_at', '>=', now()->subDays($days));
 
-            if ($user) {
-                $viewedProperties = $user->recently_viewed_properties ?? [];
-                if (count($viewedProperties) > 0) {
-                    $query->whereNotIn('id', $viewedProperties);
-                }
-            }
+            // ❌ REMOVED: View exclusion
+            // Users want to see recent properties even if they viewed them before!
 
-            // ✅ EXECUTE QUERY ONCE
             $properties = $query
                 ->orderByDesc('created_at')
                 ->orderByDesc('is_boosted')
@@ -1507,15 +1505,13 @@ class PropertyController extends Controller
 
             Log::info('✅ RECENT: Success', [
                 'properties_found' => $properties->count(),
-                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
             ]);
 
-            // ✅ TRACK IMPRESSIONS (Using the data we just fetched)
+            // Track impressions
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions($user->id, $properties, 'recent');
             }
 
-            // ✅ TRANSFORM DATA
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
             });
@@ -1530,13 +1526,7 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('❌ RECENT: Error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'user_id' => auth('sanctum')->user()?->id,
-            ]);
-
+            Log::error('❌ RECENT: Error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get recent properties', $e->getMessage(), 500);
         }
     }
@@ -1665,7 +1655,6 @@ class PropertyController extends Controller
 
             Log::info('🔥 POPULAR: Request started', [
                 'endpoint' => 'getPopular',
-                'user_authenticated' => $user ? 'YES' : 'NO',
                 'user_id' => $user?->id,
                 'limit' => $limit,
             ]);
@@ -1678,14 +1667,9 @@ class PropertyController extends Controller
                         ->orWhere('favorites_count', '>', 0);
                 });
 
-            if ($user) {
-                $viewedProperties = $user->recently_viewed_properties ?? [];
-                if (count($viewedProperties) > 0) {
-                    $query->whereNotIn('id', $viewedProperties);
-                }
-            }
+            // ❌ REMOVED: View exclusion
+            // Popular properties MUST be visible to everyone!
 
-            // ✅ EXECUTE QUERY ONCE
             $properties = $query
                 ->orderByRaw('(views * 0.6) + (favorites_count * 2) + (rating * 10) DESC')
                 ->limit($limit)
@@ -1693,15 +1677,13 @@ class PropertyController extends Controller
 
             Log::info('✅ POPULAR: Success', [
                 'properties_found' => $properties->count(),
-                'exclusion_applied' => $user && count($user->recently_viewed_properties ?? []) > 0,
             ]);
 
-            // ✅ TRACK IMPRESSIONS (Using the data we just fetched)
+            // Track impressions
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions($user->id, $properties, 'popular');
             }
 
-            // ✅ TRANSFORM DATA
             $transformedData = $properties->map(function ($property) {
                 return $this->transformPropertyData($property);
             });
@@ -1715,13 +1697,7 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('❌ POPULAR: Error', [
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'user_id' => auth('sanctum')->user()?->id,
-            ]);
-
+            Log::error('❌ POPULAR: Error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get popular properties', $e->getMessage(), 500);
         }
     }
@@ -1732,16 +1708,26 @@ class PropertyController extends Controller
     {
         try {
             $limit = $request->get('limit', 10);
-            $user = auth('sanctum')->user();
             $strategy = $request->get('strategy', 'balanced');
+            $user = auth('sanctum')->user();
 
-            $baseQuery = Property::where('is_active', true)
-                ->where('published', true)
-                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
+            Log::info('⭐ FEATURED: Request started', [
+                'limit' => $limit,
+                'strategy' => $strategy,
+            ]);
 
-            $featured = $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
+            // ✅ Cache featured properties (15 minutes)
+            $cacheKey = "featured_properties_{$strategy}_{$limit}";
 
-            // ✅ TRACK IMPRESSIONS - Track featured properties
+            $featured = Cache::remember($cacheKey, 900, function () use ($limit, $strategy) {
+                $baseQuery = Property::where('is_active', true)
+                    ->where('published', true)
+                    ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
+
+                return $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
+            });
+
+            // Track impressions
             if ($user && $featured->isNotEmpty()) {
                 $this->interactionService->trackImpressions(
                     $user->id,
@@ -1753,8 +1739,13 @@ class PropertyController extends Controller
             $transformedData = $featured->map(function ($property) {
                 $propertyData = $this->transformPropertyData($property);
                 $propertyData['featured_reason'] = $this->getFeaturedReason($property);
+                $propertyData['featured_score'] = $property->featured_score ?? 0;
                 return $propertyData;
             });
+
+            Log::info('✅ FEATURED: Success', [
+                'properties_found' => $transformedData->count(),
+            ]);
 
             return ApiResponse::success(
                 'Featured properties retrieved',
@@ -1766,7 +1757,7 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Featured error', ['message' => $e->getMessage()]);
+            Log::error('❌ FEATURED: Error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get featured properties', $e->getMessage(), 500);
         }
     }
@@ -1775,7 +1766,6 @@ class PropertyController extends Controller
     {
         $reasons = [];
 
-        // ✅ NEW: Show if property is new
         $daysSinceCreated = $property->created_at->diffInDays(now());
         if ($daysSinceCreated <= 7) {
             $reasons[] = 'New listing';
@@ -1877,22 +1867,19 @@ class PropertyController extends Controller
         $cityCount = [];
         $typeCount = [];
 
-        // Prioritize variety while maintaining quality scores
+        $cityLimit = max(1, intval($finalLimit * 0.4));
+        $typeLimit = max(1, intval($finalLimit * 0.5));
+
         foreach ($candidates as $candidate) {
             $city = $candidate->address_details['city']['en'] ?? 'Unknown';
             $propertyType = $candidate->type['category'] ?? 'Unknown';
 
-            $cityLimit = max(1, intval($finalLimit * 0.4)); // Max 40% from same city
-            $typeLimit = max(1, intval($finalLimit * 0.5)); // Max 50% of same type
-
             $canAdd = true;
 
-            // Check city diversity
             if (($cityCount[$city] ?? 0) >= $cityLimit) {
                 $canAdd = false;
             }
 
-            // Check property type diversity
             if (($typeCount[$propertyType] ?? 0) >= $typeLimit) {
                 $canAdd = false;
             }
@@ -1908,7 +1895,6 @@ class PropertyController extends Controller
             }
         }
 
-        // If we still need more properties, add highest scoring ones regardless of diversity
         if ($selected->count() < $finalLimit) {
             $remaining = $candidates->diff($selected)->take($finalLimit - $selected->count());
             $selected = $selected->merge($remaining);
@@ -1916,6 +1902,7 @@ class PropertyController extends Controller
 
         return $selected;
     }
+
     public function getByListingType($listingType, Request $request)
     {
         try {
