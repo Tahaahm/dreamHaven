@@ -1003,13 +1003,17 @@ class AgentController extends Controller
 
     // In AgentController.php
 
-    public function getAgentProfile(Request $request)
+   public function getAgentProfile(Request $request)
 {
     try {
-        $agent = $request->user();
 
-        // ✅ Ensure authenticated and correct model
+        \Log::info('STEP 1: Method started');
+
+        $agent = $request->user();
+        \Log::info('STEP 2: User retrieved', ['agent_id' => $agent?->id]);
+
         if (!$agent || !($agent instanceof \App\Models\Agent)) {
+            \Log::warning('STEP 3: Unauthorized access');
             return response()->json([
                 'status' => false,
                 'code' => 401,
@@ -1018,7 +1022,8 @@ class AgentController extends Controller
             ], 401);
         }
 
-        // ✅ Load only needed relationships
+        \Log::info('STEP 4: Loading relationships');
+
         $agent->load([
             'company:id,name',
             'currentSubscription.currentPlan:id,name',
@@ -1026,11 +1031,20 @@ class AgentController extends Controller
             'area:id,name',
         ]);
 
+        \Log::info('STEP 5: Relationships loaded successfully');
+
+        // TEST working_hours specifically
+        \Log::info('STEP 6: Working hours raw value', [
+            'working_hours' => $agent->working_hours
+        ]);
+
         /*
         |--------------------------------------------------------------------------
-        | SAFE MANUAL SERIALIZATION (NO RAW MODEL RETURN)
+        | SERIALIZE AGENT
         |--------------------------------------------------------------------------
         */
+
+        \Log::info('STEP 7: Building agent data array');
 
         $agentData = [
             'id' => $agent->id,
@@ -1079,15 +1093,20 @@ class AgentController extends Controller
             'currency' => $agent->currency,
         ];
 
+        \Log::info('STEP 8: Agent data array built successfully');
+
         /*
         |--------------------------------------------------------------------------
-        | SUBSCRIPTION DATA (SAFE)
+        | SUBSCRIPTION
         |--------------------------------------------------------------------------
         */
 
         $subscriptionData = null;
 
         if ($agent->currentSubscription) {
+
+            \Log::info('STEP 9: Building subscription');
+
             $subscription = $agent->currentSubscription;
 
             $subscriptionData = [
@@ -1103,10 +1122,14 @@ class AgentController extends Controller
                 'is_active' => $subscription->status === 'active'
                     && $subscription->end_date > now(),
                 'days_remaining' => $subscription->end_date
-                    ? now()->diffInDays($subscription->end_date, false)
+                    ? (int) now()->diffInDays($subscription->end_date, false)
                     : null,
             ];
+
+            \Log::info('STEP 10: Subscription built successfully');
         }
+
+        \Log::info('STEP 11: Returning JSON response');
 
         return response()->json([
             'status' => true,
@@ -1119,8 +1142,8 @@ class AgentController extends Controller
 
     } catch (\Throwable $e) {
 
-        \Log::error('Get Agent Profile Error', [
-            'error' => $e->getMessage(),
+        \Log::error('❌ CRASH DETECTED', [
+            'message' => $e->getMessage(),
             'file' => $e->getFile(),
             'line' => $e->getLine(),
         ]);
