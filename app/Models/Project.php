@@ -8,6 +8,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
 
+
+use App\Models\ProjectInquiry;
+use App\Models\ProjectFavorite;
+use App\Models\ProjectReview;
+
+
 class Project extends Model
 {
     use HasFactory;
@@ -432,4 +438,20 @@ class Project extends Model
 
         return now()->diffInDays($this->expected_completion_date, false);
     }
+
+    // Already exists in your model — confirm these are present:
+
+
+
+
+
+// Add this new helper scope (not in original model):
+public function scopeSearch($query, string $term)
+{
+    return $query->where(function ($q) use ($term) {
+        $q->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.en')) LIKE ?", ["%{$term}%"])
+          ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ar')) LIKE ?", ["%{$term}%"])
+          ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ku')) LIKE ?", ["%{$term}%"]);
+    });
+}
 }

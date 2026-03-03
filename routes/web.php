@@ -679,6 +679,7 @@ Route::prefix('office')->name('office.')->group(function () {
         Route::get('/project/{id}/edit', [OfficeAuthController::class, 'editProject'])->name('project.edit');
         Route::put('/project/{id}', [OfficeAuthController::class, 'updateProject'])->name('project.update');
         Route::delete('/project/{id}', [OfficeAuthController::class, 'deleteProject'])->name('project.delete');
+        
 
         Route::get('/subscriptions', [OfficeAuthController::class, 'showSubscriptions'])->name('subscriptions');
         Route::post('/subscription/subscribe/{id}', [OfficeAuthController::class, 'subscribe'])->name('subscription.subscribe');
@@ -852,14 +853,27 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/toggle-active', [AdminController::class, 'propertiesToggleActive'])->name('toggle.active');
         });
         // ========== PROJECTS ==========
-        Route::prefix('projects')->name('projects.')->group(function () {
-            Route::get('/', [AdminController::class, 'projectsIndex'])->name('index');
-            Route::get('/{id}', [AdminController::class, 'projectsShow'])->name('show');
-            Route::get('/{id}/edit', [AdminController::class, 'projectsEdit'])->name('edit');
-            Route::put('/{id}', [AdminController::class, 'projectsUpdate'])->name('update');
-            Route::delete('/{id}', [AdminController::class, 'projectsDelete'])->name('delete');
-            Route::post('/{id}/toggle-active', [AdminController::class, 'projectsToggleActive'])->name('toggle.active');
-        });
+        // ========== PROJECTS ==========
+Route::prefix('projects')->name('projects.')->group(function () {
+
+    // List & Stats
+    Route::get('/',                          [AdminController::class, 'projectsIndex'])         ->name('index');
+
+    // Create
+    Route::get('/create',                    [AdminController::class, 'projectsCreate'])        ->name('create');
+    Route::post('/store',                    [AdminController::class, 'projectsStore'])         ->name('store');
+
+    // Single project actions (specific named routes BEFORE /{id})
+    Route::get('/{id}',                      [AdminController::class, 'projectsShow'])          ->name('show');
+    Route::get('/{id}/edit',                 [AdminController::class, 'projectsEdit'])          ->name('edit');
+    Route::put('/{id}',                      [AdminController::class, 'projectsUpdate'])        ->name('update');
+    Route::delete('/{id}',                   [AdminController::class, 'projectsDelete'])        ->name('delete');
+
+    // Toggle actions
+    Route::post('/{id}/toggle-active',       [AdminController::class, 'projectsToggleActive'])  ->name('toggle.active');
+    Route::post('/{id}/toggle-publish',      [AdminController::class, 'projectsTogglePublish']) ->name('toggle.publish');
+    Route::post('/{id}/toggle-featured',     [AdminController::class, 'projectsToggleFeatured'])->name('toggle.featured');
+});
 
         // ========== BANNERS ==========
         Route::prefix('banners')->name('banners.')->group(function () {

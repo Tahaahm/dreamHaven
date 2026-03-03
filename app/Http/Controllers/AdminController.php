@@ -1108,61 +1108,8 @@ class AdminController extends Controller
         return back()->with('success', 'Property status updated!');
     }
 
-    // ==========================================
-    // PROJECTS MANAGEMENT
-    // ==========================================
 
-    public function projectsIndex(Request $request)
-    {
-        $query = Project::query();
-
-        if ($request->has('search')) {
-            $search = $request->search;
-            $query->where(function ($q) use ($search) {
-                $q->whereJsonContains('name->en', $search)
-                    ->orWhereJsonContains('name->ar', $search)
-                    ->orWhereJsonContains('name->ku', $search);
-            });
-        }
-
-        $projects = $query->paginate(15)->withQueryString();
-        return view('admin.projects.index', compact('projects'));
-    }
-
-    public function projectsShow($id)
-    {
-        $project = Project::findOrFail($id);
-        return view('admin.projects.show', compact('project'));
-    }
-
-    public function projectsEdit($id)
-    {
-        $project = Project::findOrFail($id);
-        return view('admin.projects.edit', compact('project'));
-    }
-
-    public function projectsUpdate(Request $request, $id)
-    {
-        $project = Project::findOrFail($id);
-        $project->update($request->only(['is_active', 'published', 'status']));
-        return redirect()->route('admin.projects.index')->with('success', 'Project updated successfully!');
-    }
-
-    public function projectsDelete($id)
-    {
-        $project = Project::findOrFail($id);
-        $project->delete();
-        return redirect()->route('admin.projects.index')->with('success', 'Project deleted successfully!');
-    }
-
-    public function projectsToggleActive($id)
-    {
-        $project = Project::findOrFail($id);
-        $project->update(['is_active' => !$project->is_active]);
-        return back()->with('success', 'Project status updated!');
-    }
-
-    // ==========================================
+     // ==========================================
     // BANNERS MANAGEMENT
     // ==========================================
 
@@ -2583,4 +2530,558 @@ class AdminController extends Controller
 
         return $propertyId;
     }
+
+
+
+    // ==========================================
+// PROJECTS MANAGEMENT - COMPLETE METHODS
+// ==========================================
+
+public function projectsIndex(Request $request)
+{
+    $query = Project::query();
+
+    // Search by multilingual name
+    if ($request->filled('search')) {
+        $search = $request->search;
+        $query->where(function ($q) use ($search) {
+            $q->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.en')) LIKE ?", ["%{$search}%"])
+              ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ar')) LIKE ?", ["%{$search}%"])
+              ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ku')) LIKE ?", ["%{$search}%"]);
+        });
+    }
+
+    // Filter by project status
+    if ($request->filled('status')) {
+        $query->where('status', $request->status);
+    }
+
+    // Filter by sales status
+    if ($request->filled('sales_status')) {
+        $query->where('sales_status', $request->sales_status);
+    }
+
+    // Filter by type
+    if ($request->filled('type')) {
+        $query->where('project_type', $request->type);
+    }
+
+    // Filter by featured
+    if ($request->filled('featured')) {
+        $query->where('is_featured', (bool) $request->featured);
+    }
+
+    $projects = $query->orderBy('created_at', 'desc')
+                      ->paginate(15)
+                      ->withQueryString();
+
+    $stats = [
+        'total'              => Project::count(),
+        'active'             => Project::where('is_active', true)->count(),
+        'under_construction' => Project::where('status', 'under_construction')->count(),
+        'completed'          => Project::where('status', 'completed')->count(),
+        'featured'           => Project::where('is_featured', true)->count(),
+        'unpublished'        => Project::where('published', false)->count(),
+    ];
+
+    return view('admin.projects.index', compact('projects', 'stats'));
+}
+
+// ==========================================
+
+public function projectsCreate()
+{
+    $offices = RealEstateOffice::where('is_verified', true)
+                               ->orderBy('company_name')
+                               ->get();
+
+    $agents  = Agent::where('is_verified', true)
+                    ->orderBy('agent_name')
+                    ->get();
+
+    return view('admin.projects.create', compact('offices', 'agents'));
+}
+
+// ==========================================
+
+public function projectsStore(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'name.en'          => 'required|string|max:255',
+        'project_type'     => 'required|in:residential,commercial,mixed_use,industrial,retail,office,hospitality',
+        'developer_type'   => 'required|string',
+        'developer_id'     => 'required|string',
+        'price_range.min'  => 'nullable|numeric|min:0',
+        'price_range.max'  => 'nullable|numeric|min:0',
+        'cover_image'      => 'nullable|image|mimes:jpeg,png,jpg,webp|max:4096',
+        'logo'             => 'nullable|image|mimes:jpeg,png,jpg,webp,svg|max:2048',
+        'images.*'         => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+        'completion_percentage' => 'nullable|integer|min:0|max:100',
+        'latitude'         => 'nullable|numeric|between:-90,90',
+        'longitude'        => 'nullable|numeric|between:-180,180',
+    ]);
+
+    if ($validator->fails()) {
+        return back()->withErrors($validator)->withInput();
+    }
+
+    DB::beginTransaction();
+
+    try {
+        // 1. Handle cover image
+        $coverImageUrl = null;
+        if ($request->hasFile('cover_image')) {
+            $path = $request->file('cover_image')->store('projects/covers', 'public');
+            $coverImageUrl = asset('storage/' . $path);
+        }
+
+        // 2. Handle logo
+        $logoUrl = null;
+        if ($request->hasFile('logo')) {
+            $path = $request->file('logo')->store('projects/logos', 'public');
+            $logoUrl = asset('storage/' . $path);
+        }
+
+        // 3. Handle gallery images
+        $imageUrls = [];
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $image) {
+                $path = $image->store('projects/gallery', 'public');
+                $imageUrls[] = asset('storage/' . $path);
+            }
+        }
+
+        // 4. Parse text-area features into arrays
+        $projectFeatures    = $this->parseTextareaToArray($request->input('project_features_text'));
+        $nearbyAmenities    = $this->parseTextareaToArray($request->input('nearby_amenities_text'));
+        $marketingHighlights = $this->parseTextareaToArray($request->input('marketing_highlights_text'));
+
+        // 5. Auto-generate slug if empty
+        $slug = $request->filled('slug')
+            ? Str::slug($request->slug)
+            : Str::slug($request->input('name.en'));
+
+        // Make slug unique
+        $originalSlug = $slug;
+        $count = 1;
+        while (Project::where('slug', $slug)->exists()) {
+            $slug = $originalSlug . '-' . $count++;
+        }
+
+        // 6. Build project data
+        $projectData = [
+            'developer_id'   => $request->developer_id,
+            'developer_type' => $request->developer_type,
+            'slug'           => $slug,
+
+            // JSON multilingual fields
+            'name' => [
+                'en' => $request->input('name.en'),
+                'ar' => $request->input('name.ar') ?: $request->input('name.en'),
+                'ku' => $request->input('name.ku') ?: $request->input('name.en'),
+            ],
+            'description' => [
+                'en' => $request->input('description.en'),
+                'ar' => $request->input('description.ar'),
+                'ku' => $request->input('description.ku'),
+            ],
+
+            // Classification
+            'project_type'     => $request->project_type,
+
+            // Location
+            'full_address'     => $request->full_address,
+            'latitude'         => $request->latitude,
+            'longitude'        => $request->longitude,
+            'address_details'  => [
+                'city'     => [
+                    'en' => $request->input('address_details.city.en'),
+                    'ar' => $request->input('address_details.city.ar'),
+                ],
+                'district' => [
+                    'en' => $request->input('address_details.district.en'),
+                    'ar' => $request->input('address_details.district.ar'),
+                ],
+            ],
+            'locations' => $request->latitude ? [
+                ['lat' => (float) $request->latitude, 'lng' => (float) $request->longitude]
+            ] : [],
+
+            // Pricing
+            'price_range' => [
+                'min' => (float) ($request->input('price_range.min') ?? 0),
+                'max' => (float) ($request->input('price_range.max') ?? 0),
+            ],
+            'pricing_currency'       => $request->input('pricing_currency', 'USD'),
+            'down_payment_percentage'=> $request->down_payment_percentage,
+            'installment_available'  => (bool) $request->input('installment_available', false),
+            'installment_months'     => $request->installment_months,
+
+            // Details
+            'total_units'            => $request->total_units,
+            'available_units'        => $request->input('available_units', 0),
+            'total_floors'           => $request->total_floors,
+            'buildings_count'        => $request->input('buildings_count', 1),
+            'total_area'             => $request->total_area,
+            'built_area'             => $request->built_area,
+            'completion_percentage'  => $request->input('completion_percentage', 0),
+            'year_built'             => $request->year_built,
+            'architect'              => $request->architect,
+            'contractor'             => $request->contractor,
+            'virtual_tour_url'       => $request->virtual_tour_url,
+            'rera_registration'      => $request->rera_registration,
+
+            // Dates
+            'launch_date'               => $request->launch_date ?: null,
+            'construction_start_date'   => $request->construction_start_date ?: null,
+            'expected_completion_date'  => $request->expected_completion_date ?: null,
+            'handover_date'             => $request->handover_date ?: null,
+
+            // Features
+            'project_features'    => $projectFeatures,
+            'nearby_amenities'    => $nearbyAmenities,
+            'marketing_highlights'=> $marketingHighlights,
+
+            // Media
+            'cover_image_url' => $coverImageUrl,
+            'logo_url'        => $logoUrl,
+            'images'          => $imageUrls,
+
+            // Visibility & flags
+            'status'          => $request->input('status', 'planning'),
+            'sales_status'    => $request->input('sales_status', 'pre_launch'),
+            'is_active'       => (bool) $request->input('is_active', true),
+            'published'       => (bool) $request->input('published', false),
+            'is_featured'     => (bool) $request->input('is_featured', false),
+            'is_premium'      => (bool) $request->input('is_premium', false),
+            'is_hot_project'  => (bool) $request->input('is_hot_project', false),
+
+            // Boost
+            'is_boosted'       => (bool) $request->input('is_boosted', false),
+            'boost_start_date' => $request->input('is_boosted') ? $request->boost_start_date : null,
+            'boost_end_date'   => $request->input('is_boosted') ? $request->boost_end_date   : null,
+
+            // Analytics defaults
+            'views'            => 0,
+            'favorites_count'  => 0,
+            'inquiries_count'  => 0,
+            'rating'           => 0,
+            'reviews_count'    => 0,
+        ];
+
+        Project::create($projectData);
+
+        DB::commit();
+
+        return redirect()
+            ->route('admin.projects.index')
+            ->with('success', 'Project "' . $request->input('name.en') . '" created successfully!');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Project Store Error: ' . $e->getMessage());
+        return back()->withInput()->with('error', 'Error creating project: ' . $e->getMessage());
+    }
+}
+
+// ==========================================
+
+public function projectsShow($id)
+{
+    $project = Project::findOrFail($id);
+    return view('admin.projects.show', compact('project'));
+}
+
+// ==========================================
+
+public function projectsEdit($id)
+{
+    $project = Project::findOrFail($id);
+
+    $offices = RealEstateOffice::where('is_verified', true)
+                               ->orderBy('company_name')
+                               ->get();
+
+    $agents  = Agent::where('is_verified', true)
+                    ->orderBy('agent_name')
+                    ->get();
+
+    return view('admin.projects.edit', compact('project', 'offices', 'agents'));
+}
+
+// ==========================================
+
+public function projectsUpdate(Request $request, $id)
+{
+    $project = Project::findOrFail($id);
+
+    $validator = Validator::make($request->all(), [
+        'name.en'          => 'required|string|max:255',
+        'project_type'     => 'required|in:residential,commercial,mixed_use,industrial,retail,office,hospitality',
+        'price_range.min'  => 'nullable|numeric|min:0',
+        'price_range.max'  => 'nullable|numeric|min:0',
+        'cover_image'      => 'nullable|image|mimes:jpeg,png,jpg,webp|max:4096',
+        'logo'             => 'nullable|image|mimes:jpeg,png,jpg,webp,svg|max:2048',
+        'new_images.*'     => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+        'completion_percentage' => 'nullable|integer|min:0|max:100',
+        'latitude'         => 'nullable|numeric|between:-90,90',
+        'longitude'        => 'nullable|numeric|between:-180,180',
+    ]);
+
+    if ($validator->fails()) {
+        return back()->withErrors($validator)->withInput();
+    }
+
+    DB::beginTransaction();
+
+    try {
+        // 1. Handle cover image replacement
+        $coverImageUrl = $project->cover_image_url;
+        if ($request->hasFile('cover_image')) {
+            // Delete old cover
+            if ($project->cover_image_url) {
+                $oldPath = str_replace(asset('storage/'), '', $project->cover_image_url);
+                Storage::disk('public')->delete($oldPath);
+            }
+            $path = $request->file('cover_image')->store('projects/covers', 'public');
+            $coverImageUrl = asset('storage/' . $path);
+        }
+
+        // 2. Handle logo replacement
+        $logoUrl = $project->logo_url;
+        if ($request->hasFile('logo')) {
+            if ($project->logo_url) {
+                $oldPath = str_replace(asset('storage/'), '', $project->logo_url);
+                Storage::disk('public')->delete($oldPath);
+            }
+            $path = $request->file('logo')->store('projects/logos', 'public');
+            $logoUrl = asset('storage/' . $path);
+        }
+
+        // 3. Handle gallery - remove marked images
+        $currentImages = $project->images ?? [];
+        $removeImages  = $request->input('remove_images', []);
+
+        if (!empty($removeImages)) {
+            foreach ($removeImages as $removeUrl) {
+                $oldPath = str_replace(asset('storage/'), '', $removeUrl);
+                Storage::disk('public')->delete($oldPath);
+            }
+            $currentImages = array_values(
+                array_filter($currentImages, fn($img) => !in_array($img, $removeImages))
+            );
+        }
+
+        // 4. Add new gallery images
+        if ($request->hasFile('new_images')) {
+            foreach ($request->file('new_images') as $image) {
+                $path = $image->store('projects/gallery', 'public');
+                $currentImages[] = asset('storage/' . $path);
+            }
+        }
+
+        // 5. Parse features
+        $projectFeatures     = $this->parseTextareaToArray($request->input('project_features_text'));
+        $nearbyAmenities     = $this->parseTextareaToArray($request->input('nearby_amenities_text'));
+        $marketingHighlights = $this->parseTextareaToArray($request->input('marketing_highlights_text'));
+
+        // 6. Handle slug
+        $slug = $request->filled('slug')
+            ? Str::slug($request->slug)
+            : Str::slug($request->input('name.en'));
+
+        // Ensure slug uniqueness (excluding current project)
+        $originalSlug = $slug;
+        $count = 1;
+        while (Project::where('slug', $slug)->where('id', '!=', $id)->exists()) {
+            $slug = $originalSlug . '-' . $count++;
+        }
+
+        // 7. Update
+        $project->update([
+            'slug' => $slug,
+
+            'name' => [
+                'en' => $request->input('name.en'),
+                'ar' => $request->input('name.ar') ?: $request->input('name.en'),
+                'ku' => $request->input('name.ku') ?: $request->input('name.en'),
+            ],
+            'description' => [
+                'en' => $request->input('description.en'),
+                'ar' => $request->input('description.ar'),
+                'ku' => $request->input('description.ku'),
+            ],
+
+            'project_type'    => $request->project_type,
+
+            'full_address'    => $request->full_address,
+            'latitude'        => $request->latitude,
+            'longitude'       => $request->longitude,
+            'address_details' => [
+                'city'     => [
+                    'en' => $request->input('address_details.city.en'),
+                    'ar' => $request->input('address_details.city.ar'),
+                ],
+                'district' => [
+                    'en' => $request->input('address_details.district.en'),
+                    'ar' => $request->input('address_details.district.ar'),
+                ],
+            ],
+            'locations' => $request->latitude ? [
+                ['lat' => (float) $request->latitude, 'lng' => (float) $request->longitude]
+            ] : ($project->locations ?? []),
+
+            'price_range' => [
+                'min' => (float) ($request->input('price_range.min') ?? 0),
+                'max' => (float) ($request->input('price_range.max') ?? 0),
+            ],
+            'pricing_currency'        => $request->input('pricing_currency', 'USD'),
+            'down_payment_percentage' => $request->down_payment_percentage,
+            'installment_available'   => (bool) $request->input('installment_available', false),
+            'installment_months'      => $request->installment_months,
+
+            'total_units'           => $request->total_units,
+            'available_units'       => $request->input('available_units', 0),
+            'total_floors'          => $request->total_floors,
+            'buildings_count'       => $request->input('buildings_count', 1),
+            'total_area'            => $request->total_area,
+            'built_area'            => $request->built_area,
+            'completion_percentage' => $request->input('completion_percentage', 0),
+            'year_built'            => $request->year_built,
+            'architect'             => $request->architect,
+            'contractor'            => $request->contractor,
+            'virtual_tour_url'      => $request->virtual_tour_url,
+            'rera_registration'     => $request->rera_registration,
+
+            'launch_date'              => $request->launch_date ?: null,
+            'construction_start_date'  => $request->construction_start_date ?: null,
+            'expected_completion_date' => $request->expected_completion_date ?: null,
+            'handover_date'            => $request->handover_date ?: null,
+
+            'project_features'     => $projectFeatures,
+            'nearby_amenities'     => $nearbyAmenities,
+            'marketing_highlights' => $marketingHighlights,
+
+            'cover_image_url' => $coverImageUrl,
+            'logo_url'        => $logoUrl,
+            'images'          => $currentImages,
+
+            'status'         => $request->input('status', 'planning'),
+            'sales_status'   => $request->input('sales_status', 'pre_launch'),
+            'is_active'      => (bool) $request->input('is_active', false),
+            'published'      => (bool) $request->input('published', false),
+            'is_featured'    => (bool) $request->input('is_featured', false),
+            'is_premium'     => (bool) $request->input('is_premium', false),
+            'is_hot_project' => (bool) $request->input('is_hot_project', false),
+
+            'is_boosted'       => (bool) $request->input('is_boosted', false),
+            'boost_start_date' => $request->input('is_boosted') ? $request->boost_start_date : null,
+            'boost_end_date'   => $request->input('is_boosted') ? $request->boost_end_date   : null,
+        ]);
+
+        DB::commit();
+
+        return redirect()
+            ->route('admin.projects.show', $project->id)
+            ->with('success', 'Project updated successfully!');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Project Update Error: ' . $e->getMessage());
+        return back()->withInput()->with('error', 'Error updating project: ' . $e->getMessage());
+    }
+}
+
+// ==========================================
+
+public function projectsDelete($id)
+{
+    $project = Project::findOrFail($id);
+
+    try {
+        // Delete cover image
+        if ($project->cover_image_url) {
+            $path = str_replace(asset('storage/'), '', $project->cover_image_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        // Delete logo
+        if ($project->logo_url) {
+            $path = str_replace(asset('storage/'), '', $project->logo_url);
+            Storage::disk('public')->delete($path);
+        }
+
+        // Delete gallery images
+        if ($project->images && count($project->images) > 0) {
+            foreach ($project->images as $image) {
+                $path = str_replace(asset('storage/'), '', $image);
+                Storage::disk('public')->delete($path);
+            }
+        }
+
+        $project->delete();
+
+        return redirect()
+            ->route('admin.projects.index')
+            ->with('success', 'Project deleted successfully!');
+
+    } catch (\Exception $e) {
+        Log::error('Project Delete Error: ' . $e->getMessage());
+        return back()->with('error', 'Error deleting project: ' . $e->getMessage());
+    }
+}
+
+// ==========================================
+
+public function projectsToggleActive($id)
+{
+    $project = Project::findOrFail($id);
+    $project->update(['is_active' => !$project->is_active]);
+
+    $status = $project->is_active ? 'activated' : 'deactivated';
+
+    return back()->with('success', 'Project ' . $status . ' successfully!');
+}
+
+// ==========================================
+
+public function projectsTogglePublish($id)
+{
+    $project = Project::findOrFail($id);
+    $project->update(['published' => !$project->published]);
+
+    $status = $project->published ? 'published' : 'unpublished';
+
+    return back()->with('success', 'Project ' . $status . ' successfully!');
+}
+
+// ==========================================
+
+public function projectsToggleFeatured($id)
+{
+    $project = Project::findOrFail($id);
+    $project->update(['is_featured' => !$project->is_featured]);
+
+    $status = $project->is_featured ? 'marked as featured' : 'removed from featured';
+
+    return back()->with('success', 'Project ' . $status . '!');
+}
+
+// ==========================================
+// PRIVATE HELPER
+// ==========================================
+
+/**
+ * Parse a newline-separated textarea string into a clean array.
+ */
+private function parseTextareaToArray(?string $text): array
+{
+    if (empty($text)) return [];
+
+    return array_values(
+        array_filter(
+            array_map('trim', explode("\n", $text))
+        )
+    );
+}
 }

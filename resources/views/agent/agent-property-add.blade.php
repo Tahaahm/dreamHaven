@@ -1,1659 +1,1301 @@
 @extends('layouts.agent-layout')
-
-@section('title', 'Add Property - Dream Mulk')
+@section('title', 'Add Property — Dream Mulk')
 
 @section('styles')
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Epilogue:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
-    /* ============================================
-       AGENT PROPERTY FORM - AI POWERED DESIGN
-       ============================================ */
-
-    /* --- Page Layout & Header --- */
-    .page-header {
-        background: linear-gradient(135deg, #303b97 0%, #1e2875 100%);
-        border-radius: 16px;
-        padding: 32px;
-        margin-bottom: 32px;
-        color: white;
-        position: relative;
-        overflow: hidden;
-        box-shadow: 0 4px 20px rgba(48,59,151,0.3);
-    }
-
-    .page-header::before {
-        content: '';
-        position: absolute;
-        top: -50%;
-        right: -20%;
-        width: 400px;
-        height: 400px;
-        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-    }
-
-    .page-header-content {
-        position: relative;
-        z-index: 2;
-    }
-
-    .page-title {
-        font-size: 32px;
-        font-weight: 800;
-        margin-bottom: 8px;
-    }
-
-    .page-subtitle {
-        font-size: 16px;
-        opacity: 0.9;
-    }
-
-    /* AI Helper Badge */
-    .ai-helper-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 20px;
-        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
-        color: white;
-        border-radius: 12px;
-        font-weight: 700;
-        font-size: 14px;
-        margin-bottom: 24px;
-        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
-        animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.9; }
-    }
-
-    .ai-helper-badge i {
-        font-size: 18px;
-    }
-
-    /* --- Form Containers --- */
-    .form-container {
-        background: white;
-        border-radius: 16px;
-        padding: 40px;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-    }
-
-    .form-section {
-        margin-bottom: 40px;
-        padding-bottom: 30px;
-        border-bottom: 1px solid #f1f5f9;
-    }
-
-    .form-section:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-    }
-
-    .section-title {
-        font-size: 20px;
-        font-weight: 700;
-        color: #1a202c;
-        margin-bottom: 24px;
-        padding-bottom: 12px;
-        border-bottom: 3px solid #303b97;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-
-    .section-title i {
-        color: #303b97;
-        font-size: 22px;
-    }
-
-    .section-subtitle {
-        color: #6b7280;
-        font-size: 13px;
-        margin-top: -14px;
-        margin-bottom: 24px;
-    }
-
-    /* --- Grid System --- */
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 24px;
-    }
-
-    .form-grid-full {
-        grid-column: 1 / -1;
-    }
-
-    @media (max-width: 768px) {
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-        .form-container {
-            padding: 20px;
-        }
-    }
-
-    /* --- Form Elements --- */
-    .form-group {
-        margin-bottom: 0;
-    }
-
-    .form-label {
-        display: block;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 10px;
-        font-size: 14px;
-    }
-
-    .form-label .required {
-        color: #ef4444;
-        margin-left: 4px;
-    }
-
-    .form-input, .form-select, .form-textarea {
-        width: 100%;
-        padding: 14px 18px;
-        border: 2px solid #e5e7eb;
-        border-radius: 12px;
-        font-size: 15px;
-        transition: all 0.3s;
-        background: white;
-        color: #1f2937;
-    }
-
-    .form-input:focus, .form-select:focus, .form-textarea:focus {
-        outline: none;
-        border-color: #303b97;
-        box-shadow: 0 0 0 4px rgba(48,59,151,0.1);
-    }
-
-    .form-input[readonly] {
-        background-color: #f8fafc;
-        color: #64748b;
-        cursor: not-allowed;
-        border-color: #e2e8f0;
-    }
-
-    .form-textarea {
-        min-height: 120px;
-        resize: vertical;
-        font-family: inherit;
-    }
-
-    /* --- Language Tabs --- */
-    .language-tabs {
-        display: flex;
-        gap: 8px;
-        margin-bottom: 20px;
-        background: #f8fafc;
-        padding: 8px;
-        border-radius: 12px;
-    }
-
-    .language-tab {
-        flex: 1;
-        padding: 10px 20px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 14px;
-        cursor: pointer;
-        background: transparent;
-        color: #64748b;
-        border: none;
-        transition: all 0.3s;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-
-    .language-tab.active {
-        background: #303b97;
-        color: white;
-        box-shadow: 0 2px 8px rgba(48,59,151,0.3);
-    }
-
-    .language-content {
-        display: none;
-        animation: fadeIn 0.3s ease;
-    }
-
-    .language-content.active {
-        display: block;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(5px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* --- Map Section --- */
-    .map-wrapper {
-        transition: all 0.3s ease;
-    }
-
-    .map-wrapper.hidden {
-        display: none;
-    }
-
-    .map-container {
-        width: 100%;
-        height: 400px;
-        border-radius: 12px;
-        overflow: hidden;
-        border: 2px solid #e5e7eb;
-        margin-bottom: 20px;
-        position: relative;
-    }
-
-    #map {
-        width: 100%;
-        height: 100%;
-    }
-
-    .map-instructions {
-        background: linear-gradient(135deg, rgba(48,59,151,0.05), rgba(48,59,151,0.02));
-        border: 1px dashed #303b97;
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 20px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        color: #303b97;
-        font-weight: 600;
-        font-size: 14px;
-    }
-
-    /* === VIDEO UPLOAD SECTION (AI POWERED) === */
-    .video-upload-section {
-        background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(167, 139, 250, 0.02));
-        border: 2px dashed #8b5cf6;
-        border-radius: 16px;
-        padding: 24px;
-        margin-bottom: 24px;
-    }
-
-    .video-upload-header {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 16px;
-    }
-
-    .video-upload-icon {
-        width: 48px;
-        height: 48px;
-        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 24px;
-    }
-
-    .video-upload-title {
-        font-size: 18px;
-        font-weight: 700;
-        color: #1f2937;
-    }
-
-    .video-upload-subtitle {
-        font-size: 13px;
-        color: #6b7280;
-    }
-
-    .video-upload-area {
-        border: 3px dashed #d1d5db;
-        border-radius: 12px;
-        padding: 40px 20px;
-        text-align: center;
-        background: white;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-
-    .video-upload-area:hover {
-        border-color: #8b5cf6;
-        background: #faf5ff;
-    }
-
-    .video-upload-area.processing {
-        border-color: #8b5cf6;
-        background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), white);
-        pointer-events: none;
-    }
-
-    .upload-video-icon {
-        font-size: 48px;
-        color: #8b5cf6;
-        margin-bottom: 12px;
-    }
-
-    .upload-video-text {
-        font-size: 16px;
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 6px;
-    }
-
-    .upload-video-hint {
-        color: #6b7280;
-        font-size: 13px;
-    }
-
-    /* Video Processing Status */
-    .video-processing-status {
-        display: none;
-        padding: 20px;
-        background: white;
-        border-radius: 12px;
-        margin-top: 16px;
-    }
-
-    .video-processing-status.show {
-        display: block;
-    }
-
-    .processing-progress {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 12px;
-    }
-
-    .processing-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid #f3f4f6;
-        border-top-color: #8b5cf6;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-    }
-
-    .processing-text {
-        flex: 1;
-    }
-
-    .processing-title {
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 4px;
-    }
-
-    .processing-subtitle {
-        font-size: 13px;
-        color: #6b7280;
-    }
-
-    .progress-bar-container {
-        width: 100%;
-        height: 8px;
-        background: #f3f4f6;
-        border-radius: 4px;
-        overflow: hidden;
-    }
-
-    .progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #8b5cf6, #a78bfa);
-        border-radius: 4px;
-        transition: width 0.3s ease;
-    }
-
-    /* --- Image Upload --- */
-    .image-upload-zone {
-        border: 3px dashed #cbd5e1;
-        border-radius: 16px;
-        padding: 50px;
-        text-align: center;
-        background: #f8fafc;
-        transition: all 0.3s;
-        cursor: pointer;
-        position: relative;
-    }
-
-    .image-upload-zone:hover {
-        border-color: #303b97;
-        background: #f1f5f9;
-    }
-
-    .image-upload-zone.dragover {
-        border-color: #303b97;
-        background: rgba(48,59,151,0.05);
-        transform: scale(1.01);
-    }
-
-    .upload-icon {
-        width: 80px;
-        height: 80px;
-        background: linear-gradient(135deg, #303b97, #1e2875);
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 36px;
-        color: white;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 24px rgba(48,59,151,0.3);
-    }
-
-    .upload-text {
-        font-size: 18px;
-        color: #1f2937;
-        font-weight: 700;
-        margin-bottom: 8px;
-    }
-
-    .upload-hint {
-        font-size: 14px;
-        color: #64748b;
-    }
-
-    .sort-instructions {
-        background: linear-gradient(135deg, rgba(48,59,151,0.05), rgba(48,59,151,0.02));
-        border: 1px dashed #303b97;
-        border-radius: 12px;
-        padding: 16px;
-        margin-top: 20px;
-        margin-bottom: 10px;
-        display: none;
-        align-items: center;
-        gap: 12px;
-        color: #303b97;
-        font-weight: 600;
-        font-size: 14px;
-    }
-
-    .sort-instructions.show {
-        display: flex;
-    }
-
-    .image-preview-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-        gap: 20px;
-        margin-top: 24px;
-    }
-
-    .image-preview-item {
-        position: relative;
-        border-radius: 16px;
-        overflow: hidden;
-        aspect-ratio: 1;
-        border: 3px solid #e5e7eb;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        background: #f3f4f6;
-        animation: scaleUp 0.3s ease;
-        cursor: move;
-        cursor: grab;
-        transition: all 0.3s ease;
-    }
-
-    .image-preview-item:active {
-        cursor: grabbing;
-    }
-
-    .image-preview-item.dragging {
-        opacity: 0.5;
-        transform: scale(0.95);
-        border-color: #303b97;
-        box-shadow: 0 8px 24px rgba(48,59,151,0.3);
-    }
-
-    .image-preview-item.drag-over {
-        border-color: #10b981;
-        background: rgba(16,185,129,0.05);
-        transform: scale(1.05);
-    }
-
-    .image-preview-item:first-child::after {
-        content: 'COVER';
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: linear-gradient(135deg, #303b97, #1e2875);
-        color: white;
-        padding: 6px;
-        font-size: 11px;
-        font-weight: 800;
-        text-align: center;
-        letter-spacing: 1px;
-    }
-
-    @keyframes scaleUp {
-        from { transform: scale(0.9); opacity: 0; }
-        to { transform: scale(1); opacity: 1; }
-    }
-
-    .image-preview-item img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        display: block;
-        pointer-events: none;
-    }
-
-    .image-remove-btn {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        width: 32px;
-        height: 32px;
-        background: #ef4444;
-        border: none;
-        border-radius: 8px;
-        color: white;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        transition: all 0.2s;
-        box-shadow: 0 4px 12px rgba(239,68,68,0.4);
-        z-index: 10;
-    }
-
-    .image-remove-btn:hover {
-        background: #dc2626;
-        transform: scale(1.1);
-    }
-
-    .drag-handle {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        width: 32px;
-        height: 32px;
-        background: rgba(48,59,151,0.9);
-        border: none;
-        border-radius: 8px;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        z-index: 5;
-        cursor: move;
-        cursor: grab;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    }
-
-    .drag-handle:active {
-        cursor: grabbing;
-    }
-
-    /* --- Form Actions --- */
-    .form-actions {
-        display: flex;
-        gap: 16px;
-        justify-content: flex-end;
-        padding-top: 32px;
-        border-top: 2px solid #e5e7eb;
-        margin-top: 32px;
-    }
-
-    .btn {
-        padding: 14px 32px;
-        border-radius: 12px;
-        font-weight: 700;
-        font-size: 15px;
-        cursor: pointer;
-        transition: all 0.3s;
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        border: none;
-        text-decoration: none;
-    }
-
-    .btn-primary {
-        background: linear-gradient(135deg, #303b97, #1e2875);
-        color: white;
-        box-shadow: 0 4px 12px rgba(48,59,151,0.3);
-    }
-
-    .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(48,59,151,0.4);
-    }
-
-    .btn-secondary {
-        background: white;
-        color: #64748b;
-        border: 2px solid #e5e7eb;
-    }
-
-    .btn-secondary:hover {
-        background: #f8fafc;
-        border-color: #cbd5e1;
-    }
+:root {
+    --P: #434eaa;
+    --PD: #343e8a;
+    --PL: #eef0fb;
+    --PLL: #f6f7fd;
+    --ink: #111827;
+    --sub: #6b7280;
+    --brd: #e5e7eb;
+    --bg: #f9fafb;
+    --white: #ffffff;
+    --green: #10b981;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --purple: #8b5cf6;
+    --purple-light: #f5f3ff;
+    --radius: 16px;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.06);
+    --shadow-lg: 0 8px 32px rgba(67,78,170,.18);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'Epilogue', 'IBM Plex Sans Arabic', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+}
+
+/* TOP HEADER */
+.apf-header {
+    background: var(--white);
+    border-bottom: 1px solid var(--brd);
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 68px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+.apf-logo { font-size: 20px; font-weight: 800; color: var(--P); display: flex; align-items: center; gap: 10px; }
+.apf-logo span { color: var(--ink); }
+.apf-back {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 14px; font-weight: 600; color: var(--sub);
+    text-decoration: none; padding: 8px 16px;
+    border-radius: 10px; border: 1px solid var(--brd);
+    background: var(--white); transition: all .2s;
+}
+.apf-back:hover { background: var(--bg); color: var(--ink); }
+
+/* WIZARD STEPS BAR */
+.wizard-bar {
+    background: var(--white); border-bottom: 1px solid var(--brd);
+    padding: 0 32px; display: flex; align-items: center;
+    gap: 0; overflow-x: auto; scrollbar-width: none;
+}
+.wizard-bar::-webkit-scrollbar { display: none; }
+.wstep {
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 20px; cursor: pointer;
+    border-bottom: 3px solid transparent; transition: all .25s;
+    white-space: nowrap; flex-shrink: 0;
+}
+.wstep.active { border-bottom-color: var(--P); }
+.wstep.done .wnum { background: var(--green); border-color: var(--green); color: white; }
+.wstep.active .wnum { background: var(--P); border-color: var(--P); color: white; }
+.wstep.active .wlabel { color: var(--P); font-weight: 700; }
+.wstep.done .wlabel { color: var(--green); font-weight: 600; }
+.wstep .wlabel { color: var(--sub); font-size: 13.5px; font-weight: 500; }
+.wnum {
+    width: 32px; height: 32px; border-radius: 50%;
+    border: 2px solid var(--brd);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; color: var(--sub);
+    background: var(--white); transition: all .25s; flex-shrink: 0;
+}
+.wdivider { width: 32px; height: 1px; background: var(--brd); flex-shrink: 0; margin: 0 4px; }
+
+/* MAIN LAYOUT */
+.apf-body { max-width: 1100px; margin: 0 auto; padding: 40px 24px 120px; }
+
+/* STEP PANELS */
+.step-panel { display: none; animation: fadeUp .35s ease; }
+.step-panel.active { display: block; }
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.step-header { margin-bottom: 32px; }
+.step-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--P); background: var(--PL);
+    padding: 5px 14px; border-radius: 50px; margin-bottom: 12px;
+}
+.step-title { font-size: 28px; font-weight: 800; color: var(--ink); line-height: 1.2; margin-bottom: 6px; }
+.step-sub   { font-size: 15px; color: var(--sub); font-weight: 400; }
+
+/* CARDS */
+.card {
+    background: var(--white); border: 1px solid var(--brd);
+    border-radius: var(--radius); padding: 32px; margin-bottom: 20px;
+    box-shadow: var(--shadow);
+}
+.card-title { font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 24px; display: flex; align-items: center; gap: 10px; }
+.card-title i {
+    width: 34px; height: 34px; background: var(--PL);
+    border-radius: 10px; display: flex; align-items: center;
+    justify-content: center; color: var(--P); font-size: 14px;
+}
+
+/* LANGUAGE PILL SWITCHER */
+.lang-switch { display: inline-flex; background: var(--bg); border: 1px solid var(--brd); border-radius: 12px; padding: 4px; gap: 2px; margin-bottom: 20px; }
+.lpill {
+    padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all .2s; color: var(--sub); border: none;
+    background: transparent; display: flex; align-items: center; gap: 6px;
+}
+.lpill.active { background: var(--P); color: white; box-shadow: 0 2px 8px rgba(67,78,170,.3); }
+.lang-pane { display: none; }
+.lang-pane.active { display: block; }
+
+/* FORM ELEMENTS */
+.frow { display: grid; gap: 18px; margin-bottom: 18px; }
+.frow-2 { grid-template-columns: 1fr 1fr; }
+.frow-3 { grid-template-columns: 1fr 1fr 1fr; }
+.frow-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+@media(max-width: 700px) { .frow-2, .frow-3, .frow-4 { grid-template-columns: 1fr; } }
+
+.fgroup { display: flex; flex-direction: column; gap: 7px; }
+.flabel { font-size: 13px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 5px; }
+.flabel .req  { color: var(--red); }
+.flabel .hint { color: var(--sub); font-weight: 400; font-size: 12px; }
+
+.finput, .fselect, .ftextarea {
+    width: 100%; padding: 12px 16px; border: 1.5px solid var(--brd);
+    border-radius: 12px; font-size: 14.5px; font-family: inherit;
+    color: var(--ink); background: var(--white); transition: all .2s;
+    outline: none; appearance: none; -webkit-appearance: none;
+}
+.finput:focus, .fselect:focus, .ftextarea:focus { border-color: var(--P); box-shadow: 0 0 0 3px rgba(67,78,170,.1); }
+.finput::placeholder, .ftextarea::placeholder { color: #bcc0cc; }
+.fselect {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center; padding-right: 40px;
+}
+.ftextarea { min-height: 100px; resize: vertical; line-height: 1.6; }
+
+.finput-prefix {
+    display: flex; align-items: center; border: 1.5px solid var(--brd);
+    border-radius: 12px; overflow: hidden; transition: all .2s; background: var(--white);
+}
+.finput-prefix:focus-within { border-color: var(--P); box-shadow: 0 0 0 3px rgba(67,78,170,.1); }
+.prefix-tag {
+    padding: 0 14px; background: var(--bg); border-right: 1.5px solid var(--brd);
+    color: var(--sub); font-size: 13px; font-weight: 700; height: 100%;
+    display: flex; align-items: center; white-space: nowrap; min-height: 48px;
+}
+.finput-prefix input {
+    flex: 1; border: none; outline: none; padding: 12px 16px;
+    font-size: 14.5px; font-family: inherit; background: transparent; color: var(--ink); min-width: 0;
+}
+
+/* TYPE SELECTOR CARDS */
+.type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media(max-width: 600px) { .type-grid { grid-template-columns: repeat(2, 1fr); } }
+.tcard {
+    border: 2px solid var(--brd); border-radius: 14px; padding: 20px 16px;
+    text-align: center; cursor: pointer; transition: all .2s; background: var(--white); position: relative;
+}
+.tcard:hover    { border-color: var(--P); background: var(--PLL); }
+.tcard.selected { border-color: var(--P); background: var(--PL); box-shadow: 0 0 0 3px rgba(67,78,170,.12); }
+.tcard input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
+.tcard-icon  { font-size: 28px; margin-bottom: 8px; }
+.tcard-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.tcard.selected .tcard-label { color: var(--P); }
+.tcard-check {
+    position: absolute; top: 10px; right: 10px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--P); color: white; font-size: 10px;
+    display: none; align-items: center; justify-content: center;
+}
+.tcard.selected .tcard-check { display: flex; }
+
+/* TOGGLE CHECKS */
+.toggle-group { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media(max-width: 500px) { .toggle-group { grid-template-columns: 1fr; } }
+.toggle-item {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    border: 1.5px solid var(--brd); border-radius: 12px; cursor: pointer;
+    transition: all .2s; user-select: none; background: var(--white);
+}
+.toggle-item:hover   { border-color: var(--P); background: var(--PLL); }
+.toggle-item.checked { border-color: var(--P); background: var(--PL); }
+.toggle-item input   { display: none; }
+.toggle-box {
+    width: 22px; height: 22px; border: 2px solid var(--brd); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s; flex-shrink: 0; background: var(--white);
+}
+.toggle-item.checked .toggle-box { background: var(--P); border-color: var(--P); color: white; }
+.toggle-icon  { font-size: 18px; }
+.toggle-label { font-size: 14px; font-weight: 600; color: var(--ink); }
+
+/* MAP TOGGLE ROW */
+.map-toggle-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 18px;
+    padding: 14px 18px; background: var(--PLL); border: 1.5px solid var(--PL);
+    border-radius: 12px; cursor: pointer; user-select: none;
+}
+.map-toggle-row input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--P); cursor: pointer; flex-shrink: 0; }
+.map-toggle-label { font-size: 14px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.map-toggle-label i { color: var(--P); }
+.map-wrapper { transition: all .3s ease; }
+.map-wrapper.hidden { display: none; }
+
+/* MAP SEARCH */
+.map-search-bar { display: flex; gap: 10px; margin-bottom: 12px; }
+.map-search-bar input {
+    flex: 1; padding: 12px 16px; border: 1.5px solid var(--brd);
+    border-radius: 12px; font-size: 14px; font-family: inherit; outline: none; transition: all .2s;
+}
+.map-search-bar input:focus { border-color: var(--P); box-shadow: 0 0 0 3px rgba(67,78,170,.1); }
+.map-search-bar button {
+    padding: 12px 20px; background: var(--P); color: white; border: none;
+    border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background .2s; white-space: nowrap;
+}
+.map-search-bar button:hover { background: var(--PD); }
+.map-frame { width: 100%; height: 360px; border-radius: 14px; overflow: hidden; border: 1.5px solid var(--brd); }
+#leaflet-map { width: 100%; height: 100%; }
+.map-hint { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); margin-top: 10px; padding: 10px 14px; background: var(--PLL); border-radius: 10px; }
+.map-hint i { color: var(--P); }
+.coord-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+
+/* VIDEO UPLOAD (AI) */
+.video-section {
+    border: 2px dashed var(--purple); border-radius: var(--radius);
+    padding: 28px; background: var(--purple-light); margin-bottom: 4px;
+}
+.video-section-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.video-ai-icon {
+    width: 52px; height: 52px;
+    background: linear-gradient(135deg, var(--purple), #a78bfa);
+    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 22px; flex-shrink: 0;
+}
+.video-ai-title    { font-size: 17px; font-weight: 800; color: var(--ink); }
+.video-ai-subtitle { font-size: 13px; color: var(--sub); margin-top: 2px; }
+.video-drop-area {
+    border: 2.5px dashed #d1d5db; border-radius: 14px; padding: 36px 20px;
+    text-align: center; background: var(--white); cursor: pointer; transition: all .3s ease;
+}
+.video-drop-area:hover { border-color: var(--purple); background: var(--purple-light); }
+.video-drop-area.processing { border-color: var(--purple); pointer-events: none; }
+.video-drop-icon { font-size: 44px; color: var(--purple); margin-bottom: 10px; }
+.video-drop-text { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 5px; }
+.video-drop-hint { font-size: 13px; color: var(--sub); }
+.video-status { display: none; margin-top: 16px; background: var(--white); border-radius: 12px; padding: 18px; }
+.video-status.show { display: block; }
+.vs-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.vs-spinner {
+    width: 36px; height: 36px; border: 4px solid #f3f4f6;
+    border-top-color: var(--purple); border-radius: 50%;
+    animation: spin .9s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.vs-title    { font-size: 14px; font-weight: 700; color: var(--ink); }
+.vs-subtitle { font-size: 12px; color: var(--sub); margin-top: 2px; }
+.vs-bar-wrap { width: 100%; height: 8px; background: #f3f4f6; border-radius: 4px; overflow: hidden; }
+.vs-bar { height: 100%; background: linear-gradient(90deg, var(--purple), #a78bfa); border-radius: 4px; transition: width .4s ease; width: 0%; }
+
+/* IMAGE UPLOAD */
+.img-dropzone {
+    border: 2.5px dashed var(--brd); border-radius: var(--radius);
+    padding: 48px 24px; text-align: center; cursor: pointer; transition: all .25s; background: var(--bg);
+}
+.img-dropzone:hover, .img-dropzone.dragover { border-color: var(--P); background: var(--PLL); }
+.dz-icon {
+    width: 64px; height: 64px; background: var(--PL); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px; font-size: 26px; color: var(--P);
+}
+.dz-title { font-size: 17px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+.dz-sub   { font-size: 13px; color: var(--sub); }
+.dz-formats { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+.fmt-tag {
+    padding: 4px 12px; border-radius: 50px; background: var(--white); border: 1px solid var(--brd);
+    font-size: 11px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: 1px;
+}
+.img-preview-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px; margin-top: 20px; }
+.img-thumb {
+    position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden;
+    border: 2px solid var(--brd); background: var(--bg); cursor: grab; transition: all .2s;
+}
+.img-thumb:first-child { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(245,158,11,.15); }
+.img-thumb img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; display: block; }
+.img-thumb-del {
+    position: absolute; top: 7px; right: 7px; width: 28px; height: 28px;
+    background: rgba(239,68,68,.9); border: none; border-radius: 7px;
+    color: white; font-size: 12px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .15s; z-index: 5;
+}
+.img-thumb:hover .img-thumb-del { opacity: 1; }
+.img-thumb-badge {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(245,158,11,.92); color: white; font-size: 9px;
+    font-weight: 800; text-align: center; padding: 5px; letter-spacing: 2px; text-transform: uppercase;
+}
+.img-count-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--PLL); border-radius: 10px; margin-top: 14px; font-size: 13px;
+}
+.img-count-bar strong { color: var(--P); }
+
+/* REVIEW SUMMARY */
+.review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media(max-width: 600px) { .review-grid { grid-template-columns: 1fr; } }
+.rv-item { background: var(--bg); border: 1px solid var(--brd); border-radius: 12px; padding: 16px; }
+.rv-label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--sub); margin-bottom: 5px; }
+.rv-value { font-size: 15px; font-weight: 700; color: var(--ink); }
+.review-images { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.review-img-thumb { width: 72px; height: 72px; border-radius: 10px; object-fit: cover; border: 2px solid var(--brd); }
+
+/* NAV BUTTONS */
+.step-nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 0; border-top: 1px solid var(--brd); margin-top: 24px; }
+.btn-prev {
+    display: inline-flex; align-items: center; gap: 8px; padding: 13px 26px;
+    border: 1.5px solid var(--brd); border-radius: 12px; background: var(--white);
+    color: var(--sub); font-size: 14px; font-weight: 600; cursor: pointer; transition: all .2s; font-family: inherit;
+}
+.btn-prev:hover { background: var(--bg); color: var(--ink); }
+.btn-next {
+    display: inline-flex; align-items: center; gap: 8px; padding: 13px 30px;
+    border: none; border-radius: 12px; background: var(--P); color: white;
+    font-size: 14px; font-weight: 700; cursor: pointer; transition: all .2s; font-family: inherit;
+    box-shadow: 0 4px 14px rgba(67,78,170,.3);
+}
+.btn-next:hover { background: var(--PD); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(67,78,170,.38); }
+.btn-submit { background: var(--green); box-shadow: 0 4px 14px rgba(16,185,129,.3); }
+.btn-submit:hover { background: #059669; box-shadow: 0 6px 18px rgba(16,185,129,.38); }
+
+/* UPLOAD PROGRESS DIALOG */
+.upload-overlay {
+    position: fixed; inset: 0; background: rgba(6,9,30,.55); backdrop-filter: blur(6px);
+    z-index: 9999; display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden; transition: all .3s;
+}
+.upload-overlay.show { opacity: 1; visibility: visible; }
+.upload-dialog {
+    background: var(--white); border-radius: 24px; padding: 48px 40px;
+    width: 460px; max-width: 90vw; text-align: center;
+    box-shadow: 0 24px 80px rgba(0,0,0,.22);
+    transform: scale(.92) translateY(16px); transition: all .35s cubic-bezier(.16,1,.3,1);
+}
+.upload-overlay.show .upload-dialog { transform: scale(1) translateY(0); }
+.ud-anim { width: 80px; height: 80px; margin: 0 auto 24px; position: relative; }
+.ud-ring { width: 80px; height: 80px; border-radius: 50%; border: 4px solid var(--PL); border-top-color: var(--P); animation: spin .9s linear infinite; position: absolute; inset: 0; }
+.ud-icon { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--P); }
+.ud-title { font-size: 21px; font-weight: 800; color: var(--ink); margin-bottom: 8px; }
+.ud-sub   { font-size: 14px; color: var(--sub); margin-bottom: 28px; line-height: 1.6; }
+.ud-progress { background: var(--bg); border-radius: 50px; height: 8px; overflow: hidden; margin-bottom: 12px; }
+.ud-bar { height: 100%; background: linear-gradient(90deg, var(--P), #6c77cc); border-radius: 50px; transition: width .4s ease; width: 0%; }
+.ud-pct { font-size: 22px; font-weight: 800; color: var(--P); margin-bottom: 6px; }
+.ud-steps { display: flex; flex-direction: column; gap: 8px; margin-top: 22px; text-align: left; }
+.ud-step { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--sub); padding: 10px 14px; border-radius: 10px; background: var(--bg); transition: all .3s; }
+.ud-step.active { color: var(--P); background: var(--PL); font-weight: 600; }
+.ud-step.done   { color: var(--green); background: rgba(16,185,129,.07); }
+.ud-step i { width: 18px; text-align: center; flex-shrink: 0; }
+.ud-success { display: none; }
+.ud-success.show { display: block; }
+.success-circle { width: 80px; height: 80px; background: var(--green); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; font-size: 36px; color: white; animation: popIn .4s cubic-bezier(.16,1,.3,1); }
+@keyframes popIn { from { transform: scale(.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* LISTING TYPE SWITCHER */
+.list-type-sw { display: flex; background: var(--bg); border: 1.5px solid var(--brd); border-radius: 12px; padding: 4px; gap: 4px; width: fit-content; }
+.lt-btn { padding: 10px 28px; border-radius: 9px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--sub); transition: all .2s; font-family: inherit; }
+.lt-btn.active { background: var(--P); color: white; box-shadow: 0 2px 8px rgba(67,78,170,.3); }
+
+/* RTL SUPPORT */
+[dir="rtl"] .fselect { background-position: left 14px center; padding-right: 16px; padding-left: 40px; }
+[dir="rtl"] .prefix-tag { border-right: none; border-left: 1.5px solid var(--brd); }
 </style>
 @endsection
 
 @section('content')
-<div class="page-header">
-    <div class="page-header-content">
-        <h1 class="page-title">
-            <i class="fas fa-plus-circle"></i> Add New Property
-        </h1>
-        <p class="page-subtitle">List your property on Dream Mulk - Fill in details in any language</p>
+
+{{-- UPLOAD PROGRESS DIALOG --}}
+<div class="upload-overlay" id="uploadOverlay">
+    <div class="upload-dialog">
+        <div id="udLoading">
+            <div class="ud-anim">
+                <div class="ud-ring"></div>
+                <div class="ud-icon"><i class="fas fa-home"></i></div>
+            </div>
+            <div class="ud-pct" id="udPct">0%</div>
+            <div class="ud-title">Publishing Your Property</div>
+            <div class="ud-sub" id="udSub">Please wait while we upload your property details and images...</div>
+            <div class="ud-progress"><div class="ud-bar" id="udBar"></div></div>
+            <div class="ud-steps">
+                <div class="ud-step active" id="udStep1"><i class="fas fa-info-circle"></i> Saving property details</div>
+                <div class="ud-step"         id="udStep2"><i class="fas fa-images"></i> Uploading images</div>
+                <div class="ud-step"         id="udStep3"><i class="fas fa-map-marker-alt"></i> Setting location</div>
+                <div class="ud-step"         id="udStep4"><i class="fas fa-check-circle"></i> Finalizing listing</div>
+            </div>
+        </div>
+        <div class="ud-success" id="udSuccess">
+            <div class="success-circle"><i class="fas fa-check"></i></div>
+            <div class="ud-title" style="color: var(--green)">Property Listed!</div>
+            <div class="ud-sub">Your property has been successfully published and is now live on Dream Mulk.</div>
+            <a href="{{ route('agent.properties') }}" class="btn-next btn-submit" style="margin-top:20px;display:inline-flex;text-decoration:none;">
+                <i class="fas fa-list"></i> View My Listings
+            </a>
+        </div>
     </div>
 </div>
 
-{{-- Main Form Start --}}
+{{-- HEADER --}}
+<div class="apf-header">
+    <div class="apf-logo"><i class="fas fa-building" style="color:var(--P)"></i> Dream <span>Mulk</span></div>
+    <a href="{{ route('agent.properties') }}" class="apf-back"><i class="fas fa-arrow-left"></i> My Properties</a>
+</div>
+
+{{-- WIZARD BAR --}}
+<div class="wizard-bar" id="wizardBar">
+    <div class="wstep active" data-step="1" onclick="goToStep(1)"><div class="wnum">1</div><span class="wlabel">Basic Info</span></div>
+    <div class="wdivider"></div>
+    <div class="wstep" data-step="2" onclick="goToStep(2)"><div class="wnum">2</div><span class="wlabel">Location</span></div>
+    <div class="wdivider"></div>
+    <div class="wstep" data-step="3" onclick="goToStep(3)"><div class="wnum">3</div><span class="wlabel">Details</span></div>
+    <div class="wdivider"></div>
+    <div class="wstep" data-step="4" onclick="goToStep(4)"><div class="wnum">4</div><span class="wlabel">Photos</span></div>
+    <div class="wdivider"></div>
+    <div class="wstep" data-step="5" onclick="goToStep(5)"><div class="wnum">5</div><span class="wlabel">Review</span></div>
+</div>
+
+{{-- FORM --}}
 <form action="{{ route('agent.property.store') }}" method="POST" enctype="multipart/form-data" id="propertyForm">
-    @csrf
+@csrf
 
-    <div class="form-container">
+<div class="apf-body">
 
-        {{-- AI Helper Badge --}}
-        <div class="ai-helper-badge">
-            <i class="fas fa-magic"></i>
-            <span>AI-Powered Form - Video Frame Extraction Available!</span>
+{{-- ════ STEP 1 — BASIC INFO ════ --}}
+<div class="step-panel active" id="step1">
+    <div class="step-header">
+        <div class="step-tag"><i class="fas fa-pencil"></i> Step 1 of 5</div>
+        <div class="step-title">What are you listing?</div>
+        <div class="step-sub">Start with the basics — type, listing purpose and price</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-tag"></i> Listing Purpose</div>
+        <div class="list-type-sw">
+            <button type="button" class="lt-btn active" onclick="setListType(this,'sell')">🏷️ For Sale</button>
+            <button type="button" class="lt-btn" onclick="setListType(this,'rent')">🔑 For Rent</button>
         </div>
+        <input type="hidden" name="listing_type" id="listing_type" value="sell">
+    </div>
 
-        <div class="form-section">
-            <h3 class="section-title">
-                <i class="fas fa-info-circle"></i> Basic Information
-            </h3>
-            <p class="section-subtitle">Enter property details in your preferred language</p>
-
-            {{-- Language Switcher --}}
-            <div class="language-tabs">
-                <button type="button" class="language-tab active" data-lang="en">
-                    <i class="fas fa-globe"></i> English
-                </button>
-                <button type="button" class="language-tab" data-lang="ar">
-                    <i class="fas fa-globe"></i> العربية
-                </button>
-                <button type="button" class="language-tab" data-lang="ku">
-                    <i class="fas fa-globe"></i> کوردی
-                </button>
-            </div>
-
-            {{-- English Fields --}}
-            <div class="language-content active" data-content="en">
-                <div class="form-group">
-                    <label class="form-label">Property Title (English)</label>
-                    <input type="text" name="title_en" class="form-input" placeholder="e.g., Luxury Villa in Erbil">
-                </div>
-                <div class="form-group" style="margin-top: 20px;">
-                    <label class="form-label">Description (English)</label>
-                    <textarea name="description_en" class="form-textarea" placeholder="Describe your property in detail..."></textarea>
-                </div>
-            </div>
-
-            {{-- Arabic Fields --}}
-            <div class="language-content" data-content="ar">
-                <div class="form-group">
-                    <label class="form-label">عنوان العقار (العربية)</label>
-                    <input type="text" name="title_ar" class="form-input" placeholder="مثال: فيلا فاخرة في أربيل" dir="rtl">
-                </div>
-                <div class="form-group" style="margin-top: 20px;">
-                    <label class="form-label">الوصف (العربية)</label>
-                    <textarea name="description_ar" class="form-textarea" placeholder="صف الممتلكات الخاصة بك بالتفصيل..." dir="rtl"></textarea>
-                </div>
-            </div>
-
-            {{-- Kurdish Fields --}}
-            <div class="language-content" data-content="ku">
-                <div class="form-group">
-                    <label class="form-label">ناونیشانی خانووبەرە (کوردی)</label>
-                    <input type="text" name="title_ku" class="form-input" placeholder="نموونە: ڤیلای گەورە لە هەولێر">
-                </div>
-                <div class="form-group" style="margin-top: 20px;">
-                    <label class="form-label">وەسف (کوردی)</label>
-                    <textarea name="description_ku" class="form-textarea" placeholder="خانووبەرەکەت بە وردی باس بکە..."></textarea>
-                </div>
-            </div>
-
-            {{-- Core Details --}}
-            <div class="form-grid" style="margin-top: 24px;">
-                <div class="form-group">
-                    <label class="form-label">Price (IQD)<span class="required">*</span></label>
-                    <input type="text" name="price" class="form-input numeric-input" placeholder="e.g., 150000000" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Price (USD)<span class="required">*</span></label>
-                    <input type="text" name="price_usd" class="form-input numeric-input" placeholder="e.g., 100000" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Property Type<span class="required">*</span></label>
-                    <select name="property_type" class="form-select" required>
-                        <option value="">Select Type</option>
-                        <option value="apartment">🏢 Apartment</option>
-                        <option value="villa">🏰 Villa</option>
-                        <option value="house">🏠 House</option>
-                        <option value="land">🌍 Land</option>
-                        <option value="commercial">🏪 Commercial</option>
-                        <option value="office">🏢 Office</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Status<span class="required">*</span></label>
-                    <select name="status" class="form-select" required>
-                        <option value="available">✅ Available</option>
-                        <option value="sold">❌ Sold</option>
-                        <option value="rented">🔑 Rented</option>
-                        <option value="pending">⏳ Pending</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Area (m²)<span class="required">*</span></label>
-                    <input type="text" name="area" class="form-input numeric-input" placeholder="e.g., 250" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Listing Type<span class="required">*</span></label>
-                    <select name="listing_type" class="form-select" required>
-                        <option value="sell">For Sale</option>
-                        <option value="rent">For Rent</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h3 class="section-title">
-                <i class="fas fa-map-marker-alt"></i> Location Information
-            </h3>
-
-            <div class="form-grid" style="margin-bottom: 24px;">
-                <div class="form-group">
-                    <label class="form-label">Select City <span class="required">*</span></label>
-                    <select id="location-city-select" class="form-select" required>
-                        <option value="">Loading cities...</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Select Area/District <span class="required">*</span></label>
-                    <select id="location-area-select" class="form-select" disabled required>
-                        <option value="">Select City First</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form-group" style="margin-bottom: 20px;">
-                <label class="form-label" style="display:flex; align-items:center; gap:12px; cursor:pointer; font-size: 16px;">
-                    <input type="checkbox" name="has_map" id="has_map_toggle" value="1" checked style="width:20px; height:20px; accent-color: #303b97;">
-                    <i class="fas fa-map-marked-alt" style="color:#303b97;"></i> Pin Location on Map
-                </label>
-            </div>
-
-            <div id="map_content_wrapper" class="map-wrapper">
-                <div class="map-instructions">
-                    <i class="fas fa-info-circle" style="font-size: 20px;"></i>
-                    <span>Select a City and Area above to auto-position the map. You can also drag the pin manually.</span>
-                </div>
-
-                <div class="map-container">
-                    <div id="map"></div>
-                </div>
-
-                <input type="hidden" name="latitude" id="latitude" value="0">
-                <input type="hidden" name="longitude" id="longitude" value="0">
-            </div>
-
-            {{-- HIDDEN location name fields - auto-filled by JS --}}
-            <input type="hidden" name="city_en" id="city_en">
-            <input type="hidden" name="district_en" id="district_en">
-            <input type="hidden" name="city_ar" id="city_ar">
-            <input type="hidden" name="district_ar" id="district_ar">
-            <input type="hidden" name="city_ku" id="city_ku">
-            <input type="hidden" name="district_ku" id="district_ku">
-
-            <div class="form-grid">
-                <div class="form-group form-grid-full">
-                    <label class="form-label">Full Address Details <span class="required">*</span></label>
-                    <input type="text" name="address" class="form-input" placeholder="Street number, building name, floor number, landmark..." required>
-                </div>
-            </div>
-        </div>
-
-        <div class="form-section">
-            <h3 class="section-title">
-                <i class="fas fa-home"></i> Property Details
-            </h3>
-            <div class="form-grid">
-                <div class="form-group">
-                    <label class="form-label"><i class="fas fa-bed"></i> Bedrooms</label>
-                    <input type="text" name="bedrooms" class="form-input numeric-input" placeholder="e.g., 3" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label"><i class="fas fa-bath"></i> Bathrooms</label>
-                    <input type="text" name="bathrooms" class="form-input numeric-input" placeholder="e.g., 2" required>
-                </div>
-                <div class="form-group">
-                    <label class="form-label"><i class="fas fa-layer-group"></i> Floors</label>
-                    <input type="text" name="floor_number" class="form-input numeric-input" placeholder="e.g., 2">
-                </div>
-                <div class="form-group">
-                    <label class="form-label"><i class="fas fa-calendar-check"></i> Year Built</label>
-                    <input type="text" name="year_built" class="form-input numeric-input" placeholder="e.g., 2020">
-                </div>
-            </div>
-
-            <div class="form-grid" style="margin-top: 24px;">
-                <div class="form-group">
-                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" name="furnished" value="1" style="width:20px; height:20px;">
-                        Furnished
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" name="electricity" value="1" checked style="width:20px; height:20px;">
-                        Electricity 24/7
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" name="water" value="1" checked style="width:20px; height:20px;">
-                        Water System
-                    </label>
-                </div>
-                <div class="form-group">
-                    <label class="form-label" style="display:flex; align-items:center; gap:8px;">
-                        <input type="checkbox" name="internet" value="1" checked style="width:20px; height:20px;">
-                        Internet/Fiber
-                    </label>
-                </div>
-            </div>
-        </div>
-
-        {{-- ========================================
-             VIDEO UPLOAD SECTION (AI POWERED)
-             ======================================== --}}
-        <div class="form-section">
-            <h3 class="section-title">
-                <i class="fas fa-video"></i> Property Video (Optional - AI Powered)
-            </h3>
-            <p class="section-subtitle">Upload a property tour video and AI will extract the 10 best frames automatically</p>
-
-            <div class="video-upload-section">
-                <div class="video-upload-header">
-                    <div class="video-upload-icon">
-                        <i class="fas fa-robot"></i>
-                    </div>
-                    <div>
-                        <div class="video-upload-title">AI Frame Extraction</div>
-                        <div class="video-upload-subtitle">Upload video → AI selects best 10 frames → Auto-added to gallery</div>
-                    </div>
-                </div>
-
-                <div class="video-upload-area" id="videoUploadArea" onclick="document.getElementById('videoInput').click()">
-                    <div class="upload-video-icon"><i class="fas fa-cloud-upload-alt"></i></div>
-                    <div class="upload-video-text">Click to Upload Property Video</div>
-                    <div class="upload-video-hint">MP4, MOV, AVI (Max 500MB) • AI extracts 10 best quality frames</div>
-                    <input type="file" id="videoInput" accept="video/mp4,video/quicktime,video/x-msvideo" style="display:none" onchange="handleVideoUpload(event)">
-                </div>
-
-                {{-- Video Processing Status --}}
-                <div class="video-processing-status" id="videoProcessingStatus">
-                    <div class="processing-progress">
-                        <div class="processing-spinner"></div>
-                        <div class="processing-text">
-                            <div class="processing-title" id="processingTitle">Uploading video...</div>
-                            <div class="processing-subtitle" id="processingSubtitle">Please wait</div>
-                        </div>
-                    </div>
-                    <div class="progress-bar-container">
-                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {{-- ========================================
-             IMAGES SECTION (MANUAL OR FROM VIDEO)
-             ======================================== --}}
-        <div class="form-section">
-            <h3 class="section-title">
-                <i class="fas fa-images"></i> Property Images
-            </h3>
-            <p class="section-subtitle">Upload images manually OR use video above for AI extraction (Min 1 required)</p>
-
-            <div class="image-upload-zone" id="uploadZone">
-                <div class="upload-icon">
-                    <i class="fas fa-cloud-upload-alt"></i>
-                </div>
-                <div class="upload-text">Click to upload or drag and drop</div>
-                <div class="upload-hint">PNG, JPG, WEBP up to 30MB each • Or use video for AI extraction</div>
-                <input type="file" name="images[]" id="imageInput" accept="image/*" multiple hidden>
-            </div>
-
-            <div class="sort-instructions" id="sortInstructions">
-                <i class="fas fa-arrows-alt" style="font-size: 20px;"></i>
-                <span>Drag images to reorder. First image = Cover photo</span>
-            </div>
-
-            <div class="image-preview-grid" id="imagePreviewGrid">
-            </div>
-        </div>
-
-        <div class="form-actions">
-            <a href="{{ route('agent.properties') }}" class="btn btn-secondary">
-                <i class="fas fa-times"></i> Cancel
-            </a>
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-check"></i> Add Property
-            </button>
+    <div class="card">
+        <div class="card-title"><i class="fas fa-home"></i> Property Type <span style="color:var(--red);margin-left:4px">*</span></div>
+        <div class="type-grid">
+            @php
+                $types = [
+                    ['val'=>'apartment','icon'=>'🏢','label'=>'Apartment'],
+                    ['val'=>'villa',    'icon'=>'🏰','label'=>'Villa'],
+                    ['val'=>'house',    'icon'=>'🏠','label'=>'House'],
+                    ['val'=>'land',     'icon'=>'🌍','label'=>'Land'],
+                    ['val'=>'commercial','icon'=>'🏪','label'=>'Commercial'],
+                    ['val'=>'office',   'icon'=>'💼','label'=>'Office'],
+                ];
+            @endphp
+            @foreach($types as $t)
+            <label class="tcard" onclick="selectType(this)">
+                <input type="radio" name="property_type" value="{{ $t['val'] }}" required>
+                <div class="tcard-check"><i class="fas fa-check"></i></div>
+                <div class="tcard-icon">{{ $t['icon'] }}</div>
+                <div class="tcard-label">{{ $t['label'] }}</div>
+            </label>
+            @endforeach
         </div>
     </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-align-left"></i> Property Name & Description</div>
+        <div class="lang-switch">
+            <button type="button" class="lpill active" onclick="switchLang(this,'en')">🇬🇧 English</button>
+            <button type="button" class="lpill" onclick="switchLang(this,'ar')">🇮🇶 عربی</button>
+            <button type="button" class="lpill" onclick="switchLang(this,'ku')">🏔️ کوردی</button>
+        </div>
+        <div class="lang-pane active" id="lpane-en">
+            <div class="frow" style="margin-bottom:14px">
+                <div class="fgroup">
+                    <label class="flabel">Title in English <span class="req">*</span></label>
+                    <input type="text" name="title_en" class="finput" placeholder="e.g. Luxury Villa in Erbil">
+                </div>
+            </div>
+            <div class="fgroup">
+                <label class="flabel">Description in English</label>
+                <textarea name="description_en" class="ftextarea" placeholder="Describe the property — location highlights, features, condition..."></textarea>
+            </div>
+        </div>
+        <div class="lang-pane" id="lpane-ar" dir="rtl">
+            <div class="frow" style="margin-bottom:14px">
+                <div class="fgroup">
+                    <label class="flabel">العنوان بالعربية</label>
+                    <input type="text" name="title_ar" class="finput" placeholder="مثال: فيلا فاخرة في أربيل">
+                </div>
+            </div>
+            <div class="fgroup">
+                <label class="flabel">الوصف بالعربية</label>
+                <textarea name="description_ar" class="ftextarea" placeholder="صِف العقار بالتفصيل..."></textarea>
+            </div>
+        </div>
+        <div class="lang-pane" id="lpane-ku" dir="rtl">
+            <div class="frow" style="margin-bottom:14px">
+                <div class="fgroup">
+                    <label class="flabel">ناونیشان بە کوردی</label>
+                    <input type="text" name="title_ku" class="finput" placeholder="نموونە: ڤیلای بەرز لە هەولێر">
+                </div>
+            </div>
+            <div class="fgroup">
+                <label class="flabel">وەسف بە کوردی</label>
+                <textarea name="description_ku" class="ftextarea" placeholder="خانووبەرەکەت بە وردی باس بکە..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-dollar-sign"></i> Price</div>
+        <div class="frow frow-2">
+            <div class="fgroup">
+                <label class="flabel">Price in USD <span class="req">*</span></label>
+                <div class="finput-prefix">
+                    <span class="prefix-tag">$</span>
+                    <input type="text" name="price_usd" id="price_usd" placeholder="e.g. 150,000" required>
+                </div>
+            </div>
+            <div class="fgroup">
+                <label class="flabel">Price in IQD <span class="hint">(optional)</span></label>
+                <div class="finput-prefix">
+                    <span class="prefix-tag">IQD</span>
+                    <input type="text" name="price" id="price_iqd" placeholder="e.g. 200,000,000">
+                </div>
+            </div>
+        </div>
+        <div class="frow frow-2" style="margin-top:6px">
+            <div class="fgroup">
+                <label class="flabel">Area (m²) <span class="req">*</span></label>
+                <input type="number" name="area" class="finput" placeholder="e.g. 250" required>
+            </div>
+            <div class="fgroup">
+                <label class="flabel">Status</label>
+                <select name="status" class="fselect">
+                    <option value="available">✅ Available</option>
+                    <option value="sold">❌ Sold</option>
+                    <option value="rented">🔑 Rented</option>
+                    <option value="pending">⏳ Pending</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <a href="{{ route('agent.properties') }}" class="btn-prev"><i class="fas fa-times"></i> Cancel</a>
+        <button type="button" class="btn-next" onclick="nextStep(1)">Location <i class="fas fa-arrow-right"></i></button>
+    </div>
+</div>
+
+{{-- ════ STEP 2 — LOCATION ════ --}}
+<div class="step-panel" id="step2">
+    <div class="step-header">
+        <div class="step-tag"><i class="fas fa-map-marker-alt"></i> Step 2 of 5</div>
+        <div class="step-title">Where is the property?</div>
+        <div class="step-sub">Select city, area and pin the exact location on the map</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-city"></i> City & Area</div>
+        <div class="frow frow-2">
+            <div class="fgroup">
+                <label class="flabel">City <span class="req">*</span></label>
+                <select id="location-city-select" class="fselect" required>
+                    <option value="">Loading cities...</option>
+                </select>
+            </div>
+            <div class="fgroup">
+                <label class="flabel">District / Area <span class="req">*</span></label>
+                <select id="location-area-select" class="fselect" disabled required>
+                    <option value="">Select City First</option>
+                </select>
+            </div>
+        </div>
+        <div class="frow" style="margin-top:6px">
+            <div class="fgroup">
+                <label class="flabel">Street / Full Address <span class="req">*</span></label>
+                <input type="text" name="address" class="finput" placeholder="Building name, street, floor, nearest landmark..." required>
+            </div>
+        </div>
+        <input type="hidden" name="city_en"     id="city_en">
+        <input type="hidden" name="city_ar"     id="city_ar">
+        <input type="hidden" name="city_ku"     id="city_ku">
+        <input type="hidden" name="district_en" id="district_en">
+        <input type="hidden" name="district_ar" id="district_ar">
+        <input type="hidden" name="district_ku" id="district_ku">
+    </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-map-marked-alt"></i> Pin on Map</div>
+
+        {{-- Map toggle --}}
+        <label class="map-toggle-row" for="has_map_toggle">
+            <input type="checkbox" name="has_map" id="has_map_toggle" value="1" checked>
+            <span class="map-toggle-label">
+                <i class="fas fa-map-marked-alt"></i>
+                Enable map pin (recommended — uncheck to skip)
+            </span>
+        </label>
+
+        <div id="map_content_wrapper" class="map-wrapper">
+            <div class="map-search-bar">
+                <input type="text" id="mapSearchInput" placeholder="Search address or place name...">
+                <button type="button" onclick="searchMapAddress()"><i class="fas fa-search"></i> Search</button>
+            </div>
+            <div class="map-frame"><div id="leaflet-map"></div></div>
+            <div class="map-hint"><i class="fas fa-info-circle"></i> Click anywhere on the map or drag the pin to set the exact location.</div>
+            <div class="coord-row">
+                <div class="fgroup">
+                    <label class="flabel">Latitude</label>
+                    <input type="text" name="latitude" id="latitude" class="finput" readonly placeholder="Auto from map">
+                </div>
+                <div class="fgroup">
+                    <label class="flabel">Longitude</label>
+                    <input type="text" name="longitude" id="longitude" class="finput" readonly placeholder="Auto from map">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button type="button" class="btn-prev" onclick="prevStep(2)"><i class="fas fa-arrow-left"></i> Back</button>
+        <button type="button" class="btn-next" onclick="nextStep(2)">Property Details <i class="fas fa-arrow-right"></i></button>
+    </div>
+</div>
+
+{{-- ════ STEP 3 — DETAILS ════ --}}
+<div class="step-panel" id="step3">
+    <div class="step-header">
+        <div class="step-tag"><i class="fas fa-list-check"></i> Step 3 of 5</div>
+        <div class="step-title">Property Details</div>
+        <div class="step-sub">Rooms, features and amenities</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-door-open"></i> Rooms</div>
+        <div class="frow frow-4">
+            <div class="fgroup"><label class="flabel">🛏 Bedrooms</label><input type="number" name="bedrooms" class="finput" placeholder="0" min="0"></div>
+            <div class="fgroup"><label class="flabel">🚿 Bathrooms</label><input type="number" name="bathrooms" class="finput" placeholder="0" min="0"></div>
+            <div class="fgroup"><label class="flabel">🏗 Floors</label><input type="number" name="floor_number" class="finput" placeholder="1" min="1"></div>
+            <div class="fgroup"><label class="flabel">📅 Year Built</label><input type="number" name="year_built" class="finput" placeholder="{{ date('Y') }}" min="1900" max="{{ date('Y') + 5 }}"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-sparkles"></i> Features & Amenities</div>
+        <div class="toggle-group">
+            @php
+                $toggles = [
+                    ['name'=>'furnished',   'icon'=>'🛋',  'label'=>'Furnished'],
+                    ['name'=>'electricity', 'icon'=>'⚡',  'label'=>'Electricity 24/7', 'checked'=>true],
+                    ['name'=>'water',       'icon'=>'💧',  'label'=>'Water System',      'checked'=>true],
+                    ['name'=>'internet',    'icon'=>'🌐',  'label'=>'Internet / Fiber',   'checked'=>true],
+                    ['name'=>'parking',     'icon'=>'🅿️',  'label'=>'Parking'],
+                    ['name'=>'security',    'icon'=>'🔒',  'label'=>'Security'],
+                    ['name'=>'elevator',    'icon'=>'🛗',  'label'=>'Elevator'],
+                    ['name'=>'generator',   'icon'=>'🔋',  'label'=>'Generator'],
+                    ['name'=>'garden',      'icon'=>'🌳',  'label'=>'Garden'],
+                    ['name'=>'pool',        'icon'=>'🏊',  'label'=>'Swimming Pool'],
+                ];
+            @endphp
+            @foreach($toggles as $tog)
+            <label class="toggle-item {{ isset($tog['checked']) ? 'checked' : '' }}" onclick="toggleCheck(this)">
+                <input type="checkbox" name="{{ $tog['name'] }}" value="1" {{ isset($tog['checked']) ? 'checked' : '' }}>
+                <div class="toggle-box">@if(isset($tog['checked']))<i class="fas fa-check" style="font-size:11px"></i>@endif</div>
+                <span class="toggle-icon">{{ $tog['icon'] }}</span>
+                <span class="toggle-label">{{ $tog['label'] }}</span>
+            </label>
+            @endforeach
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button type="button" class="btn-prev" onclick="prevStep(3)"><i class="fas fa-arrow-left"></i> Back</button>
+        <button type="button" class="btn-next" onclick="nextStep(3)">Add Photos <i class="fas fa-arrow-right"></i></button>
+    </div>
+</div>
+
+{{-- ════ STEP 4 — PHOTOS ════ --}}
+<div class="step-panel" id="step4">
+    <div class="step-header">
+        <div class="step-tag"><i class="fas fa-camera"></i> Step 4 of 5</div>
+        <div class="step-title">Add Photos</div>
+        <div class="step-sub">Upload photos manually or let AI extract the best frames from a video tour.</div>
+    </div>
+
+    {{-- AI VIDEO FRAME EXTRACTION --}}
+    <div class="card">
+        <div class="card-title">
+            <i class="fas fa-video" style="background:linear-gradient(135deg,#8b5cf6,#a78bfa);color:white;"></i>
+            AI Video Frame Extraction
+            <span style="font-size:12px;font-weight:400;color:var(--sub);margin-left:6px">(optional)</span>
+        </div>
+
+        <div class="video-section">
+            <div class="video-section-header">
+                <div class="video-ai-icon"><i class="fas fa-robot"></i></div>
+                <div>
+                    <div class="video-ai-title">Upload Property Tour Video</div>
+                    <div class="video-ai-subtitle">AI will automatically extract the 10 best-quality frames and add them to your gallery below</div>
+                </div>
+            </div>
+
+            <div class="video-drop-area" id="videoDropArea" onclick="document.getElementById('videoInput').click()">
+                <div class="video-drop-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                <div class="video-drop-text">Click to Upload Property Video</div>
+                <div class="video-drop-hint">MP4, MOV, AVI — Max 500 MB &nbsp;•&nbsp; AI selects 10 best frames automatically</div>
+                <input type="file" id="videoInput" accept="video/mp4,video/quicktime,video/x-msvideo" hidden onchange="handleVideoUpload(event)">
+            </div>
+
+            <div class="video-status" id="videoStatus">
+                <div class="vs-row">
+                    <div class="vs-spinner"></div>
+                    <div>
+                        <div class="vs-title"    id="vsTitle">Uploading video...</div>
+                        <div class="vs-subtitle" id="vsSubtitle">Please wait</div>
+                    </div>
+                </div>
+                <div class="vs-bar-wrap"><div class="vs-bar" id="vsBar"></div></div>
+            </div>
+        </div>
+    </div>
+
+    {{-- MANUAL IMAGE UPLOAD --}}
+    <div class="card">
+        <div class="card-title"><i class="fas fa-images"></i> Property Photos <span class="req">*</span></div>
+
+        <div class="img-dropzone" id="imgDropzone" onclick="document.getElementById('imageInput').click()">
+            <div class="dz-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+            <div class="dz-title">Click to upload or drag & drop</div>
+            <div class="dz-sub">Upload multiple photos at once. Drag to reorder. First photo = Cover image.</div>
+            <div class="dz-formats">
+                <span class="fmt-tag">JPG</span>
+                <span class="fmt-tag">PNG</span>
+                <span class="fmt-tag">WEBP</span>
+                <span class="fmt-tag">Max 30MB each</span>
+            </div>
+            <input type="file" name="images[]" id="imageInput" accept="image/*" multiple hidden>
+        </div>
+
+        <div class="img-preview-grid" id="imgGrid"></div>
+
+        <div class="img-count-bar" id="imgCountBar" style="display:none">
+            <span><strong id="imgCount">0</strong> photos selected</span>
+            <span style="color:var(--sub);font-size:12px">First photo = Cover image</span>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button type="button" class="btn-prev" onclick="prevStep(4)"><i class="fas fa-arrow-left"></i> Back</button>
+        <button type="button" class="btn-next" onclick="nextStep(4)">Review & Publish <i class="fas fa-arrow-right"></i></button>
+    </div>
+</div>
+
+{{-- ════ STEP 5 — REVIEW ════ --}}
+<div class="step-panel" id="step5">
+    <div class="step-header">
+        <div class="step-tag"><i class="fas fa-check-double"></i> Step 5 of 5</div>
+        <div class="step-title">Review & Publish</div>
+        <div class="step-sub">Everything looks good? Submit your listing.</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title"><i class="fas fa-eye"></i> Summary</div>
+        <div class="review-grid" id="reviewGrid"></div>
+        <div style="margin-top:16px">
+            <div class="rv-label" style="margin-bottom:8px">PHOTOS</div>
+            <div class="review-images" id="reviewImages"></div>
+        </div>
+    </div>
+
+    <div class="card" style="border-color:rgba(67,78,170,.25);background:var(--PLL)">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+            <div style="font-size:24px;margin-top:2px">✅</div>
+            <div>
+                <div style="font-size:15px;font-weight:700;color:var(--ink);margin-bottom:4px">Ready to publish</div>
+                <div style="font-size:13.5px;color:var(--sub);line-height:1.6">Your property will be visible to buyers and renters on Dream Mulk immediately after submission. You can always edit or remove it from your dashboard.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-nav">
+        <button type="button" class="btn-prev" onclick="prevStep(5)"><i class="fas fa-arrow-left"></i> Back</button>
+        <button type="submit" class="btn-next btn-submit" id="submitBtn"><i class="fas fa-paper-plane"></i> Publish Property</button>
+    </div>
+</div>
+
+</div>{{-- /apf-body --}}
 </form>
 
-{{-- Scripts --}}
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWAA1UqFQG8BzniCVqVZrvCzWHz72yoOA&callback=initMap" async defer></script>
-
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ============================================
-// GLOBAL VARIABLES
-// ============================================
-let map, marker, selectedFiles = [], draggedItem = null;
-let videoFramesExtracted = false;
+// ═══════════════════════════════════════════
+// WIZARD STATE
+// ═══════════════════════════════════════════
+let currentStep = 1;
+const totalSteps = 5;
+let leafletMap = null, leafletMarker = null;
+let selectedFiles = [];
+let dragSrc = null;
 
-// ============================================
+function goToStep(n) {
+    if (n < 1 || n > totalSteps) return;
+    document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('step' + n).classList.add('active');
+    document.querySelectorAll('.wstep').forEach(s => {
+        const sn = parseInt(s.dataset.step);
+        s.classList.remove('active','done');
+        if (sn === n) s.classList.add('active');
+        else if (sn < n) s.classList.add('done');
+        const wnum = s.querySelector('.wnum');
+        if (sn < n) wnum.innerHTML = '<i class="fas fa-check" style="font-size:11px"></i>';
+        else wnum.textContent = sn;
+    });
+    currentStep = n;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (n === 2) initMap();
+    if (n === 5) buildReview();
+}
+
+function nextStep(from) { if (!validateStep(from)) return; goToStep(from + 1); }
+function prevStep(from) { goToStep(from - 1); }
+
+// ═══════════════════════════════════════════
+// VALIDATION
+// ═══════════════════════════════════════════
+function validateStep(step) {
+    if (step === 1) {
+        const type = document.querySelector('input[name="property_type"]:checked');
+        if (!type) { alert('Please select a property type.'); return false; }
+
+        const titleEn = document.querySelector('input[name="title_en"]').value.trim();
+        const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
+        const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
+        if (!titleEn && !titleAr && !titleKu) { alert('Please enter a title in at least one language.'); return false; }
+        if (!titleEn) document.querySelector('input[name="title_en"]').value = titleAr || titleKu;
+        if (!titleAr) document.querySelector('input[name="title_ar"]').value = titleEn || titleKu;
+        if (!titleKu) document.querySelector('input[name="title_ku"]').value = titleEn || titleAr;
+
+        const priceUsd = document.querySelector('input[name="price_usd"]').value.trim();
+        if (!priceUsd) { alert('Please enter the price in USD.'); return false; }
+
+        // IQD price optional - default to 0 if empty
+        const priceIqdEl = document.querySelector('input[name="price"]');
+        if (!priceIqdEl.value.trim()) priceIqdEl.value = '0';
+
+        const area = document.querySelector('input[name="area"]').value.trim();
+        if (!area) { alert('Please enter the area.'); return false; }
+    }
+    if (step === 2) {
+        const address = document.querySelector('input[name="address"]').value.trim();
+        if (!address) { alert('Please enter the address details.'); return false; }
+    }
+    if (step === 4) {
+        if (selectedFiles.length === 0) { alert('Please upload at least one photo.'); return false; }
+    }
+    return true;
+}
+
+// ═══════════════════════════════════════════
+// LISTING TYPE
+// ═══════════════════════════════════════════
+function setListType(btn, val) {
+    document.querySelectorAll('.lt-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('listing_type').value = val;
+}
+
+function selectType(label) {
+    document.querySelectorAll('.tcard').forEach(c => c.classList.remove('selected'));
+    label.classList.add('selected');
+    label.querySelector('input').checked = true;
+}
+
+function switchLang(btn, lang) {
+    document.querySelectorAll('.lpill').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.lang-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('lpane-' + lang).classList.add('active');
+}
+
+function toggleCheck(label) {
+    label.classList.toggle('checked');
+    const cb  = label.querySelector('input');
+    cb.checked = !cb.checked;
+    const box = label.querySelector('.toggle-box');
+    box.innerHTML = cb.checked ? '<i class="fas fa-check" style="font-size:11px"></i>' : '';
+}
+
+// ═══════════════════════════════════════════
+// MAP TOGGLE
+// ═══════════════════════════════════════════
+function toggleMapVisibility() {
+    const toggle  = document.getElementById('has_map_toggle');
+    const wrapper = document.getElementById('map_content_wrapper');
+    const lat     = document.getElementById('latitude');
+    const lng     = document.getElementById('longitude');
+    if (toggle.checked) {
+        wrapper.classList.remove('hidden');
+        if (leafletMap) setTimeout(() => leafletMap.invalidateSize(), 150);
+    } else {
+        wrapper.classList.add('hidden');
+        lat.value = '0';
+        lng.value = '0';
+    }
+}
+
+// ═══════════════════════════════════════════
+// LEAFLET MAP
+// ═══════════════════════════════════════════
+function initMap() {
+    if (leafletMap) return;
+    const defaultLat = 36.1911, defaultLng = 44.0091;
+    leafletMap = L.map('leaflet-map', { center: [defaultLat, defaultLng], zoom: 13 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© <a href="https://openstreetmap.org">OpenStreetMap</a>'
+    }).addTo(leafletMap);
+
+    const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:38px;height:38px;background:var(--P,#434eaa);border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 4px 14px rgba(67,78,170,.45);display:flex;align-items:center;justify-content:center;"><i class='fas fa-home' style='transform:rotate(45deg);color:white;font-size:13px;'></i></div>`,
+        iconSize: [38, 38], iconAnchor: [19, 38], popupAnchor: [0, -42]
+    });
+
+    leafletMarker = L.marker([defaultLat, defaultLng], { icon, draggable: true }).addTo(leafletMap);
+    leafletMarker.on('dragend', e => { const p = e.target.getLatLng(); updateCoords(p.lat, p.lng); });
+    leafletMap.on('click', e => { leafletMarker.setLatLng(e.latlng); updateCoords(e.latlng.lat, e.latlng.lng); });
+    updateCoords(defaultLat, defaultLng);
+}
+
+function updateCoords(lat, lng) {
+    document.getElementById('latitude').value  = lat.toFixed(6);
+    document.getElementById('longitude').value = lng.toFixed(6);
+}
+
+function moveMapTo(lat, lng, zoom) {
+    if (!leafletMap) return;
+    const pos = [parseFloat(lat), parseFloat(lng)];
+    leafletMap.setView(pos, zoom || 13);
+    leafletMarker.setLatLng(pos);
+    updateCoords(pos[0], pos[1]);
+}
+
+async function searchMapAddress() {
+    const q = document.getElementById('mapSearchInput').value.trim();
+    if (!q) return;
+    try {
+        const res  = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`);
+        const data = await res.json();
+        if (data.length > 0) moveMapTo(data[0].lat, data[0].lon, 15);
+        else alert('Location not found. Try a different search.');
+    } catch(e) { console.error(e); }
+}
+
+// ═══════════════════════════════════════════
+// LOCATION SELECTOR
+// ═══════════════════════════════════════════
+async function loadCities() {
+    try {
+        const res  = await fetch('/v1/api/location/branches', { headers: {'Accept-Language':'en'} });
+        const data = await res.json();
+        if (!data.success) return;
+        const sel = document.getElementById('location-city-select');
+        sel.innerHTML = '<option value="">— Select City —</option>';
+        data.data.sort((a,b) => a.city_name_en.localeCompare(b.city_name_en)).forEach(c => {
+            const o = document.createElement('option');
+            o.value       = c.id;
+            o.textContent = c.city_name_en;
+            o.dataset.en  = c.city_name_en;
+            o.dataset.ar  = c.city_name_ar;
+            o.dataset.ku  = c.city_name_ku;
+            o.dataset.lat = c.coordinates?.lat || c.latitude  || '';
+            o.dataset.lng = c.coordinates?.lng || c.longitude || '';
+            sel.appendChild(o);
+        });
+        sel.addEventListener('change', async () => {
+            const opt = sel.options[sel.selectedIndex];
+            document.getElementById('city_en').value = opt.dataset.en || '';
+            document.getElementById('city_ar').value = opt.dataset.ar || '';
+            document.getElementById('city_ku').value = opt.dataset.ku || '';
+            if (opt.dataset.lat && leafletMap) moveMapTo(opt.dataset.lat, opt.dataset.lng, 12);
+            await loadAreas(sel.value);
+        });
+    } catch(e) { console.error('City load error', e); }
+}
+
+async function loadAreas(cityId) {
+    const sel = document.getElementById('location-area-select');
+    if (!cityId) { sel.innerHTML = '<option value="">Select City First</option>'; sel.disabled = true; return; }
+    sel.innerHTML = '<option value="">Loading...</option>';
+    sel.disabled  = true;
+    try {
+        const res  = await fetch(`/v1/api/location/branches/${cityId}/areas`, { headers: {'Accept-Language':'en'} });
+        const data = await res.json();
+        sel.innerHTML = '<option value="">— Select Area —</option>';
+        (data.data || []).sort((a,b) => a.area_name_en.localeCompare(b.area_name_en)).forEach(a => {
+            const o = document.createElement('option');
+            o.value       = a.id;
+            o.textContent = a.area_name_en;
+            o.dataset.en  = a.area_name_en;
+            o.dataset.ar  = a.area_name_ar;
+            o.dataset.ku  = a.area_name_ku;
+            o.dataset.lat = a.coordinates?.lat || a.latitude  || '';
+            o.dataset.lng = a.coordinates?.lng || a.longitude || '';
+            sel.appendChild(o);
+        });
+        sel.disabled = false;
+        sel.addEventListener('change', () => {
+            const opt = sel.options[sel.selectedIndex];
+            document.getElementById('district_en').value = opt.dataset.en || '';
+            document.getElementById('district_ar').value = opt.dataset.ar || '';
+            document.getElementById('district_ku').value = opt.dataset.ku || '';
+            if (opt.dataset.lat && leafletMap) moveMapTo(opt.dataset.lat, opt.dataset.lng, 14);
+        });
+    } catch(e) { sel.innerHTML = '<option value="">Error loading areas</option>'; sel.disabled = false; }
+}
+
+// ═══════════════════════════════════════════
 // VIDEO UPLOAD & AI FRAME EXTRACTION
-// ============================================
+// ═══════════════════════════════════════════
 async function handleVideoUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    console.log('📹 Video selected:', file.name, '(' + (file.size / 1024 / 1024).toFixed(2) + ' MB)');
+    if (file.size > 500 * 1024 * 1024) { alert('Video file too large! Maximum 500MB.'); event.target.value = ''; return; }
+    const allowed = ['video/mp4','video/quicktime','video/x-msvideo'];
+    if (!allowed.includes(file.type)) { alert('Unsupported format! Use MP4, MOV, or AVI.'); event.target.value = ''; return; }
 
-    // Validate file
-    const maxSize = 500 * 1024 * 1024; // 500MB
-    if (file.size > maxSize) {
-        alert('Video file is too large! Maximum size is 500MB.');
-        event.target.value = '';
-        return;
-    }
+    const dropArea = document.getElementById('videoDropArea');
+    const statusDiv = document.getElementById('videoStatus');
+    const vsBar     = document.getElementById('vsBar');
+    const vsTitle   = document.getElementById('vsTitle');
+    const vsSub     = document.getElementById('vsSubtitle');
 
-    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
-    if (!allowedTypes.includes(file.type)) {
-        alert('Unsupported video format! Please use MP4, MOV, or AVI.');
-        event.target.value = '';
-        return;
-    }
-
-    // Update UI
-    const uploadArea = document.getElementById('videoUploadArea');
-    const statusDiv = document.getElementById('videoProcessingStatus');
-    const progressBar = document.getElementById('progressBar');
-    const titleEl = document.getElementById('processingTitle');
-    const subtitleEl = document.getElementById('processingSubtitle');
-
-    uploadArea.classList.add('processing');
+    dropArea.classList.add('processing');
     statusDiv.classList.add('show');
-    progressBar.style.width = '10%';
-    titleEl.textContent = 'Uploading video to AI service...';
-    subtitleEl.textContent = 'Preparing for frame extraction';
+    vsBar.style.width = '10%';
+    vsTitle.textContent = 'Uploading video to AI service...';
+    vsSub.textContent   = 'Preparing for frame extraction';
 
-    // Create FormData
     const formData = new FormData();
     formData.append('video', file);
     formData.append('num_frames', 10);
 
     try {
-        // Call Python AI Service via Laravel proxy
-        progressBar.style.width = '30%';
-        titleEl.textContent = 'Processing video with AI...';
-        subtitleEl.textContent = 'Analyzing frames and extracting best quality images (30-60 seconds)';
+        vsBar.style.width   = '30%';
+        vsTitle.textContent = 'Processing video with AI...';
+        vsSub.textContent   = 'Analyzing frames and selecting best quality images (30–60 seconds)';
 
-        // 3-minute timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 180000);
+        const timeoutId  = setTimeout(() => controller.abort(), 180000);
 
         const response = await fetch('/api/video/extract-frames', {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal,
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || ''
-            }
+            method: 'POST', body: formData, signal: controller.signal,
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' }
         });
-
         clearTimeout(timeoutId);
-        progressBar.style.width = '60%';
 
-        if (!response.ok) {
-            throw new Error('AI service returned error: ' + response.status);
-        }
+        vsBar.style.width = '60%';
+        if (!response.ok) throw new Error('AI service error: ' + response.status);
 
         const result = await response.json();
-        console.log('✅ AI Response:', result);
+        if (!result.success || !result.data?.frames) throw new Error(result.message || 'Frame extraction failed');
 
-        if (!result.success || !result.data || !result.data.frames) {
-            throw new Error(result.message || 'Frame extraction failed');
-        }
+        vsBar.style.width   = '80%';
+        vsTitle.textContent = 'Downloading extracted frames...';
+        vsSub.textContent   = `Got ${result.data.frames.length} high-quality frames`;
 
-        progressBar.style.width = '80%';
-        titleEl.textContent = 'Downloading extracted frames...';
-        subtitleEl.textContent = `Got ${result.data.frames.length} high-quality frames`;
-
-        // Download frames
         const frameFiles = [];
         for (let i = 0; i < result.data.frames.length; i++) {
-            const frameUrl = result.data.frames[i];
-            const proxyUrl = frameUrl.replace('http://127.0.0.1:8001/', '/api/video/');
-
-            const frameResponse = await fetch(proxyUrl);
-            const blob = await frameResponse.blob();
-            const fileName = `ai_frame_${i + 1}.jpg`;
-            const frameFile = new File([blob], fileName, { type: 'image/jpeg' });
-            frameFiles.push(frameFile);
+            const proxyUrl = result.data.frames[i].replace('http://127.0.0.1:8001/', '/api/video/');
+            const blob     = await (await fetch(proxyUrl)).blob();
+            frameFiles.push(new File([blob], `ai_frame_${i+1}.jpg`, { type: 'image/jpeg' }));
         }
 
-        progressBar.style.width = '90%';
+        vsBar.style.width = '90%';
+        selectedFiles     = frameFiles;
+        renderThumbs();
+        syncFiles();
 
-        // Clear existing images
-        selectedFiles = [];
+        vsBar.style.width   = '100%';
+        vsTitle.textContent = '✅ Extracted ' + frameFiles.length + ' frames successfully!';
+        vsSub.textContent   = 'Frames added to your photo gallery below';
 
-        // Add extracted frames
-        selectedFiles = frameFiles;
-
-        // Render previews
-        renderPreviews();
-        syncInputFiles();
-
-        videoFramesExtracted = true;
-
-        // Success
-        progressBar.style.width = '100%';
-        titleEl.textContent = '✅ Success! Extracted ' + frameFiles.length + ' frames';
-        subtitleEl.textContent = 'High-quality frames ready';
-
-        setTimeout(() => {
-            statusDiv.classList.remove('show');
-            uploadArea.classList.remove('processing');
-            progressBar.style.width = '0%';
-        }, 3000);
-
-        console.log('✅ Video processing complete. Frames:', frameFiles.length);
+        setTimeout(() => { statusDiv.classList.remove('show'); dropArea.classList.remove('processing'); vsBar.style.width = '0%'; }, 3000);
 
     } catch (error) {
-        console.error('❌ Video processing error:', error);
-
-        titleEl.textContent = '❌ Error processing video';
-        subtitleEl.textContent = error.message || 'Failed to extract frames';
-        progressBar.style.width = '0%';
-
-        setTimeout(() => {
-            statusDiv.classList.remove('show');
-            uploadArea.classList.remove('processing');
-        }, 3000);
-
+        console.error('Video processing error:', error);
+        vsTitle.textContent = '❌ Error processing video';
+        vsSub.textContent   = error.message || 'Failed to extract frames';
+        vsBar.style.width   = '0%';
+        setTimeout(() => { statusDiv.classList.remove('show'); dropArea.classList.remove('processing'); }, 3000);
         alert('Error processing video: ' + error.message);
     }
 }
 
-// ============================================
-// UTILITY FUNCTIONS
-// ============================================
-function normalizeNumber(value) {
-    const arabicNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-    const kurdishNumerals = ['٠','١','٢','٣','٤','٥','٦','٧','٨','٩'];
-    const persianNumerals = ['۰','۱','۲','۳','۴','۵','۶','۷','۸','۹'];
-    let normalized = value.replace(/,/g, '');
-    arabicNumerals.forEach((num, index) => { normalized = normalized.replace(new RegExp(num, 'g'), index.toString()); });
-    persianNumerals.forEach((num, index) => { normalized = normalized.replace(new RegExp(num, 'g'), index.toString()); });
-    return normalized;
+// ═══════════════════════════════════════════
+// IMAGE UPLOAD
+// ═══════════════════════════════════════════
+function setupImages() {
+    const dz  = document.getElementById('imgDropzone');
+    const inp = document.getElementById('imageInput');
+    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', ()  => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+    inp.addEventListener('change', e => handleFiles(e.target.files));
 }
 
-// ============================================
-// LOCATION SELECTOR CLASS
-// ============================================
-class LocationSelector {
-    constructor(options = {}) {
-        this.citySelectId = options.citySelectId || "city-select";
-        this.areaSelectId = options.areaSelectId || "area-select";
-        this.cityInputId = options.cityInputId || "city";
-        this.districtInputId = options.districtInputId || "district";
-        this.onCityChange = options.onCityChange || null;
-        this.onAreaChange = options.onAreaChange || null;
-        this.cities = [];
-        this.currentCityId = options.selectedCityId || null;
-        this.currentAreaId = options.selectedAreaId || null;
-        this.initialized = false;
-        this.isLoading = false;
+function handleFiles(files) {
+    for (const f of files) {
+        if (!f.type.match('image.*')) { alert(f.name + ' is not an image'); continue; }
+        if (f.size > 30 * 1024 * 1024) { alert(f.name + ' exceeds 30MB limit'); continue; }
+        selectedFiles.push(f);
     }
-
-    async init() {
-        if (this.isLoading) return;
-        this.isLoading = true;
-        try {
-            await this.loadCities();
-            this.setupEventListeners();
-            if (this.currentCityId) {
-                await this.loadAreas(this.currentCityId);
-            }
-            this.initialized = true;
-        } catch (error) {
-            console.error("Failed to initialize LocationSelector:", error);
-            this.showError("Failed to load location data. Please refresh the page.");
-        } finally {
-            this.isLoading = false;
-        }
-    }
-
-    async loadCities() {
-        try {
-            const response = await fetch("/v1/api/location/branches", {
-                headers: { "Accept-Language": "en" }
-            });
-
-            if (!response.ok) {
-                let errorText = await response.text();
-                throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-            }
-
-            const result = await response.json();
-            if (result.success && result.data && Array.isArray(result.data)) {
-                this.cities = result.data;
-                this.populateCitySelect();
-            } else {
-                throw new Error("Invalid response format or no data");
-            }
-        } catch (error) {
-            console.error("Error loading cities:", error);
-            const citySelect = document.getElementById(this.citySelectId);
-            if (citySelect) {
-                citySelect.innerHTML = '<option value="">Error: Server issue</option>';
-            }
-            this.showError("Unable to load cities. Please try again later.");
-        }
-    }
-
-    populateCitySelect() {
-        const citySelect = document.getElementById(this.citySelectId);
-        if (!citySelect) return;
-
-        citySelect.innerHTML = '<option value="">Select City</option>';
-        if (this.cities.length === 0) return;
-
-        const sortedCities = [...this.cities].sort((a, b) => a.city_name_en.localeCompare(b.city_name_en));
-
-        sortedCities.forEach((city) => {
-            const option = document.createElement("option");
-            option.value = city.id;
-            option.textContent = `${city.city_name_en}`;
-
-            option.dataset.nameEn = city.city_name_en;
-            option.dataset.nameKu = city.city_name_ku;
-            option.dataset.nameAr = city.city_name_ar;
-            option.dataset.lat = city.coordinates?.lat || city.latitude || '';
-            option.dataset.lng = city.coordinates?.lng || city.longitude || '';
-
-            if (city.id == this.currentCityId) option.selected = true;
-            citySelect.appendChild(option);
-        });
-    }
-
-    async loadAreas(cityId) {
-        try {
-            const areaSelect = document.getElementById(this.areaSelectId);
-            if (!areaSelect) return;
-
-            areaSelect.innerHTML = '<option value="">Loading areas...</option>';
-            areaSelect.disabled = true;
-
-            const response = await fetch(`/v1/api/location/branches/${cityId}/areas`, {
-                headers: { "Accept-Language": "en" },
-            });
-            const result = await response.json();
-
-            if (result.success && result.data) {
-                this.populateAreaSelect(result.data);
-            } else {
-                throw new Error("Invalid response format");
-            }
-        } catch (error) {
-            console.error("Error loading areas:", error);
-            const areaSelect = document.getElementById(this.areaSelectId);
-            if (areaSelect) areaSelect.innerHTML = '<option value="">Error loading areas</option>';
-        } finally {
-            const areaSelect = document.getElementById(this.areaSelectId);
-            if (areaSelect) areaSelect.disabled = false;
-        }
-    }
-
-    populateAreaSelect(areas) {
-        const areaSelect = document.getElementById(this.areaSelectId);
-        if (!areaSelect) return;
-
-        areaSelect.innerHTML = '<option value="">Select Area</option>';
-        const sortedAreas = [...areas].sort((a, b) => a.area_name_en.localeCompare(b.area_name_en));
-
-        sortedAreas.forEach((area) => {
-            const option = document.createElement("option");
-            option.value = area.id;
-            option.textContent = `${area.area_name_en}`;
-
-            option.dataset.nameEn = area.area_name_en;
-            option.dataset.nameKu = area.area_name_ku;
-            option.dataset.nameAr = area.area_name_ar;
-            option.dataset.fullLocation = area.full_location;
-            option.dataset.lat = area.coordinates?.lat || area.latitude || '';
-            option.dataset.lng = area.coordinates?.lng || area.longitude || '';
-
-            if (area.id == this.currentAreaId) option.selected = true;
-            areaSelect.appendChild(option);
-        });
-    }
-
-    setupEventListeners() {
-        const citySelect = document.getElementById(this.citySelectId);
-        const areaSelect = document.getElementById(this.areaSelectId);
-        const cityInput = document.getElementById(this.cityInputId);
-        const districtInput = document.getElementById(this.districtInputId);
-
-        if (citySelect) {
-            citySelect.addEventListener("change", async (e) => {
-                const selectedOption = e.target.options[e.target.selectedIndex];
-                if (e.target.value) {
-                    if (cityInput) cityInput.value = selectedOption.dataset.nameEn || "";
-                    await this.loadAreas(e.target.value);
-                    if (districtInput) districtInput.value = "";
-
-                    if (this.onCityChange) {
-                        this.onCityChange({
-                            id: e.target.value,
-                            nameEn: selectedOption.dataset.nameEn,
-                            nameKu: selectedOption.dataset.nameKu,
-                            nameAr: selectedOption.dataset.nameAr,
-                            lat: selectedOption.dataset.lat,
-                            lng: selectedOption.dataset.lng
-                        });
-                    }
-                } else {
-                    if (cityInput) cityInput.value = "";
-                    if (districtInput) districtInput.value = "";
-                    if (areaSelect) {
-                        areaSelect.innerHTML = '<option value="">Select City First</option>';
-                        areaSelect.disabled = true;
-                    }
-                }
-            });
-        }
-
-        if (areaSelect) {
-            areaSelect.addEventListener("change", (e) => {
-                const selectedOption = e.target.options[e.target.selectedIndex];
-                if (e.target.value) {
-                    if (districtInput) districtInput.value = selectedOption.dataset.nameEn || "";
-                    if (this.onAreaChange) {
-                        this.onAreaChange({
-                            id: e.target.value,
-                            nameEn: selectedOption.dataset.nameEn,
-                            nameKu: selectedOption.dataset.nameKu,
-                            nameAr: selectedOption.dataset.nameAr,
-                            lat: selectedOption.dataset.lat,
-                            lng: selectedOption.dataset.lng
-                        });
-                    }
-                } else {
-                    if (districtInput) districtInput.value = "";
-                }
-            });
-        }
-    }
-
-    showError(message) {
-        console.error(message);
-    }
+    renderThumbs();
+    syncFiles();
 }
 
-// ============================================
-// GOOGLE MAPS
-// ============================================
-function initMap() {
-    const defaultLoc = { lat: 36.1911, lng: 44.0091 };
-    window.map = new google.maps.Map(document.getElementById("map"), {
-        zoom: 13,
-        center: defaultLoc,
-        styles: [
-            { "featureType": "water", "elementType": "geometry", "stylers": [{"color": "#e9e9e9"}, {"lightness": 17}] },
-            { "featureType": "landscape", "elementType": "geometry", "stylers": [{"color": "#f5f5f5"}, {"lightness": 20}] }
-        ]
+function renderThumbs() {
+    const grid = document.getElementById('imgGrid');
+    grid.innerHTML = '';
+    selectedFiles.forEach((f, i) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const div = document.createElement('div');
+            div.className = 'img-thumb';
+            div.draggable  = true;
+            div.dataset.idx = i;
+            div.innerHTML = `
+                <img src="${e.target.result}" alt="">
+                <button type="button" class="img-thumb-del" onclick="removeImg(${i})"><i class="fas fa-times"></i></button>
+                ${i === 0 ? '<div class="img-thumb-badge">Cover</div>' : ''}
+            `;
+            div.addEventListener('dragstart', onDragStart);
+            div.addEventListener('dragover',  onDragOver);
+            div.addEventListener('drop',      onDrop);
+            div.addEventListener('dragend',   onDragEnd);
+            grid.appendChild(div);
+        };
+        reader.readAsDataURL(f);
     });
+    const bar = document.getElementById('imgCountBar');
+    bar.style.display = selectedFiles.length > 0 ? 'flex' : 'none';
+    document.getElementById('imgCount').textContent = selectedFiles.length;
+}
 
-    window.marker = new google.maps.Marker({
-        position: defaultLoc,
-        map: window.map,
-        draggable: true,
-        animation: google.maps.Animation.DROP,
-        icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: "#303b97",
-            fillOpacity: 1,
-            strokeWeight: 3,
-            strokeColor: "#ffffff"
-        }
+function removeImg(idx) { selectedFiles.splice(idx, 1); renderThumbs(); syncFiles(); }
+
+function syncFiles() {
+    const dt = new DataTransfer();
+    selectedFiles.forEach(f => dt.items.add(f));
+    document.getElementById('imageInput').files = dt.files;
+}
+
+function onDragStart(e) { dragSrc = this; e.dataTransfer.effectAllowed = 'move'; this.style.opacity = '.4'; }
+function onDragOver(e)  { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; }
+function onDrop(e) {
+    e.stopPropagation();
+    if (dragSrc !== this) {
+        const fi = parseInt(dragSrc.dataset.idx), ti = parseInt(this.dataset.idx);
+        const tmp = selectedFiles[fi]; selectedFiles[fi] = selectedFiles[ti]; selectedFiles[ti] = tmp;
+        renderThumbs(); syncFiles();
+    }
+    return false;
+}
+function onDragEnd() { this.style.opacity = '1'; }
+
+// ═══════════════════════════════════════════
+// REVIEW BUILDER
+// ═══════════════════════════════════════════
+function buildReview() {
+    const get = name => { const el = document.querySelector(`[name="${name}"]`); return el ? el.value : '—'; };
+    const typeEl   = document.querySelector('input[name="property_type"]:checked');
+    const listType = document.getElementById('listing_type').value;
+
+    const items = [
+        { label: 'Listing Type',  value: listType === 'sell' ? '🏷️ For Sale' : '🔑 For Rent' },
+        { label: 'Property Type', value: typeEl ? typeEl.value.toUpperCase() : '—' },
+        { label: 'Title',         value: get('title_en') || '—' },
+        { label: 'Price USD',     value: '$' + (get('price_usd') || '0') },
+        { label: 'Price IQD',     value: 'IQD ' + (get('price') || '0') },
+        { label: 'Area',          value: get('area') + ' m²' },
+        { label: 'City',          value: get('city_en') || '—' },
+        { label: 'District',      value: get('district_en') || '—' },
+        { label: 'Address',       value: get('address') || '—' },
+        { label: 'Bedrooms',      value: get('bedrooms') || '—' },
+        { label: 'Bathrooms',     value: get('bathrooms') || '—' },
+        { label: 'Status',        value: get('status') || 'available' },
+        { label: 'Photos',        value: selectedFiles.length + ' uploaded' },
+    ];
+
+    document.getElementById('reviewGrid').innerHTML = items.map(it =>
+        `<div class="rv-item"><div class="rv-label">${it.label}</div><div class="rv-value">${it.value}</div></div>`
+    ).join('');
+
+    const imgDiv = document.getElementById('reviewImages');
+    imgDiv.innerHTML = '';
+    selectedFiles.slice(0, 6).forEach(f => {
+        const reader = new FileReader();
+        reader.onload = e => { const img = document.createElement('img'); img.src = e.target.result; img.className = 'review-img-thumb'; imgDiv.appendChild(img); };
+        reader.readAsDataURL(f);
     });
-
-    google.maps.event.addListener(window.marker, 'dragend', function(event) {
-        updateCoordinates(event.latLng.lat(), event.latLng.lng());
-    });
-
-    window.map.addListener('click', function(event) {
-        window.marker.setPosition(event.latLng);
-        updateCoordinates(event.latLng.lat(), event.latLng.lng());
-    });
-
-    updateCoordinates(defaultLoc.lat, defaultLoc.lng);
-}
-
-function updateCoordinates(lat, lng) {
-    document.getElementById('latitude').value = lat;
-    document.getElementById('longitude').value = lng;
-}
-
-function moveMapTo(lat, lng) {
-    const pos = { lat: parseFloat(lat), lng: parseFloat(lng) };
-    if (window.map && window.marker) {
-        window.map.panTo(pos);
-        window.map.setZoom(14);
-        window.marker.setPosition(pos);
-        updateCoordinates(lat, lng);
-    }
-}
-
-function toggleMap() {
-    const mapToggle = document.getElementById('has_map_toggle');
-    const mapWrapper = document.getElementById('map_content_wrapper');
-    const latInput = document.getElementById('latitude');
-    const lngInput = document.getElementById('longitude');
-
-    if (mapToggle.checked) {
-        mapWrapper.classList.remove('hidden');
-        if(window.map) {
-            setTimeout(() => {
-                google.maps.event.trigger(window.map, "resize");
-                window.map.setCenter(window.marker.getPosition());
-            }, 100);
-        }
-    } else {
-        mapWrapper.classList.add('hidden');
-        latInput.value = '0';
-        lngInput.value = '0';
-    }
-}
-
-// ============================================
-// IMAGE UPLOAD WITH DRAG & DROP
-// ============================================
-function setupImageUpload() {
-    const uploadZone = document.getElementById('uploadZone');
-    const imageInput = document.getElementById('imageInput');
-    const imagePreviewGrid = document.getElementById('imagePreviewGrid');
-    const sortInstructions = document.getElementById('sortInstructions');
-
-    if (!uploadZone || !imageInput) return;
-
-    uploadZone.onclick = () => imageInput.click();
-    imageInput.onchange = (e) => handleNewFiles(e.target.files);
-    uploadZone.ondragover = (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); };
-    uploadZone.ondragleave = (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); };
-    uploadZone.ondrop = (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleNewFiles(e.dataTransfer.files); };
-
-    function handleNewFiles(fileList) {
-        if (!fileList.length) return;
-        for (let i = 0; i < fileList.length; i++) {
-            const file = fileList[i];
-            if (!file.type.match('image.*')) {
-                alert(file.name + ' is not an image');
-                continue;
-            }
-
-            if (file.size > 30 * 1024 * 1024) {
-                alert('⚠️ Error: ' + file.name + ' is too large! Maximum file size is 30MB.');
-                continue;
-            }
-            selectedFiles.push(file);
-        }
-        renderPreviews();
-        syncInputFiles();
-
-        if (selectedFiles.length > 0) {
-            sortInstructions.classList.add('show');
-        }
-    }
-
-    function renderPreviews() {
-        imagePreviewGrid.innerHTML = '';
-        selectedFiles.forEach((file, index) => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const div = document.createElement('div');
-                div.className = 'image-preview-item';
-                div.draggable = true;
-                div.dataset.index = index;
-
-                div.innerHTML = `
-                    <div class="drag-handle"><i class="fas fa-grip-vertical"></i></div>
-                    <img src="${e.target.result}" alt="Preview">
-                    <button type="button" class="image-remove-btn" data-index="${index}">
-                        <i class="fas fa-times"></i>
-                    </button>
-                `;
-
-                div.addEventListener('dragstart', handleDragStart);
-                div.addEventListener('dragover', handleDragOver);
-                div.addEventListener('drop', handleDrop);
-                div.addEventListener('dragend', handleDragEnd);
-                div.addEventListener('dragenter', handleDragEnter);
-                div.addEventListener('dragleave', handleDragLeave);
-
-                const removeBtn = div.querySelector('.image-remove-btn');
-                removeBtn.addEventListener('click', () => removeImage(index));
-
-                imagePreviewGrid.appendChild(div);
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-
-    function handleDragStart(e) {
-        draggedItem = this;
-        this.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', this.innerHTML);
-    }
-
-    function handleDragOver(e) {
-        if (e.preventDefault) {
-            e.preventDefault();
-        }
-        e.dataTransfer.dropEffect = 'move';
-        return false;
-    }
-
-    function handleDragEnter(e) {
-        if (this !== draggedItem) {
-            this.classList.add('drag-over');
-        }
-    }
-
-    function handleDragLeave(e) {
-        this.classList.remove('drag-over');
-    }
-
-    function handleDrop(e) {
-        if (e.stopPropagation) {
-            e.stopPropagation();
-        }
-
-        if (draggedItem !== this) {
-            const draggedIndex = parseInt(draggedItem.dataset.index);
-            const targetIndex = parseInt(this.dataset.index);
-
-            const temp = selectedFiles[draggedIndex];
-            selectedFiles[draggedIndex] = selectedFiles[targetIndex];
-            selectedFiles[targetIndex] = temp;
-
-            renderPreviews();
-            syncInputFiles();
-        }
-
-        this.classList.remove('drag-over');
-        return false;
-    }
-
-    function handleDragEnd(e) {
-        this.classList.remove('dragging');
-        document.querySelectorAll('.image-preview-item').forEach(item => {
-            item.classList.remove('drag-over');
-        });
-    }
-
-    function removeImage(index) {
-        selectedFiles.splice(index, 1);
-        renderPreviews();
-        syncInputFiles();
-
-        if (selectedFiles.length === 0) {
-            sortInstructions.classList.remove('show');
-        }
-    }
-
-    function syncInputFiles() {
-        const dt = new DataTransfer();
-        selectedFiles.forEach(f => dt.items.add(f));
-        imageInput.files = dt.files;
+    if (selectedFiles.length > 6) {
+        const more = document.createElement('div');
+        more.style.cssText = 'width:72px;height:72px;border-radius:10px;background:var(--PL);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--P)';
+        more.textContent = '+' + (selectedFiles.length - 6);
+        imgDiv.appendChild(more);
     }
 }
 
-// ============================================
-// FORM VALIDATION
-// ============================================
-function validateForm(e) {
-    const titleEn = document.querySelector('input[name="title_en"]').value.trim();
-    const titleAr = document.querySelector('input[name="title_ar"]').value.trim();
-    const titleKu = document.querySelector('input[name="title_ku"]').value.trim();
+// ═══════════════════════════════════════════
+// UPLOAD PROGRESS DIALOG
+// ═══════════════════════════════════════════
+function showUploadDialog() {
+    document.getElementById('uploadOverlay').classList.add('show');
+    const steps = [
+        { id: 'udStep1', delay: 0    },
+        { id: 'udStep2', delay: 1800 },
+        { id: 'udStep3', delay: 3200 },
+        { id: 'udStep4', delay: 4400 },
+    ];
+    let pct = 5;
+    const bar   = document.getElementById('udBar');
+    const pctEl = document.getElementById('udPct');
+    const subEl = document.getElementById('udSub');
+    const totalImgs = selectedFiles.length;
+    bar.style.width = pct + '%'; pctEl.textContent = pct + '%';
 
-    const descEn = document.querySelector('textarea[name="description_en"]').value.trim();
-    const descAr = document.querySelector('textarea[name="description_ar"]').value.trim();
-    const descKu = document.querySelector('textarea[name="description_ku"]').value.trim();
-
-    if (!titleEn && !titleAr && !titleKu) {
-        e.preventDefault();
-        alert('⚠️ Please provide a property title in at least one language.');
-        return false;
-    }
-
-    const primaryTitle = titleEn || titleAr || titleKu;
-    if (!titleEn) document.querySelector('input[name="title_en"]').value = primaryTitle;
-    if (!titleAr) document.querySelector('input[name="title_ar"]').value = primaryTitle;
-    if (!titleKu) document.querySelector('input[name="title_ku"]').value = primaryTitle;
-
-    const primaryDesc = descEn || descAr || descKu;
-    if (primaryDesc) {
-        if (!descEn) document.querySelector('textarea[name="description_en"]').value = primaryDesc;
-        if (!descAr) document.querySelector('textarea[name="description_ar"]').value = primaryDesc;
-        if (!descKu) document.querySelector('textarea[name="description_ku"]').value = primaryDesc;
-    }
-
-    const mapToggle = document.getElementById('has_map_toggle');
-    const latInput = document.getElementById('latitude');
-    const lngInput = document.getElementById('longitude');
-
-    if (!mapToggle.checked || !latInput.value || !lngInput.value) {
-        latInput.value = '0';
-        lngInput.value = '0';
-    }
-
-    const imageInput = document.getElementById('imageInput');
-    if(imageInput.files.length === 0) {
-         e.preventDefault();
-         alert('⚠️ Please upload at least one image or extract frames from video.');
-         return false;
-    }
-
-    return true;
+    steps.forEach((s, i) => {
+        setTimeout(() => {
+            document.querySelectorAll('.ud-step').forEach(el => el.classList.remove('active'));
+            document.getElementById(s.id).classList.add('active');
+            if (i > 0) document.getElementById(steps[i-1].id).classList.add('done');
+            const targetPct = [25,60,80,95][i];
+            animatePct(pct, targetPct, bar, pctEl);
+            pct = targetPct;
+            if (i === 1 && totalImgs > 0) subEl.textContent = 'Uploading ' + totalImgs + ' photo' + (totalImgs > 1 ? 's' : '') + '...';
+        }, s.delay);
+    });
 }
 
-// ============================================
-// INIT ON DOM READY
-// ============================================
-document.addEventListener('DOMContentLoaded', function() {
-    // Numeric inputs
-    const numericInputs = document.querySelectorAll('.numeric-input');
-    numericInputs.forEach(input => {
-        input.addEventListener('input', function(e) {
-            this.value = normalizeNumber(this.value);
-        });
-        input.addEventListener('blur', function() {
-            this.value = normalizeNumber(this.value);
-        });
-    });
+function animatePct(from, to, bar, el) {
+    let v = from;
+    const step = () => { if (v >= to) return; v = Math.min(v+1, to); bar.style.width = v+'%'; el.textContent = v+'%'; requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+}
 
-    // Language tabs
-    document.querySelectorAll('.language-tab').forEach(tab => {
-        tab.addEventListener('click', function(e) {
-            e.preventDefault();
-            const lang = this.dataset.lang;
-            document.querySelectorAll('.language-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.language-content').forEach(c => c.classList.remove('active'));
-            this.classList.add('active');
-            document.querySelector(`[data-content="${lang}"]`).classList.add('active');
-        });
-    });
-
-    // Location selector
-    const locationSelector = new LocationSelector({
-        citySelectId: 'location-city-select',
-        areaSelectId: 'location-area-select',
-        cityInputId: 'city_en',
-        districtInputId: 'district_en',
-
-        onCityChange: (data) => {
-            document.getElementById('city_ar').value = data.nameAr || '';
-            document.getElementById('city_ku').value = data.nameKu || '';
-
-            if(data.lat && data.lng && window.map) {
-                moveMapTo(data.lat, data.lng);
-            }
-        },
-
-        onAreaChange: (data) => {
-            document.getElementById('district_ar').value = data.nameAr || '';
-            document.getElementById('district_ku').value = data.nameKu || '';
-
-            if(data.lat && data.lng && window.map) {
-                moveMapTo(data.lat, data.lng);
-                window.map.setZoom(15);
-            }
-        }
-    });
-
-    locationSelector.init();
-
-    // Map toggle
-    const mapToggle = document.getElementById('has_map_toggle');
-    if(mapToggle) {
-        mapToggle.addEventListener('change', toggleMap);
-        toggleMap();
-    }
-
-    // Image upload
-    setupImageUpload();
-
-    // Form validation
-    const form = document.getElementById('propertyForm');
-    form.addEventListener('submit', validateForm);
+// ═══════════════════════════════════════════
+// FORM SUBMIT
+// ═══════════════════════════════════════════
+document.getElementById('propertyForm').addEventListener('submit', function(e) {
+    if (!validateStep(4)) { e.preventDefault(); return; }
+    showUploadDialog();
 });
 
-console.log('✓ Agent property form with AI Video Frame Extraction initialized');
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    loadCities();
+    setupImages();
+
+    const mapToggle = document.getElementById('has_map_toggle');
+    if (mapToggle) mapToggle.addEventListener('change', toggleMapVisibility);
+
+    const mi = document.getElementById('mapSearchInput');
+    if (mi) mi.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); searchMapAddress(); } });
+});
 </script>
+
 @endsection
