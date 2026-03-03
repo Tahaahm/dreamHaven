@@ -38,12 +38,6 @@ img{display:block;}
 .list-lang-btn.active{background:var(--B);color:#fff;}
 .list-lang-btn:hover:not(.active){background:var(--BL);color:var(--B);}
 
-/* ─── CURRENCY TOGGLE ─── */
-.currency-sw{display:flex;gap:3px;background:#fff;border:1px solid var(--hr);border-radius:50px;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,.04);}
-.currency-btn{padding:5px 14px;border-radius:50px;border:none;background:transparent;font-size:12px;font-weight:700;color:var(--mid);cursor:pointer;transition:all .3s;font-family:'Outfit',sans-serif;}
-.currency-btn.active{background:var(--G);color:var(--BD);}
-.currency-btn:hover:not(.active){background:var(--GL);color:var(--BD);}
-
 /* ─── LAYOUT ─── */
 .wrap{display:flex;min-height:100vh;padding-top:80px;}
 
@@ -68,6 +62,11 @@ body.lang-ku .fc,body.lang-ar .fc{font-family:'Noto Sans Arabic',sans-serif;text
 .sel-wrap::after{content:'\f107';font-family:'Font Awesome 6 Free';font-weight:900;position:absolute;right:16px;top:50%;transform:translateY(-50%);color:var(--B);font-size:12px;pointer-events:none;}
 .sel-wrap select{padding-right:36px;cursor:pointer;}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* Price hint — always USD */
+.price-hint{font-size:11px;color:var(--dim);margin-top:6px;display:flex;align-items:center;gap:5px;}
+.price-hint i{color:var(--G);font-size:10px;}
+
 .divider{height:1px;background:var(--hr);margin:20px 0;}
 
 /* Active filter tags */
@@ -100,9 +99,7 @@ body.lang-ku .pg-title em,body.lang-ar .pg-title em{font-style:normal;}
 
 /* ─── GRID ─── */
 .grid{display:block;width:100%;min-height:200px;margin:0 -12px;position:relative;}
-/* Clearfix so grid has height */
 .grid::after{content:'';display:table;clear:both;}
-
 .pc{width:33.333%;padding:0 12px;margin-bottom:28px;float:left;box-sizing:border-box;}
 
 /* ─── CARD ─── */
@@ -145,17 +142,7 @@ body.lang-ku .cta-btn,body.lang-ar .cta-btn{font-family:'Noto Sans Arabic',sans-
 .card:hover .cta-arr{background:rgba(255,255,255,.2);}
 
 /* ─── EMPTY STATE ─── */
-.empty-state{
-  clear:both;
-  display:none; /* hidden by default — shown via JS */
-  width:100%;
-  padding:80px 40px;
-  text-align:center;
-  background:#fff;
-  border-radius:24px;
-  border:2px dashed var(--hr);
-  margin-top:8px;
-}
+.empty-state{clear:both;display:none;width:100%;padding:80px 40px;text-align:center;background:#fff;border-radius:24px;border:2px dashed var(--hr);margin-top:8px;}
 .empty-state.visible{display:block;}
 .empty-ic{width:80px;height:80px;border-radius:50%;background:var(--BL);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px;color:var(--B);}
 .empty-state h3{font-family:'Libre Baskerville',serif;font-size:22px;color:var(--BD);margin-bottom:10px;}
@@ -254,11 +241,12 @@ body.lang-ku .pgn-info,body.lang-ar .pgn-info{font-family:'Noto Sans Arabic',san
       <input type="text" id="search-keywords-input" class="fc" placeholder="پووڵ، باخچە..." data-ph-i18n="phKeyword">
     </div>
     <div class="fg">
-      <label class="fg-label" data-i18n="lbPrice">نرخ</label>
+      <label class="fg-label" data-i18n="lbPrice">نرخ (USD)</label>
       <div class="two-col">
-        <input type="number" id="min-price-input" class="fc" placeholder="کەمترین" data-ph-i18n="phMin">
-        <input type="number" id="max-price-input" class="fc" placeholder="زۆرترین" data-ph-i18n="phMax">
+        <input type="number" id="min-price-input" class="fc" placeholder="$ کەمترین" data-ph-i18n="phMin">
+        <input type="number" id="max-price-input" class="fc" placeholder="$ زۆرترین" data-ph-i18n="phMax">
       </div>
+      <div class="price-hint"><i class="fas fa-dollar-sign"></i> <span data-i18n="priceHint">نرخەکان بە دۆلاری ئەمریکی</span></div>
     </div>
     <div class="divider"></div>
     <div class="active-filters" id="activeFilterTags"></div>
@@ -279,10 +267,6 @@ body.lang-ku .pgn-info,body.lang-ar .pgn-info{font-family:'Noto Sans Arabic',san
       <div class="pg-title">Dream Mulk &mdash; <em data-i18n="pgTitleEm">خانووەکان</em></div>
     </div>
     <div class="pg-head-right">
-      <div class="currency-sw">
-        <button class="currency-btn active" data-currency="iqd">IQD</button>
-        <button class="currency-btn" data-currency="usd">USD</button>
-      </div>
       <div class="list-lang-sw">
         <button class="list-lang-btn active" data-lang="ku">کو</button>
         <button class="list-lang-btn" data-lang="en">EN</button>
@@ -317,9 +301,9 @@ body.lang-ku .pgn-info,body.lang-ar .pgn-info{font-family:'Noto Sans Arabic',san
             <span class="badge {{ $lt === 'rent' ? 'badge-rent' : 'badge-sell' }}">{{ ucfirst($lt ?: 'N/A') }}</span>
           </div>
           <div class="ci-price">
-            <div class="ci-price-sub price-label">IQD</div>
+            <div class="ci-price-sub">USD</div>
             <div class="ci-price-main price-display" data-usd="{{ $priceUsd }}" data-iqd="{{ $priceIqd }}">
-              {{ number_format($priceIqd) }}
+              ${{ number_format($priceUsd) }}
             </div>
           </div>
         </div>
@@ -343,7 +327,7 @@ body.lang-ku .pgn-info,body.lang-ar .pgn-info{font-family:'Noto Sans Arabic',san
     @endforeach
   </div>
 
-  {{-- EMPTY STATE — shown when filter returns 0 results --}}
+  {{-- EMPTY STATE --}}
   <div class="empty-state" id="emptyState">
     <div class="empty-ic"><i class="fas fa-house-circle-xmark"></i></div>
     <h3 data-i18n="emptyTitle">هیچ خانوویەک نەدۆزراوەتەوە</h3>
@@ -354,7 +338,6 @@ body.lang-ku .pgn-info,body.lang-ar .pgn-info{font-family:'Noto Sans Arabic',san
   </div>
 
   @if($properties->count() === 0)
-  {{-- Server-side empty (no results from DB at all) --}}
   <script>document.getElementById('emptyState').classList.add('visible');</script>
   @endif
 
@@ -391,7 +374,8 @@ class DreamMulkI18n {
     this._current=lang;
     localStorage.setItem(this.storageKey,lang);
     const T=this.translations[lang];
-    document.documentElement.dir=T.dir;
+    document.body.dir=T.dir;
+    document.documentElement.lang=lang==='ar'?'ar':lang==='ku'?'ku':'en';
     document.body.classList.remove('lang-ku','lang-en','lang-ar','rtl');
     document.body.classList.add('lang-'+lang);
     if(T.dir==='rtl')document.body.classList.add('rtl');
@@ -406,7 +390,6 @@ class DreamMulkI18n {
       const k=el.getAttribute('data-ph-i18n');
       if(T[k]!==undefined)el.placeholder=T[k];
     });
-    // Translate select options
     const typeSel=document.getElementById('property-type-dropdown');
     if(typeSel){
       const map={'':'optAll','sell':'optBuy','rent':'optRent'};
@@ -425,12 +408,13 @@ class DreamMulkI18n {
       dir:'rtl',
       sbTitle:'فلتەر', sbSub:'گەڕانەکەت باشتر بکە',
       lbType:'جۆری لیست', lbCity:'شار', lbArea:'ناوچە',
-      lbPurpose:'جۆری خانوو', lbKeyword:'کلیلەوشە', lbPrice:'نرخ',
+      lbPurpose:'جۆری خانوو', lbKeyword:'کلیلەوشە', lbPrice:'نرخ (USD)',
       optAll:'کڕین یان کرێ', optBuy:'کڕین', optRent:'کرێ',
       optAreaFirst:'یەکەم شار هەڵبژێرە',
       optAllTypes:'هەموو جۆرەکان',
       optVilla:'ڤیلا', optHouse:'خانوو', optApart:'ئەپارتمان', optComm:'بازرگانی',
-      phKeyword:'پووڵ، باخچە...', phMin:'کەمترین', phMax:'زۆرترین',
+      phKeyword:'پووڵ، باخچە...', phMin:'$ کەمترین', phMax:'$ زۆرترین',
+      priceHint:'نرخەکان بە دۆلاری ئەمریکی',
       btnApply:'فلتەر جێبەجێ بکە', btnReset:'پاکی بکەرەوە',
       pgTag:'خانووبەرەی کوردستان', pgTitleEm:'خانووەکان',
       propLabel:'خانوو',
@@ -444,12 +428,13 @@ class DreamMulkI18n {
       dir:'ltr',
       sbTitle:'Filters', sbSub:'Refine your search',
       lbType:'Listing Type', lbCity:'City', lbArea:'Area',
-      lbPurpose:'Property Type', lbKeyword:'Keywords', lbPrice:'Price',
+      lbPurpose:'Property Type', lbKeyword:'Keywords', lbPrice:'Price (USD)',
       optAll:'Buy or Rent', optBuy:'Buy', optRent:'Rent',
       optAreaFirst:'Select city first',
       optAllTypes:'All Types',
       optVilla:'Villa', optHouse:'House', optApart:'Apartment', optComm:'Commercial',
-      phKeyword:'Pool, Garden...', phMin:'Min', phMax:'Max',
+      phKeyword:'Pool, Garden...', phMin:'$ Min', phMax:'$ Max',
+      priceHint:'All prices in US Dollars',
       btnApply:'Apply Filters', btnReset:'Reset Filters',
       pgTag:'Kurdistan Real Estate', pgTitleEm:'Properties',
       propLabel:'Properties',
@@ -463,12 +448,13 @@ class DreamMulkI18n {
       dir:'rtl',
       sbTitle:'الفلاتر', sbSub:'حسّن بحثك',
       lbType:'نوع الإدراج', lbCity:'المدينة', lbArea:'المنطقة',
-      lbPurpose:'نوع العقار', lbKeyword:'كلمات مفتاحية', lbPrice:'السعر',
+      lbPurpose:'نوع العقار', lbKeyword:'كلمات مفتاحية', lbPrice:'السعر (USD)',
       optAll:'شراء أو إيجار', optBuy:'شراء', optRent:'إيجار',
       optAreaFirst:'اختر المدينة أولاً',
       optAllTypes:'جميع الأنواع',
       optVilla:'فيلا', optHouse:'منزل', optApart:'شقة', optComm:'تجاري',
-      phKeyword:'مسبح، حديقة...', phMin:'الأدنى', phMax:'الأقصى',
+      phKeyword:'مسبح، حديقة...', phMin:'$ الأدنى', phMax:'$ الأقصى',
+      priceHint:'جميع الأسعار بالدولار الأمريكي',
       btnApply:'تطبيق الفلاتر', btnReset:'مسح الكل',
       pgTag:'عقارات كردستان', pgTitleEm:'العقارات',
       propLabel:'عقار',
@@ -552,35 +538,16 @@ $(function(){
   });
   i18n.init();
 
-  // ── Currency ──
-  let currency = 'iqd';
-  function applyCurrency(cur){
-    currency = cur;
-    document.querySelectorAll('.currency-btn').forEach(b=>{
-      b.classList.toggle('active',b.getAttribute('data-currency')===cur);
-    });
-    document.querySelectorAll('.price-display').forEach(el=>{
-      const v = cur==='usd'
-        ? '$'+Number(el.dataset.usd).toLocaleString()
-        : Number(el.dataset.iqd).toLocaleString()+' IQD';
-      el.textContent=v;
-    });
-    document.querySelectorAll('.price-label').forEach(el=>{
-      el.textContent = cur==='usd' ? 'USD' : 'IQD';
-    });
-  }
-  document.querySelectorAll('.currency-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>applyCurrency(btn.getAttribute('data-currency')));
+  // ── Currency: always USD — no toggle needed ──
+  document.querySelectorAll('.price-display').forEach(el=>{
+    el.textContent = '$' + Number(el.dataset.usd).toLocaleString();
   });
 
   // ── Isotope ──
   var $g=$('#propertiesGrid'), isoReady=false;
 
-  // Use a simple float layout fallback if no cards or Isotope fails
   function initIso(){
-    if($('.pc').length===0){
-      showEmpty(); return;
-    }
+    if($('.pc').length===0){ showEmpty(); return; }
     $g.imagesLoaded(function(){
       $g.isotope({
         itemSelector:'.pc',
@@ -588,14 +555,13 @@ $(function(){
         layoutMode:'fitRows'
       });
       isoReady=true;
-      // Force a layout refresh after short delay
       setTimeout(()=>{ $g.isotope('layout'); },100);
       applyUrlParams();
     });
   }
   initIso();
 
-  // ── Empty state toggle ──
+  // ── Empty state ──
   function showEmpty(){
     document.getElementById('emptyState').classList.add('visible');
     $('#results-counter').text(0);
@@ -604,7 +570,7 @@ $(function(){
     document.getElementById('emptyState').classList.remove('visible');
   }
 
-  // ── Filter ──
+  // ── Filter — always compares against USD price ──
   function runFilter(){
     if(!isoReady) return;
     var kw  = $('#search-keywords-input').val().toLowerCase().trim();
@@ -617,9 +583,7 @@ $(function(){
 
     $g.isotope({filter:function(){
       var $t=$(this), tx=$t.text().toLowerCase();
-      var price = currency==='usd'
-        ? parseFloat($t.attr('data-price-usd'))
-        : parseFloat($t.attr('data-price-iqd'));
+      var price = parseFloat($t.attr('data-price-usd')); // always USD
       return (!kw||tx.includes(kw))
         && price>=mn && price<=mx
         && (!tp||$t.attr('data-type')===tp)
@@ -638,19 +602,15 @@ $(function(){
     buildFilterTags();
   }
 
-  // ── URL params auto-apply ──
+  // ── URL params ──
   function applyUrlParams(){
     const p = new URLSearchParams(window.location.search);
     const type   = p.get('type')   || '';
     const search = p.get('search') || '';
-    const city   = p.get('city')   || '';
 
     if(type)   $('#property-type-dropdown').val(type);
     if(search) $('#search-keywords-input').val(search);
-
-    // City matching happens after LocationSelector loads
-    // (handled in locSel.init().then())
-    if(type||search||city) runFilter();
+    if(type||search) runFilter();
   }
 
   // ── Active filter tags ──
@@ -674,8 +634,8 @@ $(function(){
     if(area && area!=='All Areas' && area!=='Select City First') tags.push({
       label:area, clear:()=>$('#area-dropdown').val('')
     });
-    if(mn) tags.push({label:'≥ '+Number(mn).toLocaleString(), clear:()=>$('#min-price-input').val('')});
-    if(mx) tags.push({label:'≤ '+Number(mx).toLocaleString(), clear:()=>$('#max-price-input').val('')});
+    if(mn) tags.push({label:'≥ $'+Number(mn).toLocaleString(), clear:()=>$('#min-price-input').val('')});
+    if(mx) tags.push({label:'≤ $'+Number(mx).toLocaleString(), clear:()=>$('#max-price-input').val('')});
 
     const $wrap=$('#activeFilterTags').empty();
     tags.forEach(t=>{

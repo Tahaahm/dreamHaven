@@ -2,267 +2,323 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width,initial-scale=1.0" name="viewport"/>
+<meta content="width=device-width,initial-scale=1.0,viewport-fit=cover" name="viewport"/>
 <title>Dream Mulk - Premium Real Estate Kurdistan</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,700&family=DM+Sans:wght@300;400;500;600&family=Cinzel:wght@400;600&family=Noto+Sans+Arabic:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,700&family=DM+Sans:wght@300;400;500;600&family=Cinzel:wght@400;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 <style>
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
-:root{--P:#303b97;--PD:#1a225a;--PM:#232d7a;--deep:#06091e;--G:#d4af37;--GL:#e8cb6a;--GP:#f5e8c0;--dim:rgba(255,255,255,.55);--E:cubic-bezier(.16,1,.3,1);}
-html{scroll-behavior:smooth;}
-body{font-family:'DM Sans',sans-serif;background:var(--deep);color:#fff;overflow-x:hidden;}
-header{position:fixed;top:0;left:0;right:0;height:90px;z-index:1100;padding:0 50px;display:flex;align-items:center;background:linear-gradient(to bottom,rgba(6,9,30,.7),transparent);transition:all .5s var(--E);}
-header.sc{background:rgba(6,9,30,.96);backdrop-filter:blur(20px);height:72px;box-shadow:0 1px 0 rgba(212,175,55,.1);}
-nav{max-width:1400px;width:100%;margin:0 auto;display:flex;align-items:center;justify-content:space-between;}
+/* ═══════════════════════════════════════════════════════
+   RESET & VARIABLES
+═══════════════════════════════════════════════════════ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{
+  --P:#303b97;--PD:#1a225a;--PM:#232d7a;--deep:#06091e;
+  --G:#d4af37;--GL:#e8cb6a;--GP:#f5e8c0;
+  --dim:rgba(255,255,255,.55);
+  --E:cubic-bezier(.16,1,.3,1);
+  /* Arabic/Kurdish font stack */
+  --font-ar:'Noto Naskh Arabic','Noto Sans Arabic',serif;
+  --font-ar-ui:'Noto Sans Arabic',sans-serif;
+}
+html,body{overflow-x:hidden !important;max-width:100vw;}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+/* Force scrollbar ALWAYS on the right side, even in RTL */
+html{
+  direction:ltr !important; /* scrollbar stays right */
+}
+body{
+  /* body gets the actual RTL — set by JS */
+  min-height:100%;
+}
+/* Style the vertical scrollbar — thin and right-side only */
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:var(--deep);}
+::-webkit-scrollbar-thumb{background:rgba(212,175,55,.3);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(212,175,55,.6);}
+::-webkit-scrollbar:horizontal{display:none !important;height:0;}
+/* Firefox */
+html{scrollbar-width:thin;scrollbar-color:rgba(212,175,55,.3) var(--deep);}
+body{
+  font-family:'DM Sans',sans-serif;
+  background:var(--deep);color:#fff;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ARABIC / KURDISH FONT — applied globally when RTL
+═══════════════════════════════════════════════════════ */
+body.lang-ku,
+body.lang-ar{
+  font-family:var(--font-ar-ui);
+}
+/* Every element that renders Kurdish or Arabic text */
+body.lang-ku *:not(i):not([class*="fa-"]):not([class*="fab "]):not([class*="fas "]):not([class*="far "]),
+body.lang-ar *:not(i):not([class*="fa-"]):not([class*="fab "]):not([class*="fas "]):not([class*="far "]){
+  font-family:var(--font-ar-ui);
+  line-height:1.75;
+}
+/* NEVER override Font Awesome icon font */
+i[class*="fa"]{
+  font-family:"Font Awesome 6 Free","Font Awesome 6 Brands" !important;
+  font-style:normal !important;
+}
+/* Headings: use Naskh for better Kurdish rendering */
+body.lang-ku h1,body.lang-ku h2,body.lang-ku h3,body.lang-ku h4,
+body.lang-ar h1,body.lang-ar h2,body.lang-ar h3,body.lang-ar h4{
+  font-family:var(--font-ar);
+}
+/* Keep Latin brand name in Playfair always */
+body.lang-ku .logo-name,body.lang-ar .logo-name,
+body.lang-ku .ft-logo-name,body.lang-ar .ft-logo-name{
+  font-family:'Playfair Display',serif !important;
+}
+/* Keep h1 "Dream Mulk" in Playfair */
+body.lang-ku h1,body.lang-ar h1{
+  font-family:'Playfair Display',serif !important;
+}
+
+/* ═══════════════════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════════════════ */
+header{
+  position:fixed;top:0;left:0;right:0;
+  height:90px;z-index:1100;
+  padding:0 50px;
+  display:flex;align-items:center;
+  background:linear-gradient(to bottom,rgba(6,9,30,.7),transparent);
+  transition:all .5s var(--E);
+}
+header.sc{
+  background:rgba(6,9,30,.96);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  height:72px;
+  box-shadow:0 1px 0 rgba(212,175,55,.1);
+}
+nav{
+  max-width:1400px;width:100%;margin:0 auto;
+  display:flex;align-items:center;justify-content:space-between;
+}
 .logo{display:flex;align-items:center;gap:14px;text-decoration:none;}
-.logo img{width:56px;height:56px;border-radius:50%;border:2.5px solid var(--G);object-fit:contain;background:#fff;transition:transform .5s var(--E),width .5s var(--E);box-shadow:0 4px 15px rgba(212,175,55,.25);}
+.logo img{
+  width:56px;height:56px;border-radius:50%;
+  border:2.5px solid var(--G);object-fit:contain;background:#fff;
+  transition:transform .5s var(--E),width .5s var(--E);
+  box-shadow:0 4px 15px rgba(212,175,55,.25);
+}
 header.sc .logo img{width:44px;height:44px;}
 .logo:hover img{transform:scale(1.08) rotate(5deg);}
-.logo-name{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:#fff;}
+.logo-name{
+  font-family:'Playfair Display',serif !important;
+  font-size:24px;font-weight:700;color:#fff;
+}
 header.sc .logo-name{font-size:21px;}
 .nav-ul{display:flex;gap:36px;list-style:none;}
-.nav-ul a{color:rgba(255,255,255,.7);font-size:14.5px;text-decoration:none;position:relative;padding:4px 0;transition:color .3s;}
-.nav-ul a::after{content:'';position:absolute;bottom:0;left:0;width:0;height:1.5px;background:var(--G);transition:width .4s var(--E);}
+.nav-ul a{
+  color:rgba(255,255,255,.7);font-size:14.5px;
+  text-decoration:none;position:relative;padding:4px 0;
+  transition:color .3s;
+}
+.nav-ul a::after{
+  content:'';position:absolute;bottom:0;left:0;
+  width:0;height:1.5px;background:var(--G);
+  transition:width .4s var(--E);
+}
 .nav-ul a:hover,.nav-ul a.ac{color:#fff;}
 .nav-ul a:hover::after,.nav-ul a.ac::after{width:100%;}
 .nav-right{display:flex;align-items:center;gap:13px;}
 .bell-wrap{position:relative;color:var(--G);font-size:20px;text-decoration:none;}
-.bell-badge{position:absolute;top:-4px;right:-6px;background:#e74c3c;color:#fff;font-size:9px;font-weight:700;padding:2px 4px;border-radius:5px;}
-.av-btn{width:38px;height:38px;border-radius:50%;background:var(--G);color:var(--PD);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;text-decoration:none;transition:transform .3s;}
+.bell-badge{
+  position:absolute;top:-4px;right:-6px;
+  background:#e74c3c;color:#fff;
+  font-size:9px;font-weight:700;padding:2px 4px;border-radius:5px;
+}
+.av-btn{
+  width:38px;height:38px;border-radius:50%;
+  background:var(--G);color:var(--PD);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:15px;text-decoration:none;
+  transition:transform .3s;font-family:'DM Sans',sans-serif !important;
+}
 .av-btn:hover{transform:scale(1.1);}
-.btn-o{padding:9px 24px;border:1px solid rgba(212,175,55,.45);border-radius:50px;color:var(--G);font-size:13px;text-decoration:none;transition:all .3s;}
+.btn-o{
+  padding:9px 24px;border:1px solid rgba(212,175,55,.45);
+  border-radius:50px;color:var(--G);font-size:13px;
+  text-decoration:none;transition:all .3s;
+  white-space:nowrap;
+}
 .btn-o:hover{background:rgba(212,175,55,.1);}
-.btn-s{padding:9px 24px;border:1px solid var(--G);border-radius:50px;background:var(--G);color:var(--PD);font-size:13px;font-weight:700;text-decoration:none;transition:all .4s var(--E);}
+.btn-s{
+  padding:9px 24px;border:1px solid var(--G);
+  border-radius:50px;background:var(--G);color:var(--PD);
+  font-size:13px;font-weight:700;text-decoration:none;
+  transition:all .4s var(--E);white-space:nowrap;
+}
 .btn-s:hover{background:var(--GL);transform:translateY(-2px);box-shadow:0 8px 22px rgba(212,175,55,.4);}
-.hbtn{display:none;background:none;border:none;color:var(--G);font-size:26px;cursor:pointer;}
-@media(max-width:1000px){.nav-ul,.nav-right{display:none;}.hbtn{display:block;}header{padding:0 22px;height:76px;}}
-.bkdp{position:fixed;inset:0;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .4s;z-index:1090;backdrop-filter:blur(6px);}
+.hbtn{display:none;background:none;border:none;color:var(--G);font-size:26px;cursor:pointer;padding:8px;line-height:1;}
+
+/* ─── Language Switcher ─── */
+.lang-sw{
+  display:flex;align-items:center;gap:4px;
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(212,175,55,.2);
+  border-radius:50px;padding:4px;margin-right:4px;
+}
+.lang-btn{
+  padding:5px 12px;border-radius:50px;border:none;
+  background:transparent;color:rgba(255,255,255,.55);
+  font-size:12px;font-weight:600;cursor:pointer;
+  transition:all .3s;font-family:'DM Sans',sans-serif !important;
+  letter-spacing:.5px;
+}
+.lang-btn.active{background:var(--G);color:var(--PD);}
+.lang-btn:hover:not(.active){color:#fff;background:rgba(255,255,255,.1);}
+
+/* ═══════════════════════════════════════════════════════
+   DRAWER / HAMBURGER
+═══════════════════════════════════════════════════════ */
+.bkdp{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);
+  opacity:0;pointer-events:none;
+  transition:opacity .4s;z-index:1090;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
 .bkdp.on{opacity:1;pointer-events:auto;}
-.drw{position:fixed;top:0;right:-100%;height:100vh;width:min(360px,85%);background:var(--P);z-index:1100;padding:38px 28px;display:flex;flex-direction:column;gap:18px;transition:right .5s var(--E);box-shadow:-10px 0 40px rgba(0,0,0,.5);}
-.drw::before{content:'';position:absolute;top:0;bottom:0;left:0;width:3px;background:var(--G);}
-.drw.on{right:0;}
+.drw{
+  position:fixed;top:0;right:-110%;left:auto;
+  height:100vh;width:min(360px,85%);
+  background:var(--P);z-index:1100;
+  padding:38px 28px;
+  display:flex;flex-direction:column;gap:18px;
+  transition:right .5s var(--E),left .5s var(--E);
+  box-shadow:-10px 0 40px rgba(0,0,0,.5);
+  overflow-y:auto;
+  visibility:hidden;
+}
+.drw.on{right:0;left:auto;visibility:visible;}
+.drw::before{
+  content:'';position:absolute;top:0;bottom:0;left:0;
+  width:3px;background:var(--G);
+}
+/* RTL: drawer slides in from the left */
+body.rtl .drw{right:auto;left:-110%;}
+body.rtl .drw.on{left:0;right:auto;visibility:visible;}
+body.rtl .drw::before{left:auto;right:0;}
 .drw-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
-.drw-hd span{font-family:'Playfair Display',serif;font-size:24px;color:#fff;}
-.drw-x{background:none;border:none;color:var(--G);font-size:22px;cursor:pointer;}
+.drw-hd span{font-family:'Playfair Display',serif !important;font-size:24px;color:#fff;}
+.drw-x{background:none;border:none;color:var(--G);font-size:22px;cursor:pointer;padding:4px;}
 .drw-nav{display:flex;flex-direction:column;}
-.drw-nav a{display:block;width:100%;font-size:17px;padding:15px 0;color:rgba(255,255,255,.75);border-bottom:1px solid rgba(255,255,255,.06);text-decoration:none;transition:all .3s;white-space:nowrap;}
+.drw-nav a{
+  display:block;width:100%;font-size:17px;
+  padding:15px 0;color:rgba(255,255,255,.75);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  text-decoration:none;transition:all .3s;
+}
 .drw-nav a:hover{color:var(--G);padding-left:12px;}
-.drw-ft{margin-top:auto;display:flex;flex-direction:column;gap:12px;}
-.hero{position:relative;height:100vh;min-height:680px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--deep);}
+body.rtl .drw-nav a:hover{padding-left:0;padding-right:12px;}
+.drw-ft{margin-top:auto;display:flex;flex-direction:column;gap:12px;padding-top:20px;}
+
+/* ═══════════════════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════════════════ */
+.hero{
+  position:relative;
+  height:100vh;min-height:680px;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;background:var(--deep);
+}
 #bc{position:absolute;inset:0;width:100%;height:100%;z-index:0;}
-.vig{position:absolute;inset:0;z-index:1;pointer-events:none;background:radial-gradient(ellipse 95% 52% at 50% 100%,rgba(6,9,30,1) 0%,transparent 62%),radial-gradient(ellipse 55% 38% at 50% 0%,rgba(6,9,30,.65) 0%,transparent 55%),radial-gradient(ellipse 28% 100% at 0%,rgba(6,9,30,.58) 0%,transparent 50%),radial-gradient(ellipse 28% 100% at 100%,rgba(6,9,30,.58) 0%,transparent 50%);}
-.eyebrow{display:inline-flex;align-items:center;gap:14px;font-size:10px;font-weight:600;letter-spacing:5px;text-transform:uppercase;color:var(--G);margin-bottom:16px;}
+.vig{
+  position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:
+    radial-gradient(ellipse 95% 52% at 50% 100%,rgba(6,9,30,1) 0%,transparent 62%),
+    radial-gradient(ellipse 55% 38% at 50% 0%,rgba(6,9,30,.65) 0%,transparent 55%),
+    radial-gradient(ellipse 28% 100% at 0%,rgba(6,9,30,.58) 0%,transparent 50%),
+    radial-gradient(ellipse 28% 100% at 100%,rgba(6,9,30,.58) 0%,transparent 50%);
+}
+.hc{
+  position:relative;z-index:10;
+  text-align:center;max-width:780px;
+  padding:0 24px;
+  pointer-events:none;
+  opacity:0;transform:translateY(40px);
+  transition:opacity 1.6s var(--E),transform 1.6s var(--E);
+}
+.hc.vis{opacity:1;transform:translateY(0);pointer-events:auto;}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:14px;
+  font-size:10px;font-weight:600;letter-spacing:5px;
+  text-transform:uppercase;color:var(--G);margin-bottom:16px;
+}
+body.lang-ku .eyebrow,body.lang-ar .eyebrow{
+  font-size:13px;letter-spacing:2px;text-transform:none;
+  font-family:var(--font-ar-ui);
+}
 .eyebrow::before,.eyebrow::after{content:'';width:46px;height:1px;}
 .eyebrow::before{background:linear-gradient(90deg,transparent,var(--G));}
 .eyebrow::after{background:linear-gradient(90deg,var(--G),transparent);}
-h1{font-family:'Playfair Display',serif;font-size:clamp(56px,9vw,110px);font-weight:800;line-height:.93;letter-spacing:-3px;color:#fff;margin-bottom:10px;}
-h1 .g{color:var(--G);}
-.sub{font-family:'Cinzel',serif;font-size:clamp(10px,1.4vw,13px);letter-spacing:7px;text-transform:uppercase;color:rgba(255,255,255,.27);margin-bottom:0;}
-.hdesc{font-size:16px;line-height:1.85;color:var(--dim);max-width:500px;margin:0 auto 48px;font-weight:300;}
-.hbtns{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;}
-.hb1{padding:16px 46px;background:var(--G);color:var(--PD);font-weight:700;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);box-shadow:0 4px 26px rgba(212,175,55,.4);}
-.hb1:hover{background:var(--GL);transform:translateY(-4px);box-shadow:0 16px 40px rgba(212,175,55,.55);}
-.hb2{padding:15px 46px;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.8);font-size:12px;letter-spacing:2.5px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);backdrop-filter:blur(8px);}
-.hb2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);background:rgba(212,175,55,.06);}
-.scrl{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);z-index:10;display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0;transition:opacity 1.2s ease;}
-.scrl.vis{opacity:1;}
-.scrl span{font-size:9px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,.22);}
-.mouse{width:22px;height:34px;border:1.5px solid rgba(212,175,55,.38);border-radius:12px;display:flex;justify-content:center;padding-top:6px;}
-.mouse::after{content:'';width:3px;height:8px;border-radius:2px;background:var(--G);animation:sp 2s ease-in-out infinite;}
-@keyframes sp{0%,100%{transform:translateY(0);opacity:1;}50%{transform:translateY(9px);opacity:0;}}
-/* ── STATS: only 2 stats, Happy Clients removed ── */
-.stats-bar{background:rgba(212,175,55,.06);border-top:1px solid rgba(212,175,55,.15);border-bottom:1px solid rgba(212,175,55,.15);padding:36px 60px;}
-.stats-inner{max-width:900px;margin:0 auto;display:flex;justify-content:center;align-items:center;}
-.stat-item{text-align:center;flex:1;max-width:320px;}
-.stat-num{font-family:'Playfair Display',serif;font-size:48px;font-weight:700;color:var(--G);line-height:1;}
-.stat-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-top:6px;}
-.stat-div{width:1px;height:50px;background:rgba(212,175,55,.2);}
-@media(max-width:768px){.stats-bar{padding:34px 22px;}.stats-inner{flex-wrap:wrap;gap:28px;justify-content:center;}.stat-div{display:none;}}
-/* ── SERVICES ── */
-.svc-sec{padding:120px 60px;background:linear-gradient(180deg,var(--deep) 0%,var(--PD) 100%);}
-.sec-wrap{max-width:1320px;margin:0 auto;}
-.sec-hd{text-align:center;margin-bottom:70px;}
-.stag{font-size:10px;letter-spacing:5px;text-transform:uppercase;color:var(--G);display:block;margin-bottom:14px;}
-.stitle{font-family:'Playfair Display',serif;font-size:clamp(36px,5vw,60px);font-weight:700;color:#fff;line-height:1.1;}
-.stitle em{font-style:italic;color:var(--G);}
-.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
-.svc-card{position:relative;height:530px;overflow:hidden;display:block;text-decoration:none;color:inherit;}
-.svc-card::before{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(6,9,30,.97) 0%,rgba(18,25,72,.5) 50%,rgba(48,59,151,.1) 100%);transition:all .6s var(--E);z-index:1;}
-.svc-card:hover::before{background:linear-gradient(to top,rgba(6,9,30,.98) 0%,rgba(18,25,72,.75) 65%,rgba(48,59,151,.25) 100%);}
-.svc-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(.45) brightness(.75);transition:transform .9s var(--E),filter .6s;}
-.svc-card:hover .svc-img{transform:scale(1.1);filter:saturate(.25) brightness(.65);}
-.svc-body{position:absolute;bottom:0;left:0;right:0;padding:46px 38px;z-index:2;transition:transform .6s var(--E);}
-.svc-card:hover .svc-body{transform:translateY(-16px);}
-.svc-n{font-family:'Playfair Display',serif;font-size:70px;font-weight:700;color:rgba(212,175,55,.12);line-height:1;margin-bottom:4px;transition:color .4s;}
-.svc-card:hover .svc-n{color:rgba(212,175,55,.3);}
-.svc-ico{width:52px;height:52px;border:1.5px solid rgba(212,175,55,.38);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--G);font-size:18px;margin-bottom:18px;transition:all .5s var(--E);}
-.svc-card:hover .svc-ico{background:var(--G);color:var(--PD);border-color:var(--G);transform:scale(1.1);}
-.svc-t{font-family:'Playfair Display',serif;font-size:30px;font-weight:700;color:#fff;margin-bottom:10px;transition:color .3s;}
-.svc-card:hover .svc-t{color:var(--G);}
-.svc-p{font-size:13.5px;line-height:1.75;color:rgba(255,255,255,.58);max-height:0;overflow:hidden;opacity:0;transition:all .6s var(--E);margin-bottom:0;}
-.svc-card:hover .svc-p{max-height:120px;opacity:1;margin-bottom:18px;}
-.svc-cta{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--G);font-weight:600;transition:gap .4s var(--E);}
-.svc-card:hover .svc-cta{gap:16px;}
-@media(max-width:1024px){.svc-grid{grid-template-columns:1fr 1fr;}.svc-card:last-child{grid-column:span 2;}}
-@media(max-width:768px){.svc-sec{padding:80px 22px;}.svc-grid{grid-template-columns:1fr;}.svc-card:last-child{grid-column:span 1;}}
-/* ── APP SECTION ── */
-.app-sec{padding:120px 60px;background:linear-gradient(135deg,var(--PM) 0%,var(--P) 50%,var(--PD) 100%);position:relative;overflow:hidden;}
-.app-g{display:grid;grid-template-columns:1fr 1fr;gap:90px;align-items:center;max-width:1300px;margin:0 auto;position:relative;z-index:1;}
-.app-desc{font-size:16px;line-height:1.85;color:rgba(255,255,255,.62);margin-bottom:36px;font-weight:300;}
-.app-feats{display:flex;flex-direction:column;gap:14px;margin-bottom:44px;}
-.af{display:flex;align-items:center;gap:14px;font-size:14px;color:rgba(255,255,255,.75);}
-.af i{color:var(--G);width:18px;}
-.sbtns{display:flex;gap:14px;flex-wrap:wrap;}
-.sbtn{display:flex;align-items:center;gap:14px;padding:14px 24px;border:1px solid rgba(212,175,55,.3);border-radius:14px;text-decoration:none;background:rgba(212,175,55,.06);transition:all .4s var(--E);}
-.sbtn:hover{background:rgba(212,175,55,.14);border-color:var(--G);transform:translateY(-4px);}
-.sbtn i{font-size:26px;color:var(--G);}
-.sbtn-sm{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.45);}
-.sbtn-nm{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#fff;}
-.qr-card{background:#fff;border-radius:26px;padding:28px;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:272px;margin:0 auto;box-shadow:0 0 0 1.5px rgba(212,175,55,.5),0 40px 80px rgba(0,0,0,.6);position:relative;overflow:hidden;transition:transform .6s var(--E);}
-.qr-card:hover{transform:translateY(-10px) scale(1.02);}
-.qr-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--P),var(--G),var(--P));}
-.qr-brand{display:flex;align-items:center;gap:12px;width:100%;}
-.qr-ico{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--PD),var(--P));display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;}
-.qr-t{font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--PD);}
-.qr-s{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;}
-.qr-div{width:100%;height:1px;background:rgba(48,59,151,.1);}
-.qr-img{width:188px;height:188px;border-radius:12px;display:block;}
-.qr-hint{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:#999;font-weight:500;}
-.qr-lnk{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:12px;background:linear-gradient(135deg,var(--PD),var(--P));color:#fff;border-radius:14px;font-size:13px;font-weight:600;text-decoration:none;transition:all .4s var(--E);}
-.qr-lnk:hover{box-shadow:0 8px 24px rgba(48,59,151,.5);transform:translateY(-2px);color:#fff;}
-@media(max-width:1024px){.app-g{grid-template-columns:1fr;gap:60px;}}
-@media(max-width:768px){.app-sec{padding:80px 22px;}}
-/* ── ABOUT ── */
-.abt-sec{padding:120px 60px;background:linear-gradient(180deg,var(--PD) 0%,var(--deep) 100%);}
-.abt-g{display:grid;grid-template-columns:1.4fr 1fr;gap:100px;align-items:start;max-width:1300px;margin:0 auto;}
-.abt-p{font-size:15.5px;line-height:1.95;color:rgba(255,255,255,.58);margin-bottom:20px;font-weight:300;}
-.qbar{margin-top:34px;padding:26px 30px;border-left:3px solid var(--G);background:rgba(212,175,55,.04);border-radius:0 12px 12px 0;}
-.qbar p{font-family:'Playfair Display',serif;font-size:20px;font-style:italic;color:var(--GP);line-height:1.55;}
-.vals{display:flex;flex-direction:column;gap:2px;}
-.vi{display:flex;align-items:center;gap:22px;padding:26px 28px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.05);transition:all .5s var(--E);cursor:default;}
-.vi:hover{background:rgba(212,175,55,.05);border-color:rgba(212,175,55,.2);transform:translateX(12px);}
-.vico{width:56px;height:56px;background:rgba(212,175,55,.1);border:1.5px solid rgba(212,175,55,.25);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--G);font-size:20px;flex-shrink:0;transition:all .4s var(--E);}
-.vi:hover .vico{background:var(--G);color:var(--PD);transform:scale(1.1) rotate(10deg);}
-.vinfo h4{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#fff;margin-bottom:3px;}
-.vinfo span{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.38);}
-@media(max-width:1024px){.abt-g{grid-template-columns:1fr;gap:60px;}}
-@media(max-width:768px){.abt-sec{padding:80px 22px;}}
-/* ── REDIRECT ── */
-.rdr-sec{padding:100px 60px;background:var(--P);position:relative;overflow:hidden;}
-.rdr-sec::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 85% 50%,rgba(212,175,55,.1) 0%,transparent 70%),radial-gradient(ellipse 40% 60% at 15% 50%,rgba(6,9,30,.5) 0%,transparent 70%);}
-.rdr-in{max-width:1150px;margin:0 auto;position:relative;z-index:1;display:grid;grid-template-columns:1fr auto;gap:70px;align-items:center;}
-.rdr-ey{font-size:10px;letter-spacing:5px;text-transform:uppercase;color:var(--G);display:block;margin-bottom:14px;}
-.rdr-t{font-family:'Playfair Display',serif;font-size:clamp(32px,4vw,52px);font-weight:700;color:#fff;line-height:1.2;margin-bottom:16px;}
-.rdr-t strong{color:var(--G);}
-.rdr-d{font-size:15px;color:rgba(255,255,255,.58);line-height:1.75;font-weight:300;}
-.rdr-bs{display:flex;flex-direction:column;gap:13px;min-width:255px;}
-.rdr-b1{display:flex;align-items:center;justify-content:center;gap:10px;padding:17px 36px;background:var(--G);color:var(--PD);font-weight:700;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);box-shadow:0 4px 20px rgba(212,175,55,.4);}
-.rdr-b1:hover{background:var(--GL);transform:translateY(-4px);}
-.rdr-b2{display:flex;align-items:center;justify-content:center;gap:10px;padding:16px 36px;border:1px solid rgba(255,255,255,.22);color:rgba(255,255,255,.8);font-size:12px;letter-spacing:2px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);}
-.rdr-b2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);}
-@media(max-width:900px){.rdr-in{grid-template-columns:1fr;}.rdr-bs{flex-direction:row;flex-wrap:wrap;}}
-@media(max-width:768px){.rdr-sec{padding:80px 22px;}}
-/* ── FOOTER ── */
-footer{background:var(--PD);border-top:1px solid rgba(212,175,55,.12);padding:62px 60px 34px;}
-.ft-in{max-width:1300px;margin:0 auto;}
-.ft-top{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:44px;border-bottom:1px solid rgba(255,255,255,.05);margin-bottom:30px;gap:40px;flex-wrap:wrap;}
-.ft-logo{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
-.ft-logo img{width:32px;height:32px;border-radius:50%;object-fit:contain;background:#fff;}
-.ft-logo-name{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#fff;}
-.ft-tag{font-size:13px;color:rgba(255,255,255,.38);line-height:1.7;max-width:248px;}
-.ft-col h5{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--G);margin-bottom:16px;}
-.ft-col ul{list-style:none;display:flex;flex-direction:column;gap:10px;}
-.ft-col a{font-size:14px;color:rgba(255,255,255,.45);text-decoration:none;transition:color .3s;}
-.ft-col a:hover{color:var(--G);}
-.ft-bot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;}
-.ft-copy{font-size:12px;color:rgba(255,255,255,.22);}
-.ft-copy span{color:var(--G);}
-.ft-soc{display:flex;gap:10px;}
-.soa{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.38);font-size:14px;text-decoration:none;transition:all .4s var(--E);}
-.soa:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);}
-@media(max-width:768px){footer{padding:60px 22px 30px;}.ft-top{flex-direction:column;}}
-/* ── FAB ── */
-.fab-w{position:fixed;bottom:36px;right:36px;z-index:900;display:flex;flex-direction:column;align-items:flex-end;gap:12px;}
-.fpill{display:flex;align-items:center;gap:11px;padding:13px 24px;border-radius:50px;font-size:13px;font-weight:700;letter-spacing:.8px;text-decoration:none;border:none;cursor:pointer;transition:all .4s var(--E);white-space:nowrap;position:relative;overflow:hidden;}
-.fpill::after{content:'';position:absolute;top:0;left:-75%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);transform:skewX(-18deg);transition:left .6s var(--E);pointer-events:none;}
-.fpill:hover::after{left:130%;}
-.fa-a{background:linear-gradient(135deg,var(--G),var(--GL));color:var(--PD);box-shadow:0 8px 24px rgba(212,175,55,.45);}
-.fa-a:hover{transform:translateY(-5px) scale(1.03);color:var(--PD);}
-.fa-a .fic{width:30px;height:30px;border-radius:50%;background:rgba(26,34,90,.18);display:flex;align-items:center;justify-content:center;font-size:14px;}
-.fa-o{background:linear-gradient(135deg,var(--P),var(--PD));color:#fff;border:1.5px solid rgba(212,175,55,.55);box-shadow:0 8px 24px rgba(48,59,151,.5);}
-.fa-o:hover{transform:translateY(-5px) scale(1.03);border-color:var(--G);color:#fff;}
-.fa-o .fic{width:30px;height:30px;border-radius:50%;background:rgba(212,175,55,.18);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--G);transition:all .4s var(--E);}
-.fa-o:hover .fic{background:var(--G);color:var(--PD);}
-.ftop{width:46px;height:46px;border-radius:50%;background:rgba(48,59,151,.9);border:1px solid rgba(212,175,55,.3);display:flex;align-items:center;justify-content:center;color:var(--G);font-size:16px;cursor:pointer;opacity:0;pointer-events:none;transition:all .4s var(--E);backdrop-filter:blur(8px);}
-.ftop.show{opacity:1;pointer-events:auto;}
-.ftop:hover{background:var(--G);color:var(--PD);transform:translateY(-5px);}
-@media(max-width:500px){.fab-w{bottom:20px;right:16px;}.fpill{padding:11px 18px;font-size:12px;}}
-/* ── SCROLL REVEAL ── */
-.rv{opacity:0;transform:translateY(34px);transition:opacity .9s var(--E),transform .9s var(--E);}
-.rv.on{opacity:1;transform:translateY(0);}
-.rv.d1{transition-delay:100ms;}.rv.d2{transition-delay:200ms;}.rv.d3{transition-delay:300ms;}
-
-/* ── LANGUAGE SWITCHER ── */
-.lang-sw{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.07);border:1px solid rgba(212,175,55,.2);border-radius:50px;padding:4px;margin-right:4px;}
-.lang-btn{padding:5px 12px;border-radius:50px;border:none;background:transparent;color:rgba(255,255,255,.55);font-size:12px;font-weight:600;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif;letter-spacing:.5px;}
-.lang-btn.active{background:var(--G);color:var(--PD);}
-.lang-btn:hover:not(.active){color:#fff;background:rgba(255,255,255,.1);}
-/* RTL support for Arabic */
-body.rtl{direction:rtl;}
-body.rtl .nav-ul a::after{left:auto;right:0;}
-body.rtl .drw{right:auto;left:-100%;}
-body.rtl .drw.on{left:0;right:auto;}
-body.rtl .drw::before{left:auto;right:0;}
 body.rtl .eyebrow::before{background:linear-gradient(270deg,transparent,var(--G));}
 body.rtl .eyebrow::after{background:linear-gradient(270deg,var(--G),transparent);}
-/* Kurdish font for kurd lang */
-body.lang-ku .kurd-sub,body.lang-ku .hs-tab,body.lang-ku .hs-go,body.lang-ku .hs-quick,body.lang-ku .hb1,
-body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs-quick,body.lang-ar .hb1{font-family:'Noto Sans Arabic',sans-serif;}
-
-.hc{position:relative;z-index:10;text-align:center;max-width:780px;padding:0 24px;pointer-events:none;opacity:0;transform:translateY(40px);transition:opacity 1.6s var(--E),transform 1.6s var(--E);}
-.hc.vis{opacity:1;transform:translateY(0);pointer-events:auto;}
-
-/* ── KURDISH SUBTITLE ── */
+h1{
+  font-family:'Playfair Display',serif !important;
+  font-size:clamp(56px,9vw,110px);
+  font-weight:800;line-height:.93;
+  letter-spacing:-3px;color:#fff;margin-bottom:10px;
+}
+h1 .g{color:var(--G);}
 .kurd-sub{
-  font-family:'Noto Sans Arabic',sans-serif;
-  font-size:clamp(14px,1.6vw,18px);
-  color:rgba(255,255,255,.6);
-  margin:12px 0 8px;
-  font-weight:400;
+  font-family:var(--font-ar) !important;
+  font-size:clamp(15px,2vw,19px);
+  color:rgba(255,255,255,.65);
+  margin:14px 0 8px;
+  font-weight:500;
   direction:rtl;
-  line-height:1.8;
+  line-height:1.9;
   letter-spacing:0;
 }
+.sub{
+  font-family:'Cinzel',serif;
+  font-size:clamp(10px,1.4vw,13px);
+  letter-spacing:7px;text-transform:uppercase;
+  color:rgba(255,255,255,.27);margin-bottom:0;
+}
+body.lang-ku .sub,body.lang-ar .sub{
+  font-family:var(--font-ar-ui) !important;
+  letter-spacing:2px;font-size:12px;
+}
+.hdesc{
+  font-size:16px;line-height:1.85;color:var(--dim);
+  max-width:500px;margin:0 auto 48px;font-weight:300;
+}
 
-/* ── HERO SEARCH BAR ── */
+/* ─── Hero Search Bar ─── */
 .hero-search{
   width:100%;max-width:620px;
   margin:32px auto 38px;
   pointer-events:auto;
 }
-.hs-tabs{
-  display:flex;gap:6px;margin-bottom:0;justify-content:center;
-}
+.hs-tabs{display:flex;gap:6px;margin-bottom:0;justify-content:center;}
 .hs-tab{
   padding:11px 22px;
   background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.12);
   border-bottom:none;
   border-radius:12px 12px 0 0;
-  color:rgba(255,255,255,.55);
+  color:rgba(255,255,255,.65);
   font-size:13px;
-  font-family:'Noto Sans Arabic',sans-serif;
+  font-family:var(--font-ar-ui);
   cursor:pointer;
   transition:all .3s;
   white-space:nowrap;
+  -webkit-appearance:none;
 }
 .hs-tab:hover{background:rgba(212,175,55,.1);color:#fff;}
 .hs-tab.active{
   background:rgba(212,175,55,.14);
   border-color:rgba(212,175,55,.45);
   border-bottom-color:transparent;
-  color:var(--G);
-  font-weight:600;
+  color:var(--G);font-weight:600;
 }
 .hs-bar{
   display:flex;
@@ -274,28 +330,33 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
 .hs-input-wrap{
   flex:1;display:flex;align-items:center;
   gap:12px;padding:0 20px;
+  direction:rtl;
 }
 .hs-input-wrap i{color:#bbb;font-size:14px;flex-shrink:0;}
 .hs-input-wrap input{
   flex:1;border:none;outline:none;
   font-size:14px;color:#1a225a;
   background:transparent;
-  font-family:'Noto Sans Arabic',sans-serif;
+  font-family:var(--font-ar-ui);
   padding:19px 0;
   direction:rtl;
+  width:100%;
 }
-.hs-input-wrap input::placeholder{color:#bbb;font-size:12.5px;}
+.hs-input-wrap input::placeholder{
+  color:#aaa;font-size:12.5px;
+  font-family:var(--font-ar-ui);
+}
 .hs-go{
   padding:14px 26px;
-  background:var(--G);
-  color:var(--PD);
+  background:var(--G);color:var(--PD);
   font-size:13px;font-weight:700;
-  font-family:'Noto Sans Arabic',sans-serif;
+  font-family:var(--font-ar-ui);
   text-decoration:none;
   display:flex;align-items:center;
   white-space:nowrap;
   transition:background .3s;
-  flex-shrink:0;
+  flex-shrink:0;border:none;cursor:pointer;
+  -webkit-appearance:none;
 }
 .hs-go:hover{background:var(--GL);}
 .hs-quick{
@@ -303,28 +364,797 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   margin-top:14px;flex-wrap:wrap;justify-content:center;
 }
 .hs-quick span{
-  font-size:11px;color:rgba(255,255,255,.3);
-  font-family:'Noto Sans Arabic',sans-serif;
-  direction:rtl;
+  font-size:12px;color:rgba(255,255,255,.38);
+  font-family:var(--font-ar-ui);direction:rtl;
 }
 .hs-quick a{
-  font-size:12px;color:rgba(255,255,255,.5);
+  font-size:12px;color:rgba(255,255,255,.55);
   text-decoration:none;padding:5px 14px;
-  border:1px solid rgba(255,255,255,.12);
-  border-radius:20px;
-  font-family:'Noto Sans Arabic',sans-serif;
-  transition:all .3s;white-space:nowrap;
+  border:1px solid rgba(255,255,255,.14);border-radius:20px;
+  font-family:var(--font-ar-ui);
+  transition:all .3s;white-space:nowrap;cursor:pointer;
 }
 .hs-quick a:hover{border-color:var(--G);color:var(--G);}
 
-/* Bigger gap before buttons */
-.hbtns{margin-top:0 !important;}
+/* ─── Hero Buttons ─── */
+.hbtns{
+  display:flex;align-items:center;justify-content:center;
+  gap:16px;flex-wrap:wrap;margin-top:0 !important;
+}
+.hb1{
+  padding:16px 46px;background:var(--G);color:var(--PD);
+  font-weight:700;font-size:12px;letter-spacing:2.5px;
+  text-transform:uppercase;border-radius:50px;
+  text-decoration:none;transition:all .4s var(--E);
+  box-shadow:0 4px 26px rgba(212,175,55,.4);
+  font-family:var(--font-ar-ui);
+}
+body.lang-en .hb1{font-family:'DM Sans',sans-serif;letter-spacing:2px;}
+.hb1:hover{background:var(--GL);transform:translateY(-4px);box-shadow:0 16px 40px rgba(212,175,55,.55);}
+.hb2{
+  padding:15px 46px;border:1px solid rgba(255,255,255,.2);
+  color:rgba(255,255,255,.8);font-size:12px;letter-spacing:2.5px;
+  text-transform:uppercase;border-radius:50px;
+  text-decoration:none;transition:all .4s var(--E);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  font-family:var(--font-ar-ui);
+}
+body.lang-en .hb2{font-family:'DM Sans',sans-serif;}
+.hb2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);background:rgba(212,175,55,.06);}
 
-@media(max-width:600px){
-  .hs-tabs{gap:3px;}
-  .hs-tab{padding:9px 12px;font-size:11px;}
-  .hs-go{padding:14px 14px;font-size:11px;}
-  .hero-search{margin:24px auto 30px;}
+/* ─── Scroll indicator ─── */
+.scrl{
+  position:absolute;bottom:34px;left:50%;transform:translateX(-50%);
+  z-index:10;display:flex;flex-direction:column;align-items:center;
+  gap:8px;opacity:0;transition:opacity 1.2s ease;
+}
+.scrl.vis{opacity:1;}
+.scrl span{
+  font-size:9px;letter-spacing:4px;text-transform:uppercase;
+  color:rgba(255,255,255,.22);font-family:'DM Sans',sans-serif;
+}
+body.lang-ku .scrl span,body.lang-ar .scrl span{
+  font-family:var(--font-ar-ui);letter-spacing:1px;font-size:11px;
+}
+.mouse{
+  width:22px;height:34px;
+  border:1.5px solid rgba(212,175,55,.38);
+  border-radius:12px;display:flex;justify-content:center;padding-top:6px;
+}
+.mouse::after{
+  content:'';width:3px;height:8px;border-radius:2px;background:var(--G);
+  animation:sp 2s ease-in-out infinite;
+}
+@keyframes sp{0%,100%{transform:translateY(0);opacity:1;}50%{transform:translateY(9px);opacity:0;}}
+
+/* ═══════════════════════════════════════════════════════
+   STATS BAR
+═══════════════════════════════════════════════════════ */
+.stats-bar{
+  background:rgba(212,175,55,.06);
+  border-top:1px solid rgba(212,175,55,.15);
+  border-bottom:1px solid rgba(212,175,55,.15);
+  padding:36px 60px;
+}
+.stats-inner{
+  max-width:900px;margin:0 auto;
+  display:flex;justify-content:center;align-items:center;
+}
+.stat-item{text-align:center;flex:1;max-width:320px;}
+.stat-num{
+  font-family:'Playfair Display',serif !important;
+  font-size:48px;font-weight:700;color:var(--G);line-height:1;
+}
+.stat-label{
+  font-size:11px;letter-spacing:2px;text-transform:uppercase;
+  color:rgba(255,255,255,.4);margin-top:6px;
+}
+body.lang-ku .stat-label,body.lang-ar .stat-label{
+  font-family:var(--font-ar-ui);letter-spacing:.5px;font-size:12px;
+  text-transform:none;
+}
+.stat-div{width:1px;height:50px;background:rgba(212,175,55,.2);}
+
+/* ═══════════════════════════════════════════════════════
+   SERVICES
+═══════════════════════════════════════════════════════ */
+.svc-sec{
+  padding:120px 60px;
+  background:linear-gradient(180deg,var(--deep) 0%,var(--PD) 100%);
+}
+.sec-wrap{max-width:1320px;margin:0 auto;}
+.sec-hd{text-align:center;margin-bottom:70px;}
+.stag{
+  font-size:10px;letter-spacing:5px;text-transform:uppercase;
+  color:var(--G);display:block;margin-bottom:14px;
+}
+body.lang-ku .stag,body.lang-ar .stag{
+  font-family:var(--font-ar-ui);letter-spacing:1px;
+  font-size:13px;text-transform:none;
+}
+.stitle{
+  font-family:'Playfair Display',serif !important;
+  font-size:clamp(36px,5vw,60px);font-weight:700;
+  color:#fff;line-height:1.1;
+}
+body.lang-ku .stitle,body.lang-ar .stitle{
+  font-family:var(--font-ar) !important;
+  line-height:1.3;
+}
+.stitle em{font-style:italic;color:var(--G);}
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
+.svc-card{
+  position:relative;height:530px;overflow:hidden;
+  display:block;text-decoration:none;color:inherit;
+}
+.svc-card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(to top,rgba(6,9,30,.97) 0%,rgba(18,25,72,.5) 50%,rgba(48,59,151,.1) 100%);
+  transition:all .6s var(--E);z-index:1;
+}
+.svc-card:hover::before{
+  background:linear-gradient(to top,rgba(6,9,30,.98) 0%,rgba(18,25,72,.75) 65%,rgba(48,59,151,.25) 100%);
+}
+.svc-img{
+  position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;filter:saturate(.45) brightness(.75);
+  transition:transform .9s var(--E),filter .6s;
+}
+.svc-card:hover .svc-img{transform:scale(1.1);filter:saturate(.25) brightness(.65);}
+.svc-body{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:46px 38px;z-index:2;
+  transition:transform .6s var(--E);
+}
+.svc-card:hover .svc-body{transform:translateY(-16px);}
+.svc-n{
+  font-family:'Playfair Display',serif !important;
+  font-size:70px;font-weight:700;
+  color:rgba(212,175,55,.12);line-height:1;margin-bottom:4px;
+  transition:color .4s;
+}
+.svc-card:hover .svc-n{color:rgba(212,175,55,.3);}
+.svc-ico{
+  width:52px;height:52px;border:1.5px solid rgba(212,175,55,.38);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  color:var(--G);font-size:18px;margin-bottom:18px;
+  transition:all .5s var(--E);
+}
+.svc-card:hover .svc-ico{background:var(--G);color:var(--PD);border-color:var(--G);transform:scale(1.1);}
+.svc-t{
+  font-family:'Playfair Display',serif !important;
+  font-size:30px;font-weight:700;color:#fff;
+  margin-bottom:10px;transition:color .3s;
+}
+body.lang-ku .svc-t,body.lang-ar .svc-t{
+  font-family:var(--font-ar) !important;font-size:26px;
+}
+.svc-card:hover .svc-t{color:var(--G);}
+.svc-p{
+  font-size:13.5px;line-height:1.75;color:rgba(255,255,255,.58);
+  max-height:0;overflow:hidden;opacity:0;
+  transition:all .6s var(--E);margin-bottom:0;
+}
+body.lang-ku .svc-p,body.lang-ar .svc-p{
+  font-family:var(--font-ar-ui);font-size:14px;line-height:1.9;
+}
+.svc-card:hover .svc-p{max-height:120px;opacity:1;margin-bottom:18px;}
+.svc-cta{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
+  color:var(--G);font-weight:600;transition:gap .4s var(--E);
+}
+body.lang-ku .svc-cta,body.lang-ar .svc-cta{
+  font-family:var(--font-ar-ui);letter-spacing:.5px;font-size:13px;text-transform:none;
+}
+.svc-card:hover .svc-cta{gap:16px;}
+
+/* ═══════════════════════════════════════════════════════
+   APP SECTION
+═══════════════════════════════════════════════════════ */
+.app-sec{
+  padding:120px 60px;
+  background:linear-gradient(135deg,var(--PM) 0%,var(--P) 50%,var(--PD) 100%);
+  position:relative;overflow:hidden;
+}
+.app-g{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:90px;align-items:center;
+  max-width:1300px;margin:0 auto;position:relative;z-index:1;
+}
+.app-desc{
+  font-size:16px;line-height:1.85;color:rgba(255,255,255,.62);
+  margin-bottom:36px;font-weight:300;
+}
+body.lang-ku .app-desc,body.lang-ar .app-desc{
+  font-family:var(--font-ar-ui);font-size:16px;line-height:2;
+}
+.app-feats{display:flex;flex-direction:column;gap:14px;margin-bottom:44px;}
+.af{display:flex;align-items:center;gap:14px;font-size:14px;color:rgba(255,255,255,.75);}
+body.lang-ku .af,body.lang-ar .af{
+  font-family:var(--font-ar-ui);font-size:15px;line-height:1.7;
+}
+.af i{color:var(--G);width:18px;flex-shrink:0;}
+.sbtns{display:flex;gap:14px;flex-wrap:wrap;}
+.sbtn{
+  display:flex;align-items:center;gap:14px;padding:14px 24px;
+  border:1px solid rgba(212,175,55,.3);border-radius:14px;
+  text-decoration:none;background:rgba(212,175,55,.06);
+  transition:all .4s var(--E);
+}
+.sbtn:hover{background:rgba(212,175,55,.14);border-color:var(--G);transform:translateY(-4px);}
+.sbtn i{font-size:26px;color:var(--G);}
+.sbtn-sm{
+  font-size:10px;letter-spacing:1.2px;text-transform:uppercase;
+  color:rgba(255,255,255,.45);font-family:'DM Sans',sans-serif;
+}
+body.lang-ku .sbtn-sm,body.lang-ar .sbtn-sm{
+  font-family:var(--font-ar-ui);letter-spacing:0;font-size:11px;text-transform:none;
+}
+.sbtn-nm{
+  font-family:'Playfair Display',serif !important;
+  font-size:17px;font-weight:700;color:#fff;
+}
+.qr-card{
+  background:#fff;border-radius:26px;padding:28px;
+  display:flex;flex-direction:column;align-items:center;gap:18px;
+  max-width:272px;margin:0 auto;
+  box-shadow:0 0 0 1.5px rgba(212,175,55,.5),0 40px 80px rgba(0,0,0,.6);
+  position:relative;overflow:hidden;
+  transition:transform .6s var(--E);
+}
+.qr-card:hover{transform:translateY(-10px) scale(1.02);}
+.qr-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:4px;
+  background:linear-gradient(90deg,var(--P),var(--G),var(--P));
+}
+.qr-brand{display:flex;align-items:center;gap:12px;width:100%;}
+.qr-ico{
+  width:42px;height:42px;border-radius:12px;
+  background:linear-gradient(135deg,var(--PD),var(--P));
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:19px;flex-shrink:0;
+}
+.qr-t{
+  font-family:'Playfair Display',serif !important;
+  font-size:16px;font-weight:700;color:var(--PD);
+}
+.qr-s{
+  font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;
+  color:#aaa;font-family:'DM Sans',sans-serif;
+}
+body.lang-ku .qr-s,body.lang-ar .qr-s{
+  font-family:var(--font-ar-ui);letter-spacing:0;font-size:11px;text-transform:none;
+}
+.qr-div{width:100%;height:1px;background:rgba(48,59,151,.1);}
+.qr-img{width:188px;height:188px;border-radius:12px;display:block;}
+.qr-hint{
+  display:flex;align-items:center;gap:8px;
+  font-size:10.5px;letter-spacing:1px;text-transform:uppercase;
+  color:#999;font-weight:500;font-family:'DM Sans',sans-serif;
+}
+body.lang-ku .qr-hint,body.lang-ar .qr-hint{
+  font-family:var(--font-ar-ui);letter-spacing:0;font-size:12px;text-transform:none;
+}
+.qr-lnk{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  width:100%;padding:12px;
+  background:linear-gradient(135deg,var(--PD),var(--P));
+  color:#fff;border-radius:14px;font-size:13px;font-weight:600;
+  text-decoration:none;transition:all .4s var(--E);
+  font-family:'DM Sans',sans-serif;
+}
+body.lang-ku .qr-lnk,body.lang-ar .qr-lnk{font-family:var(--font-ar-ui);}
+.qr-lnk:hover{box-shadow:0 8px 24px rgba(48,59,151,.5);transform:translateY(-2px);color:#fff;}
+
+/* ═══════════════════════════════════════════════════════
+   ABOUT
+═══════════════════════════════════════════════════════ */
+.abt-sec{
+  padding:120px 60px;
+  background:linear-gradient(180deg,var(--PD) 0%,var(--deep) 100%);
+}
+.abt-g{
+  display:grid;grid-template-columns:1.4fr 1fr;
+  gap:100px;align-items:start;max-width:1300px;margin:0 auto;
+}
+.abt-p{
+  font-size:15.5px;line-height:1.95;color:rgba(255,255,255,.58);
+  margin-bottom:20px;font-weight:300;
+}
+body.lang-ku .abt-p,body.lang-ar .abt-p{
+  font-family:var(--font-ar-ui);font-size:16px;line-height:2.1;
+}
+.qbar{
+  margin-top:34px;padding:26px 30px;
+  border-left:3px solid var(--G);
+  background:rgba(212,175,55,.04);
+  border-radius:0 12px 12px 0;
+}
+body.rtl .qbar{border-left:none;border-right:3px solid var(--G);border-radius:12px 0 0 12px;}
+.qbar p{
+  font-family:'Playfair Display',serif !important;
+  font-size:20px;font-style:italic;color:var(--GP);line-height:1.55;
+}
+body.lang-ku .qbar p,body.lang-ar .qbar p{
+  font-family:var(--font-ar) !important;
+  font-size:18px;font-style:normal;line-height:1.9;
+}
+.vals{display:flex;flex-direction:column;gap:2px;}
+.vi{
+  display:flex;align-items:center;gap:22px;
+  padding:26px 28px;
+  background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.05);
+  transition:all .5s var(--E);cursor:default;
+}
+.vi:hover{background:rgba(212,175,55,.05);border-color:rgba(212,175,55,.2);transform:translateX(12px);}
+body.rtl .vi:hover{transform:translateX(-12px);}
+.vico{
+  width:56px;height:56px;
+  background:rgba(212,175,55,.1);
+  border:1.5px solid rgba(212,175,55,.25);
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  color:var(--G);font-size:20px;flex-shrink:0;
+  transition:all .4s var(--E);
+}
+.vi:hover .vico{background:var(--G);color:var(--PD);transform:scale(1.1) rotate(10deg);}
+.vinfo h4{
+  font-family:'Playfair Display',serif !important;
+  font-size:22px;font-weight:700;color:#fff;margin-bottom:3px;
+}
+body.lang-ku .vinfo h4,body.lang-ar .vinfo h4{
+  font-family:var(--font-ar) !important;font-size:19px;
+}
+.vinfo span{
+  font-size:11px;letter-spacing:1.5px;text-transform:uppercase;
+  color:rgba(255,255,255,.38);
+}
+body.lang-ku .vinfo span,body.lang-ar .vinfo span{
+  font-family:var(--font-ar-ui);letter-spacing:0;font-size:12px;text-transform:none;
+}
+
+/* ═══════════════════════════════════════════════════════
+   REDIRECT / CTA SECTION
+═══════════════════════════════════════════════════════ */
+.rdr-sec{
+  padding:100px 60px;background:var(--P);
+  position:relative;overflow:hidden;
+}
+.rdr-sec::before{
+  content:'';position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 60% 80% at 85% 50%,rgba(212,175,55,.1) 0%,transparent 70%),
+    radial-gradient(ellipse 40% 60% at 15% 50%,rgba(6,9,30,.5) 0%,transparent 70%);
+}
+.rdr-in{
+  max-width:1150px;margin:0 auto;position:relative;z-index:1;
+  display:grid;grid-template-columns:1fr auto;
+  gap:70px;align-items:center;
+}
+.rdr-ey{
+  font-size:10px;letter-spacing:5px;text-transform:uppercase;
+  color:var(--G);display:block;margin-bottom:14px;
+}
+body.lang-ku .rdr-ey,body.lang-ar .rdr-ey{
+  font-family:var(--font-ar-ui);letter-spacing:1px;
+  font-size:13px;text-transform:none;
+}
+.rdr-t{
+  font-family:'Playfair Display',serif !important;
+  font-size:clamp(32px,4vw,52px);font-weight:700;
+  color:#fff;line-height:1.2;margin-bottom:16px;
+}
+body.lang-ku .rdr-t,body.lang-ar .rdr-t{
+  font-family:var(--font-ar) !important;line-height:1.5;
+}
+.rdr-t strong{color:var(--G);}
+.rdr-d{
+  font-size:15px;color:rgba(255,255,255,.58);
+  line-height:1.75;font-weight:300;
+}
+body.lang-ku .rdr-d,body.lang-ar .rdr-d{
+  font-family:var(--font-ar-ui);font-size:15px;line-height:2;
+}
+.rdr-bs{display:flex;flex-direction:column;gap:13px;min-width:255px;}
+.rdr-b1{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:17px 36px;background:var(--G);color:var(--PD);
+  font-weight:700;font-size:12px;letter-spacing:2.5px;
+  text-transform:uppercase;border-radius:50px;
+  text-decoration:none;transition:all .4s var(--E);
+  box-shadow:0 4px 20px rgba(212,175,55,.4);
+  font-family:var(--font-ar-ui);
+  white-space:nowrap;
+}
+body.lang-en .rdr-b1{font-family:'DM Sans',sans-serif;}
+.rdr-b1:hover{background:var(--GL);transform:translateY(-4px);}
+.rdr-b2{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:16px 36px;border:1px solid rgba(255,255,255,.22);
+  color:rgba(255,255,255,.8);font-size:12px;letter-spacing:2px;
+  text-transform:uppercase;border-radius:50px;
+  text-decoration:none;transition:all .4s var(--E);
+  font-family:var(--font-ar-ui);white-space:nowrap;
+}
+body.lang-en .rdr-b2{font-family:'DM Sans',sans-serif;}
+.rdr-b2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);}
+
+/* ═══════════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════════ */
+footer{
+  background:var(--PD);
+  border-top:1px solid rgba(212,175,55,.12);
+  padding:62px 60px 34px;
+}
+.ft-in{max-width:1300px;margin:0 auto;}
+.ft-top{
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding-bottom:44px;border-bottom:1px solid rgba(255,255,255,.05);
+  margin-bottom:30px;gap:40px;flex-wrap:wrap;
+}
+.ft-logo{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.ft-logo img{width:32px;height:32px;border-radius:50%;object-fit:contain;background:#fff;}
+.ft-logo-name{font-family:'Playfair Display',serif !important;font-size:22px;font-weight:700;color:#fff;}
+.ft-tag{
+  font-size:13px;color:rgba(255,255,255,.38);
+  line-height:1.7;max-width:248px;
+}
+body.lang-ku .ft-tag,body.lang-ar .ft-tag{
+  font-family:var(--font-ar-ui);font-size:14px;line-height:1.9;
+}
+.ft-col h5{
+  font-size:10px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--G);margin-bottom:16px;
+}
+body.lang-ku .ft-col h5,body.lang-ar .ft-col h5{
+  font-family:var(--font-ar-ui);letter-spacing:0;font-size:12px;text-transform:none;
+}
+.ft-col ul{list-style:none;display:flex;flex-direction:column;gap:10px;}
+.ft-col a{
+  font-size:14px;color:rgba(255,255,255,.45);
+  text-decoration:none;transition:color .3s;
+}
+body.lang-ku .ft-col a,body.lang-ar .ft-col a{
+  font-family:var(--font-ar-ui);font-size:14px;
+}
+.ft-col a:hover{color:var(--G);}
+.ft-bot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;}
+.ft-copy{font-size:12px;color:rgba(255,255,255,.22);font-family:'DM Sans',sans-serif;}
+.ft-copy span{color:var(--G);}
+.ft-soc{display:flex;gap:10px;}
+.soa{
+  width:36px;height:36px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.1);
+  display:flex;align-items:center;justify-content:center;
+  color:rgba(255,255,255,.38);font-size:14px;
+  text-decoration:none;transition:all .4s var(--E);
+}
+.soa:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);}
+
+/* ═══════════════════════════════════════════════════════
+   FABs
+═══════════════════════════════════════════════════════ */
+.fab-w{
+  position:fixed;bottom:36px;right:36px;
+  z-index:900;display:flex;flex-direction:column;
+  align-items:flex-end;gap:12px;
+}
+body.rtl .fab-w{right:auto;left:36px;align-items:flex-start;}
+.fpill{
+  display:flex;align-items:center;gap:11px;
+  padding:13px 24px;border-radius:50px;
+  font-size:13px;font-weight:700;letter-spacing:.8px;
+  text-decoration:none;border:none;cursor:pointer;
+  transition:all .4s var(--E);white-space:nowrap;
+  position:relative;overflow:hidden;
+  font-family:var(--font-ar-ui);
+}
+body.lang-en .fpill{font-family:'DM Sans',sans-serif;}
+.fpill::after{
+  content:'';position:absolute;top:0;left:-75%;width:50%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);
+  transform:skewX(-18deg);transition:left .6s var(--E);pointer-events:none;
+}
+.fpill:hover::after{left:130%;}
+.fa-a{
+  background:linear-gradient(135deg,var(--G),var(--GL));color:var(--PD);
+  box-shadow:0 8px 24px rgba(212,175,55,.45);
+}
+.fa-a:hover{transform:translateY(-5px) scale(1.03);color:var(--PD);}
+.fa-a .fic{
+  width:30px;height:30px;border-radius:50%;
+  background:rgba(26,34,90,.18);
+  display:flex;align-items:center;justify-content:center;font-size:14px;
+  flex-shrink:0;
+}
+.fa-o{
+  background:linear-gradient(135deg,var(--P),var(--PD));color:#fff;
+  border:1.5px solid rgba(212,175,55,.55);
+  box-shadow:0 8px 24px rgba(48,59,151,.5);
+}
+.fa-o:hover{transform:translateY(-5px) scale(1.03);border-color:var(--G);color:#fff;}
+.fa-o .fic{
+  width:30px;height:30px;border-radius:50%;
+  background:rgba(212,175,55,.18);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--G);transition:all .4s var(--E);flex-shrink:0;
+}
+.fa-o:hover .fic{background:var(--G);color:var(--PD);}
+.fpill .fab-label{transition:all .4s var(--E);}
+.ftop{
+  width:46px;height:46px;border-radius:50%;
+  background:rgba(48,59,151,.9);
+  border:1px solid rgba(212,175,55,.3);
+  display:flex;align-items:center;justify-content:center;
+  color:var(--G);font-size:16px;cursor:pointer;
+  opacity:0;pointer-events:none;
+  transition:all .4s var(--E);
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+}
+.ftop.show{opacity:1;pointer-events:auto;}
+.ftop:hover{background:var(--G);color:var(--PD);transform:translateY(-5px);}
+
+/* ── Mobile FABs: circular icon-only ── */
+@media(max-width:768px){
+  .fab-w{bottom:22px;right:14px;gap:10px;}
+  body.rtl .fab-w{left:14px;right:auto;}
+
+  /* hide label text */
+  .fpill .fab-label{display:none !important;}
+
+  /* pill becomes a perfect circle */
+  .fpill{
+    width:54px !important;height:54px !important;
+    padding:0 !important;border-radius:50% !important;
+    justify-content:center !important;
+    gap:0 !important;
+    overflow:hidden;
+  }
+  /* inner icon container fills the circle */
+  .fa-a .fic{
+    width:54px !important;height:54px !important;
+    border-radius:50% !important;
+    font-size:20px !important;
+    background:transparent !important;
+    display:flex !important;align-items:center !important;justify-content:center !important;
+    color:var(--PD) !important;
+  }
+  .fa-o .fic{
+    width:54px !important;height:54px !important;
+    border-radius:50% !important;
+    font-size:20px !important;
+    background:transparent !important;
+    display:flex !important;align-items:center !important;justify-content:center !important;
+    color:#fff !important;
+  }
+  .ftop{width:44px;height:44px;font-size:14px;}
+}
+@media(max-width:480px){
+  .fab-w{bottom:16px;right:10px;}
+  body.rtl .fab-w{left:10px;right:auto;}
+  .fpill{width:48px !important;height:48px !important;}
+  .fa-a .fic{width:48px !important;height:48px !important;font-size:18px !important;}
+  .fa-o .fic{width:48px !important;height:48px !important;font-size:18px !important;}
+  .ftop{width:40px;height:40px;}
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   SCROLL REVEAL
+═══════════════════════════════════════════════════════ */
+.rv{
+  opacity:0;transform:translateY(34px);
+  transition:opacity .9s var(--E),transform .9s var(--E);
+}
+.rv.on{opacity:1;transform:translateY(0);}
+.rv.d1{transition-delay:100ms;}
+.rv.d2{transition-delay:200ms;}
+.rv.d3{transition-delay:300ms;}
+
+/* ═══════════════════════════════════════════════════════
+   RTL GLOBAL
+═══════════════════════════════════════════════════════ */
+body.rtl .nav-ul a::after{left:auto;right:0;}
+body.rtl .eyebrow::before{background:linear-gradient(270deg,transparent,var(--G));}
+body.rtl .eyebrow::after{background:linear-gradient(270deg,var(--G),transparent);}
+
+/* ═══════════════════════════════════════════════════════
+   ════════════════ MOBILE STYLES ════════════════════════
+═══════════════════════════════════════════════════════ */
+
+/* ─── Tablet ─── */
+@media(max-width:1100px){
+  .svc-grid{grid-template-columns:1fr 1fr;}
+  .svc-card:last-child{grid-column:span 2;}
+  .abt-g{grid-template-columns:1fr;gap:60px;}
+  .app-g{grid-template-columns:1fr;gap:60px;}
+}
+
+@media(max-width:1024px){
+  .rdr-in{grid-template-columns:1fr;}
+  .rdr-bs{flex-direction:row;flex-wrap:wrap;}
+}
+
+/* ─── Hide nav on mobile, show hamburger ─── */
+@media(max-width:1000px){
+  .nav-ul,.nav-right{display:none;}
+  .hbtn{display:flex;align-items:center;justify-content:center;}
+  header{padding:0 20px;height:70px;}
+  header.sc{height:60px;}
+  .logo img{width:44px;height:44px;}
+  header.sc .logo img{width:36px;height:36px;}
+  .logo-name{font-size:20px;}
+  header.sc .logo-name{font-size:18px;}
+}
+
+/* ─── PHONE: 768px and below ─── */
+@media(max-width:768px){
+
+  /* — Header — */
+  header{padding:0 16px;height:64px;}
+  header.sc{height:56px;}
+  .logo{gap:10px;}
+  .logo img{width:40px;height:40px;}
+  header.sc .logo img{width:34px;height:34px;}
+  .logo-name{font-size:18px;}
+  header.sc .logo-name{font-size:16px;}
+
+  /* — Hero — */
+  .hero{min-height:100svh;}
+  .hc{padding:0 18px;max-width:100%;}
+  h1{
+    font-size:clamp(44px,12vw,80px);
+    letter-spacing:-2px;
+  }
+  .kurd-sub{
+    font-size:14px;line-height:1.85;
+    margin:10px 0 6px;
+    padding:0 4px;
+  }
+  .sub{font-size:10px;letter-spacing:4px;}
+  body.lang-ku .sub,body.lang-ar .sub{font-size:11px;letter-spacing:1px;}
+  .eyebrow{font-size:9px;letter-spacing:3px;margin-bottom:12px;}
+  body.lang-ku .eyebrow,body.lang-ar .eyebrow{font-size:12px;}
+  .eyebrow::before,.eyebrow::after{width:28px;}
+
+  /* — Hero Search — */
+  .hero-search{margin:22px auto 28px;padding:0 4px;}
+  .hs-tabs{gap:4px;}
+  .hs-tab{
+    padding:9px 14px;font-size:12px;
+    border-radius:10px 10px 0 0;
+  }
+  .hs-bar{border-radius:0 10px 10px 10px;}
+  .hs-input-wrap{padding:0 14px;gap:8px;}
+  .hs-input-wrap input{font-size:13px;padding:16px 0;}
+  .hs-go{padding:16px 16px;font-size:12px;}
+  .hs-quick{gap:7px;margin-top:11px;}
+  .hs-quick a{font-size:11px;padding:5px 11px;}
+  .hs-quick span{font-size:11px;}
+
+  /* — Hero Buttons — */
+  .hbtns{gap:12px;}
+  .hb1,.hb2{padding:13px 28px;font-size:11px;letter-spacing:1.5px;}
+
+  /* — Stats — */
+  .stats-bar{padding:28px 18px;}
+  .stats-inner{flex-direction:column;gap:24px;align-items:center;}
+  .stat-div{width:60px;height:1px;}
+  .stat-num{font-size:40px;}
+  .stat-label{font-size:11px;}
+
+  /* — Services — */
+  .svc-sec{padding:70px 18px;}
+  .svc-grid{grid-template-columns:1fr;gap:4px;}
+  .svc-card:last-child{grid-column:span 1;}
+  .svc-card{height:360px;}
+  .svc-body{padding:30px 24px;}
+  .svc-n{font-size:54px;}
+  .svc-t{font-size:24px;}
+  body.lang-ku .svc-t,body.lang-ar .svc-t{font-size:22px;}
+  /* Always show description on mobile (no hover) */
+  .svc-p{max-height:none !important;opacity:1 !important;margin-bottom:12px !important;font-size:13px;}
+  .svc-cta{font-size:11px;}
+  body.lang-ku .svc-cta,body.lang-ar .svc-cta{font-size:12px;}
+  .sec-hd{margin-bottom:44px;}
+  .stitle{font-size:32px;}
+  body.lang-ku .stitle,body.lang-ar .stitle{font-size:28px;}
+
+  /* — App Section — */
+  .app-sec{padding:70px 18px;}
+  .app-g{grid-template-columns:1fr;gap:48px;}
+  .app-desc{font-size:14px;line-height:1.9;}
+  .af{font-size:13px;}
+  .sbtns{gap:10px;}
+  .sbtn{padding:12px 18px;gap:10px;}
+  .sbtn i{font-size:22px;}
+  .sbtn-nm{font-size:15px;}
+  .qr-card{max-width:100%;width:100%;}
+
+  /* — About — */
+  .abt-sec{padding:70px 18px;}
+  .abt-g{grid-template-columns:1fr;gap:44px;}
+  .abt-p{font-size:14.5px;line-height:2;}
+  .qbar p{font-size:17px;}
+  body.lang-ku .qbar p,body.lang-ar .qbar p{font-size:16px;}
+  .vi{padding:20px 18px;gap:16px;}
+  .vico{width:48px;height:48px;font-size:18px;}
+  .vinfo h4{font-size:18px;}
+  body.lang-ku .vinfo h4,body.lang-ar .vinfo h4{font-size:17px;}
+
+  /* — Redirect — */
+  .rdr-sec{padding:70px 18px;}
+  .rdr-in{grid-template-columns:1fr;gap:36px;}
+  .rdr-t{font-size:28px;}
+  body.lang-ku .rdr-t,body.lang-ar .rdr-t{font-size:24px;}
+  .rdr-d{font-size:14px;}
+  .rdr-bs{flex-direction:column;min-width:unset;width:100%;}
+  .rdr-b1,.rdr-b2{padding:15px 24px;font-size:12px;letter-spacing:1.5px;justify-content:center;}
+
+  /* — Footer — */
+  footer{padding:50px 18px 28px;}
+  .ft-top{flex-direction:column;gap:32px;}
+  .ft-tag{max-width:100%;}
+  .ft-bot{flex-direction:column;align-items:flex-start;gap:16px;}
+  .ft-copy{font-size:11px;}
+
+  /* — FABs: handled in dedicated mobile FAB block above — */
+  .ftop{width:40px;height:40px;font-size:14px;}
+}
+
+/* ─── Small phones: 480px ─── */
+@media(max-width:480px){
+  header{padding:0 14px;}
+  .logo-name{font-size:17px;}
+  h1{font-size:clamp(38px,13vw,64px);}
+  .kurd-sub{font-size:13px;}
+  .hs-tab{padding:8px 10px;font-size:11px;}
+  .hs-go{padding:16px 12px;font-size:11px;}
+  .hb1,.hb2{padding:12px 22px;font-size:11px;width:100%;text-align:center;justify-content:center;}
+  .hbtns{flex-direction:column;width:100%;max-width:300px;margin:0 auto;}
+  .svc-card{height:320px;}
+  .svc-t{font-size:22px;}
+  .stat-num{font-size:36px;}
+  .rdr-b1,.rdr-b2{font-size:11px;padding:13px 18px;}
+  /* FABs handled above */
+}
+
+/* ─── Extra small: 360px ─── */
+@media(max-width:360px){
+  .hs-tabs{gap:2px;}
+  .hs-tab{padding:8px 9px;font-size:10px;}
+  .hero-search{padding:0;}
+  .hb1,.hb2{padding:11px 18px;font-size:10px;}
+}
+
+/* ─── Touch: disable hover-only interactions ─── */
+@media(hover:none){
+  .svc-card:hover .svc-img{transform:none;}
+  .svc-card:hover .svc-body{transform:none;}
+  .vi:hover{transform:none;}
+}
+
+/* ─── Safe area insets for notched phones ─── */
+@supports(padding:max(0px)){
+  header{
+    padding-left:max(20px,env(safe-area-inset-left));
+    padding-right:max(20px,env(safe-area-inset-right));
+  }
+  .fab-w{
+    bottom:max(18px,env(safe-area-inset-bottom));
+    right:max(14px,env(safe-area-inset-right));
+  }
+  body.rtl .fab-w{
+    left:max(14px,env(safe-area-inset-left));
+    right:auto;
+  }
+  footer{
+    padding-bottom:max(28px,env(safe-area-inset-bottom));
+    padding-left:max(18px,env(safe-area-inset-left));
+    padding-right:max(18px,env(safe-area-inset-right));
+  }
 }
 </style>
 </head>
@@ -344,7 +1174,6 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
     <li><a href="{{ route('contact-us') }}" class="{{ request()->routeIs('contact-us') ? 'ac' : '' }}" id="nav-contact">پەیوەندی</a></li>
   </ul>
   <div class="nav-right">
-    <!-- Language Switcher -->
     <div class="lang-sw">
       <button class="lang-btn active" data-lang="ku">کو</button>
       <button class="lang-btn" data-lang="en">EN</button>
@@ -371,28 +1200,39 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
 
 <div class="bkdp" id="bdp"></div>
 <aside class="drw" id="drw">
-  <div class="drw-hd"><span>Dream Mulk</span><button class="drw-x" id="dx"><i class="fas fa-times"></i></button></div>
+  <div class="drw-hd">
+    <span>Dream Mulk</span>
+    <button class="drw-x" id="dx"><i class="fas fa-times"></i></button>
+  </div>
+  <!-- Language switcher inside drawer for mobile -->
+  <div style="display:flex;gap:6px;margin-bottom:4px;">
+    <button class="lang-btn active" data-lang="ku" style="flex:1;padding:8px 0;font-size:13px;">کو</button>
+    <button class="lang-btn" data-lang="en" style="flex:1;padding:8px 0;font-size:13px;">EN</button>
+    <button class="lang-btn" data-lang="ar" style="flex:1;padding:8px 0;font-size:13px;">ع</button>
+  </div>
   <nav class="drw-nav">
-    <a href="{{ route('newindex') }}">Home</a>
-    <a href="{{ route('property.list') }}">Properties</a>
-    <a href="#app">Mobile App</a>
-    <a href="{{ route('about-us') }}">About Us</a>
-    <a href="{{ route('contact-us') }}">Contact</a>
+    <a href="{{ route('newindex') }}" id="drw-home">سەرەتا</a>
+    <a href="{{ route('property.list') }}" id="drw-props">خانووەکان</a>
+    <a href="#app" id="drw-app">ئەپ</a>
+    <a href="{{ route('about-us') }}" id="drw-about">دەربارەمان</a>
+    <a href="{{ route('contact-us') }}" id="drw-contact">پەیوەندی</a>
   </nav>
   <div class="drw-ft">
-    <a href="{{ route('login-page') }}" class="btn-s" style="text-align:center;">Client Login</a>
-    <a href="{{ route('property.list') }}" class="btn-o" style="text-align:center;">Browse Properties</a>
+    <a href="{{ route('login-page') }}" class="btn-s" style="text-align:center;" id="drw-login">چوونەژوورەوە</a>
+    <a href="{{ route('property.list') }}" class="btn-o" style="text-align:center;" id="drw-browse">خانووەکان ببینە</a>
   </div>
 </aside>
 
+<!-- ═══════════════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════════════ -->
 <section class="hero">
-  <!-- Aurora blobs only — no photo, keeps tower clean and readable -->
+  <!-- Aurora blobs -->
   <div style="position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;">
     <div style="position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(48,59,151,.22) 0%,transparent 70%);top:5%;left:-15%;animation:aur1 14s ease-in-out infinite;"></div>
     <div style="position:absolute;width:550px;height:550px;border-radius:50%;background:radial-gradient(circle,rgba(212,175,55,.06) 0%,transparent 70%);top:15%;right:-10%;animation:aur2 18s ease-in-out infinite;"></div>
     <div style="position:absolute;width:450px;height:450px;border-radius:50%;background:radial-gradient(circle,rgba(35,45,122,.18) 0%,transparent 70%);bottom:0%;left:25%;animation:aur3 22s ease-in-out infinite;"></div>
   </div>
-  <!-- Base glow under tower -->
   <div style="position:absolute;bottom:22%;left:50%;transform:translateX(-50%);z-index:2;width:340px;height:30px;background:radial-gradient(ellipse,rgba(212,175,55,.35) 0%,transparent 70%);filter:blur(10px);pointer-events:none;"></div>
   <style>
   @keyframes aur1{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(80px,40px) scale(1.15);}}
@@ -401,6 +1241,7 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   </style>
   <canvas id="bc"></canvas>
   <div class="vig"></div>
+
   <div class="hc" id="hc">
     <div class="eyebrow" id="t-eyebrow">خانوو و زەوی پریمیەم</div>
     <h1>Dream <span class="g">Mulk</span></h1>
@@ -416,9 +1257,9 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
       <div class="hs-bar">
         <div class="hs-input-wrap">
           <i class="fas fa-search"></i>
-          <input type="text" id="hs-input" placeholder="گەڕان لە هەولێر، سلێمانی..." />
+          <input type="text" id="hs-input" placeholder="گەڕان لە هەولێر، سلێمانی..." autocomplete="off"/>
         </div>
-        <a href="{{ route('property.list') }}" id="hs-btn" class="hs-go">بگەڕێ</a>
+        <button id="hs-btn" class="hs-go">بگەڕێ</button>
       </div>
       <div class="hs-quick">
         <span id="t-popular">شارە باوەکان:</span>
@@ -433,18 +1274,30 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
       <a href="#app" class="hb2" id="t-app">ئەپەکە دابەزێنە</a>
     </div>
   </div>
+
   <div class="scrl" id="scrl"><div class="mouse"></div><span id="t-scroll">دابەزە</span></div>
 </section>
 
-<!-- STATS: 2 items only — Happy Clients removed -->
+<!-- ═══════════════════════════════════════════════════
+     STATS
+═══════════════════════════════════════════════════ -->
 <div class="stats-bar">
   <div class="stats-inner">
-    <div class="stat-item rv"><div class="stat-num" data-t="500" data-s="+">0+</div><div class="stat-label" data-i18n="statLabel1">خانووی تۆمارکراو</div></div>
+    <div class="stat-item rv">
+      <div class="stat-num" data-t="500" data-s="+">0+</div>
+      <div class="stat-label" data-i18n="statLabel1">خانووی تۆمارکراو</div>
+    </div>
     <div class="stat-div"></div>
-    <div class="stat-item rv d2"><div class="stat-num" data-t="150" data-s="+">0+</div><div class="stat-label" data-i18n="statLabel2">ئەجێنتی دەستنیشانکراو</div></div>
+    <div class="stat-item rv d2">
+      <div class="stat-num" data-t="150" data-s="+">0+</div>
+      <div class="stat-label" data-i18n="statLabel2">ئەجێنتی دەستنیشانکراو</div>
+    </div>
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════
+     SERVICES
+═══════════════════════════════════════════════════ -->
 <section class="svc-sec">
   <div class="sec-wrap">
     <div class="sec-hd">
@@ -453,24 +1306,30 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
     </div>
     <div class="svc-grid">
       <a href="{{ route('property.list') }}" class="svc-card rv">
-        <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80" alt="Buy" class="svc-img">
-        <div class="svc-body"><div class="svc-n">01</div><div class="svc-ico"><i class="fas fa-key"></i></div>
+        <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80" alt="Buy" class="svc-img" loading="lazy">
+        <div class="svc-body">
+          <div class="svc-n">01</div>
+          <div class="svc-ico"><i class="fas fa-key"></i></div>
           <h3 class="svc-t" data-i18n="svc1Title">کڕینی خانوو</h3>
           <p class="svc-p" data-i18n="svc1Desc">خانووی خەونەکەت بدۆزەرەوە بە فلتەری پێشکەوتوو. لیستی تایبەت لە سەرانسەری کوردستان.</p>
           <div class="svc-cta" data-i18n="svc1Cta">بگەڕێ <i class="fas fa-arrow-right"></i></div>
         </div>
       </a>
       <a href="{{ route('login-page') }}" class="svc-card rv d1">
-        <img src="https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=800&q=80" alt="Sell" class="svc-img">
-        <div class="svc-body"><div class="svc-n">02</div><div class="svc-ico"><i class="fas fa-tags"></i></div>
+        <img src="https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=800&q=80" alt="Sell" class="svc-img" loading="lazy">
+        <div class="svc-body">
+          <div class="svc-n">02</div>
+          <div class="svc-ico"><i class="fas fa-tags"></i></div>
           <h3 class="svc-t" data-i18n="svc2Title">فرۆشتنی خانوو</h3>
           <p class="svc-p" data-i18n="svc2Desc">خانووەکەت تۆمار بکە و پەیوەندی بکە بە کڕیارە راستەقینەکان. بەرچاوبوونی زۆر، بێ کۆمیسیۆن.</p>
           <div class="svc-cta" data-i18n="svc2Cta">تۆمار بکە <i class="fas fa-arrow-right"></i></div>
         </div>
       </a>
       <a href="{{ route('property.list', ['type'=>'rent']) }}" class="svc-card rv d2">
-        <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80" alt="Rent" class="svc-img">
-        <div class="svc-body"><div class="svc-n">03</div><div class="svc-ico"><i class="fas fa-home"></i></div>
+        <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80" alt="Rent" class="svc-img" loading="lazy">
+        <div class="svc-body">
+          <div class="svc-n">03</div>
+          <div class="svc-ico"><i class="fas fa-home"></i></div>
           <h3 class="svc-t" data-i18n="svc3Title">کرێی خانوو</h3>
           <p class="svc-p" data-i18n="svc3Desc">کرێی گونجاو بدۆزەرەوە بۆ ژیانت. لیستی پشتڕاستکراو بە نرخی ئاشکرا.</p>
           <div class="svc-cta" data-i18n="svc3Cta">کرێ بدۆزەرەوە <i class="fas fa-arrow-right"></i></div>
@@ -480,11 +1339,17 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   </div>
 </section>
 
+<!-- ═══════════════════════════════════════════════════
+     APP
+═══════════════════════════════════════════════════ -->
 <section class="app-sec" id="app">
   <div class="app-g">
     <div class="rv">
       <span class="stag" data-i18n="appTag">ئەزموونی مۆبایل</span>
-      <h2 class="stitle" style="margin-bottom:20px;"><span data-i18n="appTitle">خانووەکان</span><br><em data-i18n="appTitleEm">لە گەڵت</em></h2>
+      <h2 class="stitle" style="margin-bottom:20px;">
+        <span data-i18n="appTitle">خانووەکان</span><br>
+        <em data-i18n="appTitleEm">لە گەڵت</em>
+      </h2>
       <p class="app-desc" data-i18n="appDesc">ئەپی Dream Mulk بازاڕی خانووبەرە کوردستانت دەهێنێتە نووکی پەنجەکانت. بگەڕێ، کاتی بینینی خانوو دابنێ، و پەیوەندی بکە بە ئەجێنتە پشتڕاستکراوەکان.</p>
       <div class="app-feats">
         <div class="af"><i class="fas fa-check-circle"></i> <span data-i18n="appF1">لیستی خانووی ڕێکەوتی و ئاگادارکردنەوەی خێرا</span></div>
@@ -494,11 +1359,11 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
         <div class="af"><i class="fas fa-check-circle"></i> <span data-i18n="appF5">بێ کۆمیسیۆن — هەمیشە ئازاد بگەڕێ</span></div>
       </div>
       <div class="sbtns">
-        <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" class="sbtn">
+        <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="sbtn">
           <i class="fab fa-apple"></i>
           <div><div class="sbtn-sm" data-i18n="appStoreLabel">دابەزێنە لە</div><div class="sbtn-nm">App Store</div></div>
         </a>
-        <a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" class="sbtn">
+        <a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener" class="sbtn">
           <i class="fab fa-google-play"></i>
           <div><div class="sbtn-sm" data-i18n="playStoreLabel">وەربگرە لە</div><div class="sbtn-nm">Google Play</div></div>
         </a>
@@ -508,13 +1373,16 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
       <div class="qr-card">
         <div class="qr-brand">
           <div class="qr-ico"><i class="fab fa-apple"></i></div>
-          <div><div class="qr-t">Dream Mulk</div><div class="qr-s" data-i18n="qrSub">App Store — بەخۆڕایی</div></div>
+          <div>
+            <div class="qr-t">Dream Mulk</div>
+            <div class="qr-s" data-i18n="qrSub">بەخۆڕایی</div>
+          </div>
         </div>
         <div class="qr-div"></div>
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://apps.apple.com/us/app/dream-mulk/id6756894199&bgcolor=ffffff&color=1a225a&margin=10&format=png&qzone=1&ecc=M" alt="QR" class="qr-img" loading="lazy"/>
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://apps.apple.com/us/app/dream-mulk/id6756894199&bgcolor=ffffff&color=1a225a&margin=10&format=png&qzone=1&ecc=M" alt="QR Code" class="qr-img" loading="lazy"/>
         <div class="qr-hint"><i class="fas fa-mobile-alt"></i><span data-i18n="qrHint">کامێراکەت بەرەو ئەمە بگرە</span></div>
         <div class="qr-div"></div>
-        <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" class="qr-lnk">
+        <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="qr-lnk">
           <i class="fab fa-apple"></i> <span data-i18n="qrBtn">بکرەوە لە App Store</span> <i class="fas fa-arrow-right"></i>
         </a>
       </div>
@@ -522,11 +1390,17 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   </div>
 </section>
 
+<!-- ═══════════════════════════════════════════════════
+     ABOUT
+═══════════════════════════════════════════════════ -->
 <section class="abt-sec" id="about">
   <div class="abt-g">
     <div class="rv">
       <span class="stag" data-i18n="abtTag">چیرۆکمان</span>
-      <h2 class="stitle"><span data-i18n="abtTitle">Dream Mulk</span><br><em data-i18n="abtTitleEm">کێیە؟</em></h2>
+      <h2 class="stitle">
+        <span data-i18n="abtTitle">Dream Mulk</span><br>
+        <em data-i18n="abtTitleEm">کێیە؟</em>
+      </h2>
       <p class="abt-p" style="margin-top:20px;" data-i18n="abtP1">Dream Mulk بە ئامانجێکی بەهێز دامەزراوە: بەرزکردنەوەی ئاستی خانووبەرە لە کوردستان. ئێمە تەنها پلاتفۆرم نین — ئێمە ئەندازیارانی چاپتەری داهاتووی تۆین.</p>
       <p class="abt-p" data-i18n="abtP2">لە بازاڕێکدا کە زۆرجار ئاڵۆزە، ئێمە وەک بەرپرسیارێتی و زیرەکیت خزمەت دەکەین. گەشتمان بە پابەندبوون بە تەکنەلۆژیای مۆدێرن و درووستکاری بەردەوامە.</p>
       <div class="qbar"><p data-i18n="abtQuote">«خانوو زەوییە، بەڵام "مولک" میراتە. ئێمە یارمەتیدەرتین کە میراتەکەت بنیادبنێیت.»</p></div>
@@ -540,11 +1414,17 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   </div>
 </section>
 
+<!-- ═══════════════════════════════════════════════════
+     REDIRECT
+═══════════════════════════════════════════════════ -->
 <section class="rdr-sec" id="contact">
   <div class="rdr-in">
     <div class="rv">
       <span class="rdr-ey" data-i18n="rdrTag">بۆ ئۆفیسە خانووبەرەکان</span>
-      <h2 class="rdr-t"><span data-i18n="rdrTitle">بزنسەکەت گەشە پێ بدە</span><br><span data-i18n="rdrWith">لەگەڵ</span> <strong>Dream Mulk</strong></h2>
+      <h2 class="rdr-t">
+        <span data-i18n="rdrTitle">بزنسەکەت گەشە پێ بدە</span><br>
+        <span data-i18n="rdrWith">لەگەڵ</span> <strong>Dream Mulk</strong>
+      </h2>
       <p class="rdr-d" data-i18n="rdrDesc">ئۆفیسی خانووبەرەکەت تۆمار بکە و بگەیە بە هەزاران کڕیار و کرێیار لە سەرانسەری کوردستان. خانوو لیست بکە، ئەجێنت بەڕێوەبەرە، مامەڵەکان ببەستە.</p>
     </div>
     <div class="rdr-bs rv d2">
@@ -554,30 +1434,45 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   </div>
 </section>
 
+<!-- ═══════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════ -->
 <footer class="rv">
   <div class="ft-in">
     <div class="ft-top">
       <div>
-        <div class="ft-logo"><img src="{{ asset('favicon.ico') }}" alt="Dream Mulk" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2111/2111307.png'"/><span class="ft-logo-name">Dream Mulk</span></div>
+        <div class="ft-logo">
+          <img src="{{ asset('favicon.ico') }}" alt="Dream Mulk" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2111/2111307.png'"/>
+          <span class="ft-logo-name">Dream Mulk</span>
+        </div>
         <p class="ft-tag" data-i18n="ftTag">باشترین پلاتفۆرمی خانووبەرەی کوردستان. بێ کارمزد. بێ کۆمیسیۆن. ئاشکرایی تەواو.</p>
       </div>
-      <div class="ft-col"><h5 data-i18n="ftCol1">پلاتفۆرم</h5><ul>
-        <li><a href="{{ route('property.list') }}" data-i18n="ftLink1">خانووەکان ببینە</a></li>
-        <li><a href="{{ route('login-page') }}" data-i18n="ftLink2">چوونەژوورەوەی کڕیار</a></li>
-        <li><a href="{{ route('agent.login') }}" data-i18n="ftLink3">پۆرتاڵی ئەجێنت</a></li>
-        <li><a href="{{ route('about-us') }}" data-i18n="ftLink4">دەربارەی ئێمە</a></li>
-      </ul></div>
-      <div class="ft-col"><h5 data-i18n="ftCol2">خزمەتگوزاری</h5><ul>
-        <li><a href="{{ route('property.list') }}" data-i18n="ftLink5">کڕینی خانوو</a></li>
-        <li><a href="{{ route('login-page') }}" data-i18n="ftLink6">فرۆشتنی خانوو</a></li>
-        <li><a href="{{ route('property.list', ['type'=>'rent']) }}" data-i18n="ftLink7">کرێی خانوو</a></li>
-        <li><a href="{{ route('agents.list') }}" data-i18n="ftLink8">ئەجێنت بدۆزەرەوە</a></li>
-      </ul></div>
-      <div class="ft-col"><h5 data-i18n="ftCol3">ئەپەکە دابەزێنە</h5><ul>
-        <li><a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank"><i class="fab fa-apple"></i> App Store</a></li>
-        <li><a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank"><i class="fab fa-google-play"></i> Google Play</a></li>
-        <li><a href="{{ route('contact-us') }}" data-i18n="ftLink9">پەیوەندیمان پێوە بکە</a></li>
-      </ul></div>
+      <div class="ft-col">
+        <h5 data-i18n="ftCol1">پلاتفۆرم</h5>
+        <ul>
+          <li><a href="{{ route('property.list') }}" data-i18n="ftLink1">خانووەکان ببینە</a></li>
+          <li><a href="{{ route('login-page') }}" data-i18n="ftLink2">چوونەژوورەوەی کڕیار</a></li>
+          <li><a href="{{ route('agent.login') }}" data-i18n="ftLink3">پۆرتاڵی ئەجێنت</a></li>
+          <li><a href="{{ route('about-us') }}" data-i18n="ftLink4">دەربارەی ئێمە</a></li>
+        </ul>
+      </div>
+      <div class="ft-col">
+        <h5 data-i18n="ftCol2">خزمەتگوزاری</h5>
+        <ul>
+          <li><a href="{{ route('property.list') }}" data-i18n="ftLink5">کڕینی خانوو</a></li>
+          <li><a href="{{ route('login-page') }}" data-i18n="ftLink6">فرۆشتنی خانوو</a></li>
+          <li><a href="{{ route('property.list', ['type'=>'rent']) }}" data-i18n="ftLink7">کرێی خانوو</a></li>
+          <li><a href="{{ route('agents.list') }}" data-i18n="ftLink8">ئەجێنت بدۆزەرەوە</a></li>
+        </ul>
+      </div>
+      <div class="ft-col">
+        <h5 data-i18n="ftCol3">ئەپەکە دابەزێنە</h5>
+        <ul>
+          <li><a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener"><i class="fab fa-apple"></i> App Store</a></li>
+          <li><a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener"><i class="fab fa-google-play"></i> Google Play</a></li>
+          <li><a href="{{ route('contact-us') }}" data-i18n="ftLink9">پەیوەندیمان پێوە بکە</a></li>
+        </ul>
+      </div>
     </div>
     <div class="ft-bot">
       <div class="ft-copy">© 2026 <span>Dream Mulk</span>. All rights reserved. Erbil, Kurdistan Region of Iraq.</div>
@@ -589,18 +1484,22 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   </div>
 </footer>
 
+<!-- FABs -->
 <div class="fab-w">
-  <a href="{{ route('agent.login') }}" class="fpill fa-a"><div class="fic"><i class="fas fa-user-shield"></i></div> <span data-i18n="fabAgent">پۆرتاڵی ئەجێنت</span></a>
-  <a href="{{ route('office.login') }}" class="fpill fa-o"><div class="fic"><i class="fas fa-building"></i></div> <span data-i18n="fabOffice">چوونەژوورەوەی خانووبەرە</span></a>
+  <a href="{{ route('agent.login') }}" class="fpill fa-a" id="fab-agent" title="Agent Portal"><div class="fic"><i class="fas fa-user-shield"></i></div><span class="fab-label" data-i18n="fabAgent">پۆرتاڵی ئەجێنت</span></a>
+  <a href="{{ route('office.login') }}" class="fpill fa-o" id="fab-office" title="Office Login"><div class="fic"><i class="fas fa-building"></i></div><span class="fab-label" data-i18n="fabOffice">چوونەژوورەوەی خانووبەرە</span></a>
   <div class="ftop" id="btt"><i class="fas fa-arrow-up"></i></div>
 </div>
 
-<!-- THREE.JS — original wireframe tower + scroll reactivity added -->
+
+<!-- ═══════════════════════════════════════════════════
+     THREE.JS TOWER
+═══════════════════════════════════════════════════ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script>
 (function(){
   const CV=document.getElementById('bc');
-  const W=()=>CV.parentElement.offsetWidth, H=()=>CV.parentElement.offsetHeight;
+  const W=()=>CV.parentElement.offsetWidth,H=()=>CV.parentElement.offsetHeight;
   const renderer=new THREE.WebGLRenderer({canvas:CV,antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
   renderer.setSize(W(),H());
@@ -695,17 +1594,20 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
     scene.add(new THREE.Line(geo,mat));
     return{geo,born:ld.born,dur:ld.dur,nPts};
   });
-  {const g=new THREE.BufferGeometry(),p=[];for(let i=0;i<750;i++)p.push((Math.random()-.5)*20,(Math.random()-.1)*10+.5,(Math.random()-.85)*14-1);g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x4455bb,size:.015,transparent:true,opacity:.18})));}
-
-  // Upward drifting gold dust particles
+  {
+    const g=new THREE.BufferGeometry(),p=[];
+    for(let i=0;i<750;i++) p.push((Math.random()-.5)*20,(Math.random()-.1)*10+.5,(Math.random()-.85)*14-1);
+    g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));
+    scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x4455bb,size:.015,transparent:true,opacity:.18})));
+  }
   const DUST_COUNT=280;
   const dustPos=new Float32Array(DUST_COUNT*3);
   const dustVel=new Float32Array(DUST_COUNT*3);
   const dustOrig=new Float32Array(DUST_COUNT*3);
   for(let i=0;i<DUST_COUNT;i++){
-    const x=(Math.random()-.5)*10, y=BY+Math.random()*TOT*1.2, z=(Math.random()-.5)*6;
-    dustPos[i*3]=x; dustPos[i*3+1]=y; dustPos[i*3+2]=z;
-    dustOrig[i*3]=x; dustOrig[i*3+1]=y; dustOrig[i*3+2]=z;
+    const x=(Math.random()-.5)*10,y=BY+Math.random()*TOT*1.2,z=(Math.random()-.5)*6;
+    dustPos[i*3]=x;dustPos[i*3+1]=y;dustPos[i*3+2]=z;
+    dustOrig[i*3]=x;dustOrig[i*3+1]=y;dustOrig[i*3+2]=z;
     dustVel[i*3]=(Math.random()-.5)*.003;
     dustVel[i*3+1]=0.004+Math.random()*.006;
     dustVel[i*3+2]=(Math.random()-.5)*.002;
@@ -717,14 +1619,20 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
 
   let mx=0,my=0,smx=0,smy=0;
   document.addEventListener('mousemove',e=>{mx=(e.clientX/innerWidth-.5);my=(e.clientY/innerHeight-.5);});
+  // Touch support for tower rotation
+  document.addEventListener('touchmove',e=>{
+    if(e.touches.length>0){
+      mx=(e.touches[0].clientX/innerWidth-.5);
+      my=(e.touches[0].clientY/innerHeight-.5);
+    }
+  },{passive:true});
   window.addEventListener('resize',()=>{renderer.setSize(W(),H());camera.aspect=W()/H();camera.updateProjectionMatrix();});
 
-  // ── SCROLL: smooth reactive scroll fraction ──
   let targetSF=0,smoothSF=0;
   window.addEventListener('scroll',()=>{
     const heroH=document.querySelector('.hero').offsetHeight||window.innerHeight;
     targetSF=Math.min((window.pageYOffset||document.documentElement.scrollTop)/heroH,1);
-  });
+  },{passive:true});
 
   const TEXT_AT=SWEEP_START+SWEEP_DUR*0.50;
   let textShown=false;
@@ -733,30 +1641,18 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
   (function loop(){
     requestAnimationFrame(loop);
     const el=clk.getElapsedTime();
-
-    // Smooth scroll fraction
     smoothSF+=(targetSF-smoothSF)*0.05;
-
     smx+=(mx-smx)*.025;
     smy+=(my-smy)*.025;
-
-    // Rotation: original auto spin + scroll bonus + mouse
-    scene.rotation.y=el*.022 + smoothSF*Math.PI*0.65 + smx*.18;
-    // X tilt: original mouse + scroll gently rises tower toward viewer
-    scene.rotation.x=smy*.06 + smoothSF*0.08;
-
-    // Camera smoothly zooms in and rises as user scrolls into hero
-    const tZ=7.2 - smoothSF*1.8;
-    const tCY=1.6 + smoothSF*1.1;
+    scene.rotation.y=el*.022+smoothSF*Math.PI*0.65+smx*.18;
+    scene.rotation.x=smy*.06+smoothSF*0.08;
+    const tZ=7.2-smoothSF*1.8;
+    const tCY=1.6+smoothSF*1.1;
     camera.position.z+=(tZ-camera.position.z)*.055;
     camera.position.y+=(tCY-camera.position.y)*.055;
     camera.position.x+=(smx*.12-camera.position.x)*.04;
-    // Look target rises toward spire as we scroll
-    camera.lookAt(0, 1.2+smoothSF*1.0, 0);
-
-    // Original breathing
+    camera.lookAt(0,1.2+smoothSF*1.0,0);
     scene.position.y=Math.sin(el*.25)*.055;
-
     OBJS.forEach(({geo,born,dur,nPts})=>{
       const age=el-born;
       if(age<0){geo.setDrawRange(0,0);return;}
@@ -767,440 +1663,336 @@ body.lang-ar .kurd-sub,body.lang-ar .hs-tab,body.lang-ar .hs-go,body.lang-ar .hs
       document.getElementById('hc').classList.add('vis');
       setTimeout(()=>document.getElementById('scrl').classList.add('vis'),900);
     }
-    // Animate gold dust upward — reset when they reach top
     for(let i=0;i<DUST_COUNT;i++){
-      dustPos[i*3]  += dustVel[i*3];
-      dustPos[i*3+1]+= dustVel[i*3+1];
-      dustPos[i*3+2]+= dustVel[i*3+2];
-      // Reset to base when drifted too high
-      if(dustPos[i*3+1] > BY+TOT*1.3){
-        dustPos[i*3]  = dustOrig[i*3];
-        dustPos[i*3+1]= BY + Math.random()*0.5;
-        dustPos[i*3+2]= dustOrig[i*3+2];
+      dustPos[i*3]  +=dustVel[i*3];
+      dustPos[i*3+1]+=dustVel[i*3+1];
+      dustPos[i*3+2]+=dustVel[i*3+2];
+      if(dustPos[i*3+1]>BY+TOT*1.3){
+        dustPos[i*3]  =dustOrig[i*3];
+        dustPos[i*3+1]=BY+Math.random()*0.5;
+        dustPos[i*3+2]=dustOrig[i*3+2];
       }
     }
     dustGeo.attributes.position.needsUpdate=true;
-    // Pulse dust opacity gently
     dustMat.opacity=0.4+Math.sin(el*0.8)*0.15;
-
     renderer.render(scene,camera);
   })();
 })();
 </script>
 
-<!-- DreamMulk i18n — fully inlined, no external dependency -->
+<!-- ═══════════════════════════════════════════════════
+     I18N CLASS
+═══════════════════════════════════════════════════ -->
 <script>
-class DreamMulkI18n {
+class DreamMulkI18n{
   constructor(o={}){
-    this.storageKey  = o.storageKey  || 'dm_lang';
-    this.defaultLang = o.defaultLang || 'ku';
-    this.onLangChange = o.onLangChange || null;
-    this._current = this.defaultLang;
+    this.storageKey=o.storageKey||'dm_lang';
+    this.defaultLang=o.defaultLang||'ku';
+    this.onLangChange=o.onLangChange||null;
+    this._current=this.defaultLang;
   }
   init(){
-    const saved = localStorage.getItem(this.storageKey) || this.defaultLang;
+    const saved=localStorage.getItem(this.storageKey)||this.defaultLang;
     this.setLang(saved);
   }
   setLang(lang){
-    if(!this.translations[lang]) return;
-    this._current = lang;
-    localStorage.setItem(this.storageKey, lang);
-    const T = this.translations[lang];
-    // Direction
-    document.documentElement.dir = T.dir;
+    if(!this.translations[lang])return;
+    this._current=lang;
+    localStorage.setItem(this.storageKey,lang);
+    const T=this.translations[lang];
+    document.body.dir=T.dir; // RTL/LTR on body only — keeps scrollbar on right
+    document.documentElement.lang=lang==='ar'?'ar':lang==='ku'?'ku':'en';
     document.body.classList.remove('lang-ku','lang-en','lang-ar','rtl');
     document.body.classList.add('lang-'+lang);
     if(T.dir==='rtl') document.body.classList.add('rtl');
-    // Switcher buttons
     document.querySelectorAll('.lang-btn').forEach(b=>{
-      b.classList.toggle('active', b.getAttribute('data-lang')===lang);
+      b.classList.toggle('active',b.getAttribute('data-lang')===lang);
     });
-    // Apply all data-i18n elements
     document.querySelectorAll('[data-i18n]').forEach(el=>{
-      const key = el.getAttribute('data-i18n');
-      if(T[key]===undefined) return;
+      const key=el.getAttribute('data-i18n');
+      if(T[key]===undefined)return;
       if(el.children.length===0){
-        el.textContent = T[key];
+        el.textContent=T[key];
       } else {
         for(let n of el.childNodes){
-          if(n.nodeType===Node.TEXT_NODE && n.textContent.trim()){
-            n.textContent = T[key]; break;
+          if(n.nodeType===Node.TEXT_NODE&&n.textContent.trim()){
+            n.textContent=T[key];break;
           }
         }
       }
     });
     // Special IDs
-    const ids = {
+    const ids={
       't-eyebrow':'eyebrow','t-sub1':'sub1','t-sub2':'sub2',
       'tab-buy':'tabBuy','tab-rent':'tabRent','tab-sell':'tabSell',
       'hs-btn':'searchBtn','t-popular':'popular',
       'q-erbil':'erbil','q-suli':'suli','q-duhok':'duhok',
       't-explore':'explore','t-app':'appBtn','t-scroll':'scroll',
       'nav-home':'navHome','nav-props':'navProps','nav-app':'navApp',
-      'nav-about':'navAbout','nav-contact':'navContact'
+      'nav-about':'navAbout','nav-contact':'navContact',
+      'drw-home':'navHome','drw-props':'navProps','drw-app':'navApp',
+      'drw-about':'navAbout','drw-contact':'navContact',
+      'drw-login':'loginBtn','drw-browse':'browseBtn'
     };
-    // Also handle rdrWith (used inline in rdr h2)
-    const rdrWithEl = document.querySelector('[data-i18n="rdrWith"]');
-    if(rdrWithEl && T.rdrWith) rdrWithEl.textContent = T.rdrWith;
     Object.entries(ids).forEach(([id,key])=>{
       const el=document.getElementById(id);
-      if(el && T[key]) el.textContent=T[key];
+      if(el&&T[key]) el.textContent=T[key];
     });
+    const rdrWithEl=document.querySelector('[data-i18n="rdrWith"]');
+    if(rdrWithEl&&T.rdrWith) rdrWithEl.textContent=T.rdrWith;
+    // Update search placeholder
+    const inp=document.getElementById('hs-input');
+    if(inp){
+      const ph={buy:T.placeholderBuy,rent:T.placeholderRent,sell:T.placeholderSell};
+      inp.placeholder=ph[currentTab]||T.placeholderBuy;
+    }
     if(typeof this.onLangChange==='function') this.onLangChange(lang,T);
   }
-  getCurrentLang(){ return this._current; }
-  t(key){ return (this.translations[this._current]||{})[key]||key; }
+  getCurrentLang(){return this._current;}
+  t(key){return(this.translations[this._current]||{})[key]||key;}
 
-  translations = {
-
-    // ══ KURDISH (سۆرانی) — زمانی بنەڕەت ══
+  translations={
     ku:{
       dir:'rtl',
-      eyebrow:       'خانوو و زەوی',
-      sub1:          'بۆ کڕین، فرۆشتن و کرێی خانوو لە کوردستان — بێ کارمزد',
-      sub2:          'کوردستان • هەولێر • ٢٠٢٦',
-      tabBuy:        '🏠 کڕین',
-      tabRent:       '🔑 کرێ',
-      tabSell:       '💰 فرۆشتن',
-      searchBtn:     'بگەڕێ',
-      placeholderBuy:  'بگەڕێ... هەولێر، سلێمانی، دهۆک',
-      placeholderRent: 'خانوی کرێ بدۆزەرەوە...',
-      placeholderSell: 'خانووەکەت بفرۆشە...',
-      popular:       'شارەکان:',
-      erbil:         'هەولێر',
-      suli:          'سلێمانی',
-      duhok:         'دهۆک',
-      explore:       'خانووەکان ببینە',
-      appBtn:        'ئەپەکە دابەزێنە',
-      scroll:        'دابەزە',
-
-      navHome:       'سەرەتا',
-      navProps:      'خانووەکان',
-      navApp:        'ئەپ',
-      navAbout:      'دەربارەمان',
-      navContact:    'پەیوەندی',
-      loginBtn:      'چوونەژوورەوە',
-      browseBtn:     'خانووەکان ببینە',
-
-      statLabel1:    'خانووی تۆمارکراو',
-      statLabel2:    'ئەجێنتی پشتڕاستکراو',
-
-      svcTag:        'خزمەتگوزاریەکان',
-      svcTitle:      'چی',
-      svcTitleEm:    'پێشکەش دەکەین',
-      svc1Title:     'کڕینی خانوو',
-      svc1Desc:      'خانووی خەونەکەت بدۆزەرەوە. لیستی تایبەت لە سەرانسەری کوردستان بە نرخی ئاشکرا.',
-      svc1Cta:       'بگەڕێ',
-      svc2Title:     'فرۆشتنی خانوو',
-      svc2Desc:      'خانووەکەت لیست بکە و بگەیە کڕیارە راستەقینەکان. بێ کۆمیسیۆن، بێ نهێنی.',
-      svc2Cta:       'لیست بکە',
-      svc3Title:     'کرێی خانوو',
-      svc3Desc:      'خانوی کرێی گونجاو بدۆزەرەوە. نرخی ئاشکرا و لیستی پشتڕاستکراو.',
-      svc3Cta:       'بگەڕێ',
-
-      appTag:        'ئەپی مۆبایل',
-      appTitle:      'خانووەکان',
-      appTitleEm:    'لە گەڵت',
-      appDesc:       'ئەپی Dream Mulk هەموو خانووەکانی کوردستانت دەخاتە پێش دەستت. بگەڕێ، کاتی سەردان دابنێ، و ڕاستەوخۆ پەیوەندی بکە بە فرۆشیارەکان.',
-      appF1:         'لیستی خانووی نوێ و ئاگادارکردنەوەی خێرا',
-      appF2:         'کاتی سەردانی خانوو دابنێ',
-      appF3:         'کوردی، عەرەبی و ئینگلیزی',
-      appF4:         'پەیامی پارێزراو و بەڵگەنامەکان',
-      appF5:         'بێ کۆمیسیۆن — بەخۆڕایی بگەڕێ',
-      appStoreLabel: 'دابەزێنە لە',
-      playStoreLabel:'وەربگرە لە',
-      qrSub:         'بەخۆڕایی',
-      qrHint:        'کامێرا بخەرە سەر کودەکە',
-      qrBtn:         'بکرەوە لە App Store',
-
-      abtTag:        'دەربارەمان',
-      abtTitle:      'Dream Mulk',
-      abtTitleEm:    'کێیە؟',
-      abtP1:         'Dream Mulk دامەزراوە بۆ ئەوەی بازاڕی خانووبەرەی کوردستان ئاسانتر و ئاشکراتر بکات. ئێمە نیازمان بۆ ئەوەیە کە کڕیار و فرۆشیار ڕاستەوخۆ پەیوەندی بکەن — بێ ناوەڕاست، بێ کۆمیسیۆن.',
-      abtP2:         'لە بازاڕێک کە زۆرجار ئاڵۆزە و پر لە نهێنی، ئێمە شەفافیەت و ئاسانی دەهێنینەوە. تەکنەلۆژیامان لە خزمەتت دایە.',
-      abtQuote:      '«خانوو زەویە، بەڵام "مولک" مێژوویە. یارمەتیت دەدەین کە مێژووی خۆت بنووسیت.»',
-      val1Title:     'تایبەتی',
-      val1Sub:       'خانووی هەڵبژێردراو',
-      val2Title:     'پاکی و ئامانج',
-      val2Sub:       'ئاشکرایی تەواو',
-      val3Title:     'تەکنەلۆژیا',
-      val3Sub:       'ئەپ و وێبسایتی مۆدێرن',
-      val4Title:     'هەولێر',
-      val4Sub:       'دامەزراوە ٢٠٢٦',
-
-      rdrTag:        'بۆ ئۆفیسی خانووبەرە',
-      rdrTitle:      'بزنسەکەت گەشە پێ بدە',
-      rdrWith:       'لەگەڵ',
-      rdrDesc:       'ئۆفیسەکەت تۆمار بکە و بگەیە بە هەزاران کڕیار و کرێیار. خانوو لیست بکە، ئەجێنت بەڕێوەبەرە، مامەڵەکان ببەستە.',
-      rdrBtn1:       'چوونەژوورەوەی ئۆفیس',
-      rdrBtn2:       'بگەڕێ بەبێ تۆمارکردن',
-
-      ftTag:         'باشترین پلاتفۆرمی خانووبەرەی کوردستان. بێ کارمزد. بێ کۆمیسیۆن.',
-      ftCol1:        'پلاتفۆرم',
-      ftCol2:        'خزمەتگوزاری',
-      ftCol3:        'ئەپەکە دابەزێنە',
-      ftLink1:       'خانووەکان ببینە',
-      ftLink2:       'چوونەژوورەوەی کڕیار',
-      ftLink3:       'پۆرتاڵی ئەجێنت',
-      ftLink4:       'دەربارەمان',
-      ftLink5:       'کڕینی خانوو',
-      ftLink6:       'فرۆشتنی خانوو',
-      ftLink7:       'کرێی خانوو',
-      ftLink8:       'ئەجێنت بدۆزەرەوە',
-      ftLink9:       'پەیوەندیمان پێوە بکە',
-      fabAgent:      'پۆرتاڵی ئەجێنت',
-      fabOffice:     'چوونەژوورەوەی ئۆفیس',
+      eyebrow:'خانوو و زەوی',
+      sub1:'بۆ کڕین، فرۆشتن و کرێی خانوو لە کوردستان — بێ کارمزد',
+      sub2:'کوردستان • هەولێر • ٢٠٢٦',
+      tabBuy:'🏠 کڕین',tabRent:'🔑 کرێ',tabSell:'💰 فرۆشتن',
+      searchBtn:'بگەڕێ',
+      placeholderBuy:'بگەڕێ... هەولێر، سلێمانی، دهۆک',
+      placeholderRent:'خانوی کرێ بدۆزەرەوە...',
+      placeholderSell:'خانووەکەت بفرۆشە...',
+      popular:'شارەکان:',erbil:'هەولێر',suli:'سلێمانی',duhok:'دهۆک',
+      explore:'خانووەکان ببینە',appBtn:'ئەپەکە دابەزێنە',scroll:'دابەزە',
+      navHome:'سەرەتا',navProps:'خانووەکان',navApp:'ئەپ',
+      navAbout:'دەربارەمان',navContact:'پەیوەندی',
+      loginBtn:'چوونەژوورەوە',browseBtn:'خانووەکان ببینە',
+      statLabel1:'خانووی تۆمارکراو',statLabel2:'ئەجێنتی پشتڕاستکراو',
+      svcTag:'خزمەتگوزاریەکان',svcTitle:'چی',svcTitleEm:'پێشکەش دەکەین',
+      svc1Title:'کڕینی خانوو',
+      svc1Desc:'خانووی خەونەکەت بدۆزەرەوە. لیستی تایبەت لە سەرانسەری کوردستان بە نرخی ئاشکرا.',
+      svc1Cta:'بگەڕێ',
+      svc2Title:'فرۆشتنی خانوو',
+      svc2Desc:'خانووەکەت لیست بکە و بگەیە کڕیارە راستەقینەکان. بێ کۆمیسیۆن، بێ نهێنی.',
+      svc2Cta:'لیست بکە',
+      svc3Title:'کرێی خانوو',
+      svc3Desc:'خانوی کرێی گونجاو بدۆزەرەوە. نرخی ئاشکرا و لیستی پشتڕاستکراو.',
+      svc3Cta:'بگەڕێ',
+      appTag:'ئەپی مۆبایل',appTitle:'خانووەکان',appTitleEm:'لە گەڵت',
+      appDesc:'ئەپی Dream Mulk هەموو خانووەکانی کوردستانت دەخاتە پێش دەستت. بگەڕێ، کاتی سەردان دابنێ، و ڕاستەوخۆ پەیوەندی بکە بە فرۆشیارەکان.',
+      appF1:'لیستی خانووی نوێ و ئاگادارکردنەوەی خێرا',
+      appF2:'کاتی سەردانی خانوو دابنێ',
+      appF3:'کوردی، عەرەبی و ئینگلیزی',
+      appF4:'پەیامی پارێزراو و بەڵگەنامەکان',
+      appF5:'بێ کۆمیسیۆن — بەخۆڕایی بگەڕێ',
+      appStoreLabel:'دابەزێنە لە',playStoreLabel:'وەربگرە لە',
+      qrSub:'بەخۆڕایی',qrHint:'کامێرا بخەرە سەر کودەکە',qrBtn:'بکرەوە لە App Store',
+      abtTag:'دەربارەمان',abtTitle:'Dream Mulk',abtTitleEm:'کێیە؟',
+      abtP1:'Dream Mulk دامەزراوە بۆ ئەوەی بازاڕی خانووبەرەی کوردستان ئاسانتر و ئاشکراتر بکات. ئێمە نیازمان بۆ ئەوەیە کە کڕیار و فرۆشیار ڕاستەوخۆ پەیوەندی بکەن — بێ ناوەڕاست، بێ کۆمیسیۆن.',
+      abtP2:'لە بازاڕێک کە زۆرجار ئاڵۆزە و پر لە نهێنی، ئێمە شەفافیەت و ئاسانی دەهێنینەوە. تەکنەلۆژیامان لە خزمەتت دایە.',
+      abtQuote:'«خانوو زەویە، بەڵام "مولک" مێژوویە. یارمەتیت دەدەین کە مێژووی خۆت بنووسیت.»',
+      val1Title:'تایبەتی',val1Sub:'خانووی هەڵبژێردراو',
+      val2Title:'پاکی و ئامانج',val2Sub:'ئاشکرایی تەواو',
+      val3Title:'تەکنەلۆژیا',val3Sub:'ئەپ و وێبسایتی مۆدێرن',
+      val4Title:'هەولێر',val4Sub:'دامەزراوە ٢٠٢٦',
+      rdrTag:'بۆ ئۆفیسی خانووبەرە',rdrTitle:'بزنسەکەت گەشە پێ بدە',rdrWith:'لەگەڵ',
+      rdrDesc:'ئۆفیسەکەت تۆمار بکە و بگەیە بە هەزاران کڕیار و کرێیار. خانوو لیست بکە، ئەجێنت بەڕێوەبەرە، مامەڵەکان ببەستە.',
+      rdrBtn1:'چوونەژوورەوەی ئۆفیس',rdrBtn2:'بگەڕێ بەبێ تۆمارکردن',
+      ftTag:'باشترین پلاتفۆرمی خانووبەرەی کوردستان. بێ کارمزد. بێ کۆمیسیۆن.',
+      ftCol1:'پلاتفۆرم',ftCol2:'خزمەتگوزاری',ftCol3:'ئەپەکە دابەزێنە',
+      ftLink1:'خانووەکان ببینە',ftLink2:'چوونەژوورەوەی کڕیار',ftLink3:'پۆرتاڵی ئەجێنت',ftLink4:'دەربارەمان',
+      ftLink5:'کڕینی خانوو',ftLink6:'فرۆشتنی خانوو',ftLink7:'کرێی خانوو',ftLink8:'ئەجێنت بدۆزەرەوە',ftLink9:'پەیوەندیمان پێوە بکە',
+      fabAgent:'پۆرتاڵی ئەجێنت',fabOffice:'چوونەژوورەوەی ئۆفیس',
     },
-
-    // ══ ENGLISH ══
     en:{
       dir:'ltr',
-      eyebrow:       'Premium Real Estate',
-      sub1:          'Buy, sell & rent properties across Kurdistan — zero commission',
-      sub2:          'Kurdistan • Erbil • Est. 2026',
-      tabBuy:        '🏠 Buy',
-      tabRent:       '🔑 Rent',
-      tabSell:       '💰 Sell',
-      searchBtn:     'Search',
-      placeholderBuy:  'Search in Erbil, Sulaymaniyah...',
-      placeholderRent: 'Find rentals in Kurdistan...',
-      placeholderSell: 'List your property...',
-      popular:       'Popular:',
-      erbil:         'Erbil',
-      suli:          'Sulaymaniyah',
-      duhok:         'Duhok',
-      explore:       'Explore Properties',
-      appBtn:        'Download App',
-      scroll:        'Scroll',
-
-      navHome:       'Home',
-      navProps:      'Properties',
-      navApp:        'App',
-      navAbout:      'About Us',
-      navContact:    'Contact',
-      loginBtn:      'Client Login',
-      browseBtn:     'Browse Properties',
-
-      statLabel1:    'Listed Properties',
-      statLabel2:    'Verified Agents',
-
-      svcTag:        'Our Services',
-      svcTitle:      'What We',
-      svcTitleEm:    'Offer',
-      svc1Title:     'Buy a Property',
-      svc1Desc:      'Find your dream home with advanced filters. Exclusive listings across Kurdistan with full price transparency.',
-      svc1Cta:       'Explore',
-      svc2Title:     'Sell a Property',
-      svc2Desc:      'List your property and reach serious buyers directly. No middlemen, no commissions, no hidden fees.',
-      svc2Cta:       'List Now',
-      svc3Title:     'Rent a Property',
-      svc3Desc:      'Find the right rental at the right price. Verified listings with transparent terms.',
-      svc3Cta:       'Find Rentals',
-
-      appTag:        'Mobile App',
-      appTitle:      'Properties',
-      appTitleEm:    'With You',
-      appDesc:       'The Dream Mulk app puts Kurdistan\'s real estate market in your pocket. Search, book viewings, and contact sellers directly.',
-      appF1:         'Live property listings & instant alerts',
-      appF2:         'Book property viewings instantly',
-      appF3:         'Kurdish, Arabic & English',
-      appF4:         'Secure messaging & documents',
-      appF5:         'Zero commission — always free',
-      appStoreLabel: 'Download on the',
-      playStoreLabel:'Get it on',
-      qrSub:         'Free Download',
-      qrHint:        'Point camera to scan',
-      qrBtn:         'Open in App Store',
-
-      abtTag:        'About Us',
-      abtTitle:      'Dream Mulk',
-      abtTitleEm:    'Story',
-      abtP1:         'Dream Mulk was built to make Kurdistan\'s property market simpler and more transparent. We connect buyers and sellers directly — no middlemen, no commissions.',
-      abtP2:         'In a market full of complexity, we bring clarity and technology to every transaction.',
-      abtQuote:      '"Property is land, but Mulk is legacy. We help you write yours."',
-      val1Title:     'Exclusive',
-      val1Sub:       'Curated listings',
-      val2Title:     'Integrity',
-      val2Sub:       'Full transparency',
-      val3Title:     'Technology',
-      val3Sub:       'Modern app & platform',
-      val4Title:     'Erbil Based',
-      val4Sub:       'Est. 2026',
-
-      rdrTag:        'For Real Estate Offices',
-      rdrTitle:      'Grow Your Business',
-      rdrWith:       'With',
-      rdrDesc:       'Register your office and reach thousands of buyers and renters across Kurdistan. Manage listings, agents, and deals in one place.',
-      rdrBtn1:       'Office Login',
-      rdrBtn2:       'Browse Without Login',
-
-      ftTag:         'Kurdistan\'s real estate platform. No fees. No commissions. Always transparent.',
-      ftCol1:        'Platform',
-      ftCol2:        'Services',
-      ftCol3:        'Download App',
-      ftLink1:       'Browse Properties',
-      ftLink2:       'Client Login',
-      ftLink3:       'Agent Portal',
-      ftLink4:       'About Us',
-      ftLink5:       'Buy Property',
-      ftLink6:       'Sell Property',
-      ftLink7:       'Rent Property',
-      ftLink8:       'Find an Agent',
-      ftLink9:       'Contact Us',
-      fabAgent:      'Agent Portal',
-      fabOffice:     'Office Login',
+      eyebrow:'Premium Real Estate',
+      sub1:'Buy, sell & rent properties across Kurdistan — zero commission',
+      sub2:'Kurdistan • Erbil • Est. 2026',
+      tabBuy:'🏠 Buy',tabRent:'🔑 Rent',tabSell:'💰 Sell',
+      searchBtn:'Search',
+      placeholderBuy:'Search in Erbil, Sulaymaniyah...',
+      placeholderRent:'Find rentals in Kurdistan...',
+      placeholderSell:'List your property...',
+      popular:'Popular:',erbil:'Erbil',suli:'Sulaymaniyah',duhok:'Duhok',
+      explore:'Explore Properties',appBtn:'Download App',scroll:'Scroll',
+      navHome:'Home',navProps:'Properties',navApp:'App',navAbout:'About Us',navContact:'Contact',
+      loginBtn:'Client Login',browseBtn:'Browse Properties',
+      statLabel1:'Listed Properties',statLabel2:'Verified Agents',
+      svcTag:'Our Services',svcTitle:'What We',svcTitleEm:'Offer',
+      svc1Title:'Buy a Property',
+      svc1Desc:'Find your dream home with advanced filters. Exclusive listings across Kurdistan with full price transparency.',
+      svc1Cta:'Explore',
+      svc2Title:'Sell a Property',
+      svc2Desc:'List your property and reach serious buyers directly. No middlemen, no commissions, no hidden fees.',
+      svc2Cta:'List Now',
+      svc3Title:'Rent a Property',
+      svc3Desc:'Find the right rental at the right price. Verified listings with transparent terms.',
+      svc3Cta:'Find Rentals',
+      appTag:'Mobile App',appTitle:'Properties',appTitleEm:'With You',
+      appDesc:'The Dream Mulk app puts Kurdistan\'s real estate market in your pocket. Search, book viewings, and contact sellers directly.',
+      appF1:'Live property listings & instant alerts',
+      appF2:'Book property viewings instantly',
+      appF3:'Kurdish, Arabic & English',
+      appF4:'Secure messaging & documents',
+      appF5:'Zero commission — always free',
+      appStoreLabel:'Download on the',playStoreLabel:'Get it on',
+      qrSub:'Free Download',qrHint:'Point camera to scan',qrBtn:'Open in App Store',
+      abtTag:'About Us',abtTitle:'Dream Mulk',abtTitleEm:'Story',
+      abtP1:'Dream Mulk was built to make Kurdistan\'s property market simpler and more transparent. We connect buyers and sellers directly — no middlemen, no commissions.',
+      abtP2:'In a market full of complexity, we bring clarity and technology to every transaction.',
+      abtQuote:'"Property is land, but Mulk is legacy. We help you write yours."',
+      val1Title:'Exclusive',val1Sub:'Curated listings',
+      val2Title:'Integrity',val2Sub:'Full transparency',
+      val3Title:'Technology',val3Sub:'Modern app & platform',
+      val4Title:'Erbil Based',val4Sub:'Est. 2026',
+      rdrTag:'For Real Estate Offices',rdrTitle:'Grow Your Business',rdrWith:'With',
+      rdrDesc:'Register your office and reach thousands of buyers and renters across Kurdistan. Manage listings, agents, and deals in one place.',
+      rdrBtn1:'Office Login',rdrBtn2:'Browse Without Login',
+      ftTag:'Kurdistan\'s real estate platform. No fees. No commissions. Always transparent.',
+      ftCol1:'Platform',ftCol2:'Services',ftCol3:'Download App',
+      ftLink1:'Browse Properties',ftLink2:'Client Login',ftLink3:'Agent Portal',ftLink4:'About Us',
+      ftLink5:'Buy Property',ftLink6:'Sell Property',ftLink7:'Rent Property',ftLink8:'Find an Agent',ftLink9:'Contact Us',
+      fabAgent:'Agent Portal',fabOffice:'Office Login',
     },
-
-    // ══ ARABIC ══
     ar:{
       dir:'rtl',
-      eyebrow:       'عقارات كردستان',
-      sub1:          'شراء وبيع وإيجار العقارات في كردستان — بدون عمولة',
-      sub2:          'كردستان • أربيل • ٢٠٢٦',
-      tabBuy:        '🏠 شراء',
-      tabRent:       '🔑 إيجار',
-      tabSell:       '💰 بيع',
-      searchBtn:     'ابحث',
-      placeholderBuy:  'ابحث في أربيل، السليمانية...',
-      placeholderRent: 'ابحث عن شقق للإيجار...',
-      placeholderSell: 'أضف عقارك...',
-      popular:       'المدن:',
-      erbil:         'أربيل',
-      suli:          'السليمانية',
-      duhok:         'دهوك',
-      explore:       'استعرض العقارات',
-      appBtn:        'تحميل التطبيق',
-      scroll:        'انزل',
-
-      navHome:       'الرئيسية',
-      navProps:      'العقارات',
-      navApp:        'التطبيق',
-      navAbout:      'من نحن',
-      navContact:    'تواصل',
-      loginBtn:      'تسجيل الدخول',
-      browseBtn:     'استعرض العقارات',
-
-      statLabel1:    'عقارات مدرجة',
-      statLabel2:    'وكلاء موثقون',
-
-      svcTag:        'خدماتنا',
-      svcTitle:      'ماذا',
-      svcTitleEm:    'نقدم',
-      svc1Title:     'شراء عقار',
-      svc1Desc:      'اعثر على منزل أحلامك بفلاتر متطورة. قوائم حصرية في كردستان بأسعار واضحة.',
-      svc1Cta:       'استعرض',
-      svc2Title:     'بيع عقار',
-      svc2Desc:      'أدرج عقارك وتواصل مع مشترين مباشرة. بدون وسطاء وبدون عمولات.',
-      svc2Cta:       'أضف الآن',
-      svc3Title:     'إيجار عقار',
-      svc3Desc:      'ابحث عن إيجار مناسب بسعر واضح. قوائم موثقة وشروط شفافة.',
-      svc3Cta:       'ابحث عن إيجار',
-
-      appTag:        'تطبيق الجوال',
-      appTitle:      'العقارات',
-      appTitleEm:    'معك دائماً',
-      appDesc:       'تطبيق Dream Mulk يضع سوق العقارات في كردستان بين يديك. ابحث وحدد مواعيد وتواصل مع البائعين مباشرة.',
-      appF1:         'قوائم فورية وتنبيهات لحظية',
-      appF2:         'احجز موعد معاينة بسهولة',
-      appF3:         'الكردية والعربية والإنجليزية',
-      appF4:         'مراسلة آمنة ووثائق',
-      appF5:         'بدون عمولة — مجاني دائماً',
-      appStoreLabel: 'حمّل من',
-      playStoreLabel:'احصل عليه من',
-      qrSub:         'تحميل مجاني',
-      qrHint:        'وجّه الكاميرا للمسح',
-      qrBtn:         'افتح في App Store',
-
-      abtTag:        'قصتنا',
-      abtTitle:      'Dream Mulk',
-      abtTitleEm:    'من نحن',
-      abtP1:         'بنينا Dream Mulk لجعل سوق العقارات في كردستان أبسط وأكثر شفافية. نربط المشترين بالبائعين مباشرة — بدون وسطاء وبدون عمولات.',
-      abtP2:         'في سوق يتسم بالتعقيد، نجلب الوضوح والتكنولوجيا لكل صفقة.',
-      abtQuote:      '"العقار أرض، لكن المُلك تاريخ. نساعدك على كتابة تاريخك."',
-      val1Title:     'الحصرية',
-      val1Sub:       'قوائم مختارة بعناية',
-      val2Title:     'النزاهة',
-      val2Sub:       'شفافية كاملة',
-      val3Title:     'التكنولوجيا',
-      val3Sub:       'منصة وتطبيق حديث',
-      val4Title:     'مقرنا أربيل',
-      val4Sub:       'تأسست ٢٠٢٦',
-
-      rdrTag:        'لمكاتب العقارات',
-      rdrTitle:      'نمّ أعمالك',
-      rdrWith:       'مع',
-      rdrDesc:       'سجّل مكتبك وتواصل مع آلاف المشترين والمستأجرين في كردستان. إدارة القوائح والوكلاء والصفقات في مكان واحد.',
-      rdrBtn1:       'دخول المكتب',
-      rdrBtn2:       'تصفح بدون تسجيل',
-
-      ftTag:         'منصة العقارات في كردستان. بدون رسوم. بدون عمولات.',
-      ftCol1:        'المنصة',
-      ftCol2:        'الخدمات',
-      ftCol3:        'تحميل التطبيق',
-      ftLink1:       'استعرض العقارات',
-      ftLink2:       'دخول العملاء',
-      ftLink3:       'بوابة الوكلاء',
-      ftLink4:       'من نحن',
-      ftLink5:       'شراء عقار',
-      ftLink6:       'بيع عقار',
-      ftLink7:       'إيجار عقار',
-      ftLink8:       'ابحث عن وكيل',
-      ftLink9:       'تواصل معنا',
-      fabAgent:      'بوابة الوكيل',
-      fabOffice:     'دخول المكتب',
+      eyebrow:'عقارات كردستان',
+      sub1:'شراء وبيع وإيجار العقارات في كردستان — بدون عمولة',
+      sub2:'كردستان • أربيل • ٢٠٢٦',
+      tabBuy:'🏠 شراء',tabRent:'🔑 إيجار',tabSell:'💰 بيع',
+      searchBtn:'ابحث',
+      placeholderBuy:'ابحث في أربيل، السليمانية...',
+      placeholderRent:'ابحث عن شقق للإيجار...',
+      placeholderSell:'أضف عقارك...',
+      popular:'المدن:',erbil:'أربيل',suli:'السليمانية',duhok:'دهوك',
+      explore:'استعرض العقارات',appBtn:'تحميل التطبيق',scroll:'انزل',
+      navHome:'الرئيسية',navProps:'العقارات',navApp:'التطبيق',navAbout:'من نحن',navContact:'تواصل',
+      loginBtn:'تسجيل الدخول',browseBtn:'استعرض العقارات',
+      statLabel1:'عقارات مدرجة',statLabel2:'وكلاء موثقون',
+      svcTag:'خدماتنا',svcTitle:'ماذا',svcTitleEm:'نقدم',
+      svc1Title:'شراء عقار',
+      svc1Desc:'اعثر على منزل أحلامك بفلاتر متطورة. قوائم حصرية في كردستان بأسعار واضحة.',
+      svc1Cta:'استعرض',
+      svc2Title:'بيع عقار',
+      svc2Desc:'أدرج عقارك وتواصل مع مشترين مباشرة. بدون وسطاء وبدون عمولات.',
+      svc2Cta:'أضف الآن',
+      svc3Title:'إيجار عقار',
+      svc3Desc:'ابحث عن إيجار مناسب بسعر واضح. قوائم موثقة وشروط شفافة.',
+      svc3Cta:'ابحث عن إيجار',
+      appTag:'تطبيق الجوال',appTitle:'العقارات',appTitleEm:'معك دائماً',
+      appDesc:'تطبيق Dream Mulk يضع سوق العقارات في كردستان بين يديك. ابحث وحدد مواعيد وتواصل مع البائعين مباشرة.',
+      appF1:'قوائم فورية وتنبيهات لحظية',
+      appF2:'احجز موعد معاينة بسهولة',
+      appF3:'الكردية والعربية والإنجليزية',
+      appF4:'مراسلة آمنة ووثائق',
+      appF5:'بدون عمولة — مجاني دائماً',
+      appStoreLabel:'حمّل من',playStoreLabel:'احصل عليه من',
+      qrSub:'تحميل مجاني',qrHint:'وجّه الكاميرا للمسح',qrBtn:'افتح في App Store',
+      abtTag:'قصتنا',abtTitle:'Dream Mulk',abtTitleEm:'من نحن',
+      abtP1:'بنينا Dream Mulk لجعل سوق العقارات في كردستان أبسط وأكثر شفافية. نربط المشترين بالبائعين مباشرة — بدون وسطاء وبدون عمولات.',
+      abtP2:'في سوق يتسم بالتعقيد، نجلب الوضوح والتكنولوجيا لكل صفقة.',
+      abtQuote:'"العقار أرض، لكن المُلك تاريخ. نساعدك على كتابة تاريخك."',
+      val1Title:'الحصرية',val1Sub:'قوائم مختارة بعناية',
+      val2Title:'النزاهة',val2Sub:'شفافية كاملة',
+      val3Title:'التكنولوجيا',val3Sub:'منصة وتطبيق حديث',
+      val4Title:'مقرنا أربيل',val4Sub:'تأسست ٢٠٢٦',
+      rdrTag:'لمكاتب العقارات',rdrTitle:'نمّ أعمالك',rdrWith:'مع',
+      rdrDesc:'سجّل مكتبك وتواصل مع آلاف المشترين والمستأجرين في كردستان. إدارة القوائم والوكلاء والصفقات في مكان واحد.',
+      rdrBtn1:'دخول المكتب',rdrBtn2:'تصفح بدون تسجيل',
+      ftTag:'منصة العقارات في كردستان. بدون رسوم. بدون عمولات.',
+      ftCol1:'المنصة',ftCol2:'الخدمات',ftCol3:'تحميل التطبيق',
+      ftLink1:'استعرض العقارات',ftLink2:'دخول العملاء',ftLink3:'بوابة الوكلاء',ftLink4:'من نحن',
+      ftLink5:'شراء عقار',ftLink6:'بيع عقار',ftLink7:'إيجار عقار',ftLink8:'ابحث عن وكيل',ftLink9:'تواصل معنا',
+      fabAgent:'بوابة الوكيل',fabOffice:'دخول المكتب',
     },
   };
 }
 </script>
 
+<!-- ═══════════════════════════════════════════════════
+     PAGE INTERACTIONS
+═══════════════════════════════════════════════════ -->
 <script>
-// ── Page interactions ──────────────────────────────────
+// ── Scroll & nav ──
 const hdr=document.getElementById('hdr'),btt=document.getElementById('btt');
-window.addEventListener('scroll',()=>{hdr.classList.toggle('sc',scrollY>60);btt.classList.toggle('show',scrollY>300);});
+window.addEventListener('scroll',()=>{
+  hdr.classList.toggle('sc',scrollY>60);
+  btt.classList.toggle('show',scrollY>300);
+},{passive:true});
 btt.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+
+// ── Drawer ──
 const ham=document.getElementById('ham'),drw=document.getElementById('drw'),bdp=document.getElementById('bdp'),dx=document.getElementById('dx');
 const oD=()=>{drw.classList.add('on');bdp.classList.add('on');document.body.style.overflow='hidden';};
 const cD=()=>{drw.classList.remove('on');bdp.classList.remove('on');document.body.style.overflow='';};
-ham.addEventListener('click',oD);dx.addEventListener('click',cD);bdp.addEventListener('click',cD);
+ham.addEventListener('click',oD);
+dx.addEventListener('click',cD);
+bdp.addEventListener('click',cD);
+// Close drawer when a link inside it is tapped
+drw.querySelectorAll('a').forEach(a=>a.addEventListener('click',cD));
 window.addEventListener('resize',()=>{if(innerWidth>1000)cD();});
+
+// ── Counter animation ──
 let cnt=false;
 new IntersectionObserver(es=>{
-  if(es[0].isIntersecting&&!cnt){cnt=true;document.querySelectorAll('.stat-num[data-t]').forEach(el=>{const tg=parseInt(el.dataset.t),sf=el.dataset.s||'';let c=0,step=Math.ceil(tg/60);const iv=setInterval(()=>{c=Math.min(c+step,tg);el.textContent=c+sf;if(c>=tg)clearInterval(iv);},20);});}
+  if(es[0].isIntersecting&&!cnt){
+    cnt=true;
+    document.querySelectorAll('.stat-num[data-t]').forEach(el=>{
+      const tg=parseInt(el.dataset.t),sf=el.dataset.s||'';
+      let c=0,step=Math.ceil(tg/60);
+      const iv=setInterval(()=>{c=Math.min(c+step,tg);el.textContent=c+sf;if(c>=tg)clearInterval(iv);},20);
+    });
+  }
 }).observe(document.querySelector('.stats-bar'));
-const obs=new IntersectionObserver((es,o)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('on');o.unobserve(e.target);}});},{threshold:.1,rootMargin:'0px 0px -30px 0px'});
-document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
-document.querySelectorAll('a[href^="#"]').forEach(a=>{a.addEventListener('click',e=>{const h=a.getAttribute('href');if(h&&h.length>1){const t=document.querySelector(h);if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'});}}});});
 
-// ── Language system ────────────────────────────────────
-const i18n = new DreamMulkI18n({ defaultLang: 'ku' });
-var currentTab = 'buy';
+// ── Scroll reveal ──
+const obs=new IntersectionObserver((es,o)=>{
+  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('on');o.unobserve(e.target);}});
+},{threshold:.08,rootMargin:'0px 0px -20px 0px'});
+document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
+
+// ── Smooth anchor links ──
+document.querySelectorAll('a[href^="#"]').forEach(a=>{
+  a.addEventListener('click',e=>{
+    const h=a.getAttribute('href');
+    if(h&&h.length>1){
+      const t=document.querySelector(h);
+      if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'});}
+    }
+  });
+});
+
+// ── Language system ──
+const i18n=new DreamMulkI18n({defaultLang:'ku'});
+var currentTab='buy';
 
 document.querySelectorAll('.lang-btn').forEach(btn=>{
   btn.addEventListener('click',()=>i18n.setLang(btn.getAttribute('data-lang')));
 });
 
-function setTab(el, type){
+function setTab(el,type){
   document.querySelectorAll('.hs-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
-  el.setAttribute('data-tab', type);
-  currentTab = type;
-  const T = i18n.translations[i18n.getCurrentLang()];
-  const inp = document.getElementById('hs-input');
-  if(inp) inp.placeholder = {buy:T.placeholderBuy,rent:T.placeholderRent,sell:T.placeholderSell}[type];
+  currentTab=type;
+  const T=i18n.translations[i18n.getCurrentLang()];
+  const inp=document.getElementById('hs-input');
+  if(inp) inp.placeholder={buy:T.placeholderBuy,rent:T.placeholderRent,sell:T.placeholderSell}[type];
 }
 
 function doHeroSearch(){
-  const keyword = document.getElementById('hs-input').value.trim();
-  const base = '{{ route("property.list") }}';
-  const params = new URLSearchParams();
+  const keyword=document.getElementById('hs-input').value.trim();
+  const base='{{ route("property.list") }}';
+  const params=new URLSearchParams();
   if(currentTab==='rent') params.set('type','rent');
   else if(currentTab==='buy') params.set('type','sell');
-  if(keyword) params.set('search', keyword);
-  window.location.href = base + (params.toString() ? '?'+params.toString() : '');
+  if(keyword) params.set('search',keyword);
+  window.location.href=base+(params.toString()?'?'+params.toString():'');
 }
 
-document.getElementById('hs-btn').addEventListener('click',e=>{e.preventDefault();doHeroSearch();});
+document.getElementById('hs-btn').addEventListener('click',doHeroSearch);
 document.getElementById('hs-input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();doHeroSearch();}});
+
 document.querySelectorAll('.hs-quick a[data-city]').forEach(a=>{
   a.addEventListener('click',e=>{
     e.preventDefault();
@@ -1217,8 +2009,10 @@ document.getElementById('tab-buy').setAttribute('data-tab','buy');
 document.getElementById('tab-rent').setAttribute('data-tab','rent');
 document.getElementById('tab-sell').setAttribute('data-tab','sell');
 
-// Init — load saved or default language
+// Init language
 i18n.init();
+
+
 </script>
 </body>
 </html>
