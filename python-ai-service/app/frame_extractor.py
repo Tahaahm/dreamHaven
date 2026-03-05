@@ -1,10 +1,11 @@
 """
-Frame Extractor Module — Real Estate Optimized (v7.1 - Relaxed OpenCV)
+Frame Extractor Module — Real Estate Optimized (v7.2 - Mobile Speed Opt)
 ======================================================================
 
 WHAT CHANGED FROM v7.0:
   ✅ FIXED: Lowered hard-reject thresholds so videos reliably return 8-10 frames.
-  ✅ FIXED: save_frame() uses rank to prevent millisecond filename collisions.
+  ✅ SPEED: save_frame() scales images to 1280px max and compresses to JPEG 80.
+            This prevents massive Base64 JSON payloads that crash mobile browsers.
 """
 
 import cv2
@@ -527,15 +528,24 @@ class VideoFrameExtractor:
     def save_frame(
         self, frame: np.ndarray, video_hash: str, rank: int
     ) -> Path:
-        """✅ FIXED: Incorporates rank to ensure totally unique filenames."""
+        """✅ MOBILE SPEED FIX: Compresses and resizes to 1280px to keep JSON Base64 payload small."""
+
+        # 🚀 SPEED FIX: Downscale to a maximum of 1280px width/height
+        h, w = frame.shape[:2]
+        if max(h, w) > 1280:
+            scale = 1280 / max(h, w)
+            # INTER_AREA is the fastest/cleanest interpolation for downscaling
+            frame = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
         ts  = int(time.time() * 1000)
-        # Added r{rank:02d} to the filename to avoid collisions when processing very fast
-        out = OUTPUT_DIR / f"{video_hash}_r{rank:02d}_{ts}.{OUTPUT_IMAGE_FORMAT.lower()}"
+        out = OUTPUT_DIR / f"{video_hash}_r{rank:02d}_{ts}.jpg"
+
+        # 🚀 SPEED FIX: Force JPEG and Quality=80 (huge reduction in Base64 bloat)
         img.save(
             out,
-            format=OUTPUT_IMAGE_FORMAT,
-            quality=OUTPUT_IMAGE_QUALITY,
+            format="JPEG",
+            quality=80,
             optimize=True
         )
         return out

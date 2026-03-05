@@ -6,8 +6,8 @@ FIXES:
   2. CLIP model removed — replaced with fast OpenCV scoring
   3. Memory freed immediately after disk write
   4. Proper error messages returned to client (no silent infinite loading)
-  5. Disk flush buffer added to prevent UI "Failed to fetch" race conditions
-  6. BASE64 BYPASS: Images are sent as Base64 strings to avoid 404 proxy errors
+  5. BASE64 BYPASS + MOBILE OPTIMIZED: Images are compressed and sent
+     as Base64 strings to avoid 404 proxy errors and mobile memory crashes.
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
@@ -21,7 +21,6 @@ import hashlib
 import time
 import os
 import psutil
-import asyncio
 import base64
 
 from app.config import (
@@ -54,7 +53,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for serving extracted frames (kept for legacy/debugging)
+# Mount static files (kept for debugging, though frontend now uses base64)
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
 
 # Global extractor instance
@@ -205,13 +204,7 @@ async def extract_frames(
         for fp in result["frames"]:
             file_path = Path(fp)
 
-            # Wait for file to exist on disk
-            for _ in range(10):
-                if file_path.exists() and file_path.stat().st_size > 0:
-                    break
-                await asyncio.sleep(0.1)
-
-            # Read the image and encode it to Base64
+            # Read the image and encode it to Base64 (instant, no delays needed)
             if file_path.exists():
                 with open(file_path, "rb") as image_file:
                     encoded_string = base64.b64encode(image_file.read()).decode('utf-8')

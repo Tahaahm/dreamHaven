@@ -1078,6 +1078,7 @@ async function handleVideoUpload(event) {
         vsSub.textContent   = 'Analyzing frames and selecting best quality images';
 
         const controller = new AbortController();
+        // 10 minute timeout for mobile data connections
         const timeoutId  = setTimeout(() => controller.abort(), 600000);
 
         const response = await fetch('/api/video/extract-frames', {
@@ -1095,13 +1096,12 @@ async function handleVideoUpload(event) {
         vsTitle.textContent = 'Processing extracted frames...';
         vsSub.textContent   = `Got ${result.data.frames.length} high-quality frames`;
 
-        // FIX: Read images directly from Base64 to bypass proxy routing issues
+        // FIX: Process compressed Base64 strings directly. No network calls, extremely fast on mobile.
         const frameFiles = [];
 
         for (let i = 0; i < result.data.frames.length; i++) {
             const frameObj = result.data.frames[i];
 
-            // Update UI progress
             vsTitle.textContent = `Processing frame ${i + 1} of ${result.data.frames.length}...`;
             vsBar.style.width = `${60 + ((i + 1) / result.data.frames.length) * 30}%`;
 
