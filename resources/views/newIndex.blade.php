@@ -28,12 +28,12 @@ html{
   -webkit-text-size-adjust:100%;
   text-size-adjust:100%;
   direction:ltr !important;
-  overflow-x:clip; /* clip NOT hidden — hidden kills scroll momentum */
+  overflow-x:clip;
 }
 body{
   max-width:100vw;
   overflow-x:clip;
-  -webkit-overflow-scrolling:touch; /* iOS momentum scroll */
+  -webkit-overflow-scrolling:touch;
   overscroll-behavior-y:auto;
 }
 
@@ -60,9 +60,9 @@ body{
   pointer-events:none !important;
   touch-action:none;
 }
-.hero{touch-action:pan-y;} /* allow vertical pan through hero */
+.hero{touch-action:pan-y;}
 .vig{pointer-events:none !important;}
-.hero > div:first-child{will-change:transform;} /* GPU-promote aurora layer */
+.hero > div:first-child{will-change:transform;}
 
 /* ═══════════════════════════════════════════════════════
    ARABIC / KURDISH FONT
@@ -120,7 +120,7 @@ header.sc .logo-name{font-size:21px;}
 .av-btn:hover{transform:scale(1.1);}
 .btn-o{padding:9px 24px;border:1px solid rgba(212,175,55,.45);border-radius:50px;color:var(--G);font-size:13px;text-decoration:none;transition:all .3s;white-space:nowrap;}
 .btn-o:hover{background:rgba(212,175,55,.1);}
-.btn-s{padding:9px 24px;border:1px solid var(--G);border-radius:50px;background:var(--G);color:var(--PD);font-size:13px;font-weight:700;text-decoration:none;transition:all .4s var(--E);white-space:nowrap;}
+.btn-s{padding:9px 24px;border:1px solid var(--G);border-radius:50px;background:var(--G);color:var(--PD);font-size:13px;font-weight:700;text-decoration:none;transition:all .4s var(--E);white-space:nowrap;display:flex;align-items:center;gap:6px;}
 .btn-s:hover{background:var(--GL);transform:translateY(-2px);box-shadow:0 8px 22px rgba(212,175,55,.4);}
 .hbtn{display:none;background:none;border:none;color:var(--G);font-size:26px;cursor:pointer;padding:8px;line-height:1;}
 
@@ -167,7 +167,7 @@ body.rtl .drw-nav a:hover{padding-left:0;padding-right:12px;}
   height:100vh;min-height:680px;
   display:flex;align-items:center;justify-content:center;
   overflow:hidden;background:var(--deep);
-  touch-action:pan-y; /* FIX: allow scrolling through hero on touch */
+  touch-action:pan-y;
 }
 .vig{
   position:absolute;inset:0;z-index:1;pointer-events:none;
@@ -382,43 +382,13 @@ body.lang-ku .ft-col a,body.lang-ar .ft-col a{font-family:var(--font-ar-ui);font
 .soa:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);}
 
 /* ═══════════════════════════════════════════════════════
-   FABs
+   FABs (Cleaned up: Only 'Back to Top' remains)
 ═══════════════════════════════════════════════════════ */
 .fab-w{position:fixed;bottom:36px;right:36px;z-index:900;display:flex;flex-direction:column;align-items:flex-end;gap:12px;}
 body.rtl .fab-w{right:auto;left:36px;align-items:flex-start;}
-.fpill{display:flex;align-items:center;gap:11px;padding:13px 24px;border-radius:50px;font-size:13px;font-weight:700;letter-spacing:.8px;text-decoration:none;border:none;cursor:pointer;transition:all .4s var(--E);white-space:nowrap;position:relative;overflow:hidden;font-family:var(--font-ar-ui);}
-body.lang-en .fpill{font-family:'DM Sans',sans-serif;}
-.fpill::after{content:'';position:absolute;top:0;left:-75%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.22),transparent);transform:skewX(-18deg);transition:left .6s var(--E);pointer-events:none;}
-.fpill:hover::after{left:130%;}
-.fa-a{background:linear-gradient(135deg,var(--G),var(--GL));color:var(--PD);box-shadow:0 8px 24px rgba(212,175,55,.45);}
-.fa-a:hover{transform:translateY(-5px) scale(1.03);color:var(--PD);}
-.fa-a .fic{width:30px;height:30px;border-radius:50%;background:rgba(26,34,90,.18);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
-.fa-o{background:linear-gradient(135deg,var(--P),var(--PD));color:#fff;border:1.5px solid rgba(212,175,55,.55);box-shadow:0 8px 24px rgba(48,59,151,.5);}
-.fa-o:hover{transform:translateY(-5px) scale(1.03);border-color:var(--G);color:#fff;}
-.fa-o .fic{width:30px;height:30px;border-radius:50%;background:rgba(212,175,55,.18);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--G);transition:all .4s var(--E);flex-shrink:0;}
-.fa-o:hover .fic{background:var(--G);color:var(--PD);}
-.fpill .fab-label{transition:all .4s var(--E);}
 .ftop{width:46px;height:46px;border-radius:50%;background:rgba(48,59,151,.9);border:1px solid rgba(212,175,55,.3);display:flex;align-items:center;justify-content:center;color:var(--G);font-size:16px;cursor:pointer;opacity:0;pointer-events:none;transition:all .4s var(--E);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
 .ftop.show{opacity:1;pointer-events:auto;}
 .ftop:hover{background:var(--G);color:var(--PD);transform:translateY(-5px);}
-
-@media(max-width:768px){
-  .fab-w{bottom:22px;right:14px;gap:10px;}
-  body.rtl .fab-w{left:14px;right:auto;}
-  .fpill .fab-label{display:none !important;}
-  .fpill{width:54px !important;height:54px !important;padding:0 !important;border-radius:50% !important;justify-content:center !important;gap:0 !important;overflow:hidden;}
-  .fa-a .fic{width:54px !important;height:54px !important;border-radius:50% !important;font-size:20px !important;background:transparent !important;display:flex !important;align-items:center !important;justify-content:center !important;color:var(--PD) !important;}
-  .fa-o .fic{width:54px !important;height:54px !important;border-radius:50% !important;font-size:20px !important;background:transparent !important;display:flex !important;align-items:center !important;justify-content:center !important;color:#fff !important;}
-  .ftop{width:44px;height:44px;font-size:14px;}
-}
-@media(max-width:480px){
-  .fab-w{bottom:16px;right:10px;}
-  body.rtl .fab-w{left:10px;right:auto;}
-  .fpill{width:48px !important;height:48px !important;}
-  .fa-a .fic{width:48px !important;height:48px !important;font-size:18px !important;}
-  .fa-o .fic{width:48px !important;height:48px !important;font-size:18px !important;}
-  .ftop{width:40px;height:40px;}
-}
 
 /* ═══════════════════════════════════════════════════════
    SCROLL REVEAL
@@ -448,8 +418,19 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   .rdr-bs{flex-direction:row;flex-wrap:wrap;}
 }
 @media(max-width:1000px){
-  .nav-ul,.nav-right{display:none;}
-  .hbtn{display:flex;align-items:center;justify-content:center;}
+  .nav-ul {display:none;}
+
+  /* Show nav-right but hide desktop-only items inside it */
+  .nav-right .lang-sw {display:none;} /* Moved to drawer */
+  .nav-right #nav-browse-btn {display:none;} /* Moved to drawer */
+  .nav-right {gap: 8px;} /* Tighter spacing for mobile header */
+
+  /* Make Login button fit nicely */
+  .nav-right #nav-login-btn {padding: 8px 14px; font-size: 11.5px;}
+
+  .hbtn{display:flex;align-items:center;justify-content:center; margin-left: 6px;}
+  body.rtl .hbtn {margin-left: 0; margin-right: 6px;}
+
   header{padding:0 20px;height:70px;}
   header.sc{height:60px;}
   .logo img{width:44px;height:44px;}
@@ -465,6 +446,7 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   header.sc .logo img{width:34px;height:34px;}
   .logo-name{font-size:18px;}
   header.sc .logo-name{font-size:16px;}
+
   .hero{min-height:100svh;}
   .hc{padding:0 18px;max-width:100%;}
   h1{font-size:clamp(44px,12vw,80px);letter-spacing:-2px;}
@@ -486,11 +468,13 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   .hs-quick span{font-size:11px;}
   .hbtns{gap:12px;}
   .hb1,.hb2{padding:13px 28px;font-size:11px;letter-spacing:1.5px;}
+
   .stats-bar{padding:28px 18px;}
   .stats-inner{flex-direction:column;gap:24px;align-items:center;}
   .stat-div{width:60px;height:1px;}
   .stat-num{font-size:40px;}
   .stat-label{font-size:11px;}
+
   .svc-sec{padding:70px 18px;}
   .svc-grid{grid-template-columns:1fr;gap:4px;}
   .svc-card:last-child{grid-column:span 1;}
@@ -502,9 +486,11 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   .svc-p{max-height:none !important;opacity:1 !important;margin-bottom:12px !important;font-size:13px;}
   .svc-cta{font-size:11px;}
   body.lang-ku .svc-cta,body.lang-ar .svc-cta{font-size:12px;}
+
   .sec-hd{margin-bottom:44px;}
   .stitle{font-size:32px;}
   body.lang-ku .stitle,body.lang-ar .stitle{font-size:28px;}
+
   .app-sec{padding:70px 18px;}
   .app-g{grid-template-columns:1fr;gap:48px;}
   .app-desc{font-size:14px;line-height:1.9;}
@@ -514,6 +500,7 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   .sbtn i{font-size:22px;}
   .sbtn-nm{font-size:15px;}
   .qr-card{max-width:100%;width:100%;}
+
   .abt-sec{padding:70px 18px;}
   .abt-g{grid-template-columns:1fr;gap:44px;}
   .abt-p{font-size:14.5px;line-height:2;}
@@ -523,6 +510,7 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   .vico{width:48px;height:48px;font-size:18px;}
   .vinfo h4{font-size:18px;}
   body.lang-ku .vinfo h4,body.lang-ar .vinfo h4{font-size:17px;}
+
   .rdr-sec{padding:70px 18px;}
   .rdr-in{grid-template-columns:1fr;gap:36px;}
   .rdr-t{font-size:28px;}
@@ -530,16 +518,26 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   .rdr-d{font-size:14px;}
   .rdr-bs{flex-direction:column;min-width:unset;width:100%;}
   .rdr-b1,.rdr-b2{padding:15px 24px;font-size:12px;letter-spacing:1.5px;justify-content:center;}
+
   footer{padding:50px 18px 28px;}
   .ft-top{flex-direction:column;gap:32px;}
   .ft-tag{max-width:100%;}
   .ft-bot{flex-direction:column;align-items:flex-start;gap:16px;}
   .ft-copy{font-size:11px;}
-  .ftop{width:40px;height:40px;font-size:14px;}
+
+  .fab-w{bottom:22px;right:14px;gap:10px;}
+  body.rtl .fab-w{left:14px;right:auto;}
+  .ftop{width:44px;height:44px;font-size:14px;}
 }
 @media(max-width:480px){
   header{padding:0 14px;}
-  .logo-name{font-size:17px;}
+  .logo-name{font-size:16px;}
+
+  /* Make login button and avatar even tighter to fit */
+  .nav-right #nav-login-btn {padding: 7px 12px; font-size: 11px;}
+  .nav-right .av-btn {width: 32px; height: 32px; font-size: 13px;}
+  .nav-right button.btn-o {padding: 6px 10px; font-size: 13px;}
+
   h1{font-size:clamp(38px,13vw,64px);}
   .kurd-sub{font-size:13px;}
   .hs-tab{padding:8px 10px;font-size:11px;}
@@ -550,6 +548,10 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   .svc-t{font-size:22px;}
   .stat-num{font-size:36px;}
   .rdr-b1,.rdr-b2{font-size:11px;padding:13px 18px;}
+
+  .fab-w{bottom:16px;right:10px;}
+  body.rtl .fab-w{left:10px;right:auto;}
+  .ftop{width:40px;height:40px;}
 }
 @media(max-width:360px){
   .hs-tabs{gap:2px;}
@@ -585,27 +587,74 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
     <li><a href="{{ route('about-us') }}" class="{{ request()->routeIs('about-us') ? 'ac' : '' }}" id="nav-about">دەربارەی ئێمە</a></li>
     <li><a href="{{ route('contact-us') }}" class="{{ request()->routeIs('contact-us') ? 'ac' : '' }}" id="nav-contact">پەیوەندی</a></li>
   </ul>
+
   <div class="nav-right">
     <div class="lang-sw">
       <button class="lang-btn active" data-lang="ku">کو</button>
       <button class="lang-btn" data-lang="en">EN</button>
       <button class="lang-btn" data-lang="ar">ع</button>
     </div>
+
     @php
-      $user=\Illuminate\Support\Facades\Auth::user();
-      $agent=\Illuminate\Support\Facades\Auth::guard('agent')->user();
-      $unreadCount=0;
-      if($user){$unreadCount=\DB::table('notifications')->where('user_id',$user->id)->where('is_read',false)->where(function($q){$q->whereNull('expires_at')->orWhere('expires_at','>',now());})->count();}
+      $user = \Illuminate\Support\Facades\Auth::guard('web')->user();
+      $agent = \Illuminate\Support\Facades\Auth::guard('agent')->user();
+      $office = \Illuminate\Support\Facades\Auth::guard('office')->user();
+
+      $anyAuth = $user || $agent || $office;
+      $unreadCount = 0;
+      $dashRoute = '#';
+      $logoutRoute = '#';
+      $displayName = '';
+
+      if($user) {
+          $dashRoute = route('user.profile');
+          $logoutRoute = route('logout');
+          $displayName = $user->username ?? $user->name ?? 'User';
+          $unreadCount = \DB::table('notifications')
+              ->where('user_id', $user->id)
+              ->where('is_read', false)
+              ->where(function($q){
+                  $q->whereNull('expires_at')->orWhere('expires_at','>',now());
+              })->count();
+      } elseif($agent) {
+          $dashRoute = route('agent.dashboard');
+          $logoutRoute = route('agent.logout');
+          $displayName = $agent->agent_name ?? $agent->name ?? 'Agent';
+      } elseif($office) {
+          $dashRoute = route('office.dashboard');
+          $logoutRoute = route('office.logout');
+          $displayName = $office->company_name ?? $office->name ?? 'Office';
+      }
     @endphp
-    @if($user||$agent)
-      <a href="{{ route('user.notifications') }}" class="bell-wrap"><i class="far fa-bell"></i>@if($unreadCount>0)<span class="bell-badge">{{ $unreadCount>99?'99+':$unreadCount }}</span>@endif</a>
-      @php $displayName=$user?($user->username??$user->name??'User'):$agent->agent_name;$redirectRoute=$user?route('user.profile'):route('agent.profile.page'); @endphp
-      <a href="{{ $redirectRoute }}" class="av-btn">{{ strtoupper(substr($displayName,0,1)) }}</a>
+
+    @if($anyAuth)
+      @if($user)
+        <a href="{{ route('user.notifications') }}" class="bell-wrap">
+          <i class="far fa-bell"></i>
+          @if($unreadCount > 0)
+            <span class="bell-badge">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
+          @endif
+        </a>
+      @endif
+
+      <a href="{{ $dashRoute }}" class="av-btn" title="Dashboard">
+        {{ strtoupper(substr($displayName, 0, 1)) }}
+      </a>
+
+      <form action="{{ $logoutRoute }}" method="POST" style="display: inline;">
+        @csrf
+        <button type="submit" class="btn-o" style="padding: 8px 15px; cursor: pointer; border: none; background: none; color: var(--G);" title="Logout">
+          <i class="fas fa-sign-out-alt"></i>
+        </button>
+      </form>
     @else
-      <a href="{{ route('property.list') }}" class="btn-o">Browse</a>
-      <a href="{{ route('login-page') }}" class="btn-s">Client Login</a>
+      <a href="{{ route('property.list') }}" class="btn-o" id="nav-browse-btn">Browse</a>
+      <a href="{{ route('login-page') }}" class="btn-s" id="nav-login-btn" style="display:flex; align-items:center; gap:6px;">
+        <i class="fas fa-user"></i> <span data-i18n="loginBtn">Client Login</span>
+      </a>
     @endif
   </div>
+
   <button class="hbtn" id="ham"><i class="fas fa-bars"></i></button>
 </nav>
 </header>
@@ -628,15 +677,22 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
     <a href="{{ route('about-us') }}" id="drw-about">دەربارەمان</a>
     <a href="{{ route('contact-us') }}" id="drw-contact">پەیوەندی</a>
   </nav>
+
   <div class="drw-ft">
-    <a href="{{ route('login-page') }}" class="btn-s" style="text-align:center;" id="drw-login">چوونەژوورەوە</a>
-    <a href="{{ route('property.list') }}" class="btn-o" style="text-align:center;" id="drw-browse">خانووەکان ببینە</a>
+    @if(isset($anyAuth) && $anyAuth)
+        <a href="{{ $dashRoute }}" class="btn-s" style="text-align:center;">Dashboard</a>
+        <form action="{{ $logoutRoute }}" method="POST" style="width: 100%;">
+            @csrf
+            <button type="submit" class="btn-o" style="width:100%; margin-top:10px; text-align:center;">Logout</button>
+        </form>
+    @else
+        <a href="{{ route('login-page') }}" class="btn-s" style="text-align:center;" id="drw-login">چوونەژوورەوە</a>
+        <a href="{{ route('property.list') }}" class="btn-o" style="text-align:center;" id="drw-browse">خانووەکان ببینە</a>
+    @endif
   </div>
 </aside>
 
-<!-- HERO -->
 <section class="hero">
-  <!-- Aurora blobs — pointer-events:none so touch passes through -->
   <div style="position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;">
     <div style="position:absolute;width:700px;height:700px;border-radius:50%;background:radial-gradient(circle,rgba(48,59,151,.22) 0%,transparent 70%);top:5%;left:-15%;animation:aur1 14s ease-in-out infinite;"></div>
     <div style="position:absolute;width:550px;height:550px;border-radius:50%;background:radial-gradient(circle,rgba(212,175,55,.06) 0%,transparent 70%);top:15%;right:-10%;animation:aur2 18s ease-in-out infinite;"></div>
@@ -649,7 +705,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   @keyframes aur3{0%,100%{transform:translate(0,0) scale(1);}50%{transform:translate(40px,-50px) scale(1.2);}}
   </style>
 
-  <!-- FIX: canvas gets pointer-events:none and touch-action:none via both CSS and inline -->
   <canvas id="bc" style="pointer-events:none!important;touch-action:none;"></canvas>
   <div class="vig"></div>
 
@@ -689,7 +744,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   <div class="scrl" id="scrl"><div class="mouse"></div><span id="t-scroll">دابەزە</span></div>
 </section>
 
-<!-- STATS -->
 <div class="stats-bar">
   <div class="stats-inner">
     <div class="stat-item rv">
@@ -704,7 +758,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   </div>
 </div>
 
-<!-- SERVICES -->
 <section class="svc-sec">
   <div class="sec-wrap">
     <div class="sec-hd">
@@ -746,7 +799,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   </div>
 </section>
 
-<!-- APP -->
 <section class="app-sec" id="app">
   <div class="app-g">
     <div class="rv">
@@ -795,7 +847,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   </div>
 </section>
 
-<!-- ABOUT -->
 <section class="abt-sec" id="about">
   <div class="abt-g">
     <div class="rv">
@@ -817,7 +868,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   </div>
 </section>
 
-<!-- CTA -->
 <section class="rdr-sec" id="contact">
   <div class="rdr-in">
     <div class="rv">
@@ -835,7 +885,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   </div>
 </section>
 
-<!-- FOOTER -->
 <footer class="rv">
   <div class="ft-in">
     <div class="ft-top">
@@ -883,14 +932,10 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   </div>
 </footer>
 
-<!-- FABs -->
 <div class="fab-w">
-  <a href="{{ route('agent.login') }}" class="fpill fa-a" id="fab-agent" title="Agent Portal"><div class="fic"><i class="fas fa-user-shield"></i></div><span class="fab-label" data-i18n="fabAgent">پۆرتاڵی ئەجێنت</span></a>
-  <a href="{{ route('office.login') }}" class="fpill fa-o" id="fab-office" title="Office Login"><div class="fic"><i class="fas fa-building"></i></div><span class="fab-label" data-i18n="fabOffice">چوونەژوورەوەی خانووبەرە</span></a>
   <div class="ftop" id="btt"><i class="fas fa-arrow-up"></i></div>
 </div>
 
-<!-- THREE.JS -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
 <script>
 (function(){
@@ -1011,7 +1056,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
 
   let mx=0,my=0,smx=0,smy=0;
 
-  /* FIX: mouse/touch listeners use passive:true and target window not document */
   window.addEventListener('mousemove',e=>{mx=(e.clientX/innerWidth-.5);my=(e.clientY/innerHeight-.5);},{passive:true});
   window.addEventListener('touchmove',e=>{
     if(e.touches.length>0){mx=(e.touches[0].clientX/innerWidth-.5);my=(e.touches[0].clientY/innerHeight-.5);}
@@ -1025,7 +1069,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
     targetSF=Math.min((window.pageYOffset||document.documentElement.scrollTop)/heroH,1);
   },{passive:true});
 
-  /* FIX: pause rendering when hero is not visible — saves CPU/GPU for scroll */
   let _heroVis=true;
   new IntersectionObserver(e=>{_heroVis=e[0].isIntersecting;},{threshold:0.01}).observe(CV.parentElement);
 
@@ -1036,7 +1079,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
   (function loop(){
     requestAnimationFrame(loop);
 
-    /* FIX: skip all work when hero is off screen */
     if(!_heroVis){return;}
 
     const el=clk.getElapsedTime();
@@ -1079,7 +1121,6 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
 })();
 </script>
 
-<!-- I18N -->
 <script>
 class DreamMulkI18n{
   constructor(o={}){
@@ -1109,7 +1150,7 @@ class DreamMulkI18n{
       if(el.children.length===0){el.textContent=T[key];}
       else{for(let n of el.childNodes){if(n.nodeType===Node.TEXT_NODE&&n.textContent.trim()){n.textContent=T[key];break;}}}
     });
-    const ids={'t-eyebrow':'eyebrow','t-sub1':'sub1','t-sub2':'sub2','tab-buy':'tabBuy','tab-rent':'tabRent','tab-sell':'tabSell','hs-btn':'searchBtn','t-popular':'popular','q-erbil':'erbil','q-suli':'suli','q-duhok':'duhok','t-explore':'explore','t-app':'appBtn','t-scroll':'scroll','nav-home':'navHome','nav-props':'navProps','nav-app':'navApp','nav-about':'navAbout','nav-contact':'navContact','drw-home':'navHome','drw-props':'navProps','drw-app':'navApp','drw-about':'navAbout','drw-contact':'navContact','drw-login':'loginBtn','drw-browse':'browseBtn'};
+    const ids={'t-eyebrow':'eyebrow','t-sub1':'sub1','t-sub2':'sub2','tab-buy':'tabBuy','tab-rent':'tabRent','tab-sell':'tabSell','hs-btn':'searchBtn','t-popular':'popular','q-erbil':'erbil','q-suli':'suli','q-duhok':'duhok','t-explore':'explore','t-app':'appBtn','t-scroll':'scroll','nav-home':'navHome','nav-props':'navProps','nav-app':'navApp','nav-about':'navAbout','nav-contact':'navContact','drw-home':'navHome','drw-props':'navProps','drw-app':'navApp','drw-about':'navAbout','drw-contact':'navContact','drw-login':'loginBtn','drw-browse':'browseBtn', 'nav-login-btn':'loginBtn', 'nav-browse-btn':'browseBtn'};
     Object.entries(ids).forEach(([id,key])=>{const el=document.getElementById(id);if(el&&T[key])el.textContent=T[key];});
     const rdrWithEl=document.querySelector('[data-i18n="rdrWith"]');
     if(rdrWithEl&&T.rdrWith)rdrWithEl.textContent=T.rdrWith;
@@ -1127,7 +1168,6 @@ class DreamMulkI18n{
 }
 </script>
 
-<!-- PAGE INTERACTIONS -->
 <script>
 // Scroll & nav
 const hdr=document.getElementById('hdr'),btt=document.getElementById('btt');

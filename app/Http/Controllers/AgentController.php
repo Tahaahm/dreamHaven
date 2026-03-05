@@ -1003,159 +1003,158 @@ class AgentController extends Controller
 
     // In AgentController.php
 
-   public function getAgentProfile(Request $request)
-{
-    try {
+    public function getAgentProfile(Request $request)
+    {
+        try {
 
-        \Log::info('STEP 1: Method started');
+            \Log::info('STEP 1: Method started');
 
-        $agent = $request->user();
-        \Log::info('STEP 2: User retrieved', ['agent_id' => $agent?->id]);
+            $agent = $request->user();
+            \Log::info('STEP 2: User retrieved', ['agent_id' => $agent?->id]);
 
-        if (!$agent || !($agent instanceof \App\Models\Agent)) {
-            \Log::warning('STEP 3: Unauthorized access');
-            return response()->json([
-                'status' => false,
-                'code' => 401,
-                'message' => 'Unauthorized. Please login as an agent.',
-                'data' => null
-            ], 401);
-        }
+            if (!$agent || !($agent instanceof \App\Models\Agent)) {
+                \Log::warning('STEP 3: Unauthorized access');
+                return response()->json([
+                    'status' => false,
+                    'code' => 401,
+                    'message' => 'Unauthorized. Please login as an agent.',
+                    'data' => null
+                ], 401);
+            }
 
-        \Log::info('STEP 4: Loading relationships');
+            \Log::info('STEP 4: Loading relationships');
 
-        $agent->load([
-            'company:id,name',
-            'currentSubscription.currentPlan:id,name',
-            'branch:id,name',
-            'area:id,name',
-        ]);
+            $agent->load([
+                'company:id,name',
+                'currentSubscription.currentPlan:id,name',
+                'branch:id,name',
+                'area:id,name',
+            ]);
 
-        \Log::info('STEP 5: Relationships loaded successfully');
+            \Log::info('STEP 5: Relationships loaded successfully');
 
-        // TEST working_hours specifically
-        \Log::info('STEP 6: Working hours raw value', [
-            'working_hours' => $agent->working_hours
-        ]);
+            // TEST working_hours specifically
+            \Log::info('STEP 6: Working hours raw value', [
+                'working_hours' => $agent->working_hours
+            ]);
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | SERIALIZE AGENT
         |--------------------------------------------------------------------------
         */
 
-        \Log::info('STEP 7: Building agent data array');
+            \Log::info('STEP 7: Building agent data array');
 
-        $agentData = [
-            'id' => $agent->id,
-            'agent_name' => $agent->agent_name,
-            'agent_bio' => $agent->agent_bio,
-            'bio_image' => $agent->bio_image,
-            'profile_image' => $agent->profile_image,
-            'type' => $agent->type,
-            'subscriber_id' => $agent->subscriber_id,
-            'is_verified' => $agent->is_verified,
-            'status' => $agent->status ?? 'active',
-            'overall_rating' => $agent->overall_rating,
-            'current_plan' => optional($agent->currentSubscription?->currentPlan)->name,
-            'properties_uploaded_this_month' => $agent->properties_uploaded_this_month,
-            'remaining_property_uploads' => $agent->remaining_property_uploads,
-            'primary_email' => $agent->primary_email,
-            'primary_phone' => $agent->primary_phone,
-            'whatsapp_number' => $agent->whatsapp_number,
-            'office_address' => $agent->office_address,
-            'latitude' => $agent->latitude,
-            'longitude' => $agent->longitude,
-            'city' => $agent->city,
-            'district' => $agent->district,
-            'city_id' => $agent->city_id,
-            'area_id' => $agent->area_id,
-            'branch' => $agent->branch ? [
-                'id' => $agent->branch->id,
-                'name' => $agent->branch->name,
-            ] : null,
-            'area' => $agent->area ? [
-                'id' => $agent->area->id,
-                'name' => $agent->area->name,
-            ] : null,
-            'properties_sold' => $agent->properties_sold,
-            'years_experience' => $agent->years_experience,
-            'license_number' => $agent->license_number,
-            'company' => $agent->company ? [
-                'id' => $agent->company->id,
-                'name' => $agent->company->name,
-            ] : null,
-            'employment_status' => $agent->employment_status,
-            'agent_overview' => $agent->agent_overview,
-            'working_hours' => $agent->working_hours,
-            'commission_rate' => $agent->commission_rate,
-            'consultation_fee' => $agent->consultation_fee,
-            'currency' => $agent->currency,
-        ];
+            $agentData = [
+                'id' => $agent->id,
+                'agent_name' => $agent->agent_name,
+                'agent_bio' => $agent->agent_bio,
+                'bio_image' => $agent->bio_image,
+                'profile_image' => $agent->profile_image,
+                'type' => $agent->type,
+                'subscriber_id' => $agent->subscriber_id,
+                'is_verified' => $agent->is_verified,
+                'status' => $agent->status ?? 'active',
+                'overall_rating' => $agent->overall_rating,
+                'current_plan' => optional($agent->currentSubscription?->currentPlan)->name,
+                'properties_uploaded_this_month' => $agent->properties_uploaded_this_month,
+                'remaining_property_uploads' => $agent->remaining_property_uploads,
+                'primary_email' => $agent->primary_email,
+                'primary_phone' => $agent->primary_phone,
+                'whatsapp_number' => $agent->whatsapp_number,
+                'office_address' => $agent->office_address,
+                'latitude' => $agent->latitude,
+                'longitude' => $agent->longitude,
+                'city' => $agent->city,
+                'district' => $agent->district,
+                'city_id' => $agent->city_id,
+                'area_id' => $agent->area_id,
+                'branch' => $agent->branch ? [
+                    'id' => $agent->branch->id,
+                    'name' => $agent->branch->name,
+                ] : null,
+                'area' => $agent->area ? [
+                    'id' => $agent->area->id,
+                    'name' => $agent->area->name,
+                ] : null,
+                'properties_sold' => $agent->properties_sold,
+                'years_experience' => $agent->years_experience,
+                'license_number' => $agent->license_number,
+                'company' => $agent->company ? [
+                    'id' => $agent->company->id,
+                    'name' => $agent->company->name,
+                ] : null,
+                'employment_status' => $agent->employment_status,
+                'agent_overview' => $agent->agent_overview,
+                'working_hours' => $agent->working_hours,
+                'commission_rate' => $agent->commission_rate,
+                'consultation_fee' => $agent->consultation_fee,
+                'currency' => $agent->currency,
+            ];
 
-        \Log::info('STEP 8: Agent data array built successfully');
+            \Log::info('STEP 8: Agent data array built successfully');
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | SUBSCRIPTION
         |--------------------------------------------------------------------------
         */
 
-        $subscriptionData = null;
+            $subscriptionData = null;
 
-        if ($agent->currentSubscription) {
+            if ($agent->currentSubscription) {
 
-            \Log::info('STEP 9: Building subscription');
+                \Log::info('STEP 9: Building subscription');
 
-            $subscription = $agent->currentSubscription;
+                $subscription = $agent->currentSubscription;
 
-            $subscriptionData = [
-                'id' => $subscription->id,
-                'plan_name' => optional($subscription->currentPlan)->name ?? 'Unknown Plan',
-                'status' => $subscription->status,
-                'start_date' => $subscription->start_date,
-                'end_date' => $subscription->end_date,
-                'property_activation_limit' => $subscription->property_activation_limit,
-                'banner_activation_limit' => $subscription->banner_activation_limit,
-                'remaining_activations' => $subscription->remaining_activations,
-                'properties_activated_this_month' => $subscription->properties_activated_this_month,
-                'is_active' => $subscription->status === 'active'
-                    && $subscription->end_date > now(),
-                'days_remaining' => $subscription->end_date
-                    ? (int) now()->diffInDays($subscription->end_date, false)
-                    : null,
-            ];
+                $subscriptionData = [
+                    'id' => $subscription->id,
+                    'plan_name' => optional($subscription->currentPlan)->name ?? 'Unknown Plan',
+                    'status' => $subscription->status,
+                    'start_date' => $subscription->start_date,
+                    'end_date' => $subscription->end_date,
+                    'property_activation_limit' => $subscription->property_activation_limit,
+                    'banner_activation_limit' => $subscription->banner_activation_limit,
+                    'remaining_activations' => $subscription->remaining_activations,
+                    'properties_activated_this_month' => $subscription->properties_activated_this_month,
+                    'is_active' => $subscription->status === 'active'
+                        && $subscription->end_date > now(),
+                    'days_remaining' => $subscription->end_date
+                        ? (int) now()->diffInDays($subscription->end_date, false)
+                        : null,
+                ];
 
-            \Log::info('STEP 10: Subscription built successfully');
+                \Log::info('STEP 10: Subscription built successfully');
+            }
+
+            \Log::info('STEP 11: Returning JSON response');
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Agent profile retrieved successfully',
+                'data' => [
+                    'agent' => $agentData,
+                    'subscription' => $subscriptionData,
+                ]
+            ], 200);
+        } catch (\Throwable $e) {
+
+            \Log::error('❌ CRASH DETECTED', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'code' => 500,
+                'message' => 'Failed to retrieve agent profile',
+                'data' => null
+            ], 500);
         }
-
-        \Log::info('STEP 11: Returning JSON response');
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Agent profile retrieved successfully',
-            'data' => [
-                'agent' => $agentData,
-                'subscription' => $subscriptionData,
-            ]
-        ], 200);
-
-    } catch (\Throwable $e) {
-
-        \Log::error('❌ CRASH DETECTED', [
-            'message' => $e->getMessage(),
-            'file' => $e->getFile(),
-            'line' => $e->getLine(),
-        ]);
-
-        return response()->json([
-            'status' => false,
-            'code' => 500,
-            'message' => 'Failed to retrieve agent profile',
-            'data' => null
-        ], 500);
     }
-}
 
     public function updateAgentProfileNew(Request $request)
     {
@@ -1186,7 +1185,7 @@ class AgentController extends Controller
             return redirect()->route('login-page')->with('error', 'Please log in');
         }
 
-        return view('agent.agent-profile-page', compact('agent'));
+        return view('agent.agent-profile', compact('agent'));
     }
     public function updateAgentPassword(Request $request)
     {
