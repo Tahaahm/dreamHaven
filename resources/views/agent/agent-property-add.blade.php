@@ -1046,7 +1046,7 @@ async function loadAreas(cityId) {
 }
 
 // ═══════════════════════════════════════════
-// VIDEO UPLOAD & AI FRAME EXTRACTION
+// VIDEO UPLOAD & AI FRAME EXTRACTION (BASE64)
 // ═══════════════════════════════════════════
 async function handleVideoUpload(event) {
     const file = event.target.files[0];
@@ -1066,7 +1066,7 @@ async function handleVideoUpload(event) {
     statusDiv.classList.add('show');
     vsBar.style.width = '10%';
     vsTitle.textContent = 'Uploading video to AI service...';
-    vsSub.textContent   = 'Preparing for frame extraction';
+    vsSub.textContent   = 'This may take a few minutes on mobile data';
 
     const formData = new FormData();
     formData.append('video', file);
@@ -1075,10 +1075,10 @@ async function handleVideoUpload(event) {
     try {
         vsBar.style.width   = '30%';
         vsTitle.textContent = 'Processing video with AI...';
-        vsSub.textContent   = 'Analyzing frames and selecting best quality images (30–60 seconds)';
+        vsSub.textContent   = 'Analyzing frames and selecting best quality images';
 
         const controller = new AbortController();
-        const timeoutId  = setTimeout(() => controller.abort(), 180000);
+        const timeoutId  = setTimeout(() => controller.abort(), 600000);
 
         const response = await fetch('/api/video/extract-frames', {
             method: 'POST', body: formData, signal: controller.signal,
@@ -1092,19 +1092,37 @@ async function handleVideoUpload(event) {
         const result = await response.json();
         if (!result.success || !result.data?.frames) throw new Error(result.message || 'Frame extraction failed');
 
-        vsBar.style.width   = '80%';
-        vsTitle.textContent = 'Downloading extracted frames...';
+        vsTitle.textContent = 'Processing extracted frames...';
         vsSub.textContent   = `Got ${result.data.frames.length} high-quality frames`;
 
+        // FIX: Read images directly from Base64 to bypass proxy routing issues
         const frameFiles = [];
+
         for (let i = 0; i < result.data.frames.length; i++) {
-            const proxyUrl = result.data.frames[i].replace('http://127.0.0.1:8001/', '/api/video/');
-            const blob     = await (await fetch(proxyUrl)).blob();
-            frameFiles.push(new File([blob], `ai_frame_${i+1}.jpg`, { type: 'image/jpeg' }));
+            const frameObj = result.data.frames[i];
+
+            // Update UI progress
+            vsTitle.textContent = `Processing frame ${i + 1} of ${result.data.frames.length}...`;
+            vsBar.style.width = `${60 + ((i + 1) / result.data.frames.length) * 30}%`;
+
+            try {
+                // Instantly convert the Base64 string into a Blob, then a File object
+                const res = await fetch(frameObj.base64);
+                const blob = await res.blob();
+
+                frameFiles.push(new File([blob], frameObj.filename, { type: 'image/jpeg' }));
+            } catch (err) {
+                console.error(`Error converting frame ${i+1}.`, err);
+            }
         }
 
-        vsBar.style.width = '90%';
-        selectedFiles     = frameFiles;
+        if (frameFiles.length === 0) {
+            throw new Error('Failed to process image data from the server.');
+        }
+
+        vsBar.style.width = '95%';
+        // Append the new AI files to any existing manual files selected
+        selectedFiles = [...selectedFiles, ...frameFiles];
         renderThumbs();
         syncFiles();
 
@@ -1116,11 +1134,18 @@ async function handleVideoUpload(event) {
 
     } catch (error) {
         console.error('Video processing error:', error);
-        vsTitle.textContent = '❌ Error processing video';
-        vsSub.textContent   = error.message || 'Failed to extract frames';
+
+        if (error.name === 'AbortError') {
+            vsTitle.textContent = '❌ Upload Timed Out';
+            vsSub.textContent   = 'Your mobile connection is too slow for this video size.';
+        } else {
+            vsTitle.textContent = '❌ Error processing video';
+            vsSub.textContent   = error.message || 'Failed to extract frames';
+        }
+
         vsBar.style.width   = '0%';
-        setTimeout(() => { statusDiv.classList.remove('show'); dropArea.classList.remove('processing'); }, 3000);
-        alert('Error processing video: ' + error.message);
+        setTimeout(() => { statusDiv.classList.remove('show'); dropArea.classList.remove('processing'); }, 4000);
+        alert('Error processing video: ' + (error.name === 'AbortError' ? 'Connection timed out' : error.message));
     }
 }
 

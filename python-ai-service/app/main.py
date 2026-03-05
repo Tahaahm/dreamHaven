@@ -7,6 +7,7 @@ FIXES:
   3. Memory freed immediately after disk write
   4. Proper error messages returned to client (no silent infinite loading)
   5. Disk flush buffer added to prevent UI "Failed to fetch" race conditions
+  6. BASE64 BYPASS: Images are sent as Base64 strings to avoid 404 proxy errors
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
@@ -21,6 +22,7 @@ import time
 import os
 import psutil
 import asyncio
+import base64
 
 from app.config import (
     UPLOAD_DIR,
@@ -52,7 +54,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files for serving extracted frames
+# Mount static files for serving extracted frames (kept for legacy/debugging)
 app.mount("/outputs", StaticFiles(directory=str(OUTPUT_DIR)), name="outputs")
 
 # Global extractor instance
@@ -198,20 +200,31 @@ async def extract_frames(
                 detail=result.get("error", "Frame extraction failed")
             )
 
-        # ── Build response with URLs ─────────────────────────────────────────
-        frame_urls = [
-            f"/outputs/{Path(fp).name}"
-            for fp in result["frames"]
-        ]
+        # ── Build response with Base64 Images ────────────────────────────────
+        frame_data_list = []
+        for fp in result["frames"]:
+            file_path = Path(fp)
 
-        # ✅ BUFFER ADDED HERE: Let the OS finalize disk writes before returning
-        await asyncio.sleep(0.5)
+            # Wait for file to exist on disk
+            for _ in range(10):
+                if file_path.exists() and file_path.stat().st_size > 0:
+                    break
+                await asyncio.sleep(0.1)
+
+            # Read the image and encode it to Base64
+            if file_path.exists():
+                with open(file_path, "rb") as image_file:
+                    encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                    frame_data_list.append({
+                        "filename": file_path.name,
+                        "base64": f"data:image/jpeg;base64,{encoded_string}"
+                    })
 
         return JSONResponse(content={
             "success": True,
-            "message": f"Successfully extracted {len(frame_urls)} frames",
+            "message": f"Successfully extracted {len(frame_data_list)} frames",
             "data": {
-                "frames": frame_urls,
+                "frames": frame_data_list,
                 "scores": result["scores"],
                 "metadata": result["metadata"]
             }
