@@ -6,6 +6,7 @@ FIXES:
   2. CLIP model removed — replaced with fast OpenCV scoring
   3. Memory freed immediately after disk write
   4. Proper error messages returned to client (no silent infinite loading)
+  5. Disk flush buffer added to prevent UI "Failed to fetch" race conditions
 """
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
@@ -19,6 +20,7 @@ import hashlib
 import time
 import os
 import psutil
+import asyncio
 
 from app.config import (
     UPLOAD_DIR,
@@ -134,13 +136,6 @@ async def extract_frames(
     video: UploadFile = File(..., description="Video file to process"),
     num_frames: Optional[int] = Form(DEFAULT_NUM_FRAMES, description="Number of frames to extract (5-20)")
 ):
-    """
-    Extract the best N frames from an uploaded video.
-
-    KEY FIX: We read the upload bytes ONCE, check size, then write
-    directly to disk — no seek(0) + re-read which caused silent 0-byte
-    files and infinite loading.
-    """
     video_path = None
 
     try:
@@ -159,13 +154,6 @@ async def extract_frames(
             )
 
         # ── Read bytes ONCE ──────────────────────────────────────────────────
-        # This is the critical fix: read all bytes into memory once,
-        # check the size, then write to disk from the same bytes.
-        # The old code did video.read() → check size → video.seek(0) →
-        # save_upload_file() which called video.read() again. On many
-        # FastAPI/Starlette versions seek(0) doesn't work on SpooledTemporary
-        # files and returns empty bytes, producing a 0-byte file that
-        # OpenCV silently fails to open → infinite loading.
         content = await video.read()
         file_size_mb = len(content) / (1024 * 1024)
 
@@ -187,7 +175,7 @@ async def extract_frames(
         async with aiofiles.open(video_path, "wb") as f:
             await f.write(content)
 
-        # Free RAM immediately — we don't need the bytes anymore
+        # Free RAM immediately
         del content
 
         print(f"\n📥 Received: {video.filename} ({file_size_mb:.1f} MB)")
@@ -215,6 +203,9 @@ async def extract_frames(
             f"/outputs/{Path(fp).name}"
             for fp in result["frames"]
         ]
+
+        # ✅ BUFFER ADDED HERE: Let the OS finalize disk writes before returning
+        await asyncio.sleep(0.5)
 
         return JSONResponse(content={
             "success": True,
