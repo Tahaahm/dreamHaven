@@ -1048,9 +1048,6 @@ async function loadAreas(cityId) {
 // ═══════════════════════════════════════════
 // VIDEO UPLOAD & AI FRAME EXTRACTION
 // ═══════════════════════════════════════════
-// ═══════════════════════════════════════════
-// VIDEO UPLOAD & AI FRAME EXTRACTION (MOBILE OPTIMIZED)
-// ═══════════════════════════════════════════
 async function handleVideoUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -1069,7 +1066,7 @@ async function handleVideoUpload(event) {
     statusDiv.classList.add('show');
     vsBar.style.width = '10%';
     vsTitle.textContent = 'Uploading video to AI service...';
-    vsSub.textContent   = 'This may take a few minutes on mobile data';
+    vsSub.textContent   = 'Preparing for frame extraction';
 
     const formData = new FormData();
     formData.append('video', file);
@@ -1078,11 +1075,10 @@ async function handleVideoUpload(event) {
     try {
         vsBar.style.width   = '30%';
         vsTitle.textContent = 'Processing video with AI...';
-        vsSub.textContent   = 'Analyzing frames and selecting best quality images';
+        vsSub.textContent   = 'Analyzing frames and selecting best quality images (30–60 seconds)';
 
         const controller = new AbortController();
-        // FIX 1: Increased timeout to 10 minutes (600,000 ms) for mobile networks
-        const timeoutId  = setTimeout(() => controller.abort(), 600000);
+        const timeoutId  = setTimeout(() => controller.abort(), 180000);
 
         const response = await fetch('/api/video/extract-frames', {
             method: 'POST', body: formData, signal: controller.signal,
@@ -1100,21 +1096,15 @@ async function handleVideoUpload(event) {
         vsTitle.textContent = 'Downloading extracted frames...';
         vsSub.textContent   = `Got ${result.data.frames.length} high-quality frames`;
 
-        // FIX 2: Download all 10 images in parallel instead of one by one
-        const framePromises = result.data.frames.map(async (frameUrl, i) => {
-            const proxyUrl = frameUrl.replace('http://127.0.0.1:8001/', '/api/video/');
-            const fetchResponse = await fetch(proxyUrl);
-            if (!fetchResponse.ok) throw new Error(`Failed to fetch image ${i+1}`);
-            const blob = await fetchResponse.blob();
-            return new File([blob], `ai_frame_${i+1}.jpg`, { type: 'image/jpeg' });
-        });
-
-        // Wait for all downloads to finish simultaneously
-        const frameFiles = await Promise.all(framePromises);
+        const frameFiles = [];
+        for (let i = 0; i < result.data.frames.length; i++) {
+            const proxyUrl = result.data.frames[i].replace('http://127.0.0.1:8001/', '/api/video/');
+            const blob     = await (await fetch(proxyUrl)).blob();
+            frameFiles.push(new File([blob], `ai_frame_${i+1}.jpg`, { type: 'image/jpeg' }));
+        }
 
         vsBar.style.width = '90%';
-        // Append the new AI files to any existing manual files selected
-        selectedFiles = [...selectedFiles, ...frameFiles];
+        selectedFiles     = frameFiles;
         renderThumbs();
         syncFiles();
 
@@ -1126,19 +1116,11 @@ async function handleVideoUpload(event) {
 
     } catch (error) {
         console.error('Video processing error:', error);
-
-        // Handle the AbortController timeout specifically to inform the user
-        if (error.name === 'AbortError') {
-            vsTitle.textContent = '❌ Upload Timed Out';
-            vsSub.textContent   = 'Your mobile connection is too slow for this video size.';
-        } else {
-            vsTitle.textContent = '❌ Error processing video';
-            vsSub.textContent   = error.message || 'Failed to extract frames';
-        }
-
+        vsTitle.textContent = '❌ Error processing video';
+        vsSub.textContent   = error.message || 'Failed to extract frames';
         vsBar.style.width   = '0%';
-        setTimeout(() => { statusDiv.classList.remove('show'); dropArea.classList.remove('processing'); }, 4000);
-        alert('Error processing video: ' + (error.name === 'AbortError' ? 'Connection timed out' : error.message));
+        setTimeout(() => { statusDiv.classList.remove('show'); dropArea.classList.remove('processing'); }, 3000);
+        alert('Error processing video: ' + error.message);
     }
 }
 
