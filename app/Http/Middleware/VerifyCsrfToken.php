@@ -14,6 +14,7 @@ class VerifyCsrfToken extends Middleware
     protected $except = [
         "/register",
         "/login",
-        "/post-property"
+        "/post-property",
+        'api/v1/auth/office/login',  // ← add this
     ];
 }
