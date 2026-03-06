@@ -185,6 +185,9 @@ class RealEstateOfficeController extends Controller
     /**
      * Login method - Note: This requires password field in migration
      */
+    /**
+     * Login method for Real Estate Office
+     */
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -200,7 +203,9 @@ class RealEstateOfficeController extends Controller
             );
         }
 
-        $office = RealEstateOffice::where('email_address', $request->email_address)->first();
+        // Fetch the office AND load the subscription relationship
+        $office = RealEstateOffice::with('subscription')->where('email_address', $request->email_address)->first();
+
         if (!$office) {
             return ApiResponse::error(
                 ResponseDetails::notFoundMessage('Office not found'),
@@ -209,8 +214,7 @@ class RealEstateOfficeController extends Controller
             );
         }
 
-        // Note: This requires password field in migration and HasApiTokens trait in model
-        /*
+        // Check password
         if (!Hash::check($request->password, $office->password)) {
             return ApiResponse::error(
                 ResponseDetails::unauthorizedMessage('Invalid credentials'),
@@ -219,19 +223,16 @@ class RealEstateOfficeController extends Controller
             );
         }
 
+        // Generate Sanctum Token
         $token = $office->createToken('authToken')->plainTextToken;
 
         return ApiResponse::success(
             ResponseDetails::successMessage('Login successful'),
-            ['token' => $token, 'office' => $office],
+            [
+                'token' => $token,
+                'office' => $office // This now contains ALL fields + subscription
+            ],
             ResponseDetails::CODE_SUCCESS
-        );
-        */
-
-        return ApiResponse::error(
-            ResponseDetails::errorMessage('Login functionality requires password field in migration and HasApiTokens trait'),
-            null,
-            ResponseDetails::CODE_SERVER_ERROR
         );
     }
 
