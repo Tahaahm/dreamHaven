@@ -142,22 +142,18 @@ class AuthController extends Controller
     //
     public function loginRealEstateOffice(Request $request)
     {
-        $credentials = $request->only('admin_email', 'password');
-
-        // Find the RealEstateOffice by email
-        $office = RealEstateOffice::where('admin_email', $request->admin_email)->first();
+        $office = RealEstateOffice::where('email_address', $request->email)->first();
 
         if ($office && Hash::check($request->password, $office->password)) {
-            // Generate token (using Sanctum)
             $token = $office->createToken('authToken')->plainTextToken;
 
             return response()->json([
                 'token' => $token,
                 'office' => $office
             ]);
-        } else {
-            return response()->json(['error' => 'Invalid credentials'], 401);
         }
+
+        return response()->json(['error' => 'Invalid credentials'], 401);
     }
 
 
