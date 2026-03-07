@@ -755,50 +755,6 @@ class OfficeAuthController extends Controller
 
 
 
-    public function getAppointments(Request $request)
-    {
-        try {
-            // Get the authenticated office from the Sanctum API token
-            $office = $request->user();
-
-            if (!$office) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthenticated'
-                ], 401);
-            }
-
-            // Fetch appointments with related user, agent, and property data
-            $appointments = Appointment::with(['user', 'agent', 'property'])
-                ->where('office_id', $office->id)
-                ->orderBy('appointment_date', 'desc')
-                ->orderBy('appointment_time', 'desc')
-                ->get();
-
-            // Calculate stats (optional, but good if you want to show them in the app later)
-            $stats = [
-                'total' => Appointment::where('office_id', $office->id)->count(),
-                'pending' => Appointment::where('office_id', $office->id)->where('status', 'pending')->count(),
-                'confirmed' => Appointment::where('office_id', $office->id)->where('status', 'confirmed')->count(),
-                'completed' => Appointment::where('office_id', $office->id)->where('status', 'completed')->count(),
-                'cancelled' => Appointment::where('office_id', $office->id)->where('status', 'cancelled')->count(),
-            ];
-
-            // Return clean JSON for Flutter
-            return response()->json([
-                'success' => true,
-                'data' => $appointments,
-                'stats' => $stats
-            ], 200);
-        } catch (\Exception $e) {
-            Log::error('API Get Appointments Error: ' . $e->getMessage());
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to load appointments: ' . $e->getMessage()
-            ], 500);
-        }
-    }
     private function notifyUserAboutAppointmentStatusChange($appointment, $oldStatus, $newStatus)
     {
         Log::info('Starting appointment notification process', [
