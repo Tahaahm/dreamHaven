@@ -14,6 +14,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AgentAuthController;
+use App\Http\Controllers\Api\OfficeDashboardApiController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\OfficeAuthController;
@@ -628,6 +629,7 @@ Route::middleware(['auth:web,agent'])->group(function () {
 
 Route::prefix('api/v1/office')->middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard', [OfficeDashboardApiController::class, 'index']);
+    Route::get('/appointments', [OfficeDashboardApiController::class, 'getAppointments']);
 });
 // ============================================
 // REAL ESTATE OFFICE - WEB AUTHENTICATION & MANAGEMENT
