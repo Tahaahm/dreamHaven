@@ -14,7 +14,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AgentAuthController;
-use App\Http\Controllers\Api\OfficeDashboardApiController;
+use App\Http\Controllers\OfficeDashboardApiController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\OfficeAuthController;

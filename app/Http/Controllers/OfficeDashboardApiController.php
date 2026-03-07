@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
@@ -13,20 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
-/**
- * Office Dashboard API Controller
- *
- * Endpoint: GET /api/v1/office/dashboard
- * Auth:     auth:sanctum  (office token)
- *
- * Add to web.php / api.php:
- *
- *   Route::prefix('api/v1/office')
- *        ->middleware('auth:sanctum')
- *        ->group(function () {
- *            Route::get('/dashboard', [\App\Http\Controllers\Api\OfficeDashboardApiController::class, 'index']);
- *        });
- */
+
 class OfficeDashboardApiController extends Controller
 {
     public function index(Request $request): JsonResponse
