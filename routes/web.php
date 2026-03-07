@@ -630,6 +630,7 @@ Route::middleware(['auth:web,agent'])->group(function () {
 Route::prefix('api/v1/office')->middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard', [OfficeDashboardApiController::class, 'index']);
     Route::get('/appointments', [OfficeDashboardApiController::class, 'getAppointments']);
+    Route::get('/properties', [OfficeDashboardApiController::class, 'getProperties']);
 });
 // ============================================
 // REAL ESTATE OFFICE - WEB AUTHENTICATION & MANAGEMENT

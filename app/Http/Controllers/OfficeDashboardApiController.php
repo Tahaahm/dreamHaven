@@ -314,4 +314,49 @@ class OfficeDashboardApiController extends Controller
             ], 500);
         }
     }
+    public function getProperties(Request $request)
+    {
+        try {
+            // Get the authenticated office
+            $office = $request->user();
+
+            if (!$office) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated'
+                ], 401);
+            }
+
+            // Base query to get only this office's properties
+            $query = \App\Models\Property::where('owner_type', 'App\Models\RealEstateOffice')
+                ->where('owner_id', $office->id)
+                ->orderBy('created_at', 'desc');
+
+            // Handle the ?status= query parameter from Flutter
+            if ($request->has('status')) {
+                $status = $request->input('status');
+
+                // Map Flutter's 'active' status to your database's 'available' status if needed
+                if ($status === 'active') {
+                    $query->where('status', 'available');
+                } else {
+                    $query->where('status', $status);
+                }
+            }
+
+            $properties = $query->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $properties
+            ], 200);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('API Get Office Properties Error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load properties: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
