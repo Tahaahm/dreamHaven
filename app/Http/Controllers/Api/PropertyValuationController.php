@@ -3,8 +3,15 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AreaMarketInsight;
+use App\Models\InvestmentScore;
+use App\Models\MarketTrend;
+use App\Models\PropertyValuation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-
+use Illuminate\Support\Facades\Cache;
+use App\Services\PipelineOrchestratorService;
+use App\Services\PipelineOrchestratorService as ServicesPipelineOrchestratorService;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PropertyValuationController
@@ -13,7 +20,7 @@ use Illuminate\Http\Request;
 class PropertyValuationController extends Controller
 {
     public function __construct(
-        private PipelineOrchestratorService $pipeline
+        private ServicesPipelineOrchestratorService $pipeline
     ) {}
 
     /**

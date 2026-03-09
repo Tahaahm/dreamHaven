@@ -2,11 +2,11 @@
 
 namespace App\Jobs;
 
+use App\Models\AiModelMetadata;
 use App\Models\PipelineJob as PipelineJobLog;
 use App\Models\PriceZone;
 use App\Models\HeatmapTile;
 use App\Models\PropertyValuation;
-use App\Models\AiModelMetadata;
 use App\Services\AIBridgeService;
 use App\Services\InsightsAggregatorService;
 use Illuminate\Bus\Queueable;

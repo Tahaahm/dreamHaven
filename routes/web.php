@@ -14,6 +14,10 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AgentAuthController;
+use App\Http\Controllers\Api\AreaInsightsController;
+use App\Http\Controllers\Api\MapController as ApiMapController;
+use App\Http\Controllers\Api\MarketTrendsController;
+use App\Http\Controllers\Api\PropertyValuationController;
 use App\Http\Controllers\OfficeDashboardApiController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\LocationController;
@@ -25,6 +29,7 @@ use App\Http\Middleware\AgentOrAdmin;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Middleware\EnsureUserIsVerified;
+use MapController;
 
 // ============================================
 // TEST & DEBUG ROUTES (Remove in production)
@@ -1019,20 +1024,20 @@ Route::get('/api/video/health', [VideoProcessingController::class, 'checkService
 Route::prefix('api/v1')->group(function () {
 
     // Map
-    Route::get('/map/zones',   [App\Http\Controllers\Api\MapController::class, 'zones']);
-    Route::get('/map/heatmap', [App\Http\Controllers\Api\MapController::class, 'heatmap']);
+    Route::get('/map/zones',   [ApiMapController::class, 'zones']);
+    Route::get('/map/heatmap', [ApiMapController::class, 'heatmap']);
 
     // Areas
-    Route::get('/areas/market-insights',          [App\Http\Controllers\Api\AreaInsightsController::class, 'index']);
-    Route::get('/areas/market-insights/{areaId}', [App\Http\Controllers\Api\AreaInsightsController::class, 'show']);
-    Route::get('/areas/top-investment',           [App\Http\Controllers\Api\AreaInsightsController::class, 'topInvestment']);
+    Route::get('/areas/market-insights',          [AreaInsightsController::class, 'index']);
+    Route::get('/areas/market-insights/{areaId}', [AreaInsightsController::class, 'show']);
+    Route::get('/areas/top-investment',           [AreaInsightsController::class, 'topInvestment']);
 
     // Market trends
-    Route::get('/market/trends',   [App\Http\Controllers\Api\MarketTrendsController::class, 'index']);
-    Route::get('/market/overview', [App\Http\Controllers\Api\MarketTrendsController::class, 'overview']);
+    Route::get('/market/trends',   [MarketTrendsController::class, 'index']);
+    Route::get('/market/overview', [MarketTrendsController::class, 'overview']);
 
     // Property valuation (auth required — user must be logged in to request AI valuation)
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/properties/ai-valuation/{propertyId}', [App\Http\Controllers\Api\PropertyValuationController::class, 'show']);
+        Route::get('/properties/ai-valuation/{propertyId}', [PropertyValuationController::class, 'show']);
     });
 });

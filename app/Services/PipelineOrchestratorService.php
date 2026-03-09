@@ -12,26 +12,7 @@ use App\Jobs\ComputePropertyValuationsJob;
 use App\Models\PipelineJob;
 use Illuminate\Support\Facades\Log;
 
-/**
- * PipelineOrchestratorService
- * ─────────────────────────────────────────────────────────────────────────────
- * Controls the order and scheduling of all AI pipeline jobs.
- *
- * Correct execution order (data dependencies):
- *   1. SnapshotMarketTrendsJob     — capture today's prices FIRST
- *   2. ComputeAreaInsightsJob      — aggregate metrics (uses trend history)
- *   3. ComputeInvestmentScoresJob  — score areas (uses area insights)
- *   4. ComputePriceZonesJob        — cluster zones (uses area insights)
- *   5. ComputeHeatmapJob           — generate tiles (uses properties)
- *   6. ComputePropertyValuationsJob— batch valuations (uses trained model)
- *   7. TrainAIModelsJob            — retrain model (uses all above, weekly only)
- *
- * Why order matters:
- *   - Price zones need area avg_price_per_m2 to determine tier colors
- *   - Investment scores need demand_score from area insights
- *   - Property valuations need a trained model to exist
- * ─────────────────────────────────────────────────────────────────────────────
- */
+
 class PipelineOrchestratorService
 {
     /**
