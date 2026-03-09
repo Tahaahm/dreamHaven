@@ -15,7 +15,7 @@ use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AgentAuthController;
 use App\Http\Controllers\Api\AreaInsightsController;
-use App\Http\Controllers\Api\MapController as ApiMapController;
+use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MarketTrendsController;
 use App\Http\Controllers\Api\PropertyValuationController;
 use App\Http\Controllers\OfficeDashboardApiController;
@@ -29,7 +29,6 @@ use App\Http\Middleware\AgentOrAdmin;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Middleware\EnsureUserIsVerified;
-use MapController;
 
 // ============================================
 // TEST & DEBUG ROUTES (Remove in production)
@@ -1024,8 +1023,8 @@ Route::get('/api/video/health', [VideoProcessingController::class, 'checkService
 Route::prefix('api/v1')->group(function () {
 
     // Map
-    Route::get('/map/zones',   [ApiMapController::class, 'zones']);
-    Route::get('/map/heatmap', [ApiMapController::class, 'heatmap']);
+    Route::get('/map/zones',   [MapController::class, 'zones']);
+    Route::get('/map/heatmap', [MapController::class, 'heatmap']);
 
     // Areas
     Route::get('/areas/market-insights',          [AreaInsightsController::class, 'index']);
