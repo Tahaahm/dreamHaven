@@ -1009,3 +1009,30 @@ Route::post('/api/video/extract-frames', [VideoProcessingController::class, 'ext
 
 Route::get('/api/video/health', [VideoProcessingController::class, 'checkServiceHealth'])
     ->name('video.health');
+
+
+
+// ============================================
+// API ROUTES - AI Real Estate Intelligence
+// ============================================
+
+Route::prefix('api/v1')->group(function () {
+
+    // Map
+    Route::get('/map/zones',   [App\Http\Controllers\Api\MapController::class, 'zones']);
+    Route::get('/map/heatmap', [App\Http\Controllers\Api\MapController::class, 'heatmap']);
+
+    // Areas
+    Route::get('/areas/market-insights',          [App\Http\Controllers\Api\AreaInsightsController::class, 'index']);
+    Route::get('/areas/market-insights/{areaId}', [App\Http\Controllers\Api\AreaInsightsController::class, 'show']);
+    Route::get('/areas/top-investment',           [App\Http\Controllers\Api\AreaInsightsController::class, 'topInvestment']);
+
+    // Market trends
+    Route::get('/market/trends',   [App\Http\Controllers\Api\MarketTrendsController::class, 'index']);
+    Route::get('/market/overview', [App\Http\Controllers\Api\MarketTrendsController::class, 'overview']);
+
+    // Property valuation (auth required — user must be logged in to request AI valuation)
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/properties/ai-valuation/{propertyId}', [App\Http\Controllers\Api\PropertyValuationController::class, 'show']);
+    });
+});
