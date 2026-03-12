@@ -3,7 +3,7 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue; // ✅ THIS MAKES IT SEND IN BACKGROUND
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -15,59 +15,60 @@ class SendOtpMail extends Mailable implements ShouldQueue
 
     public $code;
 
-    // ✅ If Contabo fails, Laravel will automatically try 3 more times
+    // How many times to retry
     public $tries = 3;
 
-    // ✅ Wait 5 seconds before trying again if it fails
+    // Seconds to wait before retry
     public $backoff = 5;
 
-    /**
-     * Create a new message instance.
-     */
     public function __construct($code)
     {
         $this->code = $code;
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Dream Mulk - Email Verification Code', // ✅ Updated
+            subject: 'Dream Mulk - Email Verification Code',
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
-        // ✅ Using htmlString so you don't need to create a separate Blade file.
-        // This is much safer for spam filters than sending plain text.
         return new Content(
             htmlString: "
-                <div style='font-family: Arial, sans-serif; text-align: center; padding: 20px; background-color: #f8f9fa; border-radius: 10px; max-width: 600px; margin: 0 auto;'>
-                    <h2 style='color: #1f2937;'>Welcome to Dream Mulk</h2> <p style='color: #4b5563; font-size: 16px;'>Your verification code is:</p>
-                    <div style='background: #ffffff; padding: 15px 25px; border-radius: 8px; display: inline-block; margin: 15px 0; border: 2px solid #303B97;'>
-                        <h1 style='color: #303B97; letter-spacing: 10px; margin: 0; font-size: 36px;'>{$this->code}</h1>
-                    </div>
-                    <p style='color: #dc2626; font-size: 14px;'>This code will expire in 10 minutes.</p>
-                    <hr style='border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;' />
-                    <p style='color: #9ca3af; font-size: 12px;'>If you didn't request this code, please ignore this email.</p>
+                <div style='background-color: #f4f4f7; padding: 30px; font-family: sans-serif;'>
+                    <table align='center' border='0' cellpadding='0' cellspacing='0' width='100%' style='max-width: 500px; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);'>
+                        <tr>
+                            <td style='padding: 40px 20px; text-align: center;'>
+                                <h2 style='color: #1f2937; margin-bottom: 10px; font-size: 24px;'>Welcome to Dream Mulk</h2>
+                                <p style='color: #6b7280; font-size: 16px;'>Use the code below to verify your email address.</p>
+
+                                <div style='margin: 30px 0;'>
+                                    <span style='display: inline-block; background-color: #f3f4f6; border: 2px dashed #303B97; color: #303B97; padding: 15px 30px; font-size: 32px; font-weight: bold; letter-spacing: 10px; border-radius: 8px;'>
+                                        {$this->code}
+                                    </span>
+                                </div>
+
+                                <p style='color: #ef4444; font-size: 13px; font-weight: bold;'>This code expires in 10 minutes.</p>
+
+                                <div style='margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;'>
+                                    <p style='color: #9ca3af; font-size: 12px; line-height: 1.5;'>
+                                        If you did not request this code, please ignore this email.<br>
+                                        &copy; 2026 Dream Mulk. All rights reserved.
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
                 </div>
             "
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
-    public function attachments(): array
+    // Optional: Log if the email keeps failing after all retries
+    public function failed($exception)
     {
-        return [];
+        \Log::error("OTP Email failed to send to user after 3 tries: " . $exception->getMessage());
     }
 }
