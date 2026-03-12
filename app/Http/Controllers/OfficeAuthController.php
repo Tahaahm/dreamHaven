@@ -2684,5 +2684,47 @@ class OfficeAuthController extends Controller
         $subscriptionBadge = $office->getSubscriptionStatusBadge();
 
         return view('office.subscription-status', compact('subscription', 'propertyInfo', 'subscriptionBadge'));
+    } // Add this anywhere inside OfficeAuthController
+    public function registerApi(Request $request)
+    {
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'company_name' => 'required|string|max:255',
+            'email_address' => 'required|email|unique:real_estate_offices,email_address',
+            'password' => 'required|string|min:6|confirmed',
+            'phone_number' => 'required|string|max:20',
+            'city' => 'required|string|max:255',
+            'district' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $office = \App\Models\RealEstateOffice::create([
+            'company_name' => $request->company_name,
+            'email_address' => $request->email_address,
+            'password' => \Illuminate\Support\Facades\Hash::make($request->password),
+            'phone_number' => $request->phone_number,
+            'city' => $request->city,
+            'district' => $request->district,
+            'account_type' => 'real_estate_official',
+            'is_verified' => false,
+        ]);
+
+        // Generate Sanctum Token for Mobile App
+        $token = $office->createToken('OfficeAppToken')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Office registered successfully',
+            'data' => [
+                'user' => $office,
+                'token' => $token
+            ]
+        ], 201);
     }
 }

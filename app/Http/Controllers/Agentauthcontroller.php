@@ -1311,4 +1311,50 @@ class AgentAuthController extends Controller
             ]);
         }
     }
+
+
+    // Add this anywhere inside OfficeAuthController
+    public function registerApi(Request $request)
+    {
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'agent_name' => 'required|string|max:255',
+            'primary_email' => 'required|email|unique:agents,primary_email',
+            'primary_phone' => 'required|string|max:20',
+            'password' => 'required|min:8|confirmed',
+            'city' => 'required|string',
+            'license_number' => 'nullable|string|unique:agents,license_number',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first(),
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $agent = new \App\Models\Agent();
+        $agent->id = (string) \Illuminate\Support\Str::uuid();
+        $agent->agent_name = $request->agent_name;
+        $agent->primary_email = $request->primary_email;
+        $agent->primary_phone = $request->primary_phone;
+        $agent->password = \Illuminate\Support\Facades\Hash::make($request->password);
+        $agent->city = $request->city;
+        $agent->license_number = $request->license_number;
+        $agent->is_verified = false;
+        $agent->status = 'active';
+        $agent->save();
+
+        // Generate Sanctum Token for Mobile App
+        $token = $agent->createToken('AgentAppToken')->plainTextToken;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Agent registered successfully',
+            'data' => [
+                'user' => $agent,
+                'token' => $token
+            ]
+        ], 201);
+    }
 }

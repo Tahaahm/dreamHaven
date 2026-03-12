@@ -230,6 +230,12 @@ Route::prefix('api/v1')->group(function () {
 
         Route::post('/agent/login', [AuthController::class, 'loginAgent']);
         Route::post('/office/login', [AuthController::class, 'loginRealEstateOffice']);
+
+        // 👇 ADD THESE TWO LINES FOR MOBILE REGISTRATION 👇
+        Route::post('/agent/register', [AgentAuthController::class, 'registerApi']);
+        Route::post('/office/register', [OfficeAuthController::class, 'registerApi']);
+        // 👆 ------------------------------------------- 👆
+
         Route::post('/send-verification-code', [UserController::class, 'sendVerificationCode']);
         Route::post('/verify-code', [UserController::class, 'verifyCodeBeforeRegister']);
     });
@@ -722,6 +728,7 @@ Route::prefix('agent')->name('agent.')->group(function () {
         Route::post('/login', [AgentAuthController::class, 'login'])->name('login.submit');
         Route::get('/register', [AgentAuthController::class, 'showRegister'])->name('register');
         Route::post('/register', [AgentAuthController::class, 'register'])->name('register.submit');
+        Route::post('/agent/register', [AgentAuthController::class, 'registerApi']);
     });
 
     // ========== AUTHENTICATED ROUTES ==========
