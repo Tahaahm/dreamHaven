@@ -359,4 +359,82 @@ class OfficeDashboardApiController extends Controller
             ], 500);
         }
     }
+
+    public function getSubscriptionStatus(Request $request): JsonResponse
+    {
+        try {
+            // 1. Get the authenticated office
+            $office = $request->user();
+
+            if (!$office) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated.'
+                ], 401);
+            }
+
+            // 2. Load subscription data
+            $office->loadMissing('subscription.currentPlan');
+            $subscription = $office->subscription;
+            $currentPlan = $subscription?->currentPlan;
+
+            // 3. Determine if the subscription is active
+            $isActive = method_exists($office, 'hasActiveSubscription')
+                ? $office->hasActiveSubscription()
+                : ($subscription?->status === 'active');
+
+            // If not active, return 403 so the Flutter app knows to block publishing
+            if (!$isActive) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need an active subscription to publish properties.',
+                    'status' => $subscription?->status ?? 'none',
+                    'is_unlimited' => false
+                ], 403);
+            }
+
+            // 4. Calculate property limits
+            $totalProperties = Property::where('owner_type', 'App\Models\RealEstateOffice')
+                ->where('owner_id', $office->id)
+                ->count();
+
+            $propertyLimitInfo = method_exists($office, 'getPropertyLimitInfo')
+                ? $office->getPropertyLimitInfo()
+                : [
+                    'used' => $totalProperties,
+                    'limit' => $currentPlan?->property_limit ?? 0,
+                    'remaining' => max(0, ($currentPlan?->property_limit ?? 0) - $totalProperties),
+                    'is_unlimited' => ($currentPlan?->property_limit === -1 || $currentPlan?->property_limit === null)
+                ];
+
+            // 5. Block if limit is reached
+            if (!$propertyLimitInfo['is_unlimited'] && $propertyLimitInfo['remaining'] <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Property limit reached. Please upgrade your subscription plan to add more properties.',
+                    'status' => 'limit_reached',
+                    'is_unlimited' => false,
+                    'limits' => $propertyLimitInfo
+                ], 403); // Returning 403 triggers the Flutter app's block mechanism
+            }
+
+            // 6. Success! They are active and have remaining properties
+            return response()->json([
+                'success' => true,
+                'message' => 'Subscription verified.',
+                'status' => 'active',
+                'is_unlimited' => $propertyLimitInfo['is_unlimited'],
+                'plan_name' => $currentPlan?->name ?? 'Unknown Plan',
+                'limits' => $propertyLimitInfo
+            ], 200);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('API Get Office Subscription Error: ' . $e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to check subscription status.',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
 }
