@@ -403,6 +403,8 @@ Route::prefix('v1/api/properties')->group(function () {
     // ============================================
     Route::middleware(['auth:sanctum'])->group(function () {
 
+        Route::post('/upload-images', [PropertyController::class, 'uploadImages']);
+
         // ✅ NEW: Property Interaction Tracking Routes
         Route::get('/recently-viewed', [PropertyController::class, 'getRecentlyViewed']);
         Route::get('/my-viewing-stats', [PropertyController::class, 'getMyViewingStats']);
