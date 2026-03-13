@@ -284,15 +284,32 @@ class PropertyController extends Controller
                 'images_data' => $request->input('images'),
             ]);
 
-            // Automatically assign logged-in agent as owner
-            if (Auth::guard('agent')->check()) {
+            // ✅ Determine owner from authenticated Sanctum token
+            $sanctumUser = auth('sanctum')->user();
+
+            if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
+                $request->merge([
+                    'owner_type' => 'RealEstateOffice',
+                    'owner_id'   => (string) $sanctumUser->id,
+                ]);
+            } elseif ($sanctumUser instanceof \App\Models\Agent) {
                 $request->merge([
                     'owner_type' => 'Agent',
-                    'owner_id' => Auth::guard('agent')->id()
+                    'owner_id'   => (string) $sanctumUser->id,
+                ]);
+            } elseif ($sanctumUser instanceof \App\Models\User) {
+                $request->merge([
+                    'owner_type' => 'User',
+                    'owner_id'   => (string) $sanctumUser->id,
+                ]);
+            } elseif (Auth::guard('agent')->check()) {
+                $request->merge([
+                    'owner_type' => 'Agent',
+                    'owner_id'   => (string) Auth::guard('agent')->id(),
                 ]);
             }
 
-            // ✅ PARSE JSON STRINGS
+            // ✅ PARSE JSON STRINGS FROM FLUTTER
             $parsedData = [];
             foreach ($request->all() as $key => $value) {
                 if (is_string($value) && $this->isJson($value)) {
@@ -304,106 +321,107 @@ class PropertyController extends Controller
 
             Log::info('✅ Parsed data', ['parsed' => $parsedData]);
 
-            // ✅ CHECK IF IMAGES ARE URLS (array) - NOT FILES
+            // ✅ CHECK IMAGES ARE URLs (array) - NOT FILES
             if (!isset($parsedData['images']) || !is_array($parsedData['images']) || count($parsedData['images']) < 1) {
                 Log::error('❌ No images provided', ['images' => $parsedData['images'] ?? 'missing']);
                 return response()->json([
-                    'status' => false,
+                    'status'  => false,
                     'message' => 'Validation failed',
-                    'data' => ['images' => ['At least one image is required']]
+                    'data'    => ['images' => ['At least one image is required']]
                 ], 400);
             }
 
             // ✅ VALIDATION
             $validator = Validator::make($parsedData, [
-                'name' => 'required|array',
-                'name.en' => 'required|string|max:255',
-                'description' => 'required|array',
-                'description.en' => 'required|string|min:10',
-                'type' => 'required|array',
-                'type.category' => 'required|string',
-                'area' => 'required|numeric|min:1',
-                'furnished' => 'required|boolean',
-                'price' => 'required|array',
-                'price.iqd' => 'required|numeric|min:1',
-                'price.usd' => 'required|numeric|min:1',
-                'listing_type' => 'required|in:rent,sell',
-                'rooms' => 'required|array',
-                'rooms.bedroom.count' => 'required|integer|min:0',
-                'rooms.bathroom.count' => 'required|integer|min:0',
-                'locations' => 'required|array|min:1',
-                'locations.*.lat' => 'required|numeric|between:-90,90',
-                'locations.*.lng' => 'required|numeric|between:-180,180',
-                'address_details' => 'required|array',
-                'address_details.city' => 'required|array',
+                'name'                    => 'required|array',
+                'name.en'                 => 'required|string|max:255',
+                'description'             => 'required|array',
+                'description.en'          => 'required|string|min:10',
+                'type'                    => 'required|array',
+                'type.category'           => 'required|string',
+                'area'                    => 'required|numeric|min:1',
+                'furnished'               => 'required|boolean',
+                'price'                   => 'required|array',
+                'price.iqd'               => 'required|numeric|min:1',
+                'price.usd'               => 'required|numeric|min:1',
+                'listing_type'            => 'required|in:rent,sell',
+                'rooms'                   => 'required|array',
+                'rooms.bedroom.count'     => 'required|integer|min:0',
+                'rooms.bathroom.count'    => 'required|integer|min:0',
+                'locations'               => 'required|array|min:1',
+                'locations.*.lat'         => 'required|numeric|between:-90,90',
+                'locations.*.lng'         => 'required|numeric|between:-180,180',
+                'address_details'         => 'required|array',
+                'address_details.city'    => 'required|array',
                 'address_details.city.en' => 'required|string|min:2',
-                'images' => 'required|array|min:1',
-                'images.*' => 'string|url',
-                'electricity' => 'nullable|boolean',
-                'water' => 'nullable|boolean',
-                'internet' => 'nullable|boolean',
+                'images'                  => 'required|array|min:1',
+                'images.*'                => 'string|url',
+                'owner_id'                => 'required|string',
+                'owner_type'              => 'required|string',
+                'electricity'             => 'nullable|boolean',
+                'water'                   => 'nullable|boolean',
+                'internet'                => 'nullable|boolean',
             ]);
 
             if ($validator->fails()) {
                 Log::error('❌ Validation failed', ['errors' => $validator->errors()]);
                 return response()->json([
-                    'status' => false,
+                    'status'  => false,
                     'message' => 'Validation failed',
-                    'data' => $validator->errors()
+                    'data'    => $validator->errors()
                 ], 400);
             }
 
             DB::beginTransaction();
 
-            // ✅ USE IMAGE URLs (already uploaded)
             $imageUrls = $parsedData['images'];
             Log::info('✅ Using image URLs', ['urls' => $imageUrls]);
 
             // ✅ BUILD PROPERTY DATA
             $propertyData = [
-                'id' => $this->generateUniquePropertyId(),
-                'owner_id' => $parsedData['owner_id'],
+                'id'         => $this->generateUniquePropertyId(),
+                'owner_id'   => (string) $parsedData['owner_id'],
                 'owner_type' => $this->getFullOwnerType($parsedData['owner_type'] ?? 'User'),
 
                 // JSON fields
-                'name' => json_encode($parsedData['name']),
-                'description' => json_encode($parsedData['description']),
-                'type' => json_encode($parsedData['type']),
-                'price' => json_encode($parsedData['price']),
-                'rooms' => json_encode($parsedData['rooms']),
-                'locations' => json_encode($parsedData['locations']),
+                'name'           => json_encode($parsedData['name']),
+                'description'    => json_encode($parsedData['description']),
+                'type'           => json_encode($parsedData['type']),
+                'price'          => json_encode($parsedData['price']),
+                'rooms'          => json_encode($parsedData['rooms']),
+                'locations'      => json_encode($parsedData['locations']),
                 'address_details' => json_encode($parsedData['address_details']),
 
                 // Simple fields
                 'listing_type' => $parsedData['listing_type'],
-                'area' => (float) $parsedData['area'],
+                'area'         => (float) $parsedData['area'],
+                'address'      => $parsedData['address'] ?? null,
 
                 // Boolean fields
-                'furnished' => $parsedData['furnished'] ? 1 : 0,
-                'electricity' => ($parsedData['electricity'] ?? true) ? 1 : 0,
-                'water' => ($parsedData['water'] ?? true) ? 1 : 0,
-                'internet' => ($parsedData['internet'] ?? false) ? 1 : 0,
+                'furnished'   => ($parsedData['furnished'] ?? false)   ? 1 : 0,
+                'electricity' => ($parsedData['electricity'] ?? true)  ? 1 : 0,
+                'water'       => ($parsedData['water'] ?? true)        ? 1 : 0,
+                'internet'    => ($parsedData['internet'] ?? false)    ? 1 : 0,
 
-                // ✅ IMAGE URLS
+                // Images
                 'images' => json_encode($imageUrls),
 
                 // Optional arrays
-                'features' => json_encode($parsedData['features'] ?? []),
+                'features'  => json_encode($parsedData['features'] ?? []),
                 'amenities' => json_encode($parsedData['amenities'] ?? []),
 
                 // Optional JSON objects
                 'furnishing_details' => json_encode($parsedData['furnishing_details'] ?? ['status' => 'unfurnished']),
-                'floor_details' => isset($parsedData['floor_details']) && is_array($parsedData['floor_details'])
+                'floor_details'      => isset($parsedData['floor_details']) && is_array($parsedData['floor_details'])
                     ? json_encode($parsedData['floor_details'])
                     : null,
 
                 // Optional simple fields
-                'rental_period' => $parsedData['rental_period'] ?? null,
-                'floor_number' => isset($parsedData['floor_number']) ? (int) $parsedData['floor_number'] : null,
-                'year_built' => isset($parsedData['year_built']) ? (int) $parsedData['year_built'] : null,
+                'rental_period'    => $parsedData['rental_period'] ?? null,
+                'floor_number'     => isset($parsedData['floor_number'])  ? (int) $parsedData['floor_number']  : null,
+                'year_built'       => isset($parsedData['year_built'])    ? (int) $parsedData['year_built']    : null,
                 'virtual_tour_url' => $parsedData['virtual_tour_url'] ?? null,
-                'floor_plan_url' => $parsedData['floor_plan_url'] ?? null,
-                'address' => $parsedData['address'] ?? null,
+                'floor_plan_url'   => $parsedData['floor_plan_url']   ?? null,
 
                 // Availability
                 'availability' => json_encode([
@@ -416,21 +434,24 @@ class PropertyController extends Controller
                 ]),
 
                 // System fields
-                'verified' => 0,
-                'is_active' => 1,
-                'published' => 1,
-                'status' => 'available',
-                'views' => 0,
-                'favorites_count' => 0,
-                'rating' => 0,
-                'is_boosted' => 0,
+                'verified'           => 0,
+                'is_active'          => 1,
+                'published'          => 1,
+                'status'             => $parsedData['status'] ?? 'available',
+                'views'              => 0,
+                'favorites_count'    => 0,
+                'rating'             => 0,
+                'is_boosted'         => 0,
 
                 // Analytics
-                'view_analytics' => json_encode(['unique_views' => 0, 'returning_views' => 0]),
+                'view_analytics'      => json_encode(['unique_views' => 0, 'returning_views' => 0]),
                 'favorites_analytics' => json_encode(['last_30_days' => 0]),
             ];
 
-            Log::info('🚀 Creating property', ['data' => $propertyData]);
+            Log::info('🚀 Creating property', [
+                'owner_id'   => $propertyData['owner_id'],
+                'owner_type' => $propertyData['owner_type'],
+            ]);
 
             DB::table('properties')->insert($propertyData + [
                 'created_at' => now(),
@@ -439,29 +460,33 @@ class PropertyController extends Controller
 
             $property = Property::find($propertyData['id']);
 
+            // ✅ INCREMENT SUBSCRIPTION COUNT IF OFFICE
+            if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
+                $sanctumUser->incrementPropertyCount();
+            }
+
             DB::commit();
 
             Log::info('✅ Property created successfully', ['property_id' => $property->id]);
 
             return response()->json([
-                'status' => true,
+                'status'  => true,
                 'message' => 'Property created successfully',
-                'redirect' => '/agent/properties',
-                'data' => $property
+                'data'    => $property
             ], 201);
         } catch (\Exception $e) {
             DB::rollback();
 
             Log::error('❌ Error creating property', [
                 'error' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
             ]);
 
             return response()->json([
-                'status' => false,
+                'status'  => false,
                 'message' => 'Failed to create property',
-                'data' => $e->getMessage()
+                'data'    => $e->getMessage()
             ], 500);
         }
     }
