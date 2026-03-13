@@ -361,30 +361,25 @@ class InsightsAggregatorService
     // ── Private Helpers ──────────────────────────────────────────────────────
 
     /**
-     * Get active properties for an area by matching city in address_details JSON.
+     * Get active properties for an area by matching branch city name in address_details JSON.
+     * Properties store city (e.g. "Erbil") not neighborhood — so we match via branch.
+     * All areas under the same branch share the city's property pool.
      */
     private function getPropertiesForArea(int $areaId, string $areaNameEn): \Illuminate\Support\Collection
     {
-        // Get area and branch info to match against address_details
+        // Get area → branch → city name
         $area   = DB::table('areas')->where('id', $areaId)->first();
         $branch = $area ? DB::table('branches')->where('id', $area->branch_id)->first() : null;
 
-        $searchTerms = array_filter([
-            $area?->area_name_en,
-            $area?->area_name_ar,
-            $area?->area_name_ku,
-            $branch?->city_name_en,
-        ]);
+        if (!$branch) return collect();
 
-        if (empty($searchTerms)) {
-            return collect();
-        }
+        $cityName = $branch->city_name_en; // e.g. "Erbil"
 
-        // Use LIKE on address_details JSON to find matching properties
-        $query = DB::table('properties')
+        return DB::table('properties')
             ->whereIn('status', ['approved', 'available'])
             ->where('is_active', 1)
             ->where('published', 1)
+            ->where('address_details', 'LIKE', "%{$cityName}%")
             ->select(
                 'id',
                 'price',
@@ -401,16 +396,8 @@ class InsightsAggregatorService
                 'views',
                 'favorites_count',
                 'rating'
-            );
-
-        // Match any term
-        $query->where(function ($q) use ($searchTerms) {
-            foreach ($searchTerms as $term) {
-                $q->orWhere('address_details', 'LIKE', "%{$term}%");
-            }
-        });
-
-        return $query->get();
+            )
+            ->get();
     }
 
     /**
