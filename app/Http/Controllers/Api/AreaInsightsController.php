@@ -39,32 +39,47 @@ class AreaInsightsController extends Controller
 
         $cacheKey = "area_insights_list_{$branchId}_{$tier}_{$sort}_p{$request->integer('page', 1)}";
 
-        $data = Cache::remember($cacheKey, now()->addHours(2), function () use (
-            $branchId,
-            $tier,
-            $sort,
-            $request
-        ) {
-            $query = AreaMarketInsight::with('area:id,name');
+        try {
+            $data = Cache::remember($cacheKey, now()->addHours(2), function () use (
+                $branchId,
+                $tier,
+                $sort,
+                $request
+            ) {
+                $query = AreaMarketInsight::with(['area' => fn($q) => $q->select('id', 'area_name_en', 'area_name_ar', 'area_name_ku', 'branch_id')]);
 
-            if ($branchId) {
-                // Filter by areas belonging to this branch
-                $query->whereHas('area', fn($q) => $q->where('branch_id', $branchId));
-            }
-            if ($tier) $query->byTier($tier);
+                if ($branchId) {
+                    $query->whereHas('area', fn($q) => $q->where('branch_id', $branchId));
+                }
+                if ($tier) $query->byTier($tier);
 
-            $allowed = ['investment_score', 'demand_score', 'average_price', 'price_growth_30d', 'listing_count'];
-            if (in_array($sort, $allowed)) {
-                $query->orderByDesc($sort);
-            }
+                $allowed = ['investment_score', 'demand_score', 'average_price', 'price_growth_30d', 'listing_count'];
+                if (in_array($sort, $allowed)) {
+                    $query->orderByDesc($sort);
+                }
 
-            return $query->paginate($request->integer('per_page', 20));
-        });
+                return $query->paginate($request->integer('per_page', 20));
+            });
 
-        return response()->json([
-            'success' => true,
-            'data'    => $data,
-        ]);
+            return response()->json([
+                'success' => true,
+                'data'    => $data,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AreaInsightsController@index failed', [
+                'error'   => $e->getMessage(),
+                'line'    => $e->getLine(),
+                'file'    => $e->getFile(),
+                'branch_id' => $branchId,
+                'tier'    => $tier,
+                'sort'    => $sort,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
