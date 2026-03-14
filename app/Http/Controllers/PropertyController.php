@@ -2907,7 +2907,6 @@ class PropertyController extends Controller
                 ->whereNotIn('status', ['cancelled', 'pending'])
                 ->whereNotNull('locations');
 
-            // Apply bounds filter
             if ($bounds) {
                 $query->whereExists(function ($subQuery) use ($bounds) {
                     $subQuery->selectRaw('1')
@@ -2924,7 +2923,6 @@ class PropertyController extends Controller
             $this->applyBasicMapFilters($query, $request);
             $properties = $query->limit($limit)->get();
 
-            // ✅ TRACK IMPRESSIONS - Track map browsing
             if ($user && $properties->isNotEmpty()) {
                 $this->interactionService->trackImpressions(
                     $user->id,
@@ -2938,22 +2936,21 @@ class PropertyController extends Controller
                 $propertyData = $this->transformPropertyData($property);
                 $coordinates = $this->getPropertyCoordinates($property);
                 $propertyData['coordinates'] = [
-                    'lat' => (float) ($coordinates['lat'] ?? 0),
-                    'lng' => (float) ($coordinates['lng'] ?? 0),
-                    'polygon' => $this->getPropertyPolygon($property), // add this
-
-
+                    'lat'     => (float) ($coordinates['lat'] ?? 0),
+                    'lng'     => (float) ($coordinates['lng'] ?? 0),
+                    'polygon' => $this->getPropertyPolygon($property),
                 ];
                 return $propertyData;
             })->filter(function ($property) {
-                return $property['coordinates']['lat'] != 0 && $property['coordinates']['lng'] != 0;
+                return $property['coordinates']['lat'] != 0
+                    && $property['coordinates']['lng'] != 0;
             });
 
             return ApiResponse::success(
                 'Map properties retrieved successfully',
                 [
-                    'data' => $transformedData->values(),
-                    'total' => $transformedData->count(),
+                    'data'   => $transformedData->values(),
+                    'total'  => $transformedData->count(),
                     'bounds' => $bounds,
                 ],
                 200
@@ -2962,6 +2959,31 @@ class PropertyController extends Controller
             Log::error('Map error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to load map properties', $e->getMessage(), 500);
         }
+    }
+
+    private function getPropertyPolygon(Property $property): ?array
+    {
+        // If you have a dedicated polygon column
+        if (!empty($property->polygon)) {
+            $decoded = is_string($property->polygon)
+                ? json_decode($property->polygon, true)
+                : $property->polygon;
+            return $decoded ?? null;
+        }
+
+        // If locations has more than 1 point, use them as a polygon
+        $locations = is_string($property->locations)
+            ? json_decode($property->locations, true)
+            : $property->locations;
+
+        if (is_array($locations) && count($locations) > 1) {
+            return array_map(
+                fn($pt) => [(float) $pt['lng'], (float) $pt['lat']],
+                $locations
+            );
+        }
+
+        return null;
     }
 
     // Helper method for simple clustering
