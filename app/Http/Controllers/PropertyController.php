@@ -2940,6 +2940,9 @@ class PropertyController extends Controller
                 $propertyData['coordinates'] = [
                     'lat' => (float) ($coordinates['lat'] ?? 0),
                     'lng' => (float) ($coordinates['lng'] ?? 0),
+                    'polygon' => $this->getPropertyPolygon($property), // add this
+
+
                 ];
                 return $propertyData;
             })->filter(function ($property) {

@@ -391,7 +391,7 @@ Route::prefix('v1/api/properties')->group(function () {
     Route::get('/popular', [PropertyController::class, 'getPopular']); // ✅ NEW
 
     Route::get('/statistics', [PropertyController::class, 'getStatistics']);
-    Route::post('/map', [PropertyController::class, 'getMapProperties']);
+    Route::get('/map', [PropertyController::class, 'getMapProperties']); // change post → get
     Route::get('/owner/{ownerType}/{ownerId}', [PropertyController::class, 'getByOwner'])
         ->where(['ownerType' => 'User|Agent|RealEstateOffice']);
     Route::get('/', [PropertyController::class, 'index']);
