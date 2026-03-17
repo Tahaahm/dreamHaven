@@ -1051,3 +1051,17 @@ Route::prefix('api/v1')->group(function () {
         Route::get('/properties/ai-valuation/{propertyId}', [PropertyValuationController::class, 'show']);
     });
 });
+
+
+Route::get('/admin/notifications/broadcast', function () {
+    return view('admin.notifications.broadcast');
+})->name('admin.notifications.broadcast')->middleware(['auth:admin']);
+
+// API route (for the Blade admin panel via fetch/axios)
+Route::post('/admin/notifications/broadcast', [NotificationController::class, 'sendBroadcast'])
+    ->middleware(['auth:admin']);
+
+
+// Route::get('/profile-test', function () {
+//     return view('profile-test');
+// });

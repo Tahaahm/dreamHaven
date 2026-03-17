@@ -2297,4 +2297,205 @@ class NotificationController extends Controller
             return redirect()->back()->with('error', 'Failed to load notifications');
         }
     }
+
+    public function sendBroadcast(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'title_en'        => 'required|string|max:100',
+                'message_en'      => 'required|string|max:300',
+                'title_ar'        => 'nullable|string|max:100',
+                'message_ar'      => 'nullable|string|max:300',
+                'title_ku'        => 'nullable|string|max:100',
+                'message_ku'      => 'nullable|string|max:300',
+                'type'            => 'required|in:system,property,promotion,alert',
+                'priority'        => 'required|in:low,medium,high,urgent',
+                'recipient_type'  => 'required|in:users,agents,offices,all',
+                'action_url'      => 'nullable|string|max:255',
+                'action_text'     => 'nullable|string|max:100',
+                'expires_at'      => 'nullable|date|after:now',
+                'scheduled_at'    => 'nullable|date|after:now',
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error(
+                    ResponseDetails::validationErrorMessage(),
+                    $validator->errors(),
+                    ResponseDetails::CODE_VALIDATION_ERROR
+                );
+            }
+
+            // Build multilingual payloads
+            $titles = array_filter([
+                'en' => $request->title_en,
+                'ar' => $request->title_ar,
+                'ku' => $request->title_ku,
+            ]);
+            $messages = array_filter([
+                'en' => $request->message_en,
+                'ar' => $request->message_ar,
+                'ku' => $request->message_ku,
+            ]);
+
+            // Collect recipients based on type
+            $users = collect();
+            $agents = collect();
+            $offices = collect();
+            $type = $request->recipient_type;
+
+            if (in_array($type, ['users', 'all'])) {
+                $users = User::where('search_preferences->behavior->enable_notifications', true)->get();
+            }
+            if (in_array($type, ['agents', 'all'])) {
+                $agents = Agent::where('is_verified', true)->get();
+            }
+            if (in_array($type, ['offices', 'all'])) {
+                $offices = RealEstateOffice::where('is_verified', true)->get();
+            }
+
+            $notifications = [];
+            $now = now();
+
+            // Build DB notification rows for Users
+            foreach ($users as $user) {
+                $lang = $user->language ?? 'en';
+                $notifications[] = [
+                    'id'         => (string) Str::uuid(),
+                    'user_id'    => $user->id,
+                    'agent_id'   => null,
+                    'office_id'  => null,
+                    'title'      => $titles[$lang] ?? $titles['en'],
+                    'message'    => $messages[$lang] ?? $messages['en'],
+                    'type'       => $request->type,
+                    'priority'   => $request->priority,
+                    'data'       => json_encode([
+                        'broadcast' => true,
+                        'titles'    => $titles,
+                        'messages'  => $messages,
+                    ]),
+                    'action_url'  => $request->action_url,
+                    'action_text' => $request->action_text,
+                    'is_read'     => false,
+                    'sent_at'     => $now,
+                    'expires_at'  => $request->expires_at,
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
+            }
+
+            // Build DB notification rows for Agents
+            foreach ($agents as $agent) {
+                $lang = $agent->language ?? 'en';
+                $notifications[] = [
+                    'id'         => (string) Str::uuid(),
+                    'user_id'    => null,
+                    'agent_id'   => $agent->id,
+                    'office_id'  => null,
+                    'title'      => $titles[$lang] ?? $titles['en'],
+                    'message'    => $messages[$lang] ?? $messages['en'],
+                    'type'       => $request->type,
+                    'priority'   => $request->priority,
+                    'data'       => json_encode([
+                        'broadcast' => true,
+                        'titles' => $titles,
+                        'messages' => $messages
+                    ]),
+                    'action_url'  => $request->action_url,
+                    'action_text' => $request->action_text,
+                    'is_read'     => false,
+                    'sent_at'     => $now,
+                    'expires_at'  => $request->expires_at,
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
+            }
+
+            // Build DB notification rows for Offices
+            foreach ($offices as $office) {
+                $lang = $office->language ?? 'en';
+                $notifications[] = [
+                    'id'         => (string) Str::uuid(),
+                    'user_id'    => null,
+                    'agent_id'   => null,
+                    'office_id'  => $office->id,
+                    'title'      => $titles[$lang] ?? $titles['en'],
+                    'message'    => $messages[$lang] ?? $messages['en'],
+                    'type'       => $request->type,
+                    'priority'   => $request->priority,
+                    'data'       => json_encode([
+                        'broadcast' => true,
+                        'titles' => $titles,
+                        'messages' => $messages
+                    ]),
+                    'action_url'  => $request->action_url,
+                    'action_text' => $request->action_text,
+                    'is_read'     => false,
+                    'sent_at'     => $now,
+                    'expires_at'  => $request->expires_at,
+                    'created_at'  => $now,
+                    'updated_at'  => $now,
+                ];
+            }
+
+            // Bulk insert DB records in chunks to prevent memory issues
+            foreach (array_chunk($notifications, 500) as $chunk) {
+                DB::table('notifications')->insert($chunk);
+            }
+
+            // Send FCM push notifications
+            if (class_exists('\App\Services\FirebaseService')) {
+                $firebaseService = new \App\Services\FirebaseService();
+
+                // FCM payload uses English by default (device handles language parsing server-side)
+                $fcmNotification = ['title' => $titles['en'], 'message' => $messages['en']];
+                $fcmData = [
+                    'type'        => $request->type,
+                    'priority'    => $request->priority,
+                    'broadcast'   => 'true',
+                    'titles'      => json_encode($titles),
+                    'messages'    => json_encode($messages),
+                    'action_url'  => $request->action_url ?? '',
+                    'action_text' => $request->action_text ?? '',
+                ];
+
+                if ($users->isNotEmpty()) {
+                    $firebaseService->sendToMultipleUsers($users, $fcmNotification, $fcmData);
+                }
+
+                if ($agents->isNotEmpty()) {
+                    $firebaseService->sendToMultipleAgents($agents, $fcmNotification, $fcmData);
+                }
+
+                if ($offices->isNotEmpty()) {
+                    $firebaseService->sendToMultipleOffices($offices, $fcmNotification, $fcmData);
+                }
+            }
+
+            Log::info('Broadcast sent', [
+                'users'   => $users->count(),
+                'agents'  => $agents->count(),
+                'offices' => $offices->count(),
+                'total'   => count($notifications),
+                'type'    => $request->type,
+            ]);
+
+            return ApiResponse::success(
+                ResponseDetails::successMessage('Broadcast sent successfully'),
+                [
+                    'sent_to'  => count($notifications),
+                    'users'    => $users->count(),
+                    'agents'   => $agents->count(),
+                    'offices'  => $offices->count(),
+                ],
+                ResponseDetails::CODE_SUCCESS
+            );
+        } catch (\Exception $e) {
+            Log::error('Broadcast error: ' . $e->getMessage());
+            return ApiResponse::error(
+                ResponseDetails::serverErrorMessage('Failed to send broadcast'),
+                null,
+                ResponseDetails::CODE_SERVER_ERROR
+            );
+        }
+    }
 }

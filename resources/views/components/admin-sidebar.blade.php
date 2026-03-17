@@ -153,6 +153,15 @@
             </a>
         </div>
 
+
+        <a href="{{ route('admin.notifications.broadcast') }}" class="sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all group relative {{ request()->routeIs('admin.notifications.*') ? 'bg-indigo-600/10 text-indigo-400' : '' }}">
+    <div class="{{ request()->routeIs('admin.notifications.*') ? 'text-indigo-400' : 'text-gray-400 group-hover:text-white' }} w-6 text-center text-lg transition-colors">
+        <i class="fas fa-bullhorn"></i>
+    </div>
+    <span class="whitespace-nowrap group-[.collapsed]/sidebar:hidden">Broadcasts</span>
+    <span class="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 hidden group-[.collapsed]/sidebar:block pointer-events-none whitespace-nowrap z-50 border border-gray-700">Broadcasts</span>
+</a>
+
         {{-- GROUP: SYSTEM --}}
         <div class="mb-6 sidebar-group">
             <p class="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 group-[.collapsed]/sidebar:hidden">System</p>

@@ -169,6 +169,12 @@
                     <span class="ml-2">Transactions</span>
                 </a>
 
+
+                <a href="{{ url('admin/notifications/broadcast') }}" class="menu-item flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 group {{ request()->is('admin/notifications/broadcast') ? 'sidebar-link-active' : 'text-gray-400 hover:text-white hover:bg-white/5' }}">
+                     <i class="fas fa-bullhorn w-6 text-center group-hover:scale-110 transition-transform"></i>
+                     <span class="ml-2">Broadcasts</span>
+                </a>
+
                 {{-- SECTION: SYSTEM --}}
                 <div class="menu-label px-4 mt-6 mb-2 text-xs font-bold text-gray-500 uppercase tracking-wider">System</div>
 

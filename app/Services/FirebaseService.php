@@ -263,11 +263,7 @@ class FirebaseService
             $tokens = $user->getFCMTokens();
             if (!empty($tokens)) {
                 foreach ($tokens as $token) {
-                    $allTokens[] = [
-                        'token' => $token,
-                        'user_id' => $user->id,
-                        'user_type' => get_class($user)
-                    ];
+                    $allTokens[] = $token;
                 }
             }
         }
@@ -277,8 +273,55 @@ class FirebaseService
             return [];
         }
 
-        $tokens = array_column($allTokens, 'token');
-        return $this->sendToMultipleTokensBatch($tokens, $notification, $data);
+        return $this->sendToMultipleTokensBatch($allTokens, $notification, $data);
+    }
+
+    /**
+     * Send FCM notification to multiple agents in batch (Optimized)
+     */
+    public function sendToMultipleAgents(Collection $agents, array $notification, array $data = [])
+    {
+        $allTokens = [];
+
+        foreach ($agents as $agent) {
+            $tokens = $agent->getFCMTokens();
+            if (!empty($tokens)) {
+                foreach ($tokens as $token) {
+                    $allTokens[] = $token;
+                }
+            }
+        }
+
+        if (empty($allTokens)) {
+            Log::info('No FCM tokens found for batch agents', ['agent_count' => $agents->count()]);
+            return [];
+        }
+
+        return $this->sendToMultipleTokensBatch($allTokens, $notification, $data);
+    }
+
+    /**
+     * Send FCM notification to multiple offices in batch (Optimized)
+     */
+    public function sendToMultipleOffices(Collection $offices, array $notification, array $data = [])
+    {
+        $allTokens = [];
+
+        foreach ($offices as $office) {
+            $tokens = $office->getFCMTokens();
+            if (!empty($tokens)) {
+                foreach ($tokens as $token) {
+                    $allTokens[] = $token;
+                }
+            }
+        }
+
+        if (empty($allTokens)) {
+            Log::info('No FCM tokens found for batch offices', ['office_count' => $offices->count()]);
+            return [];
+        }
+
+        return $this->sendToMultipleTokensBatch($allTokens, $notification, $data);
     }
 
     /**
