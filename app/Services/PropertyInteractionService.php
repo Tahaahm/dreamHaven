@@ -217,36 +217,42 @@ class PropertyInteractionService
      * Bulk track properties displayed in lists (Impressions)
      * Efficiently inserts multiple records in one query.
      */
-    public function trackImpressions(string $userId, $properties, string $sourceEndpoint): void
+    public function trackImpressions(string $userId, $properties, string $sourceEndpoint, array $extra = []): void
     {
-        if ($properties->isEmpty()) return;
+        if (empty($properties) || (is_object($properties) && method_exists($properties, 'isEmpty') && $properties->isEmpty())) {
+            return;
+        }
 
         try {
             $timestamp = now();
             $insertData = [];
             $ip = request()->ip();
 
+            // ✅ Determine if guest or real user
+            $isGuest = str_starts_with($userId, 'guest_');
+            $sessionId = $isGuest ? str_replace('guest_', '', $userId) : session()->getId();
+
             foreach ($properties as $property) {
                 $insertData[] = [
-                    'user_id' => $userId,
-                    'property_id' => $property->id,
+                    'user_id'          => $isGuest ? null : $userId,  // null for guests
+                    'session_id'       => $sessionId,
+                    'property_id'      => $property->id,
                     'interaction_type' => 'impression',
-                    'metadata' => json_encode([
+                    'metadata'         => json_encode(array_merge([
                         'source_endpoint' => $sourceEndpoint,
-                        'ip' => $ip
-                    ]),
-                    'created_at' => $timestamp,
-                    // 'updated_at' => $timestamp, // ❌ DELETE OR COMMENT OUT THIS LINE
+                        'ip'              => $ip,
+                        'is_guest'        => $isGuest,
+                    ], $extra)),
+                    'created_at'       => $timestamp,
                 ];
             }
 
-            // Perform the bulk insert
             UserPropertyInteraction::insert($insertData);
         } catch (\Exception $e) {
             Log::error('Failed to track impressions', [
-                'user_id' => $userId,
+                'user_id'  => $userId,
                 'endpoint' => $sourceEndpoint,
-                'error' => $e->getMessage()
+                'error'    => $e->getMessage()
             ]);
         }
     }
