@@ -2302,19 +2302,19 @@ class NotificationController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'title_en'        => 'required|string|max:100',
-                'message_en'      => 'required|string|max:300',
-                'title_ar'        => 'nullable|string|max:100',
-                'message_ar'      => 'nullable|string|max:300',
-                'title_ku'        => 'nullable|string|max:100',
-                'message_ku'      => 'nullable|string|max:300',
-                'type'            => 'required|in:system,property,promotion,alert',
-                'priority'        => 'required|in:low,medium,high,urgent',
-                'recipient_type'  => 'required|in:users,agents,offices,all',
-                'action_url'      => 'nullable|string|max:255',
-                'action_text'     => 'nullable|string|max:100',
-                'expires_at'      => 'nullable|date|after:now',
-                'scheduled_at'    => 'nullable|date|after:now',
+                'title_en'       => 'required|string|max:100',
+                'message_en'     => 'required|string|max:300',
+                'title_ar'       => 'nullable|string|max:100',
+                'message_ar'     => 'nullable|string|max:300',
+                'title_ku'       => 'nullable|string|max:100',
+                'message_ku'     => 'nullable|string|max:300',
+                'type'           => 'required|in:system,property,promotion,alert',
+                'priority'       => 'required|in:low,medium,high,urgent',
+                'recipient_type' => 'required|in:users,agents,offices,all',
+                'action_url'     => 'nullable|string|max:255',
+                'action_text'    => 'nullable|string|max:100',
+                'expires_at'     => 'nullable|date|after:now',
+                'scheduled_at'   => 'nullable|date|after:now',
             ]);
 
             if ($validator->fails()) {
@@ -2325,7 +2325,7 @@ class NotificationController extends Controller
                 );
             }
 
-            // Build multilingual payloads
+            // Build multilingual payloads (only filled ones)
             $titles = array_filter([
                 'en' => $request->title_en,
                 'ar' => $request->title_ar,
@@ -2337,11 +2337,11 @@ class NotificationController extends Controller
                 'ku' => $request->message_ku,
             ]);
 
-            // Collect recipients based on type
-            $users = collect();
-            $agents = collect();
+            // Collect recipients
+            $users   = collect();
+            $agents  = collect();
             $offices = collect();
-            $type = $request->recipient_type;
+            $type    = $request->recipient_type;
 
             if (in_array($type, ['users', 'all'])) {
                 $users = User::where('search_preferences->behavior->enable_notifications', true)->get();
@@ -2354,18 +2354,18 @@ class NotificationController extends Controller
             }
 
             $notifications = [];
-            $now = now();
+            $now           = now();
 
-            // Build DB notification rows for Users
+            // ── USERS ──────────────────────────────────────────────
             foreach ($users as $user) {
-                $lang = $user->language ?? 'en';
+                $resolved = $this->resolveLanguage($user->language, $titles, $messages);
                 $notifications[] = [
                     'id'         => (string) Str::uuid(),
                     'user_id'    => $user->id,
                     'agent_id'   => null,
                     'office_id'  => null,
-                    'title'      => $titles[$lang] ?? $titles['en'],
-                    'message'    => $messages[$lang] ?? $messages['en'],
+                    'title'      => $resolved['title'],
+                    'message'    => $resolved['message'],
                     'type'       => $request->type,
                     'priority'   => $request->priority,
                     'data'       => json_encode([
@@ -2383,22 +2383,22 @@ class NotificationController extends Controller
                 ];
             }
 
-            // Build DB notification rows for Agents
+            // ── AGENTS ─────────────────────────────────────────────
             foreach ($agents as $agent) {
-                $lang = $agent->language ?? 'en';
+                $resolved = $this->resolveLanguage($agent->language, $titles, $messages);
                 $notifications[] = [
                     'id'         => (string) Str::uuid(),
                     'user_id'    => null,
                     'agent_id'   => $agent->id,
                     'office_id'  => null,
-                    'title'      => $titles[$lang] ?? $titles['en'],
-                    'message'    => $messages[$lang] ?? $messages['en'],
+                    'title'      => $resolved['title'],
+                    'message'    => $resolved['message'],
                     'type'       => $request->type,
                     'priority'   => $request->priority,
                     'data'       => json_encode([
                         'broadcast' => true,
-                        'titles' => $titles,
-                        'messages' => $messages
+                        'titles'    => $titles,
+                        'messages'  => $messages,
                     ]),
                     'action_url'  => $request->action_url,
                     'action_text' => $request->action_text,
@@ -2410,22 +2410,22 @@ class NotificationController extends Controller
                 ];
             }
 
-            // Build DB notification rows for Offices
+            // ── OFFICES ────────────────────────────────────────────
             foreach ($offices as $office) {
-                $lang = $office->language ?? 'en';
+                $resolved = $this->resolveLanguage($office->language ?? null, $titles, $messages);
                 $notifications[] = [
                     'id'         => (string) Str::uuid(),
                     'user_id'    => null,
                     'agent_id'   => null,
                     'office_id'  => $office->id,
-                    'title'      => $titles[$lang] ?? $titles['en'],
-                    'message'    => $messages[$lang] ?? $messages['en'],
+                    'title'      => $resolved['title'],
+                    'message'    => $resolved['message'],
                     'type'       => $request->type,
                     'priority'   => $request->priority,
                     'data'       => json_encode([
                         'broadcast' => true,
-                        'titles' => $titles,
-                        'messages' => $messages
+                        'titles'    => $titles,
+                        'messages'  => $messages,
                     ]),
                     'action_url'  => $request->action_url,
                     'action_text' => $request->action_text,
@@ -2437,17 +2437,16 @@ class NotificationController extends Controller
                 ];
             }
 
-            // Bulk insert DB records in chunks to prevent memory issues
+            // Bulk insert in chunks
             foreach (array_chunk($notifications, 500) as $chunk) {
                 DB::table('notifications')->insert($chunk);
             }
 
-            // Send FCM push notifications
+            // ── FCM — per-recipient language resolution ────────────
             if (class_exists('\App\Services\FirebaseService')) {
                 $firebaseService = new \App\Services\FirebaseService();
 
-                // FCM payload uses English by default (device handles language parsing server-side)
-                $fcmNotification = ['title' => $titles['en'], 'message' => $messages['en']];
+                // Shared data payload (contains ALL languages so Flutter can also pick)
                 $fcmData = [
                     'type'        => $request->type,
                     'priority'    => $request->priority,
@@ -2458,25 +2457,46 @@ class NotificationController extends Controller
                     'action_text' => $request->action_text ?? '',
                 ];
 
-                if ($users->isNotEmpty()) {
-                    $firebaseService->sendToMultipleUsers($users, $fcmNotification, $fcmData);
+                // Users — each gets FCM in their own language
+                foreach ($users as $user) {
+                    $resolved = $this->resolveLanguage($user->language, $titles, $messages);
+                    $firebaseService->sendToUser($user, [
+                        'title'   => $resolved['title'],
+                        'message' => $resolved['message'],
+                    ], $fcmData);
                 }
 
-                if ($agents->isNotEmpty()) {
-                    $firebaseService->sendToMultipleAgents($agents, $fcmNotification, $fcmData);
-                }
-
-                if ($offices->isNotEmpty()) {
-                    $firebaseService->sendToMultipleOffices($offices, $fcmNotification, $fcmData);
+                // Agents — each gets FCM in their own language
+                foreach ($agents as $agent) {
+                    $resolved = $this->resolveLanguage($agent->language, $titles, $messages);
+                    $firebaseService->sendToAgent($agent, [
+                        'title'   => $resolved['title'],
+                        'message' => $resolved['message'],
+                    ], $fcmData);
                 }
             }
 
+            // Warn admin if some users have ku/ar but those weren't filled
+            $warnings = [];
+            $hasKuRecipients = $users->where('language', 'ku')->isNotEmpty()
+                || $agents->where('language', 'ku')->isNotEmpty();
+            $hasArRecipients = $users->where('language', 'ar')->isNotEmpty()
+                || $agents->where('language', 'ar')->isNotEmpty();
+
+            if ($hasKuRecipients && empty($titles['ku'])) {
+                $warnings[] = 'Some recipients have Kurdish selected but no Kurdish translation was provided — they received English.';
+            }
+            if ($hasArRecipients && empty($titles['ar'])) {
+                $warnings[] = 'Some recipients have Arabic selected but no Arabic translation was provided — they received English.';
+            }
+
             Log::info('Broadcast sent', [
-                'users'   => $users->count(),
-                'agents'  => $agents->count(),
-                'offices' => $offices->count(),
-                'total'   => count($notifications),
-                'type'    => $request->type,
+                'users'    => $users->count(),
+                'agents'   => $agents->count(),
+                'offices'  => $offices->count(),
+                'total'    => count($notifications),
+                'type'     => $request->type,
+                'warnings' => $warnings,
             ]);
 
             return ApiResponse::success(
@@ -2486,6 +2506,7 @@ class NotificationController extends Controller
                     'users'    => $users->count(),
                     'agents'   => $agents->count(),
                     'offices'  => $offices->count(),
+                    'warnings' => $warnings,
                 ],
                 ResponseDetails::CODE_SUCCESS
             );
@@ -2497,5 +2518,28 @@ class NotificationController extends Controller
                 ResponseDetails::CODE_SERVER_ERROR
             );
         }
+    }
+
+    /**
+     * Resolve the correct title/message for a recipient based on their language.
+     * Fallback chain: user's lang → 'en' → first available
+     */
+    private function resolveLanguage(?string $userLang, array $titles, array $messages): array
+    {
+        $lang = strtolower(trim($userLang ?? 'en'));
+
+        // If the user's language was filled by admin, use it
+        if (isset($titles[$lang]) && isset($messages[$lang])) {
+            return ['title' => $titles[$lang], 'message' => $messages[$lang]];
+        }
+
+        // Fallback to English
+        if (isset($titles['en']) && isset($messages['en'])) {
+            return ['title' => $titles['en'], 'message' => $messages['en']];
+        }
+
+        // Last resort: first available language
+        $first = array_key_first($titles);
+        return ['title' => $titles[$first], 'message' => $messages[$first]];
     }
 }
