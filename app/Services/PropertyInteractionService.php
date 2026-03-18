@@ -223,6 +223,8 @@ class PropertyInteractionService
             return;
         }
 
+
+
         try {
             $timestamp = now();
             $insertData = [];
@@ -246,6 +248,13 @@ class PropertyInteractionService
                     'created_at'       => $timestamp,
                 ];
             }
+            Log::info('🔵 trackImpressions called', [
+                'userId' => $userId,
+                'isGuest' => $isGuest,
+                'sessionId' => $sessionId,
+                'propertyCount' => count($insertData),
+                'endpoint' => $sourceEndpoint,
+            ]);
 
             UserPropertyInteraction::insert($insertData);
         } catch (\Exception $e) {
