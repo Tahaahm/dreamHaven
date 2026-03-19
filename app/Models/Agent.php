@@ -70,6 +70,9 @@ class Agent extends Authenticatable
         'commission_rate',
         'consultation_fee',
         'currency',
+        'device_tokens', // ← ADD THIS
+        'language',      // ← ADD THIS
+
     ];
 
     protected $casts = [
@@ -84,6 +87,8 @@ class Agent extends Authenticatable
         'working_hours' => 'array',
         'commission_rate' => 'decimal:2',
         'consultation_fee' => 'decimal:2',
+        'device_tokens'                  => 'array', // ← ADD THIS
+
     ];
 
     // ==========================================
@@ -295,5 +300,48 @@ class Agent extends Authenticatable
         }
 
         return view('agent.agent-property-add');
+    }
+
+    public function addFCMToken(string $token, ?string $deviceName = null): void  // ← ? added
+    {
+        $tokens = $this->device_tokens ?? [];
+        $deviceName = $deviceName ?? 'Unknown Device';
+
+        // Check if this exact token already exists — nothing to do
+        $existingTokens = collect($tokens)->map(
+            fn($t) => is_array($t) ? ($t['fcm_token'] ?? null) : $t
+        );
+        if ($existingTokens->contains($token)) {
+            return;
+        }
+
+        // Check if same device name already exists → replace its token
+        $found = false;
+        $tokens = collect($tokens)->map(function ($t) use ($token, $deviceName, &$found) {
+            $existingDevice = is_array($t) ? ($t['device_name'] ?? null) : null;
+
+            if ($existingDevice === $deviceName) {
+                $found = true;
+                // Replace token for this device
+                return [
+                    'fcm_token'   => $token,
+                    'device_name' => $deviceName,
+                    'updated_at'  => now()->toISOString(),
+                ];
+            }
+
+            return $t;
+        })->toArray();
+
+        // Device name not found → add as new device
+        if (!$found) {
+            $tokens[] = [
+                'fcm_token'   => $token,
+                'device_name' => $deviceName,
+                'added_at'    => now()->toISOString(),
+            ];
+        }
+
+        $this->update(['device_tokens' => $tokens]);
     }
 }

@@ -320,39 +320,45 @@ Route::prefix('real-estate-offices')->group(function () {
 // ============================================
 
 // In web.php - REPLACE the entire agents route section with this:
-
 Route::prefix('v1/api/agents')->group(function () {
-    // ✅ SPECIFIC ROUTES FIRST (before catch-all /{id})
-    Route::get('/search', [AgentController::class, 'search']);
-    Route::get('/top-rated', [AgentController::class, 'getTopRated']);
-    Route::get('/nearby', [AgentController::class, 'getNearbyAgents']);
+    // ✅ PUBLIC ROUTES FIRST
+    Route::get('/search',              [AgentController::class, 'search']);
+    Route::get('/top-rated',           [AgentController::class, 'getTopRated']);
+    Route::get('/nearby',              [AgentController::class, 'getNearbyAgents']);
     Route::get('/company/{companyId}', [AgentController::class, 'getAgentsByCompany']);
+    Route::post('/login',              [AgentController::class, 'login']);
+    Route::post('/users/{user_id}/convert-to-agent', [AgentController::class, 'createFromUser']);
 
-    // ✅ AUTHENTICATED SPECIFIC ROUTES (must be before /{id})
+    // ✅ AUTHENTICATED ROUTES
     Route::middleware(['auth:sanctum'])->group(function () {
-        Route::get('/profile', [AgentController::class, 'getAgentProfile']);
-        Route::get('/dashboard-stats', [AgentController::class, 'getDashboardStats']);
-        Route::get('/my-properties', [AgentController::class, 'getMyProperties']);
-        Route::post('/', [AgentController::class, 'store']);
-        Route::put('/{id}', [AgentController::class, 'update']);
-        Route::patch('/{id}', [AgentController::class, 'update']);
-        Route::delete('/{id}', [AgentController::class, 'destroy']);
-        Route::patch('/{id}/verify', [AgentController::class, 'toggleVerification']);
+        // Profile & Dashboard
+        Route::get('/profile',          [AgentController::class, 'getAgentProfile']);
+        Route::get('/dashboard-stats',  [AgentController::class, 'getDashboardStats']);
+        Route::get('/my-properties',    [AgentController::class, 'getMyProperties']);
+
+        // FCM & Session — must be authenticated
+        Route::post('/logout',           [AgentController::class, 'logout']);          // ← ADD
+        Route::post('/update-fcm-token', [AgentController::class, 'updateFCMToken']); // ← MOVED inside auth
+
+        // Subscriptions & Appointments
+        Route::get('/subscriptions/details',          [AgentController::class, 'getSubscriptionDetails']);
+        Route::get('/appointments',                   [AgentController::class, 'getAppointments']);
+        Route::put('/appointments/{id}/status',       [AgentController::class, 'updateAppointmentStatus']);
+
+        // CRUD
+        Route::post('/',               [AgentController::class, 'store']);
+        Route::put('/{id}',            [AgentController::class, 'update']);
+        Route::patch('/{id}',          [AgentController::class, 'update']);
+        Route::delete('/{id}',         [AgentController::class, 'destroy']);
+        Route::patch('/{id}/verify',   [AgentController::class, 'toggleVerification']);
         Route::patch('/{id}/remove-company', [AgentController::class, 'removeFromCompany']);
-        Route::get('/subscriptions/details', [AgentController::class, 'getSubscriptionDetails']);
-        Route::get('/appointments', [AgentController::class, 'getAppointments']);
-        Route::put('/appointments/{id}/status', [AgentController::class, 'updateAppointmentStatus']);
     });
 
-    // ✅ PUBLIC ROUTES
-    Route::get('/', [AgentController::class, 'index']);
-    Route::post('/login', [AgentController::class, 'login']);
-    Route::post('/users/{user_id}/convert-to-agent', [AgentController::class, 'createFromUser']);
-    Route::get('/{id}/properties', [AgentController::class, 'getAgentProperties']);
-    // ✅ CATCH-ALL ROUTES LAST (must be at the end!)
-    Route::get('/{id}', [AgentController::class, 'show']);
+    // ✅ CATCH-ALL LAST
+    Route::get('/',                    [AgentController::class, 'index']);
+    Route::get('/{id}/properties',     [AgentController::class, 'getAgentProperties']);
+    Route::get('/{id}',                [AgentController::class, 'show']);
 });
-
 // ============================================
 // API ROUTES - Location
 // ============================================

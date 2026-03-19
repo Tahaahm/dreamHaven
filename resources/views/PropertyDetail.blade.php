@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>{{ $property->name['en'] ?? 'Property Details' }} — Dream Mulk</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&family=DM+Sans:wght@300;400;500;600&family=Cinzel:wght@400;600&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&family=DM+Sans:wght@300;400;500;600&family=Cinzel:wght@400;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
+/* ═══════════════════════════════
+   RESET & VARIABLES
+═══════════════════════════════ */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
 :root{
   --deep:#06091e;--P:#303b97;--PD:#1a225a;--PM:#232d7a;
@@ -18,16 +21,29 @@
   --surf:rgba(255,255,255,.035);--brd:rgba(255,255,255,.07);
   --txt:rgba(255,255,255,.88);--mu:rgba(255,255,255,.42);
   --E:cubic-bezier(.16,1,.3,1);
+  --font-ar: 'Noto Naskh Arabic', 'Noto Sans Arabic', serif;
+  --font-ar-ui: 'Noto Sans Arabic', sans-serif;
 }
 html{scroll-behavior:smooth;}
-body{font-family:'DM Sans',sans-serif;background:var(--deep);color:var(--txt);line-height:1.6;overflow-x:hidden;}
+body{font-family:'DM Sans',sans-serif;background:var(--deep);color:var(--txt);line-height:1.6;overflow-x:hidden; transition: background 0.3s;}
 a{text-decoration:none;color:inherit;}
 img{display:block;}
+
+/* RTL & Arabic/Kurdish Fonts overrides */
+body.lang-ku, body.lang-ar { font-family: var(--font-ar-ui); }
+body.lang-ku *:not(i):not([class*="fa-"]), body.lang-ar *:not(i):not([class*="fa-"]) {
+  font-family: var(--font-ar-ui); line-height: 1.8;
+}
+body.lang-ku .ptitle, body.lang-ar .ptitle,
+body.lang-ku .sh, body.lang-ar .sh,
+body.lang-ku .ctitle, body.lang-ar .ctitle {
+  font-family: var(--font-ar) !important;
+}
 
 /* ═══════════════════════════════
    HERO GALLERY
 ═══════════════════════════════ */
-.hero{position:relative;height:72vh;min-height:520px;background:#000;overflow:hidden;}
+.hero{position:relative;height:72vh;min-height:520px;background:#000;overflow:hidden; direction: ltr !important;}
 .swiper-hero{width:100%;height:100%;}
 .swiper-hero .swiper-slide img{
   width:100%;height:100%;object-fit:cover;
@@ -35,7 +51,6 @@ img{display:block;}
 }
 .swiper-hero .swiper-slide-active img{transform:scale(1.05);filter:brightness(.72);}
 
-/* Gradient overlays */
 .hero-grad{
   position:absolute;inset:0;z-index:2;pointer-events:none;
   background:
@@ -44,9 +59,8 @@ img{display:block;}
     linear-gradient(to bottom, rgba(6,9,30,.35) 0%, transparent 25%);
 }
 
-/* Badges */
 .hero-badges{
-  position:absolute;top:28px;left:28px;z-index:10;
+  position:absolute;top:28px;inset-inline-start:28px;z-index:10;
   display:flex;gap:10px;flex-wrap:wrap;
 }
 .hbadge{
@@ -55,12 +69,12 @@ img{display:block;}
   font-size:10.5px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
 }
+body.lang-ku .hbadge, body.lang-ar .hbadge { letter-spacing: 0; font-size: 11.5px; }
 .hbadge-v{background:rgba(16,185,129,.82);color:#fff;}
 .hbadge-f{background:rgba(212,175,55,.9);color:#1a225a;}
 .hbadge-t{background:rgba(48,59,151,.8);color:#fff;border:1px solid rgba(212,175,55,.4);}
 
-/* Action buttons top-right */
-.hero-acts{position:absolute;top:28px;right:28px;z-index:10;display:flex;gap:10px;}
+.hero-acts{position:absolute;top:28px;inset-inline-end:28px;z-index:10;display:flex;gap:10px;}
 .hact{
   width:44px;height:44px;border-radius:50%;cursor:pointer;
   background:rgba(6,9,30,.55);border:1px solid rgba(255,255,255,.15);
@@ -69,9 +83,8 @@ img{display:block;}
 }
 .hact:hover{background:var(--G);border-color:var(--G);color:var(--PD);transform:scale(1.1);}
 
-/* Photo count pill */
 .photo-count{
-  position:absolute;bottom:28px;left:28px;z-index:10;
+  position:absolute;bottom:28px;inset-inline-start:28px;z-index:10;
   display:inline-flex;align-items:center;gap:8px;
   padding:8px 18px;border-radius:50px;
   background:rgba(6,9,30,.7);backdrop-filter:blur(12px);
@@ -79,9 +92,8 @@ img{display:block;}
 }
 .photo-count i{color:var(--G);}
 
-/* Thumb strip */
 .thumb-strip{
-  position:absolute;bottom:28px;right:28px;z-index:10;
+  position:absolute;bottom:28px;inset-inline-end:28px;z-index:10;
   display:flex;gap:8px;
 }
 .th{
@@ -92,7 +104,6 @@ img{display:block;}
 .th img{width:100%;height:100%;object-fit:cover;}
 .th:hover,.th.active{border-color:var(--G);opacity:1;}
 
-/* Swiper buttons */
 .swiper-button-prev,.swiper-button-next{
   width:46px;height:46px;border-radius:50%;
   background:rgba(6,9,30,.7);border:1px solid rgba(255,255,255,.14);
@@ -146,10 +157,11 @@ img{display:block;}
   text-transform:uppercase;color:var(--G);
   display:flex;align-items:center;gap:10px;margin-bottom:14px;
 }
+body.lang-ku .eyebrow, body.lang-ar .eyebrow { font-family: var(--font-ar-ui); letter-spacing: 1px; font-size: 11px; }
 .eyebrow::before{content:'';width:28px;height:1px;background:var(--G);}
 .ptitle{
   font-family:'Playfair Display',serif;
-  font-size:clamp(24px,3.5vw,40px);font-weight:800;line-height:1.1;
+  font-size:clamp(24px,3.5vw,40px);font-weight:800;line-height:1.2;
   color:#fff;margin-bottom:10px;
 }
 .paddr{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--mu);}
@@ -158,7 +170,7 @@ img{display:block;}
 .price{
   font-family:'Playfair Display',serif;
   font-size:clamp(28px,4vw,46px);font-weight:800;
-  color:var(--G);letter-spacing:-1.5px;line-height:1;
+  color:var(--G);letter-spacing:-1.5px;line-height:1; direction: ltr;
 }
 .price-note{font-size:13px;color:var(--mu);margin-bottom:5px;}
 
@@ -176,6 +188,7 @@ img{display:block;}
 .bcard i{font-size:20px;color:var(--G);margin-bottom:10px;display:block;}
 .bv{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#fff;display:block;line-height:1;}
 .bl{font-size:9.5px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);margin-top:5px;display:block;}
+body.lang-ku .bl, body.lang-ar .bl { font-family: var(--font-ar-ui); letter-spacing: 0; font-size: 11.5px; text-transform: none; }
 
 /* ─── VIEW PROFILE BTN ─── */
 .prof-btn{
@@ -186,7 +199,9 @@ img{display:block;}
   transition:all .4s var(--E);
 }
 .prof-btn:hover{background:rgba(212,175,55,.22);transform:translateX(5px);}
+body.rtl .prof-btn:hover{transform:translateX(-5px);}
 .prof-btn i{font-size:12px;}
+body.rtl .prof-btn i.fa-arrow-right { transform: rotate(180deg); }
 
 /* ─── DESCRIPTION ─── */
 .desc{font-size:15px;line-height:2;color:var(--mu);font-weight:300;}
@@ -201,6 +216,7 @@ img{display:block;}
 }
 .srow:hover{border-color:rgba(212,175,55,.28);background:rgba(212,175,55,.05);}
 .slbl{font-size:11.5px;color:var(--mu);font-weight:500;}
+body.lang-ku .slbl, body.lang-ar .slbl { font-size: 13px; }
 .sval{font-size:13px;font-weight:600;color:#fff;display:flex;align-items:center;gap:7px;}
 .sval i{color:var(--G);font-size:11px;}
 
@@ -216,9 +232,8 @@ img{display:block;}
 .pill i{color:var(--G);font-size:11px;}
 
 /* ─── MAP ─── */
-.map-wrap{height:370px;overflow:hidden;}
+.map-wrap{height:370px;overflow:hidden; direction: ltr;} /* Keep map LTR to prevent tile breaking */
 #prop-map{width:100%;height:100%;}
-/* Dark tile tint for Leaflet */
 .leaflet-tile{filter:brightness(.55) saturate(.45) hue-rotate(200deg);}
 .leaflet-container{background:var(--deep);}
 .leaflet-attribution-flag{display:none!important;}
@@ -240,13 +255,14 @@ img{display:block;}
 .leaflet-popup-content{margin:16px 18px;font-family:'DM Sans',sans-serif;}
 
 /* ─── REPORT ─── */
-.report-card{border-left:3px solid rgba(239,68,68,.6);}
+.report-card{border-inline-start:3px solid rgba(239,68,68,.6);}
 .report-card textarea{
   width:100%;background:var(--surf);border:1px solid var(--brd);
   color:#fff;border-radius:12px;padding:14px 16px;
   font-family:'DM Sans',sans-serif;font-size:14px;
   resize:none;outline:none;transition:border .3s;
 }
+body.lang-ku .report-card textarea, body.lang-ar .report-card textarea { font-family: var(--font-ar-ui); }
 .report-card textarea:focus{border-color:rgba(239,68,68,.5);}
 .report-card textarea::placeholder{color:rgba(255,255,255,.2);}
 .report-card textarea:focus{box-shadow:0 0 0 3px rgba(239,68,68,.07);}
@@ -281,8 +297,9 @@ img{display:block;}
   font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:var(--mu);
   display:flex;align-items:center;justify-content:center;gap:6px;
 }
+body.lang-ku .ag-role, body.lang-ar .ag-role { font-size: 11.5px; letter-spacing: 0; text-transform: none; }
 .ag-role i{color:var(--G);}
-.ag-rating{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:10px;}
+.ag-rating{display:flex;align-items:center;justify-content:center;gap:4px;margin-top:10px; direction: ltr;}
 .ag-rating i{color:var(--G);font-size:12px;}
 .ag-rating span{font-size:12px;color:var(--mu);margin-left:4px;}
 .ag-acts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;}
@@ -297,8 +314,9 @@ img{display:block;}
 .ag-view:hover{background:rgba(212,175,55,.22);}
 .ag-sep{width:100%;height:1px;background:var(--brd);margin:18px 0;}
 .ag-stat-row{display:flex;justify-content:center;gap:28px;}
-.ag-stat-n{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--G);}
+.ag-stat-n{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--G); direction: ltr;}
 .ag-stat-l{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mu);margin-top:2px;}
+body.lang-ku .ag-stat-l, body.lang-ar .ag-stat-l { font-size: 11.5px; letter-spacing: 0; text-transform: none; }
 
 /* ─── CONTACT CARD ─── */
 .contact-card{padding:30px;}
@@ -306,12 +324,15 @@ img{display:block;}
 .csub{font-size:13px;color:var(--mu);margin-bottom:24px;line-height:1.6;}
 .fg{margin-bottom:16px;}
 .fg label{display:block;font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--mu);margin-bottom:8px;}
+body.lang-ku .fg label, body.lang-ar .fg label { font-size: 12.5px; letter-spacing: 0; text-transform: none; }
 .fg input,.fg textarea{
   width:100%;background:var(--surf);border:1px solid var(--brd);
   color:#fff;border-radius:12px;padding:13px 16px;
   font-family:'DM Sans',sans-serif;font-size:14px;
   outline:none;transition:all .3s var(--E);
 }
+body.lang-ku .fg input, body.lang-ar .fg input,
+body.lang-ku .fg textarea, body.lang-ar .fg textarea { font-family: var(--font-ar-ui); }
 .fg input::placeholder,.fg textarea::placeholder{color:rgba(255,255,255,.18);}
 .fg input:focus,.fg textarea:focus{
   border-color:rgba(212,175,55,.5);
@@ -328,6 +349,7 @@ img{display:block;}
   box-shadow:0 4px 24px rgba(212,175,55,.35);
   transition:all .4s var(--E);position:relative;overflow:hidden;
 }
+body.lang-ku .send-btn, body.lang-ar .send-btn { font-family: var(--font-ar-ui); letter-spacing: 0; font-size: 14.5px; text-transform: none; }
 .send-btn::before{
   content:'';position:absolute;inset:0;
   background:linear-gradient(135deg,rgba(255,255,255,.18),transparent);
@@ -352,7 +374,7 @@ img{display:block;}
 .qi-row:last-child{margin-bottom:0;}
 .qi-row:hover{border-color:rgba(212,175,55,.22);background:rgba(212,175,55,.04);}
 .qi-lbl{font-size:12px;color:var(--mu);display:flex;align-items:center;gap:7px;}
-.qi-lbl i{color:var(--G);width:14px;}
+.qi-lbl i{color:var(--G);width:14px; text-align: center;}
 .qi-val{font-size:13px;font-weight:600;color:#fff;}
 
 /* ─── SECTION SPACING ─── */
@@ -371,8 +393,8 @@ img{display:block;}
   .gcp{padding:22px;}
   .outer{padding:0 14px 80px;}
   .grid{margin-top:0;}
-  .hero-badges{top:14px;left:14px;}
-  .hero-acts{top:14px;right:14px;}
+  .hero-badges{top:14px;inset-inline-start:14px;}
+  .hero-acts{top:14px;inset-inline-end:14px;}
   .thumb-strip,.photo-count{display:none;}
 }
 @media(max-width:480px){.ag-acts{grid-template-columns:1fr;}}
@@ -382,9 +404,8 @@ img{display:block;}
 @php $navbarStyle = 'dark'; @endphp
 @include('navbar')
 
-<!-- ═══════ HERO ═══════ -->
 <div class="hero">
-  <div class="swiper swiper-hero">
+  <div class="swiper swiper-hero" dir="ltr">
     <div class="swiper-wrapper">
       @foreach($property->images as $photo)
       <div class="swiper-slide">
@@ -400,76 +421,80 @@ img{display:block;}
 
   <div class="hero-grad"></div>
 
-  <!-- Badges -->
   <div class="hero-badges">
     @if($property->verified)
-      <span class="hbadge hbadge-v"><i class="fas fa-shield-check"></i> Verified</span>
+      <span class="hbadge hbadge-v"><i class="fas fa-shield-check"></i> <span data-i18n="verified">Verified</span></span>
     @endif
     @if($property->is_boosted)
-      <span class="hbadge hbadge-f"><i class="fas fa-crown"></i> Featured</span>
+      <span class="hbadge hbadge-f"><i class="fas fa-crown"></i> <span data-i18n="featured">Featured</span></span>
     @endif
-    <span class="hbadge hbadge-t"><i class="fas fa-tag"></i> {{ ucfirst($property->listing_type) }}</span>
+    <span class="hbadge hbadge-t"><i class="fas fa-tag"></i> <span data-i18n="{{ strtolower($property->listing_type) }}">{{ ucfirst($property->listing_type) }}</span></span>
   </div>
 
-  <!-- Action buttons -->
   <div class="hero-acts">
     <div class="hact" id="share-btn" title="Share"><i class="fas fa-share-nodes"></i></div>
     <div class="hact" id="fav-btn" title="Save"><i class="far fa-heart"></i></div>
   </div>
 
-  <!-- Photo count -->
   <div class="photo-count" id="photo-count">
     <i class="fas fa-camera"></i>
-    <span id="pc-text">1 / {{ count($property->images) }}</span>
+    <span id="pc-text" style="direction: ltr;">1 / {{ count($property->images) }}</span>
   </div>
 
-  <!-- Thumbnail strip -->
   <div class="thumb-strip" id="thumb-strip"></div>
 </div>
 
-<!-- ═══════ CONTENT ═══════ -->
 <div class="outer">
 <div class="grid">
 
-<!-- ══ LEFT ══ -->
 <div>
 
-  <!-- ─ Title & Price ─ -->
   <div class="gc gcp top-accent sb">
-    <div class="eyebrow">Dream Mulk Property</div>
-    <h1 class="ptitle">{{ $property->name['en'] ?? $property->name ?? 'Untitled Property' }}</h1>
-    <div class="paddr">
+    <div class="eyebrow" data-i18n="eyebrowText">Dream Mulk Property</div>
+    <h1 class="ptitle" id="dyn-title"
+        data-en="{{ $property->name['en'] ?? $property->name ?? 'Untitled Property' }}"
+        data-ku="{{ $property->name['ku'] ?? $property->name ?? 'Untitled Property' }}"
+        data-ar="{{ $property->name['ar'] ?? $property->name ?? 'Untitled Property' }}">
+        {{ $property->name['en'] ?? $property->name ?? 'Untitled Property' }}
+    </h1>
+
+    <div class="paddr" id="dyn-addr"
+         data-en="{{ $property->address_details['city']['en'] ?? $property->address ?? 'Kurdistan, Iraq' }}"
+         data-ku="{{ $property->address_details['city']['ku'] ?? $property->address ?? 'Kurdistan, Iraq' }}"
+         data-ar="{{ $property->address_details['city']['ar'] ?? $property->address ?? 'Kurdistan, Iraq' }}">
       <i class="fas fa-location-dot"></i>
-      {{ $property->address_details['city']['en'] ?? $property->address ?? 'Kurdistan, Iraq' }}
+      <span>{{ $property->address_details['city']['en'] ?? $property->address ?? 'Kurdistan, Iraq' }}</span>
     </div>
+
     <div class="price-row">
       <div>
         <div class="price">${{ number_format($property->price['usd'] ?? 0) }}</div>
-        <div class="price-note">{{ $property->listing_type === 'rent' ? 'per month' : 'total price' }}</div>
+        <div class="price-note" data-i18n="{{ $property->listing_type === 'rent' ? 'perMonth' : 'totalPrice' }}">
+          {{ $property->listing_type === 'rent' ? 'per month' : 'total price' }}
+        </div>
       </div>
     </div>
 
-    <!-- Bento stats -->
     <div class="bento">
       <div class="bcard">
         <i class="fas fa-bed"></i>
         <span class="bv">{{ $property->rooms['bedroom']['count'] ?? 0 }}</span>
-        <span class="bl">Bedrooms</span>
+        <span class="bl" data-i18n="beds">Bedrooms</span>
       </div>
       <div class="bcard">
         <i class="fas fa-bath"></i>
         <span class="bv">{{ $property->rooms['bathroom']['count'] ?? 0 }}</span>
-        <span class="bl">Bathrooms</span>
+        <span class="bl" data-i18n="baths">Bathrooms</span>
       </div>
       <div class="bcard">
         <i class="fas fa-vector-square"></i>
         <span class="bv">{{ number_format($property->area ?? 0) }}</span>
-        <span class="bl">m² Area</span>
+        <span class="bl" data-i18n="area">m² Area</span>
       </div>
       <div class="bcard">
         <i class="fas fa-couch"></i>
-        <span class="bv">{{ $property->furnished ? 'Yes' : 'No' }}</span>
-        <span class="bl">Furnished</span>
+        <span class="bv" data-i18n="{{ $property->furnished ? 'yes' : 'no' }}">{{ $property->furnished ? 'Yes' : 'No' }}</span>
+        <span class="bl" data-i18n="furnished">Furnished</span>
       </div>
     </div>
 
@@ -484,55 +509,58 @@ img{display:block;}
     @endphp
     @if($canAgent)
       <a href="{{ $agentUrl }}" class="prof-btn">
-        <i class="fas fa-user-tie"></i> View Professional Profile <i class="fas fa-arrow-right"></i>
+        <i class="fas fa-user-tie"></i> <span data-i18n="viewProfile">View Professional Profile</span> <i class="fas fa-arrow-right"></i>
       </a>
     @endif
   </div>
 
-  <!-- ─ Description ─ -->
   <div class="gc gcp sb">
-    <div class="sh"><div class="sh-ico"><i class="fas fa-align-left"></i></div> About This Property</div>
-    <p class="desc">{{ $property->description['en'] ?? 'No description has been provided for this property.' }}</p>
+    <div class="sh"><div class="sh-ico"><i class="fas fa-align-left"></i></div> <span data-i18n="aboutProp">About This Property</span></div>
+    <p class="desc" id="dyn-desc"
+       data-en="{{ $property->description['en'] ?? 'No description has been provided for this property.' }}"
+       data-ku="{{ $property->description['ku'] ?? $property->description['en'] ?? 'زانیاری نەنووسراوە' }}"
+       data-ar="{{ $property->description['ar'] ?? $property->description['en'] ?? 'لم يتم تقديم وصف' }}">
+       {{ $property->description['en'] ?? 'No description has been provided for this property.' }}
+    </p>
   </div>
 
-  <!-- ─ Specifications ─ -->
   <div class="gc gcp sb">
-    <div class="sh"><div class="sh-ico"><i class="fas fa-list-check"></i></div> Specifications</div>
+    <div class="sh"><div class="sh-ico"><i class="fas fa-list-check"></i></div> <span data-i18n="specs">Specifications</span></div>
     <div class="specs">
       @php $specs = [
-        ['l'=>'Property Type','v'=>ucfirst($property->type['category'] ?? 'N/A'),'i'=>'fa-home'],
-        ['l'=>'Year Built','v'=>$property->year_built ?? 'N/A','i'=>'fa-calendar-check'],
-        ['l'=>'Floor Number','v'=>$property->floor_number ?? 'N/A','i'=>'fa-layer-group'],
-        ['l'=>'Electricity','v'=>$property->electricity ? 'Available' : 'N/A','i'=>'fa-bolt'],
-        ['l'=>'Water Supply','v'=>$property->water ? 'Available' : 'N/A','i'=>'fa-droplet'],
-        ['l'=>'Internet','v'=>$property->internet ? 'Fiber Optic' : 'N/A','i'=>'fa-wifi'],
+        ['l'=>'Property Type','lk'=>'propType','v'=>ucfirst($property->type['category'] ?? 'N/A'),'i'=>'fa-home'],
+        ['l'=>'Year Built','lk'=>'yearBuilt','v'=>$property->year_built ?? 'N/A','i'=>'fa-calendar-check'],
+        ['l'=>'Floor Number','lk'=>'floorNum','v'=>$property->floor_number ?? 'N/A','i'=>'fa-layer-group'],
+        ['l'=>'Electricity','lk'=>'electricity','v'=>$property->electricity ? 'Available' : 'N/A','i'=>'fa-bolt'],
+        ['l'=>'Water Supply','lk'=>'water','v'=>$property->water ? 'Available' : 'N/A','i'=>'fa-droplet'],
+        ['l'=>'Internet','lk'=>'internet','v'=>$property->internet ? 'Fiber Optic' : 'N/A','i'=>'fa-wifi'],
       ]; @endphp
       @foreach($specs as $s)
       <div class="srow">
-        <span class="slbl">{{ $s['l'] }}</span>
-        <span class="sval"><i class="fas {{ $s['i'] }}"></i>{{ $s['v'] }}</span>
+        <span class="slbl" data-i18n="{{ $s['lk'] }}">{{ $s['l'] }}</span>
+        <span class="sval"><i class="fas {{ $s['i'] }}"></i>
+            <span data-i18n-val="{{ strtolower($s['v']) }}">{{ $s['v'] }}</span>
+        </span>
       </div>
       @endforeach
     </div>
   </div>
 
-  <!-- ─ Amenities ─ -->
   @if(!empty($property->features) || !empty($property->amenities))
   <div class="gc gcp sb">
-    <div class="sh"><div class="sh-ico"><i class="fas fa-sparkles"></i></div> Amenities & Features</div>
+    <div class="sh"><div class="sh-ico"><i class="fas fa-sparkles"></i></div> <span data-i18n="amenities">Amenities & Features</span></div>
     <div class="pills">
       @foreach(array_merge($property->features ?? [], $property->amenities ?? []) as $item)
-        <span class="pill"><i class="fas fa-check"></i>{{ ucfirst($item) }}</span>
+        <span class="pill"><i class="fas fa-check"></i> <span data-i18n-item="{{ strtolower($item) }}">{{ ucfirst($item) }}</span></span>
       @endforeach
     </div>
   </div>
   @endif
 
-  <!-- ─ MAP (Leaflet / OpenStreetMap — zero API key needed) ─ -->
   <div class="gc sb" style="overflow:hidden;">
     <div class="gcp" style="padding-bottom:0;">
       <div class="sh" style="margin-bottom:20px;">
-        <div class="sh-ico"><i class="fas fa-map-location-dot"></i></div> Location
+        <div class="sh-ico"><i class="fas fa-map-location-dot"></i></div> <span data-i18n="location">Location</span>
       </div>
     </div>
     <div class="map-wrap">
@@ -540,33 +568,28 @@ img{display:block;}
     </div>
   </div>
 
-  <!-- ─ Report ─ -->
   <div class="gc gcp sb report-card">
     <div class="sh" style="border-color:rgba(239,68,68,.15);">
       <div class="sh-ico" style="background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.22);color:#f87171;">
         <i class="fas fa-triangle-exclamation"></i>
       </div>
-      <span style="color:#fca5a5;">Report This Listing</span>
+      <span style="color:#fca5a5;" data-i18n="reportTitle">Report This Listing</span>
     </div>
     <form method="POST" action="{{ route('report.store') }}">
       @csrf
       <input type="hidden" name="property_id" value="{{ $property->id }}"/>
       <div style="margin-bottom:14px;">
-        <textarea name="report" rows="3" placeholder="Describe the issue with this listing…" required></textarea>
+        <textarea name="report" rows="3" data-placeholder-i18n="reportDesc" placeholder="Describe the issue with this listing…" required></textarea>
       </div>
-      <button type="submit" class="btn-report"><i class="fas fa-flag"></i> Submit Report</button>
+      <button type="submit" class="btn-report"><i class="fas fa-flag"></i> <span data-i18n="submitReport">Submit Report</span></button>
     </form>
     @if(session('success'))
       <div class="ok-box"><i class="fas fa-check-circle"></i>{{ session('success') }}</div>
     @endif
   </div>
 
-</div><!-- /left -->
+</div><div class="sticky-col">
 
-<!-- ══ SIDEBAR ══ -->
-<div class="sticky-col">
-
-  <!-- ─ Agent Card ─ -->
   @if($canAgent && $owner)
   <div class="gc agent-card">
     <div class="ag-avatar">
@@ -579,91 +602,241 @@ img{display:block;}
     <div class="ag-name">{{ $owner->agent_name ?? $owner->name ?? 'Agent' }}</div>
     <div class="ag-role">
       <i class="fas fa-circle-check"></i>
-      {{ get_class($owner)==='App\\Models\\RealEstateOffice' ? 'Real Estate Office' : 'Verified Agent' }}
+      <span data-i18n="{{ get_class($owner)==='App\\Models\\RealEstateOffice' ? 'office' : 'agent' }}">
+        {{ get_class($owner)==='App\\Models\\RealEstateOffice' ? 'Real Estate Office' : 'Verified Agent' }}
+      </span>
     </div>
     <div class="ag-rating">
       <i class="fas fa-star"></i><i class="fas fa-star"></i><i class="fas fa-star"></i>
       <i class="fas fa-star"></i><i class="fas fa-star-half-stroke"></i>
-      <span>4.8 (124 reviews)</span>
+      <span>4.8 (124)</span>
     </div>
     <div class="ag-acts">
       @if($owner->phone ?? $owner->phone_number)
       <a href="tel:{{ $owner->phone ?? $owner->phone_number }}" class="ag-btn ag-call">
-        <i class="fas fa-phone"></i> Call
+        <i class="fas fa-phone"></i> <span data-i18n="call">Call</span>
       </a>
       @endif
       <a href="{{ $agentUrl }}" class="ag-btn ag-view">
-        <i class="fas fa-user"></i> Profile
+        <i class="fas fa-user"></i> <span data-i18n="profile">Profile</span>
       </a>
     </div>
     <div class="ag-sep"></div>
     <div class="ag-stat-row">
       <div style="text-align:center;">
         <div class="ag-stat-n">47</div>
-        <div class="ag-stat-l">Listings</div>
+        <div class="ag-stat-l" data-i18n="listings">Listings</div>
       </div>
       <div style="text-align:center;">
         <div class="ag-stat-n">5yr</div>
-        <div class="ag-stat-l">Experience</div>
+        <div class="ag-stat-l" data-i18n="experience">Experience</div>
       </div>
       <div style="text-align:center;">
         <div class="ag-stat-n">98%</div>
-        <div class="ag-stat-l">Response</div>
+        <div class="ag-stat-l" data-i18n="response">Response</div>
       </div>
     </div>
   </div>
   @endif
 
-  <!-- ─ Contact Form ─ -->
   <div class="gc contact-card">
-    <div class="ctitle">Send Inquiry</div>
-    <div class="csub">Interested in this property? Send a message and we'll connect you with the agent directly.</div>
+    <div class="ctitle" data-i18n="inquiryTitle">Send Inquiry</div>
+    <div class="csub" data-i18n="inquirySub">Interested in this property? Send a message and we'll connect you with the agent directly.</div>
     <form action="/submit-contact" method="POST">
       @csrf
       <div class="fg">
-        <label>Full Name</label>
-        <input type="text" name="name" placeholder="Your full name" required/>
+        <label data-i18n="fullName">Full Name</label>
+        <input type="text" name="name" data-placeholder-i18n="fullNamePh" placeholder="Your full name" required/>
       </div>
       <div class="fg">
-        <label>Phone Number</label>
-        <input type="tel" name="phone-number" placeholder="07XX XXX XXXX" required/>
+        <label data-i18n="phone">Phone Number</label>
+        <input type="tel" name="phone-number" placeholder="07XX XXX XXXX" required style="direction: ltr; text-align: start;"/>
       </div>
       <div class="fg">
-        <label>Message</label>
-        <textarea name="message" rows="4" required>I am interested in {{ $property->name['en'] ?? 'this property' }}. Please contact me.</textarea>
+        <label data-i18n="message">Message</label>
+        <textarea name="message" rows="4" id="inquiry-msg" required>I am interested in this property. Please contact me.</textarea>
       </div>
-      <button type="submit" class="send-btn"><i class="fas fa-paper-plane"></i> Send Inquiry</button>
+      <button type="submit" class="send-btn"><i class="fas fa-paper-plane"></i> <span data-i18n="sendInquiry">Send Inquiry</span></button>
     </form>
-    <div class="resp-note"><i class="fas fa-clock"></i> Typically responds within 24 hours</div>
+    <div class="resp-note"><i class="fas fa-clock"></i> <span data-i18n="respNote">Typically responds within 24 hours</span></div>
   </div>
 
-  <!-- ─ Quick Info ─ -->
   <div class="gc quick-card">
     <div class="sh" style="font-size:16px;margin-bottom:16px;padding-bottom:14px;">
-      <div class="sh-ico"><i class="fas fa-circle-info"></i></div> Quick Info
+      <div class="sh-ico"><i class="fas fa-circle-info"></i></div> <span data-i18n="quickInfo">Quick Info</span>
     </div>
     @php $qi=[
-      ['l'=>'Property ID','v'=>'#'.str_pad($property->id,5,'0',STR_PAD_LEFT),'i'=>'fa-hashtag'],
-      ['l'=>'Status','v'=>ucfirst($property->status ?? 'Active'),'i'=>'fa-circle-dot'],
-      ['l'=>'Listed','v'=>optional($property->created_at)->diffForHumans() ?? 'Recently','i'=>'fa-calendar'],
-      ['l'=>'Views','v'=>number_format($property->views ?? 0),'i'=>'fa-eye'],
+      ['l'=>'Property ID','lk'=>'propId','v'=>'#'.str_pad($property->id,5,'0',STR_PAD_LEFT),'i'=>'fa-hashtag'],
+      ['l'=>'Status','lk'=>'status','v'=>ucfirst($property->status ?? 'Active'),'i'=>'fa-circle-dot'],
+      ['l'=>'Listed','lk'=>'listed','v'=>optional($property->created_at)->diffForHumans() ?? 'Recently','i'=>'fa-calendar'],
+      ['l'=>'Views','lk'=>'views','v'=>number_format($property->views ?? 0),'i'=>'fa-eye'],
     ]; @endphp
     @foreach($qi as $q)
     <div class="qi-row">
-      <span class="qi-lbl"><i class="fas {{ $q['i'] }}"></i>{{ $q['l'] }}</span>
-      <span class="qi-val">{{ $q['v'] }}</span>
+      <span class="qi-lbl"><i class="fas {{ $q['i'] }}"></i><span data-i18n="{{ $q['lk'] }}">{{ $q['l'] }}</span></span>
+      <span class="qi-val" style="direction:ltr;">
+        @if($q['lk'] === 'status')
+            <span data-i18n-val="{{ strtolower($q['v']) }}">{{ $q['v'] }}</span>
+        @else
+            {{ $q['v'] }}
+        @endif
+      </span>
     </div>
     @endforeach
   </div>
 
-</div><!-- /sidebar -->
-</div><!-- /grid -->
-</div><!-- /outer -->
-
-<!-- ═══════ SCRIPTS ═══════ -->
-<script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+</div></div></div><script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+/* ── I18N SYSTEM ── */
+class PropertyI18n {
+  constructor() {
+    this.storageKey = 'dm_lang';
+    this.defaultLang = 'ku';
+    this.translations = {
+      ku: {
+        dir: 'rtl',
+        eyebrowText: 'موڵکی دریم موڵک', verified: 'پشتڕاستکراوە', featured: 'تایبەت',
+        rent: 'کرێ', sell: 'فرۆشتن', perMonth: 'مانگانە', totalPrice: 'نرخی گشتی',
+        beds: 'نووستن', baths: 'گەرماو', area: 'ڕووبەر (م٢)', furnished: 'مۆبیلیات',
+        yes: 'بەڵێ', no: 'نەخێر', viewProfile: 'بینینی پڕۆفایلی کارمەند',
+        aboutProp: 'دەربارەی ئەم خانوو', specs: 'تایبەتمەندییەکان', amenities: 'خزمەتگوزارییەکان',
+        location: 'ناونیشان', reportTitle: 'ڕاپۆرتکردنی ئەم خانوو', submitReport: 'ناردنی ڕاپۆرت',
+        agent: 'ئەجێنتی پشتڕاستکراوە', office: 'ئۆفیسی خانووبەرە', call: 'پەیوەندی', profile: 'پڕۆفایل',
+        listings: 'خانووەکان', experience: 'ئەزموون', response: 'وەڵامدانەوە',
+        inquiryTitle: 'ناردنی پرسیار', inquirySub: 'ئارەزووی ئەم خانووت هەیە؟ نامەیەک بنێرە.',
+        fullName: 'ناوی تەواو', phone: 'ژمارەی تەلەفۆن', message: 'نامە', sendInquiry: 'ناردن',
+        respNote: 'زۆرجار لە ماوەی ٢٤ کاتژمێردا وەڵام دەداتەوە', quickInfo: 'زانیاری خێرا',
+        propId: 'ژمارەی خانوو', status: 'دۆخ', listed: 'کاتی دانان', views: 'بینینەکان',
+
+        // Form & Textarea
+        reportDesc: 'کێشەی ئەم خانوو لێرە بنووسە...', fullNamePh: 'ناوی خۆت بنووسە',
+        msgDefault: 'سڵاو، ئارەزووی ئەم خانووەم هەیە. تکایە پەیوەندیم پێوە بکە.',
+
+        // Dynamic Values translation mapping
+        val_available: 'بەردەستە', val_n_a: 'نەزانراو', val_fiber_optic: 'فایبەر ئۆپتیک', val_active: 'چالاک',
+        propType: 'جۆری خانوو', yearBuilt: 'ساڵی درووستکردن', floorNum: 'نهۆم', electricity: 'کارەبا', water: 'ئاو', internet: 'ئینتەرنێت'
+      },
+      en: {
+        dir: 'ltr',
+        eyebrowText: 'Dream Mulk Property', verified: 'Verified', featured: 'Featured',
+        rent: 'Rent', sell: 'Sale', perMonth: 'per month', totalPrice: 'total price',
+        beds: 'Bedrooms', baths: 'Bathrooms', area: 'm² Area', furnished: 'Furnished',
+        yes: 'Yes', no: 'No', viewProfile: 'View Professional Profile',
+        aboutProp: 'About This Property', specs: 'Specifications', amenities: 'Amenities & Features',
+        location: 'Location', reportTitle: 'Report This Listing', submitReport: 'Submit Report',
+        agent: 'Verified Agent', office: 'Real Estate Office', call: 'Call', profile: 'Profile',
+        listings: 'Listings', experience: 'Experience', response: 'Response',
+        inquiryTitle: 'Send Inquiry', inquirySub: 'Interested in this property? Send a message.',
+        fullName: 'Full Name', phone: 'Phone Number', message: 'Message', sendInquiry: 'Send Inquiry',
+        respNote: 'Typically responds within 24 hours', quickInfo: 'Quick Info',
+        propId: 'Property ID', status: 'Status', listed: 'Listed', views: 'Views',
+
+        reportDesc: 'Describe the issue with this listing...', fullNamePh: 'Your full name',
+        msgDefault: 'I am interested in this property. Please contact me.',
+
+        val_available: 'Available', val_n_a: 'N/A', val_fiber_optic: 'Fiber Optic', val_active: 'Active',
+        propType: 'Property Type', yearBuilt: 'Year Built', floorNum: 'Floor Number', electricity: 'Electricity', water: 'Water Supply', internet: 'Internet'
+      },
+      ar: {
+        dir: 'rtl',
+        eyebrowText: 'عقار دريم مُلك', verified: 'موثق', featured: 'مميز',
+        rent: 'للإيجار', sell: 'للبيع', perMonth: 'شهرياً', totalPrice: 'السعر الإجمالي',
+        beds: 'غرف النوم', baths: 'الحمامات', area: 'المساحة (م٢)', furnished: 'مفروش',
+        yes: 'نعم', no: 'لا', viewProfile: 'عرض الملف الشخصي',
+        aboutProp: 'عن هذا العقار', specs: 'المواصفات', amenities: 'المميزات والمرافق',
+        location: 'الموقع', reportTitle: 'الإبلاغ عن هذا الإعلان', submitReport: 'إرسال البلاغ',
+        agent: 'وكيل موثق', office: 'مكتب عقارات', call: 'اتصال', profile: 'الملف الشخصي',
+        listings: 'إعلانات', experience: 'خبرة', response: 'استجابة',
+        inquiryTitle: 'إرسال استفسار', inquirySub: 'مهتم بهذا العقار؟ أرسل رسالة للتواصل.',
+        fullName: 'الاسم الكامل', phone: 'رقم الهاتف', message: 'رسالة', sendInquiry: 'إرسال',
+        respNote: 'عادة ما يرد خلال ٢٤ ساعة', quickInfo: 'معلومات سريعة',
+        propId: 'رقم العقار', status: 'الحالة', listed: 'تاريخ النشر', views: 'المشاهدات',
+
+        reportDesc: 'صف المشكلة في هذا الإعلان...', fullNamePh: 'اسمك الكامل',
+        msgDefault: 'مرحباً، أنا مهتم بهذا العقار. يرجى التواصل معي.',
+
+        val_available: 'متوفر', val_n_a: 'غير متوفر', val_fiber_optic: 'ألياف ضوئية', val_active: 'نشط',
+        propType: 'نوع العقار', yearBuilt: 'سنة البناء', floorNum: 'الطابق', electricity: 'الكهرباء', water: 'الماء', internet: 'الإنترنت'
+      }
+    };
+  }
+
+  init() {
+    const saved = localStorage.getItem(this.storageKey) || this.defaultLang;
+    this.setLang(saved);
+
+    // Listen for language buttons from the navbar (assuming they have class .lang-btn and data-lang attr)
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.addEventListener('click', () => this.setLang(btn.getAttribute('data-lang')));
+    });
+  }
+
+  setLang(lang) {
+    if (!this.translations[lang]) return;
+    localStorage.setItem(this.storageKey, lang);
+    const T = this.translations[lang];
+
+    document.body.dir = T.dir;
+    document.documentElement.lang = lang === 'ar' ? 'ar' : lang === 'ku' ? 'ku' : 'en';
+    document.body.classList.remove('lang-ku', 'lang-en', 'lang-ar', 'rtl');
+    document.body.classList.add('lang-' + lang);
+    if (T.dir === 'rtl') document.body.classList.add('rtl');
+
+    // Update Active Button States
+    document.querySelectorAll('.lang-btn').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-lang') === lang);
+    });
+
+    // 1. Translate Static Texts
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (T[key] !== undefined) el.textContent = T[key];
+    });
+
+    // 2. Translate Static Values (Specs/Amenities)
+    document.querySelectorAll('[data-i18n-val]').forEach(el => {
+      const key = 'val_' + el.getAttribute('data-i18n-val').replace(/\s+/g, '_').replace(/[^a-z0-9_]/gi, '');
+      if (T[key] !== undefined) el.textContent = T[key];
+    });
+
+    // 3. Translate Placeholders
+    document.querySelectorAll('[data-placeholder-i18n]').forEach(el => {
+      const key = el.getAttribute('data-placeholder-i18n');
+      if (T[key] !== undefined) el.placeholder = T[key];
+    });
+
+    // 4. Translate Dynamic Blade Data (Title, Description, Address)
+    const dynEls = ['dyn-title', 'dyn-desc', 'dyn-addr'];
+    dynEls.forEach(id => {
+      const el = document.getElementById(id);
+      if(el) {
+          const transTxt = el.getAttribute('data-' + lang);
+          if(transTxt && transTxt.trim() !== '') {
+              // for addr we need to keep the icon
+              if(id === 'dyn-addr') {
+                  el.querySelector('span').textContent = transTxt;
+              } else {
+                  el.textContent = transTxt;
+              }
+          }
+      }
+    });
+
+    // 5. Default Textarea Message
+    const msgArea = document.getElementById('inquiry-msg');
+    if(msgArea && (msgArea.value === this.translations['en'].msgDefault ||
+                   msgArea.value === this.translations['ku'].msgDefault ||
+                   msgArea.value === this.translations['ar'].msgDefault)) {
+        msgArea.value = T.msgDefault;
+    }
+  }
+}
+
+// Initialize I18n
+const propI18n = new PropertyI18n();
+propI18n.init();
+
 /* ── SWIPER ── */
 const heroSwiper = new Swiper('.swiper-hero',{
   loop:true,
@@ -733,7 +906,6 @@ document.getElementById('share-btn').addEventListener('click',function(){
     scrollWheelZoom:false,
   });
 
-  /* OpenStreetMap tile — completely free, no key */
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     maxZoom:19,
     attribution:'&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -741,7 +913,6 @@ document.getElementById('share-btn').addEventListener('click',function(){
 
   L.control.zoom({position:'bottomright'}).addTo(map);
 
-  /* Gold custom marker */
   const markerHTML=`
     <div style="position:relative;width:42px;height:52px;">
       <div style="
@@ -763,7 +934,7 @@ document.getElementById('share-btn').addEventListener('click',function(){
   L.marker([{{ $lat }},{{ $lng }}],{icon})
     .addTo(map)
     .bindPopup(`
-      <div style="min-width:190px;">
+      <div style="min-width:190px;" dir="ltr">
         <div style="font-weight:800;font-size:14px;margin-bottom:5px;">
           {{ $property->name['en'] ?? 'Property' }}
         </div>
@@ -778,7 +949,6 @@ document.getElementById('share-btn').addEventListener('click',function(){
     `,{maxWidth:240})
     .openPopup();
 
-  /* Enable scroll zoom on click */
   map.on('click',()=>map.scrollWheelZoom.enable());
   map.on('mouseout',()=>map.scrollWheelZoom.disable());
 })();

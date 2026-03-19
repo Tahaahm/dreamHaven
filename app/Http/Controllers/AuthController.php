@@ -145,45 +145,52 @@ class AuthController extends Controller
         $office = RealEstateOffice::where('email_address', $request->email)->first();
 
         if ($office && Hash::check($request->password, $office->password)) {
+
+            // Handle device token — same logic as Agent and User
+            $deviceName  = $request->get('device_name', 'Unknown Device');
+            $deviceToken = $request->get('device_token'); // FCM token
+
+            if ($deviceToken) {
+                $office->addFCMToken($deviceToken, $deviceName);
+            }
+
             $token = $office->createToken('authToken')->plainTextToken;
 
             return response()->json([
-                'token' => $token,
-                'office' => $office
+                'token'  => $token,
+                'office' => $office->fresh(), // fresh() so device_tokens is up to date
             ]);
         }
 
         return response()->json(['error' => 'Invalid credentials'], 401);
     }
 
-
     // Login for Agents
     public function loginAgent(Request $request)
     {
-        $credentials = $request->only('email', 'password');
-
-        // Find the agent by email
-        $agent = Agent::where('email', $request->email)->first();
+        // Find the agent by primary_email
+        $agent = Agent::where('primary_email', $request->email)->first();
 
         if ($agent && Hash::check($request->password, $agent->password)) {
+
+            // Handle device token — same logic as User and Office
+            $deviceName  = $request->get('device_name', 'Unknown Device');
+            $deviceToken = $request->get('device_token'); // FCM token
+
+            if ($deviceToken) {
+                $agent->addFCMToken($deviceToken, $deviceName);
+            }
+
             $token = $agent->createToken('authToken')->plainTextToken;
 
             return response()->json([
                 'token' => $token,
-                'agent' => $agent
+                'agent' => $agent->fresh(), // fresh() so device_tokens is up to date
             ]);
-        } else {
-            return response()->json(['error' => 'Invalid credentials'], 401);
         }
+
+        return response()->json(['error' => 'Invalid credentials'], 401);
     }
-
-
-
-
-
-
-
-
 
 
 

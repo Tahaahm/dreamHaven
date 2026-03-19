@@ -45,7 +45,8 @@ class RealEstateOffice extends Authenticatable
         'years_experience',
         'about_company',
         'availability_schedule',
-
+        'device_tokens',  // ← ADDED
+        'language',       // ← ADDED
     ];
 
     protected $hidden = [
@@ -56,15 +57,16 @@ class RealEstateOffice extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-            'is_verified' => 'boolean',
-            'average_rating' => 'decimal:2',
-            'latitude' => 'decimal:8',
-            'longitude' => 'decimal:8',
-            'properties_sold' => 'integer',
-            'years_experience' => 'integer',
+            'email_verified_at'   => 'datetime',
+            'password'            => 'hashed',
+            'is_verified'         => 'boolean',
+            'average_rating'      => 'decimal:2',
+            'latitude'            => 'decimal:8',
+            'longitude'           => 'decimal:8',
+            'properties_sold'     => 'integer',
+            'years_experience'    => 'integer',
             'availability_schedule' => 'array',
+            'device_tokens'       => 'array',  // ← ADDED
         ];
     }
 
@@ -182,6 +184,83 @@ class RealEstateOffice extends Authenticatable
         return $this->companyAgents()->where('is_active', true)->count();
     }
 
+    // ==================== DEVICE TOKEN METHODS ====================
+
+    /**
+     * Add or update an FCM token for this office.
+     * Same logic as Agent and User.
+     */
+    public function addFCMToken(string $token, ?string $deviceName = null): void
+    {
+        $tokens     = $this->device_tokens ?? [];
+        $deviceName = $deviceName ?? 'Unknown Device';
+
+        // If the exact token already exists — nothing to do
+        $existingTokens = collect($tokens)->map(
+            fn($t) => is_array($t) ? ($t['fcm_token'] ?? null) : $t
+        );
+        if ($existingTokens->contains($token)) {
+            return;
+        }
+
+        // If same device name exists → replace its token
+        $found  = false;
+        $tokens = collect($tokens)->map(function ($t) use ($token, $deviceName, &$found) {
+            $existingDevice = is_array($t) ? ($t['device_name'] ?? null) : null;
+
+            if ($existingDevice === $deviceName) {
+                $found = true;
+                return [
+                    'fcm_token'   => $token,
+                    'device_name' => $deviceName,
+                    'updated_at'  => now()->toISOString(),
+                ];
+            }
+
+            return $t;
+        })->toArray();
+
+        // Device name not found → add as new entry
+        if (!$found) {
+            $tokens[] = [
+                'fcm_token'   => $token,
+                'device_name' => $deviceName,
+                'added_at'    => now()->toISOString(),
+            ];
+        }
+
+        $this->update(['device_tokens' => $tokens]);
+    }
+
+    /**
+     * Remove a specific FCM token.
+     */
+    public function removeFCMToken(string $token): void
+    {
+        $tokens = collect($this->device_tokens ?? [])
+            ->reject(fn($t) => (is_array($t) ? ($t['fcm_token'] ?? null) : $t) === $token)
+            ->values()
+            ->toArray();
+
+        $this->update(['device_tokens' => $tokens]);
+    }
+
+    /**
+     * Get all raw FCM token strings for this office.
+     */
+    public function getFCMTokens(): array
+    {
+        $fcmTokens = [];
+
+        foreach ($this->device_tokens ?? [] as $device) {
+            if (!empty($device['fcm_token'])) {
+                $fcmTokens[] = $device['fcm_token'];
+            }
+        }
+
+        return $fcmTokens;
+    }
+
     // ==================== SUBSCRIPTION HELPER METHODS ====================
 
     /**
@@ -189,7 +268,6 @@ class RealEstateOffice extends Authenticatable
      */
     public function hasActiveSubscription(): bool
     {
-        // ✅ CHANGE THIS to lowercase
         if (!$this->subscription_id || !$this->subscription) {
             return false;
         }
@@ -212,19 +290,16 @@ class RealEstateOffice extends Authenticatable
      */
     public function canAddProperty(): bool
     {
-        // No subscription = no access
         if (!$this->hasActiveSubscription()) {
             return false;
         }
 
         $subscription = $this->subscription;
 
-        // Unlimited properties (null or 0 limit)
         if ($subscription->property_activation_limit === null || $subscription->property_activation_limit === 0) {
             return true;
         }
 
-        // Check remaining activations
         return $subscription->remaining_activations > 0;
     }
 
@@ -239,33 +314,33 @@ class RealEstateOffice extends Authenticatable
         if (!$subscription || !$subscription->isActive()) {
             return [
                 'has_subscription' => false,
-                'current' => $currentCount,
-                'limit' => 0,
-                'remaining' => 0,
-                'can_add' => false,
-                'percentage_used' => 0,
-                'is_unlimited' => false,
+                'current'          => $currentCount,
+                'limit'            => 0,
+                'remaining'        => 0,
+                'can_add'          => false,
+                'percentage_used'  => 0,
+                'is_unlimited'     => false,
             ];
         }
 
-        $limit = $subscription->property_activation_limit ?? null;
+        $limit       = $subscription->property_activation_limit ?? null;
         $isUnlimited = $limit === null || $limit === 0;
 
-        $remaining = $isUnlimited ? PHP_INT_MAX : max(0, $subscription->remaining_activations);
+        $remaining      = $isUnlimited ? PHP_INT_MAX : max(0, $subscription->remaining_activations);
         $percentageUsed = $isUnlimited ? 0 : ($limit > 0 ? ($currentCount / $limit) * 100 : 0);
 
         return [
-            'has_subscription' => true,
-            'current' => $currentCount,
-            'limit' => $isUnlimited ? '∞' : $limit,
-            'remaining' => $isUnlimited ? '∞' : $remaining,
-            'can_add' => $this->canAddProperty(),
-            'percentage_used' => $percentageUsed,
-            'is_unlimited' => $isUnlimited,
+            'has_subscription'     => true,
+            'current'              => $currentCount,
+            'limit'                => $isUnlimited ? '∞' : $limit,
+            'remaining'            => $isUnlimited ? '∞' : $remaining,
+            'can_add'              => $this->canAddProperty(),
+            'percentage_used'      => $percentageUsed,
+            'is_unlimited'         => $isUnlimited,
             'subscription_end_date' => $subscription->end_date,
-            'days_remaining' => $subscription->daysRemaining(),
-            'is_trial' => $subscription->isTrialActive(),
-            'trial_end_date' => $subscription->trial_end_date,
+            'days_remaining'       => $subscription->daysRemaining(),
+            'is_trial'             => $subscription->isTrialActive(),
+            'trial_end_date'       => $subscription->trial_end_date,
         ];
     }
 
@@ -296,9 +371,9 @@ class RealEstateOffice extends Authenticatable
     {
         if (!$this->hasActiveSubscription()) {
             return [
-                'text' => 'No Subscription',
+                'text'  => 'No Subscription',
                 'color' => 'red',
-                'icon' => 'ban',
+                'icon'  => 'ban',
             ];
         }
 
@@ -306,9 +381,9 @@ class RealEstateOffice extends Authenticatable
 
         if ($subscription->isTrialActive()) {
             return [
-                'text' => 'Trial Active',
+                'text'  => 'Trial Active',
                 'color' => 'blue',
-                'icon' => 'clock',
+                'icon'  => 'clock',
             ];
         }
 
@@ -316,16 +391,16 @@ class RealEstateOffice extends Authenticatable
 
         if ($daysLeft <= 7) {
             return [
-                'text' => 'Expiring Soon',
+                'text'  => 'Expiring Soon',
                 'color' => 'orange',
-                'icon' => 'exclamation-triangle',
+                'icon'  => 'exclamation-triangle',
             ];
         }
 
         return [
-            'text' => 'Active',
+            'text'  => 'Active',
             'color' => 'green',
-            'icon' => 'check-circle',
+            'icon'  => 'check-circle',
         ];
     }
 }

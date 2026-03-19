@@ -332,4 +332,56 @@ class User extends Authenticatable implements MustVerifyEmail
         return $query->whereNotNull('recently_viewed_properties')
             ->whereRaw('JSON_LENGTH(recently_viewed_properties) > 0');
     }
+
+    public function addFCMToken(string $token, string $deviceName = null): void
+    {
+        $tokens = $this->device_tokens ?? [];
+        $deviceName = $deviceName ?? 'Unknown Device';
+
+        // Check if this exact token already exists — nothing to do
+        $existingTokens = collect($tokens)->map(
+            fn($t) => is_array($t) ? ($t['fcm_token'] ?? null) : $t
+        );
+        if ($existingTokens->contains($token)) {
+            return;
+        }
+
+        // Check if same device name already exists → replace its token
+        $found = false;
+        $tokens = collect($tokens)->map(function ($t) use ($token, $deviceName, &$found) {
+            $existingDevice = is_array($t) ? ($t['device_name'] ?? null) : null;
+
+            if ($existingDevice === $deviceName) {
+                $found = true;
+                return [
+                    'fcm_token'   => $token,
+                    'device_name' => $deviceName,
+                    'updated_at'  => now()->toISOString(),
+                ];
+            }
+
+            return $t;
+        })->toArray();
+
+        // Device name not found → add as new device
+        if (!$found) {
+            $tokens[] = [
+                'fcm_token'   => $token,
+                'device_name' => $deviceName,
+                'added_at'    => now()->toISOString(),
+            ];
+        }
+
+        $this->update(['device_tokens' => $tokens]);
+    }
+
+    public function removeFCMToken(string $token): void
+    {
+        $tokens = collect($this->device_tokens ?? [])
+            ->reject(fn($t) => (is_array($t) ? ($t['fcm_token'] ?? null) : $t) === $token)
+            ->values()
+            ->toArray();
+
+        $this->update(['device_tokens' => $tokens]);
+    }
 }

@@ -58,9 +58,11 @@ class AgentController extends Controller
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required|string',
-            'device_name' => 'nullable|string', // Flutter should send this
+            'email'       => 'required|email',
+            'password'    => 'required|string',
+            'device_name' => 'nullable|string',
+            'fcm_token'   => 'nullable|string',  // ← ADD
+            'language'    => 'nullable|in:en,ar,ku', // ← ADD
         ]);
 
         if ($validator->fails()) {
@@ -71,23 +73,31 @@ class AgentController extends Controller
             );
         }
 
-        $email = $request->email;
-        $password = $request->password;
+        $email      = $request->email;
+        $password   = $request->password;
         $deviceName = $request->device_name ?? 'Unknown Device';
+        $fcmToken   = $request->fcm_token;
+        $language   = $request->language;
 
         // 1️⃣ Try logging in as a normal User
         $user = User::where('email', $email)->first();
         if ($user && Hash::check($password, $user->password)) {
-            // Generate Sanctum Token
+
+            // Save FCM token if provided
+            if ($fcmToken) {
+                $user->addFCMToken($fcmToken, $deviceName);
+            }
+
+            // Save language if provided
+            if ($language) {
+                $user->update(['language' => $language]);
+            }
+
             $token = $user->createToken($deviceName)->plainTextToken;
 
             return ApiResponse::success(
                 ResponseDetails::successMessage('Logged in successfully as user'),
-                [
-                    'token' => $token,
-                    'user' => $user,
-                    'role' => 'user'
-                ],
+                ['token' => $token, 'user' => $user, 'role' => 'user'],
                 ResponseDetails::CODE_SUCCESS
             );
         }
@@ -95,16 +105,22 @@ class AgentController extends Controller
         // 2️⃣ Try logging in as an Agent
         $agent = Agent::where('primary_email', $email)->first();
         if ($agent && Hash::check($password, $agent->password)) {
-            // Generate Sanctum Token
+
+            // Save FCM token if provided
+            if ($fcmToken) {
+                $agent->addFCMToken($fcmToken, $deviceName);
+            }
+
+            // Save language if provided
+            if ($language) {
+                $agent->update(['language' => $language]);
+            }
+
             $token = $agent->createToken($deviceName)->plainTextToken;
 
             return ApiResponse::success(
                 ResponseDetails::successMessage('Logged in successfully as agent'),
-                [
-                    'token' => $token,
-                    'agent' => $agent, // Flutter expects this key based on your logs
-                    'role' => 'agent'
-                ],
+                ['token' => $token, 'agent' => $agent, 'role' => 'agent'],
                 ResponseDetails::CODE_SUCCESS
             );
         }
@@ -113,7 +129,7 @@ class AgentController extends Controller
         return ApiResponse::error(
             'Invalid credentials',
             ['email' => ['These credentials do not match our records.']],
-            401 // Unauthorized
+            401
         );
     }
 
@@ -1712,5 +1728,57 @@ class AgentController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
         }
+    }
+
+    public function updateFCMToken(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'fcm_token'     => 'required|string',
+            'old_fcm_token' => 'nullable|string',
+            'device_name'   => 'nullable|string',
+            'language'      => 'nullable|in:en,ar,ku',
+        ]);
+
+        if ($validator->fails()) {
+            return ApiResponse::error(
+                ResponseDetails::validationErrorMessage(),
+                $validator->errors(),
+                ResponseDetails::CODE_VALIDATION_ERROR
+            );
+        }
+
+        $user = $request->user();
+
+        if (!$user) {
+            return ApiResponse::error(
+                ResponseDetails::unauthorizedMessage(),
+                null,
+                ResponseDetails::CODE_UNAUTHORIZED
+            );
+        }
+
+        // Remove old token if provided (token rotation)
+        if ($request->old_fcm_token) {
+            $user->removeFCMToken($request->old_fcm_token);
+        }
+
+        // Add new token
+        $user->addFCMToken($request->fcm_token, $request->device_name ?? 'Unknown Device');
+
+        // Update language if provided
+        if ($request->language) {
+            $user->update(['language' => $request->language]);
+        }
+
+        Log::info('FCM token updated', [
+            'user_id' => $user->id,
+            'role'    => $user instanceof \App\Models\Agent ? 'agent' : 'user',
+        ]);
+
+        return ApiResponse::success(
+            ResponseDetails::successMessage('FCM token updated successfully'),
+            null,
+            ResponseDetails::CODE_SUCCESS
+        );
     }
 }
