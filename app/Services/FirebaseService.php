@@ -26,6 +26,10 @@ class FirebaseService
         $this->baseUrl = "https://fcm.googleapis.com/v1/projects/{$this->projectId}/messages:send";
     }
 
+    // ==========================================
+    // 🔑 ACCESS TOKEN
+    // ==========================================
+
     /**
      * Get OAuth 2.0 access token for FCM API
      */
@@ -55,32 +59,36 @@ class FirebaseService
         }
     }
 
+    // ==========================================
+    // 📤 SINGLE TOKEN
+    // ==========================================
+
     /**
      * Send FCM notification to a single device token
      */
     public function sendToToken(string $fcmToken, array $notification, array $data = [])
     {
         try {
-            $payload = $this->buildNotificationPayload($fcmToken, $notification, $data);
+            $payload     = $this->buildNotificationPayload($fcmToken, $notification, $data);
             $accessToken = $this->getAccessToken();
 
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $accessToken,
-                'Content-Type' => 'application/json',
+                'Content-Type'  => 'application/json',
             ])->timeout(30)->post($this->baseUrl, $payload);
 
             if ($response->successful()) {
                 $result = $response->json();
                 Log::info('FCM notification sent successfully', [
-                    'token' => substr($fcmToken, 0, 20) . '...',
-                    'message_name' => $result['name'] ?? null
+                    'token'        => substr($fcmToken, 0, 20) . '...',
+                    'message_name' => $result['name'] ?? null,
                 ]);
                 return $result;
             } else {
                 Log::error('FCM notification failed', [
-                    'status' => $response->status(),
+                    'status'   => $response->status(),
                     'response' => $response->body(),
-                    'token' => substr($fcmToken, 0, 20) . '...'
+                    'token'    => substr($fcmToken, 0, 20) . '...',
                 ]);
 
                 $this->handleTokenErrors($response, $fcmToken);
@@ -89,11 +97,15 @@ class FirebaseService
         } catch (\Exception $e) {
             Log::error('FCM notification exception', [
                 'error' => $e->getMessage(),
-                'token' => substr($fcmToken, 0, 20) . '...'
+                'token' => substr($fcmToken, 0, 20) . '...',
             ]);
             return false;
         }
     }
+
+    // ==========================================
+    // 📤 BATCH / CONCURRENT
+    // ==========================================
 
     /**
      * Send FCM notifications to multiple tokens using concurrent requests
@@ -104,11 +116,11 @@ class FirebaseService
             return [];
         }
 
-        $chunks = array_chunk($fcmTokens, $this->batchSize);
+        $chunks    = array_chunk($fcmTokens, $this->batchSize);
         $allResults = [];
 
         foreach ($chunks as $tokenChunk) {
-            $results = $this->sendConcurrentRequests($tokenChunk, $notification, $data);
+            $results    = $this->sendConcurrentRequests($tokenChunk, $notification, $data);
             $allResults = array_merge($allResults, $results);
         }
 
@@ -122,15 +134,15 @@ class FirebaseService
     {
         try {
             $accessToken = $this->getAccessToken();
-            $results = [];
+            $results     = [];
 
             $responses = Http::pool(function (Pool $pool) use ($tokens, $notification, $data, $accessToken) {
                 $requests = [];
                 foreach ($tokens as $token) {
-                    $payload = $this->buildNotificationPayload($token, $notification, $data);
+                    $payload    = $this->buildNotificationPayload($token, $notification, $data);
                     $requests[] = $pool->withHeaders([
                         'Authorization' => 'Bearer ' . $accessToken,
-                        'Content-Type' => 'application/json',
+                        'Content-Type'  => 'application/json',
                     ])->timeout(30)->post($this->baseUrl, $payload);
                 }
                 return $requests;
@@ -140,28 +152,28 @@ class FirebaseService
                 $token = $tokens[$index];
 
                 if ($response->successful()) {
-                    $result = $response->json();
+                    $result    = $response->json();
                     $results[] = [
-                        'token' => $token,
+                        'token'   => $token,
                         'success' => true,
-                        'result' => $result
+                        'result'  => $result,
                     ];
 
                     Log::info('FCM batch notification sent', [
-                        'token' => substr($token, 0, 20) . '...',
-                        'message_name' => $result['name'] ?? null
+                        'token'        => substr($token, 0, 20) . '...',
+                        'message_name' => $result['name'] ?? null,
                     ]);
                 } else {
                     $results[] = [
-                        'token' => $token,
+                        'token'   => $token,
                         'success' => false,
-                        'error' => $response->body()
+                        'error'   => $response->body(),
                     ];
 
                     Log::error('FCM batch notification failed', [
-                        'token' => substr($token, 0, 20) . '...',
-                        'status' => $response->status(),
-                        'response' => $response->body()
+                        'token'    => substr($token, 0, 20) . '...',
+                        'status'   => $response->status(),
+                        'response' => $response->body(),
                     ]);
 
                     $this->handleTokenErrors($response, $token);
@@ -171,59 +183,19 @@ class FirebaseService
             return $results;
         } catch (\Exception $e) {
             Log::error('FCM batch notification exception', [
-                'error' => $e->getMessage(),
-                'token_count' => count($tokens)
+                'error'       => $e->getMessage(),
+                'token_count' => count($tokens),
             ]);
             return [];
         }
     }
 
-    /**
-     * Build notification payload
-     */
-    private function buildNotificationPayload(string $fcmToken, array $notification, array $data = [])
-    {
-        return [
-            'message' => [
-                'token' => $fcmToken,
-                'notification' => [
-                    'title' => $notification['title'] ?? '',
-                    'body' => $notification['message'] ?? $notification['body'] ?? '',
-                ],
-                'data' => array_merge($data, [
-                    'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                    'notification_id' => (string)($data['id'] ?? ''),
-                    'type' => $data['type'] ?? 'general'
-                ]),
-                'android' => [
-                    'priority' => 'high',
-                    'notification' => [
-                        'sound' => 'default',
-                        'default_sound' => true,
-                        'channel_id' => 'default'
-                    ]
-                ],
-                'apns' => [
-                    'headers' => [
-                        'apns-priority' => '10'
-                    ],
-                    'payload' => [
-                        'aps' => [
-                            'alert' => [
-                                'title' => $notification['title'] ?? '',
-                                'body' => $notification['message'] ?? $notification['body'] ?? '',
-                            ],
-                            'sound' => 'default',
-                            'badge' => 1
-                        ]
-                    ]
-                ]
-            ]
-        ];
-    }
+    // ==========================================
+    // 👤 SINGLE RECIPIENT HELPERS
+    // ==========================================
 
     /**
-     * Send FCM notification to a user (all their devices) - Async version
+     * Send FCM notification to a single user (all their devices)
      */
     public function sendToUser(User $user, array $notification, array $data = [])
     {
@@ -238,7 +210,7 @@ class FirebaseService
     }
 
     /**
-     * Send FCM notification to an agent (all their devices) - Async version
+     * Send FCM notification to a single agent (all their devices)
      */
     public function sendToAgent(Agent $agent, array $notification, array $data = [])
     {
@@ -253,6 +225,25 @@ class FirebaseService
     }
 
     /**
+     * Send FCM notification to a single office (all their devices)
+     */
+    public function sendToOffice(RealEstateOffice $office, array $notification, array $data = [])
+    {
+        $fcmTokens = $office->getFCMTokens();
+
+        if (empty($fcmTokens)) {
+            Log::info('No FCM tokens found for office', ['office_id' => $office->id]);
+            return false;
+        }
+
+        return $this->sendToMultipleTokensBatch($fcmTokens, $notification, $data);
+    }
+
+    // ==========================================
+    // 👥 BULK RECIPIENT HELPERS
+    // ==========================================
+
+    /**
      * Send FCM notification to multiple users in batch
      */
     public function sendToMultipleUsers(Collection $users, array $notification, array $data = [])
@@ -260,11 +251,8 @@ class FirebaseService
         $allTokens = [];
 
         foreach ($users as $user) {
-            $tokens = $user->getFCMTokens();
-            if (!empty($tokens)) {
-                foreach ($tokens as $token) {
-                    $allTokens[] = $token;
-                }
+            foreach ($user->getFCMTokens() as $token) {
+                $allTokens[] = $token;
             }
         }
 
@@ -277,18 +265,15 @@ class FirebaseService
     }
 
     /**
-     * Send FCM notification to multiple agents in batch (Optimized)
+     * Send FCM notification to multiple agents in batch
      */
     public function sendToMultipleAgents(Collection $agents, array $notification, array $data = [])
     {
         $allTokens = [];
 
         foreach ($agents as $agent) {
-            $tokens = $agent->getFCMTokens();
-            if (!empty($tokens)) {
-                foreach ($tokens as $token) {
-                    $allTokens[] = $token;
-                }
+            foreach ($agent->getFCMTokens() as $token) {
+                $allTokens[] = $token;
             }
         }
 
@@ -301,18 +286,15 @@ class FirebaseService
     }
 
     /**
-     * Send FCM notification to multiple offices in batch (Optimized)
+     * Send FCM notification to multiple offices in batch
      */
     public function sendToMultipleOffices(Collection $offices, array $notification, array $data = [])
     {
         $allTokens = [];
 
         foreach ($offices as $office) {
-            $tokens = $office->getFCMTokens();
-            if (!empty($tokens)) {
-                foreach ($tokens as $token) {
-                    $allTokens[] = $token;
-                }
+            foreach ($office->getFCMTokens() as $token) {
+                $allTokens[] = $token;
             }
         }
 
@@ -325,6 +307,59 @@ class FirebaseService
     }
 
     /**
+     * Send FCM notification to ALL entity types at once (users + agents + offices)
+     */
+    public function sendToAll(
+        Collection $users,
+        Collection $agents,
+        Collection $offices,
+        array $notification,
+        array $data = []
+    ) {
+        $allTokens = [];
+
+        foreach ($users as $user) {
+            foreach ($user->getFCMTokens() as $token) {
+                $allTokens[] = $token;
+            }
+        }
+
+        foreach ($agents as $agent) {
+            foreach ($agent->getFCMTokens() as $token) {
+                $allTokens[] = $token;
+            }
+        }
+
+        foreach ($offices as $office) {
+            foreach ($office->getFCMTokens() as $token) {
+                $allTokens[] = $token;
+            }
+        }
+
+        if (empty($allTokens)) {
+            Log::info('No FCM tokens found for broadcast', [
+                'users'   => $users->count(),
+                'agents'  => $agents->count(),
+                'offices' => $offices->count(),
+            ]);
+            return [];
+        }
+
+        Log::info('Broadcasting FCM notification to all entities', [
+            'total_tokens' => count($allTokens),
+            'users'        => $users->count(),
+            'agents'       => $agents->count(),
+            'offices'      => $offices->count(),
+        ]);
+
+        return $this->sendToMultipleTokensBatch($allTokens, $notification, $data);
+    }
+
+    // ==========================================
+    // 📡 TOPIC NOTIFICATIONS
+    // ==========================================
+
+    /**
      * Send topic-based notification (for broadcasting)
      */
     public function sendToTopic(string $topic, array $notification, array $data = [])
@@ -332,71 +367,123 @@ class FirebaseService
         try {
             $payload = [
                 'message' => [
-                    'topic' => $topic,
+                    'topic'        => $topic,
                     'notification' => [
                         'title' => $notification['title'] ?? '',
-                        'body' => $notification['message'] ?? $notification['body'] ?? '',
+                        'body'  => $notification['message'] ?? $notification['body'] ?? '',
                     ],
                     'data' => array_merge($data, [
                         'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-                        'type' => $data['type'] ?? 'general'
+                        'type'         => $data['type'] ?? 'general',
                     ]),
                     'android' => [
-                        'priority' => 'high',
+                        'priority'     => 'high',
                         'notification' => [
-                            'sound' => 'default',
+                            'sound'         => 'default',
                             'default_sound' => true,
-                            'channel_id' => 'default'
-                        ]
+                            'channel_id'    => 'default',
+                        ],
                     ],
                     'apns' => [
                         'headers' => [
-                            'apns-priority' => '10'
+                            'apns-priority' => '10',
                         ],
                         'payload' => [
                             'aps' => [
                                 'alert' => [
                                     'title' => $notification['title'] ?? '',
-                                    'body' => $notification['message'] ?? $notification['body'] ?? '',
+                                    'body'  => $notification['message'] ?? $notification['body'] ?? '',
                                 ],
                                 'sound' => 'default',
-                                'badge' => 1
-                            ]
-                        ]
-                    ]
-                ]
+                                'badge' => 1,
+                            ],
+                        ],
+                    ],
+                ],
             ];
 
             $accessToken = $this->getAccessToken();
 
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $accessToken,
-                'Content-Type' => 'application/json',
+                'Content-Type'  => 'application/json',
             ])->timeout(30)->post($this->baseUrl, $payload);
 
             if ($response->successful()) {
                 $result = $response->json();
                 Log::info('FCM topic notification sent', [
-                    'topic' => $topic,
-                    'message_name' => $result['name'] ?? null
+                    'topic'        => $topic,
+                    'message_name' => $result['name'] ?? null,
                 ]);
                 return $result;
             } else {
                 Log::error('FCM topic notification failed', [
-                    'topic' => $topic,
-                    'status' => $response->status(),
-                    'response' => $response->body()
+                    'topic'    => $topic,
+                    'status'   => $response->status(),
+                    'response' => $response->body(),
                 ]);
                 return false;
             }
         } catch (\Exception $e) {
             Log::error('FCM topic notification exception', [
                 'topic' => $topic,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
             return false;
         }
     }
+
+    // ==========================================
+    // 🔧 PAYLOAD BUILDER
+    // ==========================================
+
+    /**
+     * Build notification payload for a single token
+     */
+    private function buildNotificationPayload(string $fcmToken, array $notification, array $data = [])
+    {
+        return [
+            'message' => [
+                'token'        => $fcmToken,
+                'notification' => [
+                    'title' => $notification['title'] ?? '',
+                    'body'  => $notification['message'] ?? $notification['body'] ?? '',
+                ],
+                'data' => array_merge($data, [
+                    'click_action'    => 'FLUTTER_NOTIFICATION_CLICK',
+                    'notification_id' => (string) ($data['id'] ?? ''),
+                    'type'            => $data['type'] ?? 'general',
+                ]),
+                'android' => [
+                    'priority'     => 'high',
+                    'notification' => [
+                        'sound'         => 'default',
+                        'default_sound' => true,
+                        'channel_id'    => 'default',
+                    ],
+                ],
+                'apns' => [
+                    'headers' => [
+                        'apns-priority' => '10',
+                    ],
+                    'payload' => [
+                        'aps' => [
+                            'alert' => [
+                                'title' => $notification['title'] ?? '',
+                                'body'  => $notification['message'] ?? $notification['body'] ?? '',
+                            ],
+                            'sound' => 'default',
+                            'badge' => 1,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    // ==========================================
+    // 🧹 TOKEN CLEANUP
+    // ==========================================
 
     /**
      * Handle token errors and cleanup invalid tokens
@@ -413,7 +500,7 @@ class FirebaseService
                     if (in_array($errorCode, ['UNREGISTERED', 'INVALID_ARGUMENT'])) {
                         Log::info('Removing invalid FCM token', [
                             'token' => substr($token, 0, 20) . '...',
-                            'error' => $errorCode
+                            'error' => $errorCode,
                         ]);
                         $this->removeInvalidToken($token);
                     }
@@ -423,7 +510,7 @@ class FirebaseService
     }
 
     /**
-     * Remove invalid FCM token from user records
+     * Remove invalid FCM token from all entity records
      */
     private function removeInvalidToken(string $invalidToken)
     {
@@ -431,39 +518,38 @@ class FirebaseService
             // Remove from users
             $users = User::whereJsonContains('device_tokens', [['fcm_token' => $invalidToken]])->get();
             foreach ($users as $user) {
-                $deviceTokens = $user->device_tokens ?? [];
-                $filteredTokens = array_filter($deviceTokens, function ($device) use ($invalidToken) {
-                    return ($device['fcm_token'] ?? '') !== $invalidToken;
-                });
-                $user->update(['device_tokens' => array_values($filteredTokens)]);
+                $user->removeFCMToken($invalidToken);
             }
 
             // Remove from agents
             $agents = Agent::whereJsonContains('device_tokens', [['fcm_token' => $invalidToken]])->get();
             foreach ($agents as $agent) {
-                $deviceTokens = $agent->device_tokens ?? [];
-                $filteredTokens = array_filter($deviceTokens, function ($device) use ($invalidToken) {
-                    return ($device['fcm_token'] ?? '') !== $invalidToken;
-                });
-                $agent->update(['device_tokens' => array_values($filteredTokens)]);
+                $agent->removeFCMToken($invalidToken);
             }
 
             // Remove from offices
             $offices = RealEstateOffice::whereJsonContains('device_tokens', [['fcm_token' => $invalidToken]])->get();
             foreach ($offices as $office) {
-                $deviceTokens = $office->device_tokens ?? [];
-                $filteredTokens = array_filter($deviceTokens, function ($device) use ($invalidToken) {
-                    return ($device['fcm_token'] ?? '') !== $invalidToken;
-                });
-                $office->update(['device_tokens' => array_values($filteredTokens)]);
+                $office->removeFCMToken($invalidToken);
             }
+
+            Log::info('Invalid FCM token removed from all entities', [
+                'token'   => substr($invalidToken, 0, 20) . '...',
+                'users'   => $users->count(),
+                'agents'  => $agents->count(),
+                'offices' => $offices->count(),
+            ]);
         } catch (\Exception $e) {
             Log::error('Error removing invalid FCM token', [
                 'token' => substr($invalidToken, 0, 20) . '...',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
         }
     }
+
+    // ==========================================
+    // 🎨 NOTIFICATION TYPE PAYLOADS
+    // ==========================================
 
     /**
      * Create notification payload optimized for different notification types
@@ -471,37 +557,37 @@ class FirebaseService
     public function createNotificationPayload(string $type, array $data): array
     {
         $basePayload = [
-            'title' => $data['title'] ?? 'Notification',
+            'title'   => $data['title'] ?? 'Notification',
             'message' => $data['message'] ?? '',
         ];
 
         switch ($type) {
             case 'property':
                 return array_merge($basePayload, [
-                    'icon' => 'property_icon',
-                    'color' => '#2196F3',
-                    'category' => 'property'
+                    'icon'     => 'property_icon',
+                    'color'    => '#2196F3',
+                    'category' => 'property',
                 ]);
 
             case 'appointment':
                 return array_merge($basePayload, [
-                    'icon' => 'appointment_icon',
-                    'color' => '#4CAF50',
-                    'category' => 'appointment'
+                    'icon'     => 'appointment_icon',
+                    'color'    => '#4CAF50',
+                    'category' => 'appointment',
                 ]);
 
             case 'system':
                 return array_merge($basePayload, [
-                    'icon' => 'system_icon',
-                    'color' => '#FF9800',
-                    'category' => 'system'
+                    'icon'     => 'system_icon',
+                    'color'    => '#FF9800',
+                    'category' => 'system',
                 ]);
 
             case 'promotion':
                 return array_merge($basePayload, [
-                    'icon' => 'promotion_icon',
-                    'color' => '#E91E63',
-                    'category' => 'promotion'
+                    'icon'     => 'promotion_icon',
+                    'color'    => '#E91E63',
+                    'category' => 'promotion',
                 ]);
 
             default:

@@ -302,12 +302,12 @@ class Agent extends Authenticatable
         return view('agent.agent-property-add');
     }
 
-    public function addFCMToken(string $token, ?string $deviceName = null): void  // ← ? added
+    public function addFCMToken(string $token, ?string $deviceName = null): void
     {
-        $tokens = $this->device_tokens ?? [];
+        $tokens     = $this->device_tokens ?? [];
         $deviceName = $deviceName ?? 'Unknown Device';
 
-        // Check if this exact token already exists — nothing to do
+        // If the exact token already exists — nothing to do
         $existingTokens = collect($tokens)->map(
             fn($t) => is_array($t) ? ($t['fcm_token'] ?? null) : $t
         );
@@ -315,18 +315,19 @@ class Agent extends Authenticatable
             return;
         }
 
-        // Check if same device name already exists → replace its token
-        $found = false;
+        // If same device name exists → replace its token
+        $found  = false;
         $tokens = collect($tokens)->map(function ($t) use ($token, $deviceName, &$found) {
             $existingDevice = is_array($t) ? ($t['device_name'] ?? null) : null;
 
             if ($existingDevice === $deviceName) {
                 $found = true;
-                // Replace token for this device
                 return [
-                    'fcm_token'   => $token,
-                    'device_name' => $deviceName,
-                    'updated_at'  => now()->toISOString(),
+                    'device_name'  => $deviceName,
+                    'fcm_token'    => $token,
+                    'created_at'   => $t['created_at'] ?? now()->format('Y-m-d H:i:s'), // preserve original
+                    'last_updated' => now()->format('Y-m-d H:i:s'),
+                    'last_login'   => now()->format('Y-m-d H:i:s'),
                 ];
             }
 
@@ -336,9 +337,11 @@ class Agent extends Authenticatable
         // Device name not found → add as new device
         if (!$found) {
             $tokens[] = [
-                'fcm_token'   => $token,
-                'device_name' => $deviceName,
-                'added_at'    => now()->toISOString(),
+                'device_name'  => $deviceName,
+                'fcm_token'    => $token,
+                'created_at'   => now()->format('Y-m-d H:i:s'),
+                'last_updated' => now()->format('Y-m-d H:i:s'),
+                'last_login'   => now()->format('Y-m-d H:i:s'),
             ];
         }
 

@@ -211,21 +211,25 @@ class RealEstateOffice extends Authenticatable
             if ($existingDevice === $deviceName) {
                 $found = true;
                 return [
-                    'fcm_token'   => $token,
-                    'device_name' => $deviceName,
-                    'updated_at'  => now()->toISOString(),
+                    'device_name'  => $deviceName,
+                    'fcm_token'    => $token,
+                    'created_at'   => $t['created_at'] ?? now()->format('Y-m-d H:i:s'), // keep original
+                    'last_updated' => now()->format('Y-m-d H:i:s'),
+                    'last_login'   => now()->format('Y-m-d H:i:s'),
                 ];
             }
 
             return $t;
         })->toArray();
 
-        // Device name not found → add as new entry
+        // Device name not found → add as new device
         if (!$found) {
             $tokens[] = [
-                'fcm_token'   => $token,
-                'device_name' => $deviceName,
-                'added_at'    => now()->toISOString(),
+                'device_name'  => $deviceName,
+                'fcm_token'    => $token,
+                'created_at'   => now()->format('Y-m-d H:i:s'),
+                'last_updated' => now()->format('Y-m-d H:i:s'),
+                'last_login'   => now()->format('Y-m-d H:i:s'),
             ];
         }
 
