@@ -360,6 +360,90 @@ class OfficeDashboardApiController extends Controller
         }
     }
 
+
+    public function getProfile(Request $request): JsonResponse
+    {
+        try {
+            $office = Auth::guard('sanctum')->user()
+                ?? Auth::guard('office')->user();
+
+            if (! $office) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated.',
+                ], 401);
+            }
+
+            // Load subscription with its plan
+            $office->loadMissing('subscription.currentPlan');
+            $subscription = $office->subscription;
+            $currentPlan  = $subscription?->currentPlan;
+
+            $propertyLimitInfo = method_exists($office, 'getPropertyLimitInfo')
+                ? $office->getPropertyLimitInfo()
+                : [
+                    'used'         => 0,
+                    'limit'        => 0,
+                    'remaining'    => 0,
+                    'is_unlimited' => false,
+                ];
+
+            $subscriptionData = [
+                'status'         => $subscription?->status ?? 'none',
+                'plan_name'      => $currentPlan?->name ?? 'No Plan',
+                'plan_type'      => $currentPlan?->type ?? null,
+                'end_date'       => $subscription?->end_date?->toDateString(),
+                'expires_at'     => $subscription?->end_date?->toIso8601String(),
+                'days_remaining' => $subscription?->end_date
+                    ? max(0, now()->diffInDays($subscription->end_date, false))
+                    : 0,
+                'is_active'      => method_exists($office, 'hasActiveSubscription')
+                    ? $office->hasActiveSubscription()
+                    : ($subscription?->status === 'active'),
+                'property_limit' => $propertyLimitInfo,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data'    => [
+                    'id'                    => $office->id,
+                    'company_name'          => $office->company_name,
+                    'company_bio'           => $office->company_bio,
+                    'company_bio_image'     => $office->company_bio_image,
+                    'profile_image'         => $office->profile_image,
+                    'account_type'          => $office->account_type ?? 'real_estate_official',
+                    'current_plan'          => $currentPlan?->name,
+                    'subscription_id'       => $office->subscription_id ?? $subscription?->id,
+                    'is_verified'           => (bool) ($office->is_verified ?? false),
+                    'average_rating'        => $office->average_rating ?? '0.00',
+                    'email_address'         => $office->email ?? $office->email_address,
+                    'phone_number'          => $office->phone_number,
+                    'office_address'        => $office->office_address ?? $office->address,
+                    'latitude'              => $office->latitude,
+                    'longitude'             => $office->longitude,
+                    'city'                  => $office->city,
+                    'district'              => $office->district,
+                    'properties_sold'       => $office->properties_sold ?? 0,
+                    'years_experience'      => $office->years_experience ?? 0,
+                    'about_company'         => $office->about_company,
+                    'availability_schedule' => $office->availability_schedule,
+                    'status'                => $office->status ?? 'active',
+                    'subscription'          => $subscriptionData,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[OfficeDashboardApi::getProfile] ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load office profile.',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
     public function getSubscriptionStatus(Request $request): JsonResponse
     {
         try {

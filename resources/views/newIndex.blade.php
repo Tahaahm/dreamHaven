@@ -1,574 +1,753 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ku">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width,initial-scale=1.0,viewport-fit=cover" name="viewport"/>
-<title>Dream Mulk - Premium Real Estate Kurdistan</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,700&family=DM+Sans:wght@300;400;500;600&family=Cinzel:wght@400;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<title>Dream Mulk — خانوو و زەوی پریمیەم</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Playfair for EN display, Amiri for AR/KU display (much better than Noto Naskh for headlines), DM Sans for EN body, Noto Sans Arabic for UI -->
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,700&family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=DM+Sans:wght@300;400;500;600&family=Noto+Sans+Arabic:wght@300;400;500;600;700&family=Cinzel:wght@400;600&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@studio-freight/lenis@1.0.42/dist/lenis.min.js"></script>
+
 <style>
-/* ═══════════════════════════════════════════════════════
-   RESET & VARIABLES (Primary Brand Colors)
-═══════════════════════════════════════════════════════ */
-*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+/* ═══════════════════════════════════════
+   CSS VARIABLES
+═══════════════════════════════════════ */
 :root{
-  --P: #303b97;    /* Primary Brand Blue */
-  --PD: #1a225a;   /* Primary Dark */
-  --PM: #232d7a;   /* Primary Medium */
-  --deep: #0b1036; /* Deepest blue, slightly brightened from pure black */
-  --G: #d4af37;    /* Signature Gold */
-  --GL: #e8cb6a;
-  --GP: #f5e8c0;
-  --dim: rgba(255,255,255,.65); /* Brightened dim text */
-  --E: cubic-bezier(.16,1,.3,1);
-  --font-ar: 'Noto Naskh Arabic','Noto Sans Arabic',serif;
-  --font-ar-ui: 'Noto Sans Arabic',sans-serif;
+  --P:#303b97;
+  --PD:#0a0d27;
+  --PM:#1c2463;
+  --deep:#060814;
+  --G:#d4af37;
+  --GL:#e8cb6a;
+  --GP:#f5e8c0;
+  --dim:rgba(255,255,255,.78);
+  --E:cubic-bezier(.16,1,.3,1);
+  /* Typography */
+  --f-en:'DM Sans',sans-serif;
+  --f-en-disp:'Playfair Display',serif;
+  --f-ar:'Amiri',serif;          /* Beautiful Arabic display font */
+  --f-ar-ui:'Noto Sans Arabic',sans-serif;
+  --f-cinzel:'Cinzel',serif;
 }
 
-/* ═══════════════════════════════════════════════════════
-   SCROLL & BODY
-═══════════════════════════════════════════════════════ */
-html{
-  scroll-behavior:smooth;
-  -webkit-text-size-adjust:100%;
-  text-size-adjust:100%;
-  direction:ltr !important;
-  overflow-x:clip;
-}
+/* ═══════════════════════════════════════
+   RESET
+═══════════════════════════════════════ */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html{overflow-x:clip;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
 body{
-  max-width:100vw;
-  overflow-x:clip;
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior-y:auto;
-  font-family:'DM Sans',sans-serif;
   background:var(--deep);color:#fff;
+  font-family:var(--f-en);
+  overflow-x:clip;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
+  direction:rtl; /* default Kurdish RTL */
 }
+::-webkit-scrollbar{display:none;}
+img,video{display:block;max-width:100%;}
+/* prevent 300ms tap delay on mobile */
+a,button{touch-action:manipulation;}
 
-::-webkit-scrollbar{width:6px;}
-::-webkit-scrollbar-track{background:var(--deep);}
-::-webkit-scrollbar-thumb{background:rgba(212,175,55,.3);border-radius:3px;}
-::-webkit-scrollbar-thumb:hover{background:rgba(212,175,55,.6);}
-::-webkit-scrollbar:horizontal{display:none !important;height:0;}
-html{scrollbar-width:thin;scrollbar-color:rgba(212,175,55,.3) var(--deep);}
+/* ═══════════════════════════════════════
+   LANGUAGE — ARABIC / KURDISH
 
-/* ═══════════════════════════════════════════════════════
-   ARABIC / KURDISH FONT
-═══════════════════════════════════════════════════════ */
-body.lang-ku,body.lang-ar{font-family:var(--font-ar-ui);}
-body.lang-ku *:not(i):not([class*="fa-"]):not([class*="fab "]):not([class*="fas "]):not([class*="far "]),
-body.lang-ar *:not(i):not([class*="fa-"]):not([class*="fab "]):not([class*="fas "]):not([class*="far "]){
-  font-family:var(--font-ar-ui);line-height:1.75;
+   Key improvements over original:
+   - Amiri for headlines (designed for Arabic calligraphy)
+   - Better line-height: 1.9 for body, 1.5 for headlines
+   - No letter-spacing on Arabic (it distorts the script)
+   - Larger base font size for Arabic readability
+═══════════════════════════════════════ */
+body.lang-ku,body.lang-ar{
+  font-family:var(--f-ar-ui);
 }
-i[class*="fa"]{font-family:"Font Awesome 6 Free","Font Awesome 6 Brands" !important;font-style:normal !important;}
+/* All non-icon elements get Arabic UI font */
+body.lang-ku *:not(i):not([class*="fa"]),
+body.lang-ar *:not(i):not([class*="fa"]){
+  font-family:var(--f-ar-ui);
+  letter-spacing:0!important;   /* NEVER use letter-spacing on Arabic */
+}
+/* Icon fix */
+i[class*="fa"]{
+  font-family:"Font Awesome 6 Free","Font Awesome 6 Brands"!important;
+  font-style:normal!important;
+  letter-spacing:0!important;
+}
+/* Arabic display headings — Amiri is far superior for this */
 body.lang-ku h1,body.lang-ku h2,body.lang-ku h3,body.lang-ku h4,
-body.lang-ar h1,body.lang-ar h2,body.lang-ar h3,body.lang-ar h4{font-family:var(--font-ar);}
+body.lang-ar h1,body.lang-ar h2,body.lang-ar h3,body.lang-ar h4{
+  font-family:var(--f-ar)!important;
+  font-weight:700;
+  line-height:1.45!important;  /* Arabic needs more room between lines */
+  letter-spacing:0!important;
+}
+/* Hero H1 in Arabic — special large treatment */
+body.lang-ku h1,body.lang-ar h1{
+  font-family:var(--f-ar)!important;
+  font-size:clamp(48px,9vw,100px)!important;
+  line-height:1.3!important;
+}
+/* Logo always stays Playfair regardless of language */
 body.lang-ku .logo-name,body.lang-ar .logo-name,
-body.lang-ku .ft-logo-name,body.lang-ar .ft-logo-name{font-family:'Playfair Display',serif !important;}
-body.lang-ku h1,body.lang-ar h1{font-family:'Playfair Display',serif !important;}
+body.lang-ku .ft-logo-name,body.lang-ar .ft-logo-name{
+  font-family:var(--f-en-disp)!important;
+}
+/* Arabic body text — bigger, more line height for readability */
+body.lang-ku p,body.lang-ar p{
+  font-size:1.05em;
+  line-height:1.95!important;
+}
+body.lang-ku .kurd-sub,body.lang-ar .kurd-sub{
+  font-family:var(--f-ar)!important;
+  line-height:1.85!important;
+  font-size:clamp(17px,2.2vw,22px)!important;
+}
 
-/* ═══════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    HEADER
-═══════════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 header{
   position:fixed;top:0;left:0;right:0;
-  height:90px;z-index:1100;
+  height:88px;z-index:1100;
   padding:0 50px;
   display:flex;align-items:center;
-  background:linear-gradient(to bottom,rgba(11,16,54,.85),transparent);
-  transition:all .5s var(--E);
+  background:linear-gradient(to bottom,rgba(6,8,20,.88),transparent);
+  transition:height .5s var(--E),background .5s,border-color .4s;
+  border-bottom:1px solid transparent;
+  will-change:height;
 }
 header.sc{
-  background:rgba(26,34,90,.96);
+  background:rgba(10,13,39,.96);
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  height:72px;
-  box-shadow:0 1px 0 rgba(212,175,55,.1);
+  height:68px;
+  border-color:rgba(212,175,55,.15);
 }
-nav{max-width:1400px;width:100%;margin:0 auto;display:flex;align-items:center;justify-content:space-between;}
-.logo{display:flex;align-items:center;gap:14px;text-decoration:none;}
+nav{max-width:1400px;width:100%;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.logo{display:flex;align-items:center;gap:12px;text-decoration:none;flex-shrink:0;}
 .logo img{
-  width:56px;height:56px;border-radius:50%;
-  border:2.5px solid var(--G);object-fit:contain;background:#fff;
-  transition:transform .5s var(--E),width .5s var(--E);
-  box-shadow:0 4px 15px rgba(212,175,55,.25);
+  width:50px;height:50px;border-radius:50%;
+  border:2px solid var(--G);object-fit:contain;background:#fff;
+  transition:transform .5s var(--E),width .5s,height .5s;
+  box-shadow:0 4px 20px rgba(0,0,0,.5);
 }
-header.sc .logo img{width:44px;height:44px;}
+header.sc .logo img{width:40px;height:40px;}
 .logo:hover img{transform:scale(1.08) rotate(5deg);}
-.logo-name{font-family:'Playfair Display',serif !important;font-size:24px;font-weight:700;color:#fff;}
-header.sc .logo-name{font-size:21px;}
-.nav-ul{display:flex;gap:36px;list-style:none;}
-.nav-ul a{color:rgba(255,255,255,.7);font-size:14.5px;text-decoration:none;position:relative;padding:4px 0;transition:color .3s;}
-.nav-ul a::after{content:'';position:absolute;bottom:0;left:0;width:0;height:1.5px;background:var(--G);transition:width .4s var(--E);}
+.logo-name{
+  font-family:var(--f-en-disp)!important;
+  font-size:22px;font-weight:700;color:#fff;
+  white-space:nowrap;
+}
+header.sc .logo-name{font-size:20px;}
+
+.nav-ul{display:flex;gap:30px;list-style:none;}
+.nav-ul a{
+  font-size:14px;color:rgba(255,255,255,.82);
+  text-decoration:none;position:relative;padding:4px 0;
+  transition:color .3s;white-space:nowrap;
+}
+.nav-ul a::after{
+  content:'';position:absolute;bottom:0;left:0;width:0;
+  height:1.5px;background:var(--G);transition:width .4s var(--E);
+}
 .nav-ul a:hover,.nav-ul a.ac{color:#fff;}
 .nav-ul a:hover::after,.nav-ul a.ac::after{width:100%;}
-.nav-right{display:flex;align-items:center;gap:13px;}
-.bell-wrap{position:relative;color:var(--G);font-size:20px;text-decoration:none;}
-.bell-badge{position:absolute;top:-4px;right:-6px;background:#e74c3c;color:#fff;font-size:9px;font-weight:700;padding:2px 4px;border-radius:5px;}
-.av-btn{width:38px;height:38px;border-radius:50%;background:var(--G);color:var(--PD);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;text-decoration:none;transition:transform .3s;font-family:'DM Sans',sans-serif !important;}
-.av-btn:hover{transform:scale(1.1);}
-.btn-o{padding:9px 24px;border:1px solid rgba(212,175,55,.45);border-radius:50px;color:var(--G);font-size:13px;text-decoration:none;transition:all .3s;white-space:nowrap;}
-.btn-o:hover{background:rgba(212,175,55,.1);}
-.btn-s{padding:9px 24px;border:1px solid var(--G);border-radius:50px;background:var(--G);color:var(--PD);font-size:13px;font-weight:700;text-decoration:none;transition:all .4s var(--E);white-space:nowrap;display:flex;align-items:center;gap:6px;}
-.btn-s:hover{background:var(--GL);transform:translateY(-2px);box-shadow:0 8px 22px rgba(212,175,55,.4);}
-.hbtn{display:none;background:none;border:none;color:var(--G);font-size:26px;cursor:pointer;padding:8px;line-height:1;}
+body.lang-ku .nav-ul a,body.lang-ar .nav-ul a{font-size:14.5px;}
 
-/* Language Switcher */
-.lang-sw{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.07);border:1px solid rgba(212,175,55,.2);border-radius:50px;padding:4px;margin-right:4px;}
-.lang-btn{padding:5px 12px;border-radius:50px;border:none;background:transparent;color:rgba(255,255,255,.65);font-size:12px;font-weight:600;cursor:pointer;transition:all .3s;font-family:'DM Sans',sans-serif !important;letter-spacing:.5px;}
+.nav-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+/* Language switcher */
+.lang-sw{
+  display:flex;align-items:center;gap:3px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(212,175,55,.3);
+  border-radius:50px;padding:3px;
+}
+.lang-btn{
+  padding:5px 11px;border-radius:50px;border:none;
+  background:transparent;color:rgba(255,255,255,.7);
+  font-size:12px;font-weight:600;
+  cursor:pointer;transition:all .3s;
+  font-family:var(--f-en)!important;
+  letter-spacing:.5px;
+  /* Fast touch response */
+  -webkit-tap-highlight-color:transparent;
+}
 .lang-btn.active{background:var(--G);color:var(--PD);}
-.lang-btn:hover:not(.active){color:#fff;background:rgba(255,255,255,.1);}
+.lang-btn:hover:not(.active){color:#fff;background:rgba(255,255,255,.12);}
 
-/* ═══════════════════════════════════════════════════════
+.bell-wrap{position:relative;color:var(--G);font-size:19px;text-decoration:none;line-height:1;}
+.bell-badge{position:absolute;top:-4px;right:-6px;background:#e74c3c;color:#fff;font-size:9px;font-weight:700;padding:2px 4px;border-radius:5px;line-height:1;}
+.av-btn{width:36px;height:36px;border-radius:50%;background:var(--G);color:var(--PD);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;text-decoration:none;transition:transform .3s;font-family:var(--f-en)!important;flex-shrink:0;}
+.av-btn:hover{transform:scale(1.1);}
+.btn-o{
+  padding:8px 20px;border:1px solid rgba(212,175,55,.45);border-radius:50px;
+  color:var(--G);font-size:13px;text-decoration:none;transition:all .3s;
+  white-space:nowrap;
+}
+.btn-o:hover{background:rgba(212,175,55,.1);}
+.btn-s{
+  padding:9px 22px;border:1px solid var(--G);border-radius:50px;
+  background:var(--G);color:var(--PD);
+  font-size:13px;font-weight:700;text-decoration:none;
+  transition:all .4s var(--E);white-space:nowrap;
+  display:flex;align-items:center;gap:6px;
+}
+.btn-s:hover{background:var(--GL);transform:translateY(-2px);box-shadow:0 8px 22px rgba(212,175,55,.4);}
+body.lang-ku .btn-s,body.lang-ar .btn-s,
+body.lang-ku .btn-o,body.lang-ar .btn-o{font-size:13.5px;}
+.hbtn{display:none;background:none;border:none;color:var(--G);font-size:24px;cursor:pointer;padding:8px;line-height:1;flex-shrink:0;}
+
+/* ═══════════════════════════════════════
    DRAWER
-═══════════════════════════════════════════════════════ */
-.bkdp{position:fixed;inset:0;background:rgba(0,0,0,.6);opacity:0;pointer-events:none;transition:opacity .4s;z-index:1090;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+═══════════════════════════════════════ */
+.bkdp{position:fixed;inset:0;background:rgba(0,0,0,.8);opacity:0;pointer-events:none;transition:opacity .4s;z-index:1090;backdrop-filter:blur(8px);}
 .bkdp.on{opacity:1;pointer-events:auto;}
 .drw{
-  position:fixed;top:0;right:-110%;left:auto;
-  height:100vh;width:min(360px,85%);
-  background:var(--P);z-index:1100;
-  padding:38px 28px;
-  display:flex;flex-direction:column;gap:18px;
-  transition:right .5s var(--E),left .5s var(--E);
-  box-shadow:-10px 0 40px rgba(0,0,0,.5);
+  position:fixed;top:0;right:-110%;
+  height:100dvh;width:min(340px,86%);
+  background:var(--PD);z-index:1200;
+  padding:36px 26px;
+  display:flex;flex-direction:column;gap:0;
+  transition:right .5s var(--E);
+  box-shadow:-8px 0 40px rgba(0,0,0,.7);
   overflow-y:auto;visibility:hidden;
+  -webkit-overflow-scrolling:touch;
 }
-.drw.on{right:0;left:auto;visibility:visible;}
+.drw.on{right:0;visibility:visible;}
 .drw::before{content:'';position:absolute;top:0;bottom:0;left:0;width:3px;background:var(--G);}
-body.rtl .drw{right:auto;left:-110%;}
-body.rtl .drw.on{left:0;right:auto;visibility:visible;}
+body.rtl .drw{right:auto;left:-110%;border-left:none;}
+body.rtl .drw.on{left:0;right:auto;}
 body.rtl .drw::before{left:auto;right:0;}
-.drw-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
-.drw-hd span{font-family:'Playfair Display',serif !important;font-size:24px;color:#fff;}
-.drw-x{background:none;border:none;color:var(--G);font-size:22px;cursor:pointer;padding:4px;}
+.drw-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.drw-hd span{font-family:var(--f-en-disp)!important;font-size:22px;color:#fff;}
+.drw-x{background:none;border:none;color:var(--G);font-size:20px;cursor:pointer;padding:6px;line-height:1;}
+.drw-lang{display:flex;gap:4px;margin-bottom:18px;background:rgba(255,255,255,.06);border-radius:50px;padding:3px;}
+.drw-lang .lang-btn{flex:1;text-align:center;padding:8px 0;font-size:13px;}
 .drw-nav{display:flex;flex-direction:column;}
-.drw-nav a{display:block;width:100%;font-size:17px;padding:15px 0;color:rgba(255,255,255,.75);border-bottom:1px solid rgba(255,255,255,.06);text-decoration:none;transition:all .3s;}
-.drw-nav a:hover{color:var(--G);padding-left:12px;}
-body.rtl .drw-nav a:hover{padding-left:0;padding-right:12px;}
-.drw-ft{margin-top:auto;display:flex;flex-direction:column;gap:12px;padding-top:20px;}
+.drw-nav a{
+  display:block;padding:14px 0;
+  font-size:16px;color:rgba(255,255,255,.8);
+  border-bottom:1px solid rgba(255,255,255,.06);
+  text-decoration:none;transition:all .3s;
+}
+.drw-nav a:hover{color:var(--G);padding-left:10px;}
+body.rtl .drw-nav a:hover{padding-left:0;padding-right:10px;}
+body.lang-ku .drw-nav a,body.lang-ar .drw-nav a{font-size:16.5px;line-height:1.6;}
+.drw-ft{margin-top:auto;padding-top:22px;display:flex;flex-direction:column;gap:10px;}
 
-/* ═══════════════════════════════════════════════════════
-   HERO (Cinematic Video Background with Primary Brand Colors)
-═══════════════════════════════════════════════════════ */
-.hero{
-  position:relative;
-  height:100vh;min-height:680px;
-  display:flex;align-items:center;justify-content:center;
+/* ═══════════════════════════════════════
+   HERO — VIDEO + SCROLL ANIMATION
+═══════════════════════════════════════ */
+.hero-pin-wrap{height:200vh;position:relative;}
+.hero-pin{
+  position:sticky;top:0;height:100vh;
   overflow:hidden;
-  background:var(--PD); /* Fallback */
+  display:flex;align-items:center;justify-content:center;
+  background:#000;
+  /* perspective for 3D tilt effect */
+  perspective:1500px;
 }
-
-/* Background Video styling */
-.hero-vid {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  min-width: 100%;
-  min-height: 100%;
-  width: auto;
-  height: auto;
-  transform: translate(-50%, -50%);
-  object-fit: cover;
-  z-index: 0;
+.hero-vid{
+  position:absolute;
+  top:50%;left:50%;
+  min-width:100%;min-height:100%;
+  width:auto;height:auto;
+  transform:translate(-50%,-50%) scale(1.05);
+  object-fit:cover;
+  z-index:0;
+  transform-origin:center center;
+  will-change:transform,opacity;
 }
-
-/* Elegant brand-colored overlay to tint the video */
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: linear-gradient(to bottom, rgba(11, 16, 54, 0.85) 0%, rgba(48, 59, 151, 0.45) 50%, rgba(26, 34, 90, 0.95) 100%);
-  pointer-events: none;
+.hero-overlay{
+  position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(to bottom,
+    rgba(6,8,20,.72) 0%,
+    rgba(10,13,39,.45) 50%,
+    rgba(6,8,20,.94) 100%);
 }
-
+/* Hero content */
 .hc{
   position:relative;z-index:10;
-  text-align:center;max-width:780px;
+  text-align:center;max-width:820px;
   padding:0 24px;
-  opacity:0;transform:translateY(40px);
-  transition:opacity 1.6s var(--E),transform 1.6s var(--E);
+  transform-style:preserve-3d;
+  will-change:transform,opacity;
+  /* Force center regardless of body direction */
+  margin:0 auto;
+  direction:ltr; /* internal layout LTR so stagger order is correct */
 }
-.hc.vis{opacity:1;transform:translateY(0);pointer-events:auto;}
-.eyebrow{display:inline-flex;align-items:center;gap:14px;font-size:10px;font-weight:600;letter-spacing:5px;text-transform:uppercase;color:var(--G);margin-bottom:16px;}
-body.lang-ku .eyebrow,body.lang-ar .eyebrow{font-size:13px;letter-spacing:2px;text-transform:none;font-family:var(--font-ar-ui);}
-.eyebrow::before,.eyebrow::after{content:'';width:46px;height:1px;}
+/* But text elements inside that are Kurdish/Arabic get RTL back */
+.hc .kurd-sub,
+.hc .eyebrow,
+.hc .hs-quick,
+.hc .hs-input-wrap{
+  direction:rtl;
+}
+/* Overline */
+.eyebrow{
+  display:inline-flex;align-items:center;gap:14px;
+  font-size:10px;font-weight:700;letter-spacing:5px;text-transform:uppercase;
+  color:var(--G);margin-bottom:16px;
+  opacity:0;transform:translateY(20px); /* GSAP reveals this */
+}
+body.lang-ku .eyebrow,body.lang-ar .eyebrow{
+  font-size:13px;letter-spacing:1px;text-transform:none;
+  font-family:var(--f-ar-ui)!important;
+}
+.eyebrow::before,.eyebrow::after{content:'';width:40px;height:1px;flex-shrink:0;}
 .eyebrow::before{background:linear-gradient(90deg,transparent,var(--G));}
 .eyebrow::after{background:linear-gradient(90deg,var(--G),transparent);}
 body.rtl .eyebrow::before{background:linear-gradient(270deg,transparent,var(--G));}
 body.rtl .eyebrow::after{background:linear-gradient(270deg,var(--G),transparent);}
-h1{font-family:'Playfair Display',serif !important;font-size:clamp(56px,9vw,110px);font-weight:800;line-height:.93;letter-spacing:-3px;color:#fff;margin-bottom:10px;}
+
+/* H1 — character-level flip */
+h1{
+  font-family:var(--f-en-disp)!important;
+  font-size:clamp(56px,10vw,118px);
+  font-weight:800;line-height:.95;
+  letter-spacing:-3px;color:#fff;margin-bottom:10px;
+}
+.char{display:inline-block;transform-origin:50% 100%;will-change:transform,opacity;}
+/* H1 is always LTR — it's a Latin brand name that must never flip */
+h1#hero-title{direction:ltr!important;unicode-bidi:embed;}
 h1 .g{color:var(--G);}
-.kurd-sub{font-family:var(--font-ar) !important;font-size:clamp(15px,2vw,19px);color:var(--dim);margin:14px 0 8px;font-weight:500;direction:rtl;line-height:1.9;letter-spacing:0;}
-.sub{font-family:'Cinzel',serif;font-size:clamp(10px,1.4vw,13px);letter-spacing:7px;text-transform:uppercase;color:rgba(255,255,255,.4);margin-bottom:0;}
-body.lang-ku .sub,body.lang-ar .sub{font-family:var(--font-ar-ui) !important;letter-spacing:2px;font-size:12px;}
+/* Arabic H1 overrides */
+body.lang-ku h1,body.lang-ar h1{
+  font-family:var(--f-ar)!important;
+  font-size:clamp(44px,8vw,96px)!important;
+  line-height:1.25!important;
+  letter-spacing:0!important;
+  font-weight:700!important;
+}
+body.lang-ku h1 .g,body.lang-ar h1 .g{color:var(--G);}
 
-/* Hero Search Bar */
-.hero-search{width:100%;max-width:620px;margin:32px auto 38px;pointer-events:auto;}
-.hs-tabs{display:flex;gap:6px;margin-bottom:0;justify-content:center;}
-.hs-tab{padding:11px 22px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-bottom:none;border-radius:12px 12px 0 0;color:rgba(255,255,255,.75);font-size:13px;font-family:var(--font-ar-ui);cursor:pointer;transition:all .3s;white-space:nowrap;-webkit-appearance:none;backdrop-filter:blur(8px);}
-.hs-tab:hover{background:rgba(212,175,55,.15);color:#fff;}
-.hs-tab.active{background:rgba(255,255,255,.98);border-color:rgba(255,255,255,.98);border-bottom-color:transparent;color:var(--PD);font-weight:700;}
-.hs-bar{display:flex;background:rgba(255,255,255,.98);border-radius:0 12px 12px 12px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4),0 0 0 1px rgba(212,175,55,.3);}
-.hs-input-wrap{flex:1;display:flex;align-items:center;gap:12px;padding:0 20px;direction:rtl;}
-.hs-input-wrap i{color:#888;font-size:14px;flex-shrink:0;}
-.hs-input-wrap input{flex:1;border:none;outline:none;font-size:14px;color:var(--PD);font-weight:500;background:transparent;font-family:var(--font-ar-ui);padding:19px 0;direction:rtl;width:100%;}
-.hs-input-wrap input::placeholder{color:#777;font-size:13px;font-family:var(--font-ar-ui);}
-.hs-go{padding:14px 26px;background:var(--G);color:var(--PD);font-size:13px;font-weight:700;font-family:var(--font-ar-ui);text-decoration:none;display:flex;align-items:center;white-space:nowrap;transition:background .3s;flex-shrink:0;border:none;cursor:pointer;-webkit-appearance:none;}
+/* Kurdish/Arabic sub */
+.kurd-sub{
+  font-family:var(--f-ar)!important;
+  font-size:clamp(16px,2vw,20px);
+  color:#fff;
+  margin:14px 0 8px;
+  font-weight:400;
+  direction:rtl;
+  line-height:1.85;
+  letter-spacing:0!important;
+  text-shadow:0 2px 12px rgba(0,0,0,.6);
+  opacity:0;transform:translateY(18px);
+}
+.sub{
+  font-family:var(--f-cinzel);
+  font-size:clamp(10px,1.4vw,13px);
+  letter-spacing:7px;text-transform:uppercase;
+  color:rgba(255,255,255,.58);
+  opacity:0;transform:translateY(12px);
+}
+body.lang-ku .sub,body.lang-ar .sub{
+  font-family:var(--f-ar-ui)!important;
+  letter-spacing:1px!important;
+  font-size:12px;
+}
+
+/* Search */
+.hero-search{
+  width:100%;max-width:660px;
+  margin:34px auto 36px;
+  opacity:0;transform:translateY(22px);
+}
+.hs-tabs{display:flex;gap:5px;justify-content:center;}
+.hs-tab{
+  padding:11px 24px;
+  background:rgba(0,0,0,.4);
+  border:1px solid rgba(255,255,255,.15);border-bottom:none;
+  border-radius:10px 10px 0 0;
+  color:rgba(255,255,255,.82);
+  font-size:13px;font-family:var(--f-ar-ui);
+  cursor:pointer;transition:all .3s;white-space:nowrap;
+  -webkit-appearance:none;backdrop-filter:blur(10px);
+  -webkit-tap-highlight-color:transparent;
+}
+.hs-tab:hover{background:rgba(212,175,55,.2);color:#fff;}
+.hs-tab.active{background:rgba(255,255,255,.98);border-color:rgba(255,255,255,.98);color:var(--PD);font-weight:700;}
+.hs-bar{
+  display:flex;background:rgba(255,255,255,.98);
+  border-radius:0 10px 10px 10px;overflow:hidden;
+  box-shadow:0 28px 56px rgba(0,0,0,.6),0 0 0 2px rgba(212,175,55,.22);
+}
+.hs-input-wrap{flex:1;display:flex;align-items:center;gap:11px;padding:0 22px;direction:rtl;}
+.hs-input-wrap i{color:#777;font-size:14px;flex-shrink:0;}
+.hs-input-wrap input{
+  flex:1;border:none;outline:none;
+  font-size:15px;color:var(--PD);font-weight:600;
+  background:transparent;
+  font-family:var(--f-ar-ui);
+  padding:20px 0;direction:rtl;width:100%;
+  -webkit-appearance:none;
+}
+.hs-input-wrap input::placeholder{color:#888;font-size:14px;font-family:var(--f-ar-ui);font-weight:400;}
+.hs-go{
+  padding:0 30px;
+  background:var(--G);color:var(--PD);
+  font-size:14px;font-weight:700;
+  font-family:var(--f-ar-ui);
+  border:none;cursor:pointer;
+  transition:background .3s;flex-shrink:0;
+  -webkit-appearance:none;
+  min-height:60px;
+}
 .hs-go:hover{background:var(--GL);}
-.hs-quick{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap;justify-content:center;}
-.hs-quick span{font-size:12px;color:rgba(255,255,255,.5);font-family:var(--font-ar-ui);direction:rtl;}
-.hs-quick a{font-size:12px;color:rgba(255,255,255,.75);text-decoration:none;padding:5px 14px;border:1px solid rgba(255,255,255,.2);border-radius:20px;background:rgba(0,0,0,0.2);font-family:var(--font-ar-ui);transition:all .3s;white-space:nowrap;cursor:pointer;}
-.hs-quick a:hover{border-color:var(--G);color:var(--G);background:rgba(0,0,0,0.4);}
+.hs-quick{
+  display:flex;align-items:center;gap:8px;
+  margin-top:14px;flex-wrap:wrap;justify-content:center;
+}
+.hs-quick span{font-size:12px;color:rgba(255,255,255,.6);font-family:var(--f-ar-ui);}
+.hs-quick a{
+  font-size:12px;color:#fff;
+  padding:5px 14px;border:1px solid rgba(255,255,255,.28);
+  border-radius:20px;background:rgba(0,0,0,.38);
+  font-family:var(--f-ar-ui);transition:all .3s;
+  white-space:nowrap;cursor:pointer;
+  backdrop-filter:blur(5px);
+  -webkit-tap-highlight-color:transparent;
+}
+.hs-quick a:hover{border-color:var(--G);color:var(--G);}
 
-/* Hero Buttons */
-.hbtns{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:0 !important;}
-.hb1{padding:16px 46px;background:var(--G);color:var(--PD);font-weight:700;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);box-shadow:0 4px 26px rgba(212,175,55,.4);font-family:var(--font-ar-ui);}
-body.lang-en .hb1{font-family:'DM Sans',sans-serif;letter-spacing:2px;}
-.hb1:hover{background:var(--GL);transform:translateY(-4px);box-shadow:0 12px 40px rgba(212,175,55,.6);}
-.hb2{padding:15px 46px;border:1px solid rgba(255,255,255,.3);color:#fff;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-family:var(--font-ar-ui);background:rgba(0,0,0,0.2);}
-body.lang-en .hb2{font-family:'DM Sans',sans-serif;}
-.hb2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);background:rgba(212,175,55,.1);}
+/* Hero buttons */
+.hbtns{
+  display:flex;align-items:center;justify-content:center;
+  gap:14px;flex-wrap:wrap;
+  opacity:0;transform:translateY(16px);
+}
+.hb1{
+  padding:16px 46px;background:var(--G);color:var(--PD);
+  font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;
+  border-radius:50px;text-decoration:none;
+  transition:all .4s var(--E);
+  box-shadow:0 8px 28px rgba(212,175,55,.5);
+  font-family:var(--f-ar-ui);
+}
+body.lang-en .hb1{font-family:var(--f-en);letter-spacing:2.5px;}
+.hb1:hover{background:var(--GL);transform:translateY(-4px);box-shadow:0 14px 42px rgba(212,175,55,.65);}
+.hb2{
+  padding:15px 46px;border:1px solid rgba(255,255,255,.38);
+  color:#fff;font-size:13px;letter-spacing:2px;text-transform:uppercase;
+  border-radius:50px;text-decoration:none;
+  transition:all .4s var(--E);
+  backdrop-filter:blur(8px);background:rgba(0,0,0,.28);
+  font-family:var(--f-ar-ui);
+}
+body.lang-en .hb2{font-family:var(--f-en);}
+.hb2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);background:rgba(212,175,55,.12);}
 
 /* Scroll indicator */
-.scrl{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);z-index:10;display:flex;flex-direction:column;align-items:center;gap:8px;opacity:0;transition:opacity 1.2s ease;pointer-events:none;}
-.scrl.vis{opacity:1;}
-.scrl span{font-size:9px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,.5);font-family:'DM Sans',sans-serif;}
-body.lang-ku .scrl span,body.lang-ar .scrl span{font-family:var(--font-ar-ui);letter-spacing:1px;font-size:11px;}
-.mouse{width:22px;height:34px;border:1.5px solid rgba(212,175,55,.6);border-radius:12px;display:flex;justify-content:center;padding-top:6px;}
-.mouse::after{content:'';width:3px;height:8px;border-radius:2px;background:var(--G);animation:sp 2s ease-in-out infinite;}
-@keyframes sp{0%,100%{transform:translateY(0);opacity:1;}50%{transform:translateY(9px);opacity:0;}}
+.scrl{
+  position:absolute;bottom:32px;left:50%;transform:translateX(-50%);
+  z-index:10;display:flex;flex-direction:column;align-items:center;gap:8px;
+  pointer-events:none;opacity:0;
+}
+.scrl span{font-size:9px;letter-spacing:4px;text-transform:uppercase;color:rgba(255,255,255,.58);font-family:var(--f-en);}
+body.lang-ku .scrl span,body.lang-ar .scrl span{font-family:var(--f-ar-ui)!important;letter-spacing:1px;font-size:11px;}
+.mouse{width:22px;height:34px;border:1.5px solid rgba(212,175,55,.75);border-radius:11px;display:flex;justify-content:center;padding-top:6px;}
+.mouse::after{content:'';width:3px;height:7px;border-radius:2px;background:var(--G);animation:sp 2.2s ease-in-out infinite;}
+@keyframes sp{0%,100%{transform:translateY(0);opacity:1;}50%{transform:translateY(8px);opacity:0;}}
 
-/* ═══════════════════════════════════════════════════════
-   STATS BAR
-═══════════════════════════════════════════════════════ */
-.stats-bar{background:rgba(48,59,151,.15);border-top:1px solid rgba(212,175,55,.15);border-bottom:1px solid rgba(212,175,55,.15);padding:36px 60px;position:relative;z-index:2;}
-.stats-inner{max-width:900px;margin:0 auto;display:flex;justify-content:center;align-items:center;}
-.stat-item{text-align:center;flex:1;max-width:320px;}
-.stat-num{font-family:'Playfair Display',serif !important;font-size:48px;font-weight:700;color:var(--G);line-height:1;}
-.stat-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.5);margin-top:6px;}
-body.lang-ku .stat-label,body.lang-ar .stat-label{font-family:var(--font-ar-ui);letter-spacing:.5px;font-size:12px;text-transform:none;}
-.stat-div{width:1px;height:50px;background:rgba(212,175,55,.2);}
+/* ═══════════════════════════════════════
+   PAGE SECTIONS
+═══════════════════════════════════════ */
+.page-sections{position:relative;z-index:20;background:var(--PD);}
 
-/* ═══════════════════════════════════════════════════════
-   SERVICES
-═══════════════════════════════════════════════════════ */
-.svc-sec{padding:120px 60px;background:linear-gradient(180deg,var(--deep) 0%,var(--PD) 100%);}
+/* STATS */
+.stats-bar{
+  background:var(--PM);
+  border-bottom:1px solid rgba(212,175,55,.15);
+  padding:44px 60px;
+}
+.stats-inner{max-width:1000px;margin:0 auto;display:flex;justify-content:center;align-items:center;}
+.stat-item{text-align:center;flex:1;max-width:300px;}
+.stat-num{
+  font-family:var(--f-en-disp)!important;
+  font-size:clamp(48px,6vw,60px);
+  font-weight:700;color:var(--G);line-height:1;
+  text-shadow:0 0 30px rgba(212,175,55,.2);
+}
+.stat-label{
+  font-size:12px;letter-spacing:2px;text-transform:uppercase;
+  color:rgba(255,255,255,.6);margin-top:8px;
+}
+body.lang-ku .stat-label,body.lang-ar .stat-label{
+  font-family:var(--f-ar-ui)!important;letter-spacing:0;
+  font-size:13.5px;text-transform:none;line-height:1.6;
+}
+.stat-div{width:1px;height:56px;background:rgba(212,175,55,.28);}
+
+/* SERVICES */
+.svc-sec{padding:130px 60px;background:linear-gradient(180deg,var(--deep) 0%,var(--PD) 100%);}
 .sec-wrap{max-width:1320px;margin:0 auto;}
-.sec-hd{text-align:center;margin-bottom:70px;}
-.stag{font-size:10px;letter-spacing:5px;text-transform:uppercase;color:var(--G);display:block;margin-bottom:14px;}
-body.lang-ku .stag,body.lang-ar .stag{font-family:var(--font-ar-ui);letter-spacing:1px;font-size:13px;text-transform:none;}
-.stitle{font-family:'Playfair Display',serif !important;font-size:clamp(36px,5vw,60px);font-weight:700;color:#fff;line-height:1.1;}
-body.lang-ku .stitle,body.lang-ar .stitle{font-family:var(--font-ar) !important;line-height:1.3;}
+.sec-hd{text-align:center;margin-bottom:80px;}
+.stag{
+  font-size:11px;letter-spacing:4px;text-transform:uppercase;
+  color:var(--G);display:block;margin-bottom:14px;font-weight:600;
+}
+body.lang-ku .stag,body.lang-ar .stag{
+  font-family:var(--f-ar-ui)!important;
+  letter-spacing:0;font-size:14px;text-transform:none;
+}
+.stitle{
+  font-family:var(--f-en-disp)!important;
+  font-size:clamp(36px,5vw,66px);
+  font-weight:700;color:#fff;line-height:1.1;
+}
+body.lang-ku .stitle,body.lang-ar .stitle{
+  font-family:var(--f-ar)!important;
+  line-height:1.4!important;
+  font-size:clamp(30px,4.5vw,58px)!important;
+}
 .stitle em{font-style:italic;color:var(--G);}
-.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
-.svc-card{position:relative;height:530px;overflow:hidden;display:block;text-decoration:none;color:inherit;}
-.svc-card::before{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(11,16,54,.97) 0%,rgba(26,34,90,.5) 50%,rgba(48,59,151,.1) 100%);transition:all .6s var(--E);z-index:1;}
-.svc-card:hover::before{background:linear-gradient(to top,rgba(11,16,54,.98) 0%,rgba(26,34,90,.75) 65%,rgba(48,59,151,.25) 100%);}
-.svc-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(.55) brightness(.85);transition:transform .9s var(--E),filter .6s;}
-.svc-card:hover .svc-img{transform:scale(1.1);filter:saturate(.35) brightness(.75);}
-.svc-body{position:absolute;bottom:0;left:0;right:0;padding:46px 38px;z-index:2;transition:transform .6s var(--E);}
-.svc-card:hover .svc-body{transform:translateY(-16px);}
-.svc-n{font-family:'Playfair Display',serif !important;font-size:70px;font-weight:700;color:rgba(212,175,55,.15);line-height:1;margin-bottom:4px;transition:color .4s;}
-.svc-card:hover .svc-n{color:rgba(212,175,55,.35);}
-.svc-ico{width:52px;height:52px;border:1.5px solid rgba(212,175,55,.45);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--G);font-size:18px;margin-bottom:18px;transition:all .5s var(--E);}
-.svc-card:hover .svc-ico{background:var(--G);color:var(--PD);border-color:var(--G);transform:scale(1.1);}
-.svc-t{font-family:'Playfair Display',serif !important;font-size:30px;font-weight:700;color:#fff;margin-bottom:10px;transition:color .3s;}
-body.lang-ku .svc-t,body.lang-ar .svc-t{font-family:var(--font-ar) !important;font-size:26px;}
+body.lang-ku .stitle em,body.lang-ar .stitle em{font-style:normal;}
+
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;}
+.svc-card{position:relative;height:560px;overflow:hidden;display:block;text-decoration:none;color:inherit;}
+.svc-card::before{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(6,8,20,.98) 0%,rgba(10,13,39,.58) 50%,rgba(28,36,99,.1) 100%);transition:all .8s var(--E);z-index:1;}
+.svc-card:hover::before{background:linear-gradient(to top,rgba(6,8,20,.99) 0%,rgba(10,13,39,.8) 65%,rgba(28,36,99,.25) 100%);}
+.svc-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;filter:saturate(.6) brightness(.8);transition:transform 1.2s var(--E),filter .8s;}
+.svc-card:hover .svc-img{transform:scale(1.1);filter:saturate(.18) brightness(.58);}
+.svc-body{position:absolute;bottom:0;left:0;right:0;padding:48px 40px;z-index:2;transition:transform .8s var(--E);}
+.svc-card:hover .svc-body{transform:translateY(-18px);}
+.svc-n{font-family:var(--f-en-disp)!important;font-size:78px;font-weight:700;color:rgba(212,175,55,.1);line-height:1;margin-bottom:4px;transition:color .4s;}
+.svc-card:hover .svc-n{color:rgba(212,175,55,.24);}
+.svc-ico{width:54px;height:54px;border:1.5px solid rgba(212,175,55,.38);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--G);font-size:19px;margin-bottom:18px;transition:all .5s var(--E);}
+.svc-card:hover .svc-ico{background:var(--G);color:var(--PD);border-color:var(--G);transform:scale(1.12) rotate(8deg);}
+.svc-t{
+  font-family:var(--f-en-disp)!important;
+  font-size:30px;font-weight:700;color:#fff;
+  margin-bottom:12px;transition:color .3s;
+}
+body.lang-ku .svc-t,body.lang-ar .svc-t{
+  font-family:var(--f-ar)!important;
+  font-size:26px!important;
+  line-height:1.45!important;
+}
 .svc-card:hover .svc-t{color:var(--G);}
-.svc-p{font-size:13.5px;line-height:1.75;color:var(--dim);max-height:0;overflow:hidden;opacity:0;transition:all .6s var(--E);margin-bottom:0;}
-body.lang-ku .svc-p,body.lang-ar .svc-p{font-family:var(--font-ar-ui);font-size:14px;line-height:1.9;}
-.svc-card:hover .svc-p{max-height:120px;opacity:1;margin-bottom:18px;}
-.svc-cta{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--G);font-weight:600;transition:gap .4s var(--E);}
-body.lang-ku .svc-cta,body.lang-ar .svc-cta{font-family:var(--font-ar-ui);letter-spacing:.5px;font-size:13px;text-transform:none;}
+.svc-p{
+  font-size:14px;line-height:1.85;color:var(--dim);
+  max-height:0;overflow:hidden;opacity:0;
+  transition:all .8s var(--E);margin-bottom:0;
+}
+body.lang-ku .svc-p,body.lang-ar .svc-p{
+  font-family:var(--f-ar-ui)!important;
+  font-size:14.5px!important;line-height:2!important;
+}
+.svc-card:hover .svc-p{max-height:130px;opacity:1;margin-bottom:20px;}
+.svc-cta{display:inline-flex;align-items:center;gap:10px;font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--G);font-weight:700;transition:gap .4s var(--E);}
+body.lang-ku .svc-cta,body.lang-ar .svc-cta{font-family:var(--f-ar-ui)!important;letter-spacing:0;font-size:13.5px;text-transform:none;}
 .svc-card:hover .svc-cta{gap:16px;}
 
-/* ═══════════════════════════════════════════════════════
-   APP SECTION
-═══════════════════════════════════════════════════════ */
-.app-sec{padding:120px 60px;background:linear-gradient(135deg,var(--PM) 0%,var(--P) 50%,var(--PD) 100%);position:relative;overflow:hidden;}
-.app-g{display:grid;grid-template-columns:1fr 1fr;gap:90px;align-items:center;max-width:1300px;margin:0 auto;position:relative;z-index:1;}
-.app-desc{font-size:16px;line-height:1.85;color:var(--dim);margin-bottom:36px;font-weight:300;}
-body.lang-ku .app-desc,body.lang-ar .app-desc{font-family:var(--font-ar-ui);font-size:16px;line-height:2;}
+/* APP */
+.app-sec{padding:140px 60px;background:linear-gradient(135deg,var(--PM) 0%,var(--P) 50%,var(--PD) 100%);position:relative;overflow:hidden;}
+.app-g{display:grid;grid-template-columns:1fr 1fr;gap:90px;align-items:center;max-width:1280px;margin:0 auto;position:relative;z-index:1;}
+.app-desc{font-size:16px;line-height:1.9;color:var(--dim);margin-bottom:38px;}
+body.lang-ku .app-desc,body.lang-ar .app-desc{
+  font-family:var(--f-ar-ui)!important;
+  font-size:16px!important;line-height:2!important;
+}
 .app-feats{display:flex;flex-direction:column;gap:14px;margin-bottom:44px;}
-.af{display:flex;align-items:center;gap:14px;font-size:14px;color:rgba(255,255,255,.8);}
-body.lang-ku .af,body.lang-ar .af{font-family:var(--font-ar-ui);font-size:15px;line-height:1.7;}
-.af i{color:var(--G);width:18px;flex-shrink:0;}
+.af{display:flex;align-items:flex-start;gap:14px;font-size:15px;color:rgba(255,255,255,.9);}
+body.lang-ku .af,body.lang-ar .af{font-family:var(--f-ar-ui)!important;font-size:15px!important;line-height:1.75!important;}
+.af i{color:var(--G);font-size:18px;flex-shrink:0;margin-top:2px;}
 .sbtns{display:flex;gap:14px;flex-wrap:wrap;}
-.sbtn{display:flex;align-items:center;gap:14px;padding:14px 24px;border:1px solid rgba(212,175,55,.3);border-radius:14px;text-decoration:none;background:rgba(212,175,55,.06);transition:all .4s var(--E);}
-.sbtn:hover{background:rgba(212,175,55,.14);border-color:var(--G);transform:translateY(-4px);}
-.sbtn i{font-size:26px;color:var(--G);}
-.sbtn-sm{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.55);font-family:'DM Sans',sans-serif;}
-body.lang-ku .sbtn-sm,body.lang-ar .sbtn-sm{font-family:var(--font-ar-ui);letter-spacing:0;font-size:11px;text-transform:none;}
-.sbtn-nm{font-family:'Playfair Display',serif !important;font-size:17px;font-weight:700;color:#fff;}
-.qr-card{background:#fff;border-radius:26px;padding:28px;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:272px;margin:0 auto;box-shadow:0 0 0 1.5px rgba(212,175,55,.5),0 40px 80px rgba(0,0,0,.6);position:relative;overflow:hidden;transition:transform .6s var(--E);}
-.qr-card:hover{transform:translateY(-10px) scale(1.02);}
+.sbtn{display:flex;align-items:center;gap:14px;padding:15px 24px;border:1px solid rgba(212,175,55,.4);border-radius:14px;text-decoration:none;background:rgba(212,175,55,.07);transition:all .4s var(--E);box-shadow:0 8px 24px rgba(0,0,0,.18);}
+.sbtn:hover{background:rgba(212,175,55,.18);border-color:var(--G);transform:translateY(-4px);box-shadow:0 14px 36px rgba(0,0,0,.35);}
+.sbtn i{font-size:28px;color:var(--G);}
+.sbtn-sm{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.6);font-family:var(--f-en)!important;}
+body.lang-ku .sbtn-sm,body.lang-ar .sbtn-sm{font-family:var(--f-ar-ui)!important;letter-spacing:0;font-size:12px;text-transform:none;}
+.sbtn-nm{font-family:var(--f-en-disp)!important;font-size:18px;font-weight:700;color:#fff;}
+
+/* QR Card */
+.qr-card{background:#fff;border-radius:24px;padding:28px;display:flex;flex-direction:column;align-items:center;gap:18px;max-width:280px;margin:0 auto;box-shadow:0 0 0 2px rgba(212,175,55,.6),0 48px 96px rgba(0,0,0,.8);position:relative;overflow:hidden;transition:transform .7s var(--E);}
+.qr-card:hover{transform:translateY(-14px) scale(1.02);}
 .qr-card::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--P),var(--G),var(--P));}
 .qr-brand{display:flex;align-items:center;gap:12px;width:100%;}
-.qr-ico{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--PD),var(--P));display:flex;align-items:center;justify-content:center;color:#fff;font-size:19px;flex-shrink:0;}
-.qr-t{font-family:'Playfair Display',serif !important;font-size:16px;font-weight:700;color:var(--PD);}
-.qr-s{font-size:9.5px;letter-spacing:1.5px;text-transform:uppercase;color:#aaa;font-family:'DM Sans',sans-serif;}
-body.lang-ku .qr-s,body.lang-ar .qr-s{font-family:var(--font-ar-ui);letter-spacing:0;font-size:11px;text-transform:none;}
-.qr-div{width:100%;height:1px;background:rgba(48,59,151,.1);}
-.qr-img{width:188px;height:188px;border-radius:12px;display:block;}
-.qr-hint{display:flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:#777;font-weight:500;font-family:'DM Sans',sans-serif;}
-body.lang-ku .qr-hint,body.lang-ar .qr-hint{font-family:var(--font-ar-ui);letter-spacing:0;font-size:12px;text-transform:none;}
-.qr-lnk{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:12px;background:linear-gradient(135deg,var(--PD),var(--P));color:#fff;border-radius:14px;font-size:13px;font-weight:600;text-decoration:none;transition:all .4s var(--E);font-family:'DM Sans',sans-serif;}
-body.lang-ku .qr-lnk,body.lang-ar .qr-lnk{font-family:var(--font-ar-ui);}
-.qr-lnk:hover{box-shadow:0 8px 24px rgba(48,59,151,.5);transform:translateY(-2px);color:#fff;}
+.qr-ico{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--PD),var(--P));display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px;flex-shrink:0;}
+.qr-t{font-family:var(--f-en-disp)!important;font-size:17px;font-weight:700;color:var(--PD);}
+.qr-s{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:#888;font-family:var(--f-en)!important;}
+body.lang-ku .qr-s,body.lang-ar .qr-s{font-family:var(--f-ar-ui)!important;letter-spacing:0;font-size:11px;text-transform:none;}
+.qr-div{width:100%;height:1px;background:rgba(48,59,151,.12);}
+.qr-img{width:196px;height:196px;border-radius:12px;display:block;}
+.qr-hint{display:flex;align-items:center;gap:8px;font-size:11px;color:#666;font-family:var(--f-en)!important;}
+body.lang-ku .qr-hint,body.lang-ar .qr-hint{font-family:var(--f-ar-ui)!important;font-size:12.5px;}
+.qr-lnk{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:13px;background:linear-gradient(135deg,var(--PD),var(--PM));color:#fff;border-radius:14px;font-size:14px;font-weight:700;text-decoration:none;transition:all .4s var(--E);font-family:var(--f-en)!important;}
+body.lang-ku .qr-lnk,body.lang-ar .qr-lnk{font-family:var(--f-ar-ui)!important;}
+.qr-lnk:hover{box-shadow:0 8px 28px rgba(48,59,151,.55);transform:translateY(-2px);color:#fff;}
 
-/* ═══════════════════════════════════════════════════════
-   ABOUT
-═══════════════════════════════════════════════════════ */
-.abt-sec{padding:120px 60px;background:linear-gradient(180deg,var(--PD) 0%,var(--deep) 100%);}
-.abt-g{display:grid;grid-template-columns:1.4fr 1fr;gap:100px;align-items:start;max-width:1300px;margin:0 auto;}
-.abt-p{font-size:15.5px;line-height:1.95;color:var(--dim);margin-bottom:20px;font-weight:300;}
-body.lang-ku .abt-p,body.lang-ar .abt-p{font-family:var(--font-ar-ui);font-size:16px;line-height:2.1;}
-.qbar{margin-top:34px;padding:26px 30px;border-left:3px solid var(--G);background:rgba(212,175,55,.05);border-radius:0 12px 12px 0;}
-body.rtl .qbar{border-left:none;border-right:3px solid var(--G);border-radius:12px 0 0 12px;}
-.qbar p{font-family:'Playfair Display',serif !important;font-size:20px;font-style:italic;color:var(--GP);line-height:1.55;}
-body.lang-ku .qbar p,body.lang-ar .qbar p{font-family:var(--font-ar) !important;font-size:18px;font-style:normal;line-height:1.9;}
-.vals{display:flex;flex-direction:column;gap:2px;}
-.vi{display:flex;align-items:center;gap:22px;padding:26px 28px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);transition:all .5s var(--E);cursor:default;}
-.vi:hover{background:rgba(212,175,55,.06);border-color:rgba(212,175,55,.25);transform:translateX(12px);}
-body.rtl .vi:hover{transform:translateX(-12px);}
-.vico{width:56px;height:56px;background:rgba(212,175,55,.12);border:1.5px solid rgba(212,175,55,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--G);font-size:20px;flex-shrink:0;transition:all .4s var(--E);}
-.vi:hover .vico{background:var(--G);color:var(--PD);transform:scale(1.1) rotate(10deg);}
-.vinfo h4{font-family:'Playfair Display',serif !important;font-size:22px;font-weight:700;color:#fff;margin-bottom:3px;}
-body.lang-ku .vinfo h4,body.lang-ar .vinfo h4{font-family:var(--font-ar) !important;font-size:19px;}
-.vinfo span{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.45);}
-body.lang-ku .vinfo span,body.lang-ar .vinfo span{font-family:var(--font-ar-ui);letter-spacing:0;font-size:12px;text-transform:none;}
+/* ABOUT */
+.abt-sec{padding:140px 60px;background:linear-gradient(180deg,var(--PD) 0%,var(--deep) 100%);}
+.abt-g{display:grid;grid-template-columns:1.35fr 1fr;gap:100px;align-items:start;max-width:1280px;margin:0 auto;}
+.abt-p{font-size:16px;line-height:2;color:var(--dim);margin-bottom:22px;}
+body.lang-ku .abt-p,body.lang-ar .abt-p{
+  font-family:var(--f-ar-ui)!important;
+  font-size:16px!important;line-height:2.1!important;
+}
+.qbar{margin-top:38px;padding:28px 32px;border-left:4px solid var(--G);background:rgba(212,175,55,.08);border-radius:0 14px 14px 0;}
+body.rtl .qbar{border-left:none;border-right:4px solid var(--G);border-radius:14px 0 0 14px;}
+.qbar p{
+  font-family:var(--f-en-disp)!important;
+  font-size:22px;font-style:italic;color:var(--GP);line-height:1.65;
+}
+body.lang-ku .qbar p,body.lang-ar .qbar p{
+  font-family:var(--f-ar)!important;
+  font-size:19px!important;font-style:normal!important;
+  line-height:1.85!important;
+}
+.vals{display:flex;flex-direction:column;gap:3px;}
+.vi{display:flex;align-items:center;gap:22px;padding:26px 30px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);transition:all .5s var(--E);cursor:default;}
+.vi:hover{background:rgba(212,175,55,.09);border-color:rgba(212,175,55,.38);transform:translateX(14px);}
+body.rtl .vi:hover{transform:translateX(-14px);}
+.vico{width:60px;height:60px;background:rgba(212,175,55,.13);border:2px solid rgba(212,175,55,.38);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--G);font-size:22px;flex-shrink:0;transition:all .4s var(--E);}
+.vi:hover .vico{background:var(--G);color:var(--PD);transform:scale(1.12) rotate(10deg);}
+.vinfo h4{
+  font-family:var(--f-en-disp)!important;
+  font-size:22px;font-weight:700;color:#fff;margin-bottom:4px;
+}
+body.lang-ku .vinfo h4,body.lang-ar .vinfo h4{
+  font-family:var(--f-ar)!important;
+  font-size:19px!important;line-height:1.4!important;
+}
+.vinfo span{font-size:12px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.5);}
+body.lang-ku .vinfo span,body.lang-ar .vinfo span{
+  font-family:var(--f-ar-ui)!important;letter-spacing:0;font-size:13px;text-transform:none;
+}
 
-/* ═══════════════════════════════════════════════════════
-   CTA SECTION
-═══════════════════════════════════════════════════════ */
-.rdr-sec{padding:100px 60px;background:var(--P);position:relative;overflow:hidden;}
-.rdr-sec::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 85% 50%,rgba(212,175,55,.15) 0%,transparent 70%),radial-gradient(ellipse 40% 60% at 15% 50%,rgba(11,16,54,.6) 0%,transparent 70%);}
-.rdr-in{max-width:1150px;margin:0 auto;position:relative;z-index:1;display:grid;grid-template-columns:1fr auto;gap:70px;align-items:center;}
-.rdr-ey{font-size:10px;letter-spacing:5px;text-transform:uppercase;color:var(--G);display:block;margin-bottom:14px;}
-body.lang-ku .rdr-ey,body.lang-ar .rdr-ey{font-family:var(--font-ar-ui);letter-spacing:1px;font-size:13px;text-transform:none;}
-.rdr-t{font-family:'Playfair Display',serif !important;font-size:clamp(32px,4vw,52px);font-weight:700;color:#fff;line-height:1.2;margin-bottom:16px;}
-body.lang-ku .rdr-t,body.lang-ar .rdr-t{font-family:var(--font-ar) !important;line-height:1.5;}
+/* CTA */
+.rdr-sec{padding:120px 60px;background:var(--PM);position:relative;overflow:hidden;}
+.rdr-sec::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 85% 50%,rgba(212,175,55,.18) 0%,transparent 70%),radial-gradient(ellipse 40% 60% at 15% 50%,rgba(6,8,20,.75) 0%,transparent 70%);}
+.rdr-in{max-width:1120px;margin:0 auto;position:relative;z-index:1;display:grid;grid-template-columns:1fr auto;gap:80px;align-items:center;}
+.rdr-ey{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--G);display:block;margin-bottom:14px;font-weight:700;}
+body.lang-ku .rdr-ey,body.lang-ar .rdr-ey{font-family:var(--f-ar-ui)!important;letter-spacing:0;font-size:14px;text-transform:none;}
+.rdr-t{
+  font-family:var(--f-en-disp)!important;
+  font-size:clamp(32px,4vw,55px);font-weight:700;
+  color:#fff;line-height:1.2;margin-bottom:16px;
+}
+body.lang-ku .rdr-t,body.lang-ar .rdr-t{
+  font-family:var(--f-ar)!important;
+  line-height:1.45!important;
+  font-size:clamp(28px,3.5vw,48px)!important;
+}
 .rdr-t strong{color:var(--G);}
-.rdr-d{font-size:15px;color:rgba(255,255,255,.65);line-height:1.75;font-weight:300;}
-body.lang-ku .rdr-d,body.lang-ar .rdr-d{font-family:var(--font-ar-ui);font-size:15px;line-height:2;}
-.rdr-bs{display:flex;flex-direction:column;gap:13px;min-width:255px;}
-.rdr-b1{display:flex;align-items:center;justify-content:center;gap:10px;padding:17px 36px;background:var(--G);color:var(--PD);font-weight:700;font-size:12px;letter-spacing:2.5px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);box-shadow:0 4px 20px rgba(212,175,55,.4);font-family:var(--font-ar-ui);white-space:nowrap;}
-body.lang-en .rdr-b1{font-family:'DM Sans',sans-serif;}
+.rdr-d{font-size:16px;color:rgba(255,255,255,.75);line-height:1.85;}
+body.lang-ku .rdr-d,body.lang-ar .rdr-d{font-family:var(--f-ar-ui)!important;font-size:16px!important;line-height:2!important;}
+.rdr-bs{display:flex;flex-direction:column;gap:14px;min-width:270px;}
+.rdr-b1{display:flex;align-items:center;justify-content:center;gap:11px;padding:17px 36px;background:var(--G);color:var(--PD);font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);box-shadow:0 8px 24px rgba(212,175,55,.48);font-family:var(--f-ar-ui);white-space:nowrap;}
+body.lang-en .rdr-b1{font-family:var(--f-en);}
 .rdr-b1:hover{background:var(--GL);transform:translateY(-4px);}
-.rdr-b2{display:flex;align-items:center;justify-content:center;gap:10px;padding:16px 36px;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.9);font-size:12px;letter-spacing:2px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);font-family:var(--font-ar-ui);white-space:nowrap;}
-body.lang-en .rdr-b2{font-family:'DM Sans',sans-serif;}
-.rdr-b2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);}
+.rdr-b2{display:flex;align-items:center;justify-content:center;gap:11px;padding:16px 36px;border:2px solid rgba(255,255,255,.28);color:#fff;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;border-radius:50px;text-decoration:none;transition:all .4s var(--E);font-family:var(--f-ar-ui);white-space:nowrap;background:rgba(0,0,0,.18);}
+body.lang-en .rdr-b2{font-family:var(--f-en);}
+.rdr-b2:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);background:rgba(212,175,55,.12);}
 
-/* ═══════════════════════════════════════════════════════
-   FOOTER
-═══════════════════════════════════════════════════════ */
-footer{background:var(--PD);border-top:1px solid rgba(212,175,55,.15);padding:62px 60px 34px;}
-.ft-in{max-width:1300px;margin:0 auto;}
-.ft-top{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:44px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:30px;gap:40px;flex-wrap:wrap;}
-.ft-logo{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
-.ft-logo img{width:32px;height:32px;border-radius:50%;object-fit:contain;background:#fff;}
-.ft-logo-name{font-family:'Playfair Display',serif !important;font-size:22px;font-weight:700;color:#fff;}
-.ft-tag{font-size:13px;color:rgba(255,255,255,.45);line-height:1.7;max-width:248px;}
-body.lang-ku .ft-tag,body.lang-ar .ft-tag{font-family:var(--font-ar-ui);font-size:14px;line-height:1.9;}
-.ft-col h5{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--G);margin-bottom:16px;}
-body.lang-ku .ft-col h5,body.lang-ar .ft-col h5{font-family:var(--font-ar-ui);letter-spacing:0;font-size:12px;text-transform:none;}
-.ft-col ul{list-style:none;display:flex;flex-direction:column;gap:10px;}
-.ft-col a{font-size:14px;color:rgba(255,255,255,.55);text-decoration:none;transition:color .3s;}
-body.lang-ku .ft-col a,body.lang-ar .ft-col a{font-family:var(--font-ar-ui);font-size:14px;}
+/* FOOTER */
+footer{background:var(--deep);border-top:1px solid rgba(212,175,55,.18);padding:68px 60px 38px;}
+.ft-in{max-width:1280px;margin:0 auto;}
+.ft-top{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:46px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:30px;gap:44px;flex-wrap:wrap;}
+.ft-logo{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+.ft-logo img{width:34px;height:34px;border-radius:50%;object-fit:contain;background:#fff;}
+.ft-logo-name{font-family:var(--f-en-disp)!important;font-size:22px;font-weight:700;color:#fff;}
+.ft-tag{font-size:14px;color:rgba(255,255,255,.55);line-height:1.85;max-width:250px;}
+body.lang-ku .ft-tag,body.lang-ar .ft-tag{font-family:var(--f-ar-ui)!important;font-size:14.5px;line-height:2;}
+.ft-col h5{font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:var(--G);margin-bottom:18px;font-weight:700;}
+body.lang-ku .ft-col h5,body.lang-ar .ft-col h5{font-family:var(--f-ar-ui)!important;letter-spacing:0;font-size:13.5px;text-transform:none;}
+.ft-col ul{list-style:none;display:flex;flex-direction:column;gap:11px;}
+.ft-col a{font-size:14.5px;color:rgba(255,255,255,.62);text-decoration:none;transition:color .3s;}
+body.lang-ku .ft-col a,body.lang-ar .ft-col a{font-family:var(--f-ar-ui)!important;font-size:14.5px;}
 .ft-col a:hover{color:var(--G);}
 .ft-bot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;}
-.ft-copy{font-size:12px;color:rgba(255,255,255,.35);font-family:'DM Sans',sans-serif;}
+.ft-copy{font-size:13px;color:rgba(255,255,255,.42);font-family:var(--f-en)!important;}
 .ft-copy span{color:var(--G);}
 .ft-soc{display:flex;gap:10px;}
-.soa{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);font-size:14px;text-decoration:none;transition:all .4s var(--E);}
+.soa{width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.58);font-size:15px;text-decoration:none;transition:all .4s var(--E);}
 .soa:hover{border-color:var(--G);color:var(--G);transform:translateY(-4px);}
 
-/* ═══════════════════════════════════════════════════════
-   FABs
-═══════════════════════════════════════════════════════ */
-.fab-w{position:fixed;bottom:36px;right:36px;z-index:900;display:flex;flex-direction:column;align-items:flex-end;gap:12px;}
-body.rtl .fab-w{right:auto;left:36px;align-items:flex-start;}
-.ftop{width:46px;height:46px;border-radius:50%;background:rgba(48,59,151,.9);border:1px solid rgba(212,175,55,.35);display:flex;align-items:center;justify-content:center;color:var(--G);font-size:16px;cursor:pointer;opacity:0;pointer-events:none;transition:all .4s var(--E);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+/* FAB */
+.fab-w{position:fixed;bottom:32px;right:32px;z-index:900;display:flex;flex-direction:column;align-items:flex-end;gap:11px;}
+body.rtl .fab-w{right:auto;left:32px;align-items:flex-start;}
+.ftop{width:48px;height:48px;border-radius:50%;background:rgba(28,36,99,.92);border:1.5px solid rgba(212,175,55,.4);display:flex;align-items:center;justify-content:center;color:var(--G);font-size:17px;cursor:pointer;opacity:0;pointer-events:none;transition:all .4s var(--E);backdrop-filter:blur(10px);}
 .ftop.show{opacity:1;pointer-events:auto;}
 .ftop:hover{background:var(--G);color:var(--PD);transform:translateY(-5px);}
 
-/* ═══════════════════════════════════════════════════════
-   SCROLL REVEAL
-═══════════════════════════════════════════════════════ */
-.rv{opacity:0;transform:translateY(34px);transition:opacity .9s var(--E),transform .9s var(--E);}
-.rv.on{opacity:1;transform:translateY(0);}
-.rv.d1{transition-delay:100ms;}
-.rv.d2{transition-delay:200ms;}
-.rv.d3{transition-delay:300ms;}
+/* GSAP initial states */
+.anim-up{opacity:0;transform:translateY(48px);}
+.anim-scale{opacity:0;transform:scale(0.9);}
+.anim-left{opacity:0;transform:translateX(48px);}
+.anim-right{opacity:0;transform:translateX(-48px);}
 
-/* ═══════════════════════════════════════════════════════
-   RTL GLOBAL
-═══════════════════════════════════════════════════════ */
-body.rtl .nav-ul a::after{left:auto;right:0;}
-
-/* ═══════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    RESPONSIVE
-═══════════════════════════════════════════════════════ */
+═══════════════════════════════════════ */
 @media(max-width:1100px){
   .svc-grid{grid-template-columns:1fr 1fr;}
-  .svc-card:last-child{grid-column:span 2;}
-  .abt-g{grid-template-columns:1fr;gap:60px;}
-  .app-g{grid-template-columns:1fr;gap:60px;}
+  .svc-card:last-child{grid-column:span 2;height:380px;}
+  .abt-g,.app-g{grid-template-columns:1fr;gap:60px;}
+  .qr-card{max-width:100%;}
 }
 @media(max-width:1024px){
   .rdr-in{grid-template-columns:1fr;}
-  .rdr-bs{flex-direction:row;flex-wrap:wrap;}
+  .rdr-bs{flex-direction:row;flex-wrap:wrap;min-width:unset;}
 }
 @media(max-width:1000px){
-  .nav-ul {display:none;}
-  .nav-right .lang-sw {display:none;}
-  .nav-right #nav-browse-btn {display:none;}
-  .nav-right {gap: 8px;}
-  .nav-right #nav-login-btn {padding: 8px 14px; font-size: 11.5px;}
-  .hbtn{display:flex;align-items:center;justify-content:center; margin-left: 6px;}
-  body.rtl .hbtn {margin-left: 0; margin-right: 6px;}
-  header{padding:0 20px;height:70px;}
+  .nav-ul{display:none;}
+  .nav-right .lang-sw{display:none;}
+  .nav-right #nav-browse-btn{display:none;}
+  .hbtn{display:flex;align-items:center;justify-content:center;}
+  header{padding:0 18px;height:70px;}
   header.sc{height:60px;}
-  .logo img{width:44px;height:44px;}
-  header.sc .logo img{width:36px;height:36px;}
-  .logo-name{font-size:20px;}
-  header.sc .logo-name{font-size:18px;}
+  .stats-bar,.svc-sec,.app-sec,.abt-sec,.rdr-sec,footer{padding-left:20px;padding-right:20px;}
 }
 @media(max-width:768px){
-  header{padding:0 16px;height:64px;}
-  header.sc{height:56px;}
-  .logo{gap:10px;}
-  .logo img{width:40px;height:40px;}
-  header.sc .logo img{width:34px;height:34px;}
-  .logo-name{font-size:18px;}
-  header.sc .logo-name{font-size:16px;}
-
-  .hero{min-height:100svh;}
-  .hc{padding:0 18px;max-width:100%;}
-  h1{font-size:clamp(44px,12vw,80px);letter-spacing:-2px;}
-  .kurd-sub{font-size:14px;line-height:1.85;margin:10px 0 6px;padding:0 4px;}
-  .sub{font-size:10px;letter-spacing:4px;}
-  body.lang-ku .sub,body.lang-ar .sub{font-size:11px;letter-spacing:1px;}
-  .eyebrow{font-size:9px;letter-spacing:3px;margin-bottom:12px;}
-  body.lang-ku .eyebrow,body.lang-ar .eyebrow{font-size:12px;}
-  .eyebrow::before,.eyebrow::after{width:28px;}
-  .hero-search{margin:22px auto 28px;padding:0 4px;}
-  .hs-tabs{gap:4px;}
-  .hs-tab{padding:9px 14px;font-size:12px;border-radius:10px 10px 0 0;}
-  .hs-bar{border-radius:0 10px 10px 10px;}
-  .hs-input-wrap{padding:0 14px;gap:8px;}
-  .hs-input-wrap input{font-size:13px;padding:16px 0;}
-  .hs-go{padding:16px 16px;font-size:12px;}
-  .hs-quick{gap:7px;margin-top:11px;}
-  .hs-quick a{font-size:11px;padding:5px 11px;}
-  .hs-quick span{font-size:11px;}
-  .hbtns{gap:12px;}
-  .hb1,.hb2{padding:13px 28px;font-size:11px;letter-spacing:1.5px;}
-
-  .stats-bar{padding:28px 18px;}
-  .stats-inner{flex-direction:column;gap:24px;align-items:center;}
-  .stat-div{width:60px;height:1px;}
-  .stat-num{font-size:40px;}
-  .stat-label{font-size:11px;}
-
-  .svc-sec{padding:70px 18px;}
-  .svc-grid{grid-template-columns:1fr;gap:4px;}
+  h1{font-size:clamp(42px,12vw,76px);letter-spacing:-2px;}
+  body.lang-ku h1,body.lang-ar h1{font-size:clamp(38px,10vw,68px)!important;}
+  .hero-search{margin:20px auto 26px;}
+  .hbtns{gap:10px;}
+  .hb1,.hb2{padding:13px 26px;font-size:12px;}
+  .stats-inner{flex-direction:column;gap:22px;align-items:center;}
+  .stat-div{width:56px;height:1px;}
+  .svc-grid{grid-template-columns:1fr;gap:6px;}
   .svc-card:last-child{grid-column:span 1;}
-  .svc-card{height:360px;}
-  .svc-body{padding:30px 24px;}
-  .svc-n{font-size:54px;}
-  .svc-t{font-size:24px;}
-  body.lang-ku .svc-t,body.lang-ar .svc-t{font-size:22px;}
-  .svc-p{max-height:none !important;opacity:1 !important;margin-bottom:12px !important;font-size:13px;}
-  .svc-cta{font-size:11px;}
-  body.lang-ku .svc-cta,body.lang-ar .svc-cta{font-size:12px;}
-
-  .sec-hd{margin-bottom:44px;}
-  .stitle{font-size:32px;}
-  body.lang-ku .stitle,body.lang-ar .stitle{font-size:28px;}
-
-  .app-sec{padding:70px 18px;}
-  .app-g{grid-template-columns:1fr;gap:48px;}
-  .app-desc{font-size:14px;line-height:1.9;}
-  .af{font-size:13px;}
-  .sbtns{gap:10px;}
-  .sbtn{padding:12px 18px;gap:10px;}
-  .sbtn i{font-size:22px;}
-  .sbtn-nm{font-size:15px;}
-  .qr-card{max-width:100%;width:100%;}
-
-  .abt-sec{padding:70px 18px;}
-  .abt-g{grid-template-columns:1fr;gap:44px;}
-  .abt-p{font-size:14.5px;line-height:2;}
-  .qbar p{font-size:17px;}
-  body.lang-ku .qbar p,body.lang-ar .qbar p{font-size:16px;}
-  .vi{padding:20px 18px;gap:16px;}
-  .vico{width:48px;height:48px;font-size:18px;}
-  .vinfo h4{font-size:18px;}
-  body.lang-ku .vinfo h4,body.lang-ar .vinfo h4{font-size:17px;}
-
-  .rdr-sec{padding:70px 18px;}
-  .rdr-in{grid-template-columns:1fr;gap:36px;}
-  .rdr-t{font-size:28px;}
-  body.lang-ku .rdr-t,body.lang-ar .rdr-t{font-size:24px;}
-  .rdr-d{font-size:14px;}
+  .svc-card{height:380px;}
+  /* Show service card text on mobile (no hover state) */
+  .svc-p{max-height:none!important;opacity:1!important;margin-bottom:12px!important;}
   .rdr-bs{flex-direction:column;min-width:unset;width:100%;}
-  .rdr-b1,.rdr-b2{padding:15px 24px;font-size:12px;letter-spacing:1.5px;justify-content:center;}
-
-  footer{padding:50px 18px 28px;}
-  .ft-top{flex-direction:column;gap:32px;}
-  .ft-tag{max-width:100%;}
-  .ft-bot{flex-direction:column;align-items:flex-start;gap:16px;}
-  .ft-copy{font-size:11px;}
-
-  .fab-w{bottom:22px;right:14px;gap:10px;}
-  body.rtl .fab-w{left:14px;right:auto;}
-  .ftop{width:44px;height:44px;font-size:14px;}
+  .ft-top{flex-direction:column;gap:28px;}
+  .ft-bot{flex-direction:column;align-items:flex-start;}
+  .fab-w{bottom:20px;right:18px;}
+  body.rtl .fab-w{left:18px;right:auto;}
 }
 @media(max-width:480px){
-  header{padding:0 14px;}
-  .logo-name{font-size:16px;}
-  .nav-right #nav-login-btn {padding: 7px 12px; font-size: 11px;}
-  .nav-right .av-btn {width: 32px; height: 32px; font-size: 13px;}
-  .nav-right button.btn-o {padding: 6px 10px; font-size: 13px;}
-
-  h1{font-size:clamp(38px,13vw,64px);}
-  .kurd-sub{font-size:13px;}
-  .hs-tab{padding:8px 10px;font-size:11px;}
-  .hs-go{padding:16px 12px;font-size:11px;}
-  .hb1,.hb2{padding:12px 22px;font-size:11px;width:100%;text-align:center;justify-content:center;}
-  .hbtns{flex-direction:column;width:100%;max-width:300px;margin:0 auto;}
-  .svc-card{height:320px;}
-  .svc-t{font-size:22px;}
-  .stat-num{font-size:36px;}
-  .rdr-b1,.rdr-b2{font-size:11px;padding:13px 18px;}
-
-  .fab-w{bottom:16px;right:10px;}
-  body.rtl .fab-w{left:10px;right:auto;}
-  .ftop{width:40px;height:40px;}
+  .hbtns{flex-direction:column;width:100%;max-width:290px;margin:0 auto;}
+  .hb1,.hb2{width:100%;text-align:center;justify-content:center;}
+  .hs-tab{padding:9px 11px;font-size:11.5px;}
+  .hs-go{padding:0 16px;font-size:13px;}
+  .hs-input-wrap input{padding:17px 0;}
+  .hs-input-wrap{padding:0 16px;}
+  body.lang-ku h1,body.lang-ar h1{font-size:clamp(34px,11vw,58px)!important;}
 }
-@media(max-width:360px){
-  .hs-tabs{gap:2px;}
-  .hs-tab{padding:8px 9px;font-size:10px;}
-  .hero-search{padding:0;}
-  .hb1,.hb2{padding:11px 18px;font-size:10px;}
-}
+/* No hover on touch — make service cards always show text */
 @media(hover:none){
-  .svc-card:hover .svc-img{transform:none;}
+  .svc-p{max-height:none!important;opacity:1!important;margin-bottom:12px!important;}
   .svc-card:hover .svc-body{transform:none;}
-  .vi:hover{transform:none;}
 }
+/* Safe area support */
 @supports(padding:max(0px)){
-  header{padding-left:max(20px,env(safe-area-inset-left));padding-right:max(20px,env(safe-area-inset-right));}
-  .fab-w{bottom:max(18px,env(safe-area-inset-bottom));right:max(14px,env(safe-area-inset-right));}
-  body.rtl .fab-w{left:max(14px,env(safe-area-inset-left));right:auto;}
-  footer{padding-bottom:max(28px,env(safe-area-inset-bottom));padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right));}
+  header{padding-left:max(18px,env(safe-area-inset-left));padding-right:max(18px,env(safe-area-inset-right));}
+  .fab-w{right:max(32px,env(safe-area-inset-right));}
+  footer{padding-bottom:max(38px,env(safe-area-inset-bottom));}
 }
 </style>
 </head>
-<body>
+<body class="lang-ku">
 
+<!-- ══ HEADER ══ -->
 <header id="hdr">
 <nav>
   <a href="{{ route('newindex') }}" class="logo">
@@ -576,500 +755,733 @@ body.rtl .nav-ul a::after{left:auto;right:0;}
     <span class="logo-name">Dream Mulk</span>
   </a>
   <ul class="nav-ul">
-    <li><a href="{{ route('newindex') }}" class="{{ request()->routeIs('newindex') ? 'ac' : '' }}" id="nav-home">سەرەتا</a></li>
-    <li><a href="{{ route('property.list') }}" class="{{ request()->routeIs('property.list') ? 'ac' : '' }}" id="nav-props">خانووەکان</a></li>
-    <li><a href="#app" id="nav-app">ئەپ</a></li>
-    <li><a href="{{ route('about-us') }}" class="{{ request()->routeIs('about-us') ? 'ac' : '' }}" id="nav-about">دەربارەی ئێمە</a></li>
-    <li><a href="{{ route('contact-us') }}" class="{{ request()->routeIs('contact-us') ? 'ac' : '' }}" id="nav-contact">پەیوەندی</a></li>
+    <li><a href="{{ route('newindex') }}"       class="{{ request()->routeIs('newindex') ? 'ac':'' }}"        id="nav-home">سەرەتا</a></li>
+    <li><a href="{{ route('property.list') }}"  class="{{ request()->routeIs('property.list') ? 'ac':'' }}"  id="nav-props">خانووەکان</a></li>
+    <li><a href="#app"     id="nav-app">ئەپ</a></li>
+    <li><a href="{{ route('about-us') }}"       class="{{ request()->routeIs('about-us') ? 'ac':'' }}"        id="nav-about">دەربارەی ئێمە</a></li>
+    <li><a href="{{ route('contact-us') }}"     class="{{ request()->routeIs('contact-us') ? 'ac':'' }}"      id="nav-contact">پەیوەندی</a></li>
   </ul>
-
   <div class="nav-right">
     <div class="lang-sw">
       <button class="lang-btn active" data-lang="ku">کو</button>
       <button class="lang-btn" data-lang="en">EN</button>
       <button class="lang-btn" data-lang="ar">ع</button>
     </div>
-
     @php
-      $user = \Illuminate\Support\Facades\Auth::guard('web')->user();
-      $agent = \Illuminate\Support\Facades\Auth::guard('agent')->user();
-      $office = \Illuminate\Support\Facades\Auth::guard('office')->user();
-
-      $anyAuth = $user || $agent || $office;
-      $unreadCount = 0;
-      $dashRoute = '#';
-      $logoutRoute = '#';
-      $displayName = '';
-
-      if($user) {
-          $dashRoute = route('user.profile');
-          $logoutRoute = route('logout');
-          $displayName = $user->username ?? $user->name ?? 'User';
-          $unreadCount = \DB::table('notifications')
-              ->where('user_id', $user->id)
-              ->where('is_read', false)
-              ->where(function($q){
-                  $q->whereNull('expires_at')->orWhere('expires_at','>',now());
-              })->count();
-      } elseif($agent) {
-          $dashRoute = route('agent.dashboard');
-          $logoutRoute = route('agent.logout');
-          $displayName = $agent->agent_name ?? $agent->name ?? 'Agent';
-      } elseif($office) {
-          $dashRoute = route('office.dashboard');
-          $logoutRoute = route('office.logout');
-          $displayName = $office->company_name ?? $office->name ?? 'Office';
-      }
+      $user=\Illuminate\Support\Facades\Auth::guard('web')->user();
+      $agent=\Illuminate\Support\Facades\Auth::guard('agent')->user();
+      $office=\Illuminate\Support\Facades\Auth::guard('office')->user();
+      $anyAuth=$user||$agent||$office;
+      $unreadCount=0;$dashRoute='#';$logoutRoute='#';$displayName='';
+      if($user){$dashRoute=route('user.profile');$logoutRoute=route('logout');$displayName=$user->username??$user->name??'U';$unreadCount=\DB::table('notifications')->where('user_id',$user->id)->where('is_read',false)->where(function($q){$q->whereNull('expires_at')->orWhere('expires_at','>',now());})->count();}
+      elseif($agent){$dashRoute=route('agent.dashboard');$logoutRoute=route('agent.logout');$displayName=$agent->agent_name??$agent->name??'A';}
+      elseif($office){$dashRoute=route('office.dashboard');$logoutRoute=route('office.logout');$displayName=$office->company_name??$office->name??'O';}
     @endphp
-
     @if($anyAuth)
       @if($user)
-        <a href="{{ route('user.notifications') }}" class="bell-wrap">
-          <i class="far fa-bell"></i>
-          @if($unreadCount > 0)
-            <span class="bell-badge">{{ $unreadCount > 99 ? '99+' : $unreadCount }}</span>
-          @endif
-        </a>
-      @endif
-
-      <a href="{{ $dashRoute }}" class="av-btn" title="Dashboard">
-        {{ strtoupper(substr($displayName, 0, 1)) }}
+      <a href="{{ route('user.notifications') }}" class="bell-wrap">
+        <i class="far fa-bell"></i>
+        @if($unreadCount>0)<span class="bell-badge">{{ $unreadCount>99?'99+':$unreadCount }}</span>@endif
       </a>
-
-      <form action="{{ $logoutRoute }}" method="POST" style="display: inline;">
-        @csrf
-        <button type="submit" class="btn-o" style="padding: 8px 15px; cursor: pointer; border: none; background: none; color: var(--G);" title="Logout">
-          <i class="fas fa-sign-out-alt"></i>
-        </button>
+      @endif
+      <a href="{{ $dashRoute }}" class="av-btn">{{ strtoupper(substr($displayName,0,1)) }}</a>
+      <form action="{{ $logoutRoute }}" method="POST" style="display:inline;">@csrf
+        <button type="submit" class="btn-o" style="padding:8px 14px;cursor:pointer;border:none;background:none;color:var(--G);"><i class="fas fa-sign-out-alt"></i></button>
       </form>
     @else
       <a href="{{ route('property.list') }}" class="btn-o" id="nav-browse-btn">Browse</a>
-      <a href="{{ route('login-page') }}" class="btn-s" id="nav-login-btn" style="display:flex; align-items:center; gap:6px;">
-        <i class="fas fa-user"></i> <span data-i18n="loginBtn">Client Login</span>
+      <a href="{{ route('login-page') }}"    class="btn-s" id="nav-login-btn">
+        <i class="fas fa-user"></i>
+        <span data-i18n="loginBtn">چوونەژوورەوە</span>
       </a>
     @endif
   </div>
-
   <button class="hbtn" id="ham"><i class="fas fa-bars"></i></button>
 </nav>
 </header>
 
+<!-- ══ DRAWER BACKDROP ══ -->
 <div class="bkdp" id="bdp"></div>
+
+<!-- ══ DRAWER ══ -->
 <aside class="drw" id="drw">
   <div class="drw-hd">
     <span>Dream Mulk</span>
     <button class="drw-x" id="dx"><i class="fas fa-times"></i></button>
   </div>
-  <div style="display:flex;gap:6px;margin-bottom:4px;">
-    <button class="lang-btn active" data-lang="ku" style="flex:1;padding:8px 0;font-size:13px;">کو</button>
-    <button class="lang-btn" data-lang="en" style="flex:1;padding:8px 0;font-size:13px;">EN</button>
-    <button class="lang-btn" data-lang="ar" style="flex:1;padding:8px 0;font-size:13px;">ع</button>
+  <div class="drw-lang">
+    <button class="lang-btn active" data-lang="ku">کو</button>
+    <button class="lang-btn" data-lang="en">EN</button>
+    <button class="lang-btn" data-lang="ar">ع</button>
   </div>
   <nav class="drw-nav">
-    <a href="{{ route('newindex') }}" id="drw-home">سەرەتا</a>
+    <a href="{{ route('newindex') }}"      id="drw-home">سەرەتا</a>
     <a href="{{ route('property.list') }}" id="drw-props">خانووەکان</a>
-    <a href="#app" id="drw-app">ئەپ</a>
-    <a href="{{ route('about-us') }}" id="drw-about">دەربارەمان</a>
-    <a href="{{ route('contact-us') }}" id="drw-contact">پەیوەندی</a>
+    <a href="#app"                         id="drw-app">ئەپ</a>
+    <a href="{{ route('about-us') }}"      id="drw-about">دەربارەمان</a>
+    <a href="{{ route('contact-us') }}"    id="drw-contact">پەیوەندی</a>
   </nav>
-
   <div class="drw-ft">
-    @if(isset($anyAuth) && $anyAuth)
-        <a href="{{ $dashRoute }}" class="btn-s" style="text-align:center;">Dashboard</a>
-        <form action="{{ $logoutRoute }}" method="POST" style="width: 100%;">
-            @csrf
-            <button type="submit" class="btn-o" style="width:100%; margin-top:10px; text-align:center;">Logout</button>
-        </form>
+    @if(isset($anyAuth)&&$anyAuth)
+      <a href="{{ $dashRoute }}" class="btn-s" style="text-align:center;justify-content:center;">Dashboard</a>
+      <form action="{{ $logoutRoute }}" method="POST" style="width:100%;">@csrf
+        <button type="submit" class="btn-o" style="width:100%;text-align:center;cursor:pointer;">Logout</button>
+      </form>
     @else
-        <a href="{{ route('login-page') }}" class="btn-s" style="text-align:center;" id="drw-login">چوونەژوورەوە</a>
-        <a href="{{ route('property.list') }}" class="btn-o" style="text-align:center;" id="drw-browse">خانووەکان ببینە</a>
+      <a href="{{ route('login-page') }}"    class="btn-s" style="text-align:center;justify-content:center;" id="drw-login">چوونەژوورەوە</a>
+      <a href="{{ route('property.list') }}" class="btn-o" style="text-align:center;"                         id="drw-browse">خانووەکان ببینە</a>
     @endif
   </div>
 </aside>
 
-<section class="hero">
-  <video class="hero-vid" autoplay loop muted playsinline>
-    <source src="https://www.pexels.com/download/video/17224730" type="video/mp4">
-  </video>
+<!-- ══ HERO ══ -->
+<div class="hero-pin-wrap" id="hero-wrap">
+  <div class="hero-pin" id="hero-pin">
+    <video class="hero-vid" id="hero-vid" autoplay loop muted playsinline preload="auto">
+      <source src="https://www.pexels.com/download/video/17224730" type="video/mp4">
+      <!-- fallback image if video fails -->
+      <img src="https://images.unsplash.com/photo-1613490493576-7fde63acd811?w=1800&q=88" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;"/>
+    </video>
+    <div class="hero-overlay"></div>
 
-  <div class="hero-overlay"></div>
+    <div class="hc" id="hc">
+      <div class="eyebrow" id="t-eyebrow">خانوو و زەوی پریمیەم</div>
 
-  <div class="hc vis" id="hc">
-    <div class="eyebrow" id="t-eyebrow">خانوو و زەوی پریمیەم</div>
-    <h1>Dream <span class="g">Mulk</span></h1>
-    <div class="kurd-sub" id="t-sub1">پلاتفۆرمی تایبەت بۆ کڕین، فرۆشتن و کرێی خانوو لە کوردستان</div>
-    <div class="sub" id="t-sub2">کوردستان &bull; هەولێر &bull; ٢٠٢٦</div>
+      <h1 id="hero-title" dir="ltr" style="direction:ltr;unicode-bidi:embed;">
+        <span class="char">D</span><span class="char">R</span><span class="char">E</span><span class="char">A</span><span class="char">M</span>&nbsp;<span class="g"><span class="char">M</span><span class="char">U</span><span class="char">L</span><span class="char">K</span></span>
+      </h1>
 
-    <div class="hero-search">
-      <div class="hs-tabs">
-        <button class="hs-tab active" id="tab-buy" onclick="setTab(this,'buy')"></button>
-        <button class="hs-tab" id="tab-rent" onclick="setTab(this,'rent')"></button>
-        <button class="hs-tab" id="tab-sell" onclick="setTab(this,'sell')"></button>
-      </div>
-      <div class="hs-bar">
-        <div class="hs-input-wrap">
-          <i class="fas fa-search"></i>
-          <input type="text" id="hs-input" placeholder="گەڕان لە هەولێر، سلێمانی..." autocomplete="off"/>
+      <div class="kurd-sub" id="t-sub1">پلاتفۆرمی تایبەت بۆ کڕین، فرۆشتن و کرێدانی خانوو لە کوردستان</div>
+      <div class="sub"      id="t-sub2">کوردستان &bull; هەولێر &bull; ٢٠٢٦</div>
+
+      <div class="hero-search">
+        <div class="hs-tabs">
+          <button class="hs-tab active" id="tab-buy"  onclick="setTab(this,'buy')"></button>
+          <button class="hs-tab"        id="tab-rent" onclick="setTab(this,'rent')"></button>
+          <button class="hs-tab"        id="tab-sell" onclick="setTab(this,'sell')"></button>
         </div>
-        <button id="hs-btn" class="hs-go">بگەڕێ</button>
+        <div class="hs-bar">
+          <div class="hs-input-wrap">
+            <i class="fas fa-search"></i>
+            <input type="text" id="hs-input" placeholder="گەڕان لە هەولێر، سلێمانی..." autocomplete="off" inputmode="search"/>
+          </div>
+          <button id="hs-btn" class="hs-go">بگەڕێ</button>
+        </div>
+        <div class="hs-quick">
+          <span id="t-popular">شارەکان:</span>
+          <a data-city="erbil"        id="q-erbil">هەولێر</a>
+          <a data-city="sulaymaniyah" id="q-suli">سلێمانی</a>
+          <a data-city="duhok"        id="q-duhok">دهۆک</a>
+        </div>
       </div>
-      <div class="hs-quick">
-        <span id="t-popular">شارە باوەکان:</span>
-        <a data-city="erbil" id="q-erbil">هەولێر</a>
-        <a data-city="sulaymaniyah" id="q-suli">سلێمانی</a>
-        <a data-city="duhok" id="q-duhok">دهۆک</a>
+
+      <div class="hbtns">
+        <a href="{{ route('property.list') }}" class="hb1" id="t-explore">خانووەکان ببینە</a>
+        <a href="#app"                          class="hb2" id="t-app">ئەپەکە دابەزێنە</a>
       </div>
     </div>
 
-    <div class="hbtns">
-      <a href="{{ route('property.list') }}" class="hb1" id="t-explore">خانووەکان ببینە</a>
-      <a href="#app" class="hb2" id="t-app">ئەپەکە دابەزێنە</a>
-    </div>
-  </div>
-
-  <div class="scrl vis" id="scrl"><div class="mouse"></div><span id="t-scroll">دابەزە</span></div>
-</section>
-
-<div class="stats-bar">
-  <div class="stats-inner">
-    <div class="stat-item rv">
-      <div class="stat-num" data-t="500" data-s="+">0+</div>
-      <div class="stat-label" data-i18n="statLabel1">خانووی تۆمارکراو</div>
-    </div>
-    <div class="stat-div"></div>
-    <div class="stat-item rv d2">
-      <div class="stat-num" data-t="150" data-s="+">0+</div>
-      <div class="stat-label" data-i18n="statLabel2">ئەجێنتی دەستنیشانکراو</div>
+    <div class="scrl" id="scrl">
+      <div class="mouse"></div>
+      <span id="t-scroll">دابەزە</span>
     </div>
   </div>
 </div>
 
-<section class="svc-sec">
-  <div class="sec-wrap">
-    <div class="sec-hd">
-      <span class="stag rv" data-i18n="svcTag">خزمەتگوزاریەکان</span>
-      <h2 class="stitle rv d1"><span data-i18n="svcTitle">چی</span> <em data-i18n="svcTitleEm">پێشکەش دەکەین</em></h2>
-    </div>
-    <div class="svc-grid">
-      <a href="{{ route('property.list') }}" class="svc-card rv">
-        <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80" alt="Buy" class="svc-img" loading="lazy">
-        <div class="svc-body">
-          <div class="svc-n">01</div>
-          <div class="svc-ico"><i class="fas fa-key"></i></div>
-          <h3 class="svc-t" data-i18n="svc1Title">کڕینی خانوو</h3>
-          <p class="svc-p" data-i18n="svc1Desc">خانووی خەونەکەت بدۆزەرەوە بە فلتەری پێشکەوتوو. لیستی تایبەت لە سەرانسەری کوردستان.</p>
-          <div class="svc-cta" data-i18n="svc1Cta">بگەڕێ <i class="fas fa-arrow-right"></i></div>
-        </div>
-      </a>
-      <a href="{{ route('login-page') }}" class="svc-card rv d1">
-        <img src="https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=800&q=80" alt="Sell" class="svc-img" loading="lazy">
-        <div class="svc-body">
-          <div class="svc-n">02</div>
-          <div class="svc-ico"><i class="fas fa-tags"></i></div>
-          <h3 class="svc-t" data-i18n="svc2Title">فرۆشتنی خانوو</h3>
-          <p class="svc-p" data-i18n="svc2Desc">خانووەکەت تۆمار بکە و پەیوەندی بکە بە کڕیارە راستەقینەکان. بەرچاوبوونی زۆر، بێ کۆمیسیۆن.</p>
-          <div class="svc-cta" data-i18n="svc2Cta">تۆمار بکە <i class="fas fa-arrow-right"></i></div>
-        </div>
-      </a>
-      <a href="{{ route('property.list', ['type'=>'rent']) }}" class="svc-card rv d2">
-        <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80" alt="Rent" class="svc-img" loading="lazy">
-        <div class="svc-body">
-          <div class="svc-n">03</div>
-          <div class="svc-ico"><i class="fas fa-home"></i></div>
-          <h3 class="svc-t" data-i18n="svc3Title">کرێی خانوو</h3>
-          <p class="svc-p" data-i18n="svc3Desc">کرێی گونجاو بدۆزەرەوە بۆ ژیانت. لیستی پشتڕاستکراو بە نرخی ئاشکرا.</p>
-          <div class="svc-cta" data-i18n="svc3Cta">کرێ بدۆزەرەوە <i class="fas fa-arrow-right"></i></div>
-        </div>
-      </a>
+<!-- ══ PAGE SECTIONS ══ -->
+<div class="page-sections">
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stats-inner">
+      <div class="stat-item anim-up">
+        <div class="stat-num" data-t="500" data-s="+">0+</div>
+        <div class="stat-label" data-i18n="statLabel1">خانووی تۆمارکراو</div>
+      </div>
+      <div class="stat-div"></div>
+      <div class="stat-item anim-up" style="transition-delay:.18s">
+        <div class="stat-num" data-t="150" data-s="+">0+</div>
+        <div class="stat-label" data-i18n="statLabel2">ئەجێنتی پشتڕاستکراو</div>
+      </div>
     </div>
   </div>
-</section>
 
-<section class="app-sec" id="app">
-  <div class="app-g">
-    <div class="rv">
-      <span class="stag" data-i18n="appTag">ئەزموونی مۆبایل</span>
-      <h2 class="stitle" style="margin-bottom:20px;">
-        <span data-i18n="appTitle">خانووەکان</span><br>
-        <em data-i18n="appTitleEm">لە گەڵت</em>
-      </h2>
-      <p class="app-desc" data-i18n="appDesc">ئەپی Dream Mulk بازاڕی خانووبەرە کوردستانت دەهێنێتە نووکی پەنجەکانت. بگەڕێ، کاتی بینینی خانوو دابنێ، و پەیوەندی بکە بە ئەجێنتە پشتڕاستکراوەکان.</p>
-      <div class="app-feats">
-        <div class="af"><i class="fas fa-check-circle"></i> <span data-i18n="appF1">لیستی خانووی ڕێکەوتی و ئاگادارکردنەوەی خێرا</span></div>
-        <div class="af"><i class="fas fa-check-circle"></i> <span data-i18n="appF2">دانانی کاتی بینینی خانوو بە ئەجێنت</span></div>
-        <div class="af"><i class="fas fa-check-circle"></i> <span data-i18n="appF3">زمانی زۆر: کوردی، عەرەبی و ئینگلیزی</span></div>
-        <div class="af"><i class="fas fa-check-circle"></i> <span data-i18n="appF4">پەیامی پارێزراو و بەڵگەنامە لە ئەپدا</span></div>
-        <div class="af"><i class="fas fa-check-circle"></i> <span data-i18n="appF5">بێ کۆمیسیۆن — هەمیشە ئازاد بگەڕێ</span></div>
+  <!-- Services -->
+  <section class="svc-sec">
+    <div class="sec-wrap">
+      <div class="sec-hd">
+        <span class="stag anim-up" data-i18n="svcTag">خزمەتگوزاریەکان</span>
+        <h2 class="stitle anim-up" style="transition-delay:.1s">
+          <span data-i18n="svcTitle">چی</span> <em data-i18n="svcTitleEm">پێشکەش دەکەین</em>
+        </h2>
       </div>
-      <div class="sbtns">
-        <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="sbtn">
-          <i class="fab fa-apple"></i>
-          <div><div class="sbtn-sm" data-i18n="appStoreLabel">دابەزێنە لە</div><div class="sbtn-nm">App Store</div></div>
-        </a>
-        <a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener" class="sbtn">
-          <i class="fab fa-google-play"></i>
-          <div><div class="sbtn-sm" data-i18n="playStoreLabel">وەربگرە لە</div><div class="sbtn-nm">Google Play</div></div>
-        </a>
-      </div>
-    </div>
-    <div class="rv d2">
-      <div class="qr-card">
-        <div class="qr-brand">
-          <div class="qr-ico"><i class="fab fa-apple"></i></div>
-          <div>
-            <div class="qr-t">Dream Mulk</div>
-            <div class="qr-s" data-i18n="qrSub">بەخۆڕایی</div>
+      <div class="svc-grid">
+        <a href="{{ route('property.list') }}" class="svc-card anim-scale">
+          <img src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=800&q=80" alt="" class="svc-img" loading="lazy">
+          <div class="svc-body">
+            <div class="svc-n">01</div>
+            <div class="svc-ico"><i class="fas fa-key"></i></div>
+            <h3 class="svc-t" data-i18n="svc1Title">کڕینی خانوو</h3>
+            <p class="svc-p" data-i18n="svc1Desc">خانووی خەونەکەت بدۆزەرەوە. لیستی تایبەت لە سەرانسەری کوردستان بە نرخی ئاشکرا.</p>
+            <div class="svc-cta"><span data-i18n="svc1Cta">بگەڕێ</span> <i class="fas fa-arrow-right"></i></div>
           </div>
-        </div>
-        <div class="qr-div"></div>
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://apps.apple.com/us/app/dream-mulk/id6756894199&bgcolor=ffffff&color=1a225a&margin=10&format=png&qzone=1&ecc=M" alt="QR Code" class="qr-img" loading="lazy"/>
-        <div class="qr-hint"><i class="fas fa-mobile-alt"></i><span data-i18n="qrHint">کامێراکەت بەرەو ئەمە بگرە</span></div>
-        <div class="qr-div"></div>
-        <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="qr-lnk">
-          <i class="fab fa-apple"></i> <span data-i18n="qrBtn">بکرەوە لە App Store</span> <i class="fas fa-arrow-right"></i>
+        </a>
+        <a href="{{ route('login-page') }}" class="svc-card anim-scale" style="transition-delay:.14s">
+          <img src="https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=800&q=80" alt="" class="svc-img" loading="lazy">
+          <div class="svc-body">
+            <div class="svc-n">02</div>
+            <div class="svc-ico"><i class="fas fa-tags"></i></div>
+            <h3 class="svc-t" data-i18n="svc2Title">فرۆشتنی خانوو</h3>
+            <p class="svc-p" data-i18n="svc2Desc">خانووەکەت لیست بکە و بگەیە کڕیارە راستەقینەکان. بێ کۆمیسیۆن، بێ نهێنی.</p>
+            <div class="svc-cta"><span data-i18n="svc2Cta">تۆمار بکە</span> <i class="fas fa-arrow-right"></i></div>
+          </div>
+        </a>
+        <a href="{{ route('property.list',['type'=>'rent']) }}" class="svc-card anim-scale" style="transition-delay:.28s">
+          <img src="https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80" alt="" class="svc-img" loading="lazy">
+          <div class="svc-body">
+            <div class="svc-n">03</div>
+            <div class="svc-ico"><i class="fas fa-home"></i></div>
+            <h3 class="svc-t" data-i18n="svc3Title">کرێدانی خانوو</h3>
+            <p class="svc-p" data-i18n="svc3Desc">کرێی گونجاو بدۆزەرەوە بۆ ژیانت. لیستی پشتڕاستکراو بە نرخی ئاشکرا.</p>
+            <div class="svc-cta"><span data-i18n="svc3Cta">کرێ بدۆزەرەوە</span> <i class="fas fa-arrow-right"></i></div>
+          </div>
         </a>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section class="abt-sec" id="about">
-  <div class="abt-g">
-    <div class="rv">
-      <span class="stag" data-i18n="abtTag">چیرۆکمان</span>
-      <h2 class="stitle">
-        <span data-i18n="abtTitle">Dream Mulk</span><br>
-        <em data-i18n="abtTitleEm">کێیە؟</em>
-      </h2>
-      <p class="abt-p" style="margin-top:20px;" data-i18n="abtP1">Dream Mulk بە ئامانجێکی بەهێز دامەزراوە: بەرزکردنەوەی ئاستی خانووبەرە لە کوردستان. ئێمە تەنها پلاتفۆرم نین — ئێمە ئەندازیارانی چاپتەری داهاتووی تۆین.</p>
-      <p class="abt-p" data-i18n="abtP2">لە بازاڕێکدا کە زۆرجار ئاڵۆزە، ئێمە وەک بەرپرسیارێتی و زیرەکیت خزمەت دەکەین. گەشتمان بە پابەندبوون بە تەکنەلۆژیای مۆدێرن و درووستکاری بەردەوامە.</p>
-      <div class="qbar"><p data-i18n="abtQuote">«خانوو زەوییە، بەڵام "مولک" میراتە. ئێمە یارمەتیدەرتین کە میراتەکەت بنیادبنێیت.»</p></div>
-    </div>
-    <div class="vals rv d2">
-      <div class="vi"><div class="vico"><i class="fas fa-crown"></i></div><div class="vinfo"><h4 data-i18n="val1Title">تایبەتمەندی</h4><span data-i18n="val1Sub">پۆرتفۆلیۆی هەڵبژێردراو</span></div></div>
-      <div class="vi"><div class="vico"><i class="fas fa-handshake"></i></div><div class="vinfo"><h4 data-i18n="val2Title">درووستکاری</h4><span data-i18n="val2Sub">ئاشکرایی تەواو</span></div></div>
-      <div class="vi"><div class="vico"><i class="fas fa-mobile-alt"></i></div><div class="vinfo"><h4 data-i18n="val3Title">تەکنەلۆژیا</h4><span data-i18n="val3Sub">پلاتفۆرمی زیرەک و مۆدێرن</span></div></div>
-      <div class="vi"><div class="vico"><i class="fas fa-map-marked-alt"></i></div><div class="vinfo"><h4 data-i18n="val4Title">لە هەولێر</h4><span data-i18n="val4Sub">دامەزراوە ٢٠٢٦ — کوردستان</span></div></div>
-    </div>
-  </div>
-</section>
-
-<section class="rdr-sec" id="contact">
-  <div class="rdr-in">
-    <div class="rv">
-      <span class="rdr-ey" data-i18n="rdrTag">بۆ ئۆفیسە خانووبەرەکان</span>
-      <h2 class="rdr-t">
-        <span data-i18n="rdrTitle">بزنسەکەت گەشە پێ بدە</span><br>
-        <span data-i18n="rdrWith">لەگەڵ</span> <strong>Dream Mulk</strong>
-      </h2>
-      <p class="rdr-d" data-i18n="rdrDesc">ئۆفیسی خانووبەرەکەت تۆمار بکە و بگەیە بە هەزاران کڕیار و کرێیار لە سەرانسەری کوردستان. خانوو لیست بکە، ئەجێنت بەڕێوەبەرە، مامەڵەکان ببەستە.</p>
-    </div>
-    <div class="rdr-bs rv d2">
-      <a href="{{ route('office.login') }}" class="rdr-b1"><i class="fas fa-building"></i> <span data-i18n="rdrBtn1">چوونەژوورەوەی خانووبەرە</span></a>
-      <a href="{{ route('property.list') }}" class="rdr-b2"><i class="fas fa-search"></i> <span data-i18n="rdrBtn2">بگەڕێ بێ چوونەژوورەوە</span></a>
-    </div>
-  </div>
-</section>
-
-<footer class="rv">
-  <div class="ft-in">
-    <div class="ft-top">
-      <div>
-        <div class="ft-logo">
-          <img src="{{ asset('favicon.ico') }}" alt="Dream Mulk" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2111/2111307.png'"/>
-          <span class="ft-logo-name">Dream Mulk</span>
+  <!-- App -->
+  <section class="app-sec" id="app">
+    <div class="app-g">
+      <div class="anim-right">
+        <span class="stag" data-i18n="appTag">ئەپی مۆبایل</span>
+        <h2 class="stitle" style="margin-bottom:18px;">
+          <span data-i18n="appTitle">خانووەکان</span><br>
+          <em data-i18n="appTitleEm">لە گەڵت</em>
+        </h2>
+        <p class="app-desc" data-i18n="appDesc">ئەپی Dream Mulk بازاڕی خانووبەرەی کوردستانت دەهێنێتە نووکی پەنجەکانت. بگەڕێ، کاتی بینینی خانوو دابنێ، و پەیوەندی بکە بە ئەجێنتە پشتڕاستکراوەکان.</p>
+        <div class="app-feats">
+          <div class="af"><i class="fas fa-check-circle"></i><span data-i18n="appF1">لیستی خانووی ڕێکەوتی و ئاگادارکردنەوەی خێرا</span></div>
+          <div class="af"><i class="fas fa-check-circle"></i><span data-i18n="appF2">دانانی کاتی بینینی خانوو بە ئەجێنت</span></div>
+          <div class="af"><i class="fas fa-check-circle"></i><span data-i18n="appF3">زمانی زۆر: کوردی، عەرەبی و ئینگلیزی</span></div>
+          <div class="af"><i class="fas fa-check-circle"></i><span data-i18n="appF4">پەیامی پارێزراو و بەڵگەنامە لە ئەپدا</span></div>
+          <div class="af"><i class="fas fa-check-circle"></i><span data-i18n="appF5">بێ کۆمیسیۆن — هەمیشە ئازاد بگەڕێ</span></div>
         </div>
-        <p class="ft-tag" data-i18n="ftTag">باشترین پلاتفۆرمی خانووبەرەی کوردستان. بێ کارمزد. بێ کۆمیسیۆن. ئاشکرایی تەواو.</p>
+        <div class="sbtns">
+          <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="sbtn">
+            <i class="fab fa-apple"></i>
+            <div><div class="sbtn-sm" data-i18n="appStoreLabel">دابەزێنە لە</div><div class="sbtn-nm">App Store</div></div>
+          </a>
+          <a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener" class="sbtn">
+            <i class="fab fa-google-play"></i>
+            <div><div class="sbtn-sm" data-i18n="playStoreLabel">وەربگرە لە</div><div class="sbtn-nm">Google Play</div></div>
+          </a>
+        </div>
       </div>
-      <div class="ft-col">
-        <h5 data-i18n="ftCol1">پلاتفۆرم</h5>
-        <ul>
-          <li><a href="{{ route('property.list') }}" data-i18n="ftLink1">خانووەکان ببینە</a></li>
-          <li><a href="{{ route('login-page') }}" data-i18n="ftLink2">چوونەژوورەوەی کڕیار</a></li>
-          <li><a href="{{ route('agent.login') }}" data-i18n="ftLink3">پۆرتاڵی ئەجێنت</a></li>
-          <li><a href="{{ route('about-us') }}" data-i18n="ftLink4">دەربارەی ئێمە</a></li>
-        </ul>
-      </div>
-      <div class="ft-col">
-        <h5 data-i18n="ftCol2">خزمەتگوزاری</h5>
-        <ul>
-          <li><a href="{{ route('property.list') }}" data-i18n="ftLink5">کڕینی خانوو</a></li>
-          <li><a href="{{ route('login-page') }}" data-i18n="ftLink6">فرۆشتنی خانوو</a></li>
-          <li><a href="{{ route('property.list', ['type'=>'rent']) }}" data-i18n="ftLink7">کرێی خانوو</a></li>
-          <li><a href="{{ route('agents.list') }}" data-i18n="ftLink8">ئەجێنت بدۆزەرەوە</a></li>
-        </ul>
-      </div>
-      <div class="ft-col">
-        <h5 data-i18n="ftCol3">ئەپەکە دابەزێنە</h5>
-        <ul>
-          <li><a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener"><i class="fab fa-apple"></i> App Store</a></li>
-          <li><a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener"><i class="fab fa-google-play"></i> Google Play</a></li>
-          <li><a href="{{ route('contact-us') }}" data-i18n="ftLink9">پەیوەندیمان پێوە بکە</a></li>
-        </ul>
+      <div class="anim-left">
+        <div class="qr-card">
+          <div class="qr-brand">
+            <div class="qr-ico"><i class="fab fa-apple"></i></div>
+            <div><div class="qr-t">Dream Mulk</div><div class="qr-s" data-i18n="qrSub">بەخۆڕایی</div></div>
+          </div>
+          <div class="qr-div"></div>
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://apps.apple.com/us/app/dream-mulk/id6756894199&bgcolor=ffffff&color=1a225a&margin=10&format=png&qzone=1&ecc=M" alt="QR Code" class="qr-img" loading="lazy"/>
+          <div class="qr-hint"><i class="fas fa-mobile-alt"></i><span data-i18n="qrHint">کامێراکەت بەرەو ئەمە بگرە</span></div>
+          <div class="qr-div"></div>
+          <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="qr-lnk">
+            <i class="fab fa-apple"></i> <span data-i18n="qrBtn">بکرەوە لە App Store</span> <i class="fas fa-arrow-right"></i>
+          </a>
+        </div>
       </div>
     </div>
-    <div class="ft-bot">
-      <div class="ft-copy">© 2026 <span>Dream Mulk</span>. All rights reserved. Erbil, Kurdistan Region of Iraq.</div>
-      <div class="ft-soc">
-        <a href="https://www.facebook.com/share/1CGLEbK7qh/" target="_blank" rel="noopener" class="soa"><i class="fab fa-facebook-f"></i></a>
-        <a href="https://www.instagram.com/dream_mulk?igsh=MWt4YXd1eTN4NW5j" target="_blank" rel="noopener" class="soa"><i class="fab fa-instagram"></i></a>
+  </section>
+
+  <!-- About -->
+  <section class="abt-sec" id="about">
+    <div class="abt-g">
+      <div class="anim-right">
+        <span class="stag" data-i18n="abtTag">چیرۆکمان</span>
+        <h2 class="stitle">
+          <span data-i18n="abtTitle">Dream Mulk</span><br>
+          <em data-i18n="abtTitleEm">کێیە؟</em>
+        </h2>
+        <p class="abt-p" style="margin-top:18px;" data-i18n="abtP1">Dream Mulk بە ئامانجێکی بەهێز دامەزراوە: ئاسانکردن و ئاشکراکردنی بازاڕی خانووبەرەی کوردستان. ئێمە کڕیار و فرۆشیار ڕاستەوخۆ پەیوەند دەکەین — بێ ناوەڕاست، بێ کۆمیسیۆن.</p>
+        <p class="abt-p" data-i18n="abtP2">لە بازاڕێکدا کە زۆرجار ئاڵۆزە، ئێمە وەک بەرپرسیارێتی و زیرەکیت خزمەت دەکەین. گەشتمان بە پابەندبوون بە تەکنەلۆژیای مۆدێرن و درووستکاری بەردەوامە.</p>
+        <div class="qbar"><p data-i18n="abtQuote">«خانوو زەوییە، بەڵام "مولک" میراتە. ئێمە یارمەتیدەرتین کە میراتەکەت بنیادبنێیت.»</p></div>
+      </div>
+      <div class="vals anim-left">
+        <div class="vi"><div class="vico"><i class="fas fa-crown"></i></div><div class="vinfo"><h4 data-i18n="val1Title">تایبەتمەندی</h4><span data-i18n="val1Sub">خانووی هەڵبژێردراو</span></div></div>
+        <div class="vi"><div class="vico"><i class="fas fa-handshake"></i></div><div class="vinfo"><h4 data-i18n="val2Title">درووستکاری</h4><span data-i18n="val2Sub">ئاشکرایی تەواو</span></div></div>
+        <div class="vi"><div class="vico"><i class="fas fa-mobile-alt"></i></div><div class="vinfo"><h4 data-i18n="val3Title">تەکنەلۆژیا</h4><span data-i18n="val3Sub">پلاتفۆرمی زیرەک و مۆدێرن</span></div></div>
+        <div class="vi"><div class="vico"><i class="fas fa-map-marked-alt"></i></div><div class="vinfo"><h4 data-i18n="val4Title">لە هەولێر</h4><span data-i18n="val4Sub">دامەزراوە ٢٠٢٦ — کوردستان</span></div></div>
       </div>
     </div>
-  </div>
-</footer>
+  </section>
+
+  <!-- CTA -->
+  <section class="rdr-sec" id="contact">
+    <div class="rdr-in">
+      <div class="anim-right">
+        <span class="rdr-ey" data-i18n="rdrTag">بۆ ئۆفیسە خانووبەرەکان</span>
+        <h2 class="rdr-t">
+          <span data-i18n="rdrTitle">کاروبارەکەت بگەشێنە</span><br>
+          <span data-i18n="rdrWith">لەگەڵ</span> <strong>Dream Mulk</strong>
+        </h2>
+        <p class="rdr-d" data-i18n="rdrDesc">کۆمپانیاکەت تۆمار بکە و بگەیە بە هەزاران کڕیار و کرێیار لە سەرانسەری کوردستان.</p>
+      </div>
+      <div class="rdr-bs anim-left">
+        <a href="{{ route('office.login') }}"  class="rdr-b1"><i class="fas fa-building"></i> <span data-i18n="rdrBtn1">چوونەژوورەوەی خانووبەرە</span></a>
+        <a href="{{ route('property.list') }}" class="rdr-b2"><i class="fas fa-search"></i>   <span data-i18n="rdrBtn2">بگەڕێ بێ چوونەژوورەوە</span></a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="ft-in">
+      <div class="ft-top">
+        <div>
+          <div class="ft-logo">
+            <img src="{{ asset('favicon.ico') }}" alt="Dream Mulk" onerror="this.src='https://cdn-icons-png.flaticon.com/512/2111/2111307.png'"/>
+            <span class="ft-logo-name">Dream Mulk</span>
+          </div>
+          <p class="ft-tag" data-i18n="ftTag">باشترین پلاتفۆرمی خانووبەرەی کوردستان. بێ کارمزد. بێ کۆمیسیۆن. بێ نهێنی.</p>
+        </div>
+        <div class="ft-col">
+          <h5 data-i18n="ftCol1">پلاتفۆرم</h5>
+          <ul>
+            <li><a href="{{ route('property.list') }}"  data-i18n="ftLink1">خانووەکان ببینە</a></li>
+            <li><a href="{{ route('login-page') }}"     data-i18n="ftLink2">چوونەژوورەوەی کڕیار</a></li>
+            <li><a href="{{ route('agent.login') }}"    data-i18n="ftLink3">پۆرتاڵی ئەجێنت</a></li>
+            <li><a href="{{ route('about-us') }}"       data-i18n="ftLink4">دەربارەی ئێمە</a></li>
+          </ul>
+        </div>
+        <div class="ft-col">
+          <h5 data-i18n="ftCol2">خزمەتگوزاری</h5>
+          <ul>
+            <li><a href="{{ route('property.list') }}"                   data-i18n="ftLink5">کڕینی خانوو</a></li>
+            <li><a href="{{ route('login-page') }}"                      data-i18n="ftLink6">فرۆشتنی خانوو</a></li>
+            <li><a href="{{ route('property.list',['type'=>'rent']) }}"  data-i18n="ftLink7">کرێدانی خانوو</a></li>
+            <li><a href="{{ route('agents.list') }}"                     data-i18n="ftLink8">ئەجێنت بدۆزەرەوە</a></li>
+          </ul>
+        </div>
+        <div class="ft-col">
+          <h5 data-i18n="ftCol3">ئەپەکە دابەزێنە</h5>
+          <ul>
+            <li><a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener"><i class="fab fa-apple"></i> App Store</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener"><i class="fab fa-google-play"></i> Google Play</a></li>
+            <li><a href="{{ route('contact-us') }}" data-i18n="ftLink9">پەیوەندیمان پێوە بکە</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="ft-bot">
+        <div class="ft-copy">© {{ date('Y') }} <span>Dream Mulk</span>. Erbil, Kurdistan Region of Iraq.</div>
+        <div class="ft-soc">
+          <a href="https://www.facebook.com/share/1CGLEbK7qh/"                  target="_blank" rel="noopener" class="soa"><i class="fab fa-facebook-f"></i></a>
+          <a href="https://www.instagram.com/dream_mulk?igsh=MWt4YXd1eTN4NW5j"  target="_blank" rel="noopener" class="soa"><i class="fab fa-instagram"></i></a>
+        </div>
+      </div>
+    </div>
+  </footer>
+</div><!-- /page-sections -->
 
 <div class="fab-w">
   <div class="ftop" id="btt"><i class="fas fa-arrow-up"></i></div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════
+   JAVASCRIPT — Single clean engine
+
+   Fixes from original:
+   1. Lenis ticker added ONCE (original had double-tick bug)
+   2. Mouse parallax uses requestAnimationFrame + lerp,
+      NOT GSAP on every mousemove event (much smoother)
+   3. Hero 3D tilt disabled on touch devices
+   4. Smooth anchors via Lenis scrollTo
+   5. All GSAP work in DOMContentLoaded
+══════════════════════════════════════════════════════ -->
 <script>
-class DreamMulkI18n{
-  constructor(o={}){
-    this.storageKey=o.storageKey||'dm_lang';
-    this.defaultLang=o.defaultLang||'ku';
-    this.onLangChange=o.onLangChange||null;
-    this._current=this.defaultLang;
-  }
-  init(){
-    const saved=localStorage.getItem(this.storageKey)||this.defaultLang;
-    this.setLang(saved);
-  }
-  setLang(lang){
-    if(!this.translations[lang])return;
-    this._current=lang;
-    localStorage.setItem(this.storageKey,lang);
-    const T=this.translations[lang];
-    document.body.dir=T.dir;
-    document.documentElement.lang=lang==='ar'?'ar':lang==='ku'?'ku':'en';
-    document.body.classList.remove('lang-ku','lang-en','lang-ar','rtl');
-    document.body.classList.add('lang-'+lang);
-    if(T.dir==='rtl') document.body.classList.add('rtl');
-    document.querySelectorAll('.lang-btn').forEach(b=>{b.classList.toggle('active',b.getAttribute('data-lang')===lang);});
-    document.querySelectorAll('[data-i18n]').forEach(el=>{
-      const key=el.getAttribute('data-i18n');
-      if(T[key]===undefined)return;
-      if(el.children.length===0){el.textContent=T[key];}
-      else{for(let n of el.childNodes){if(n.nodeType===Node.TEXT_NODE&&n.textContent.trim()){n.textContent=T[key];break;}}}
-    });
-    const ids={'t-eyebrow':'eyebrow','t-sub1':'sub1','t-sub2':'sub2','tab-buy':'tabBuy','tab-rent':'tabRent','tab-sell':'tabSell','hs-btn':'searchBtn','t-popular':'popular','q-erbil':'erbil','q-suli':'suli','q-duhok':'duhok','t-explore':'explore','t-app':'appBtn','t-scroll':'scroll','nav-home':'navHome','nav-props':'navProps','nav-app':'navApp','nav-about':'navAbout','nav-contact':'navContact','drw-home':'navHome','drw-props':'navProps','drw-app':'navApp','drw-about':'navAbout','drw-contact':'navContact','drw-login':'loginBtn','drw-browse':'browseBtn', 'nav-login-btn':'loginBtn', 'nav-browse-btn':'browseBtn'};
-    Object.entries(ids).forEach(([id,key])=>{const el=document.getElementById(id);if(el&&T[key])el.textContent=T[key];});
-    const rdrWithEl=document.querySelector('[data-i18n="rdrWith"]');
-    if(rdrWithEl&&T.rdrWith)rdrWithEl.textContent=T.rdrWith;
-    const inp=document.getElementById('hs-input');
-    if(inp){const ph={buy:T.placeholderBuy,rent:T.placeholderRent,sell:T.placeholderSell};inp.placeholder=ph[currentTab]||T.placeholderBuy;}
-    if(typeof this.onLangChange==='function')this.onLangChange(lang,T);
-  }
-  getCurrentLang(){return this._current;}
-  t(key){return(this.translations[this._current]||{})[key]||key;}
-  translations={
-    ku:{dir:'rtl',eyebrow:'خانوو و زەوی',sub1:'بۆ کڕین، فرۆشتن و کرێی خانوو لە کوردستان — بێ کارمزد',sub2:'کوردستان • هەولێر • ٢٠٢٦',tabBuy:'🏠 کڕین',tabRent:'🔑 کرێ',tabSell:'💰 فرۆشتن',searchBtn:'بگەڕێ',placeholderBuy:'بگەڕێ... هەولێر، سلێمانی، دهۆک',placeholderRent:'خانوی کرێ بدۆزەرەوە...',placeholderSell:'خانووەکەت بفرۆشە...',popular:'شارەکان:',erbil:'هەولێر',suli:'سلێمانی',duhok:'دهۆک',explore:'خانووەکان ببینە',appBtn:'ئەپەکە دابەزێنە',scroll:'دابەزە',navHome:'سەرەتا',navProps:'خانووەکان',navApp:'ئەپ',navAbout:'دەربارەمان',navContact:'پەیوەندی',loginBtn:'چوونەژوورەوە',browseBtn:'خانووەکان ببینە',statLabel1:'خانووی تۆمارکراو',statLabel2:'ئەجێنتی پشتڕاستکراو',svcTag:'خزمەتگوزاریەکان',svcTitle:'چی',svcTitleEm:'پێشکەش دەکەین',svc1Title:'کڕینی خانوو',svc1Desc:'خانووی خەونەکەت بدۆزەرەوە. لیستی تایبەت لە سەرانسەری کوردستان بە نرخی ئاشکرا.',svc1Cta:'بگەڕێ',svc2Title:'فرۆشتنی خانوو',svc2Desc:'خانووەکەت لیست بکە و بگەیە کڕیارە راستەقینەکان. بێ کۆمیسیۆن، بێ نهێنی.',svc2Cta:'لیست بکە',svc3Title:'کرێی خانوو',svc3Desc:'خانوی کرێی گونجاو بدۆزەرەوە. نرخی ئاشکرا و لیستی پشتڕاستکراو.',svc3Cta:'بگەڕێ',appTag:'ئەپی مۆبایل',appTitle:'خانووەکان',appTitleEm:'لە گەڵت',appDesc:'ئەپی Dream Mulk هەموو خانووەکانی کوردستانت دەخاتە پێش دەستت. بگەڕێ، کاتی سەردان دابنێ، و ڕاستەوخۆ پەیوەندی بکە بە فرۆشیارەکان.',appF1:'لیستی خانووی نوێ و ئاگادارکردنەوەی خێرا',appF2:'کاتی سەردانی خانوو دابنێ',appF3:'کوردی، عەرەبی و ئینگلیزی',appF4:'پەیامی پارێزراو و بەڵگەنامەکان',appF5:'بێ کۆمیسیۆن — بەخۆڕایی بگەڕێ',appStoreLabel:'دابەزێنە لە',playStoreLabel:'وەربگرە لە',qrSub:'بەخۆڕایی',qrHint:'کامێرا بخەرە سەر کودەکە',qrBtn:'بکرەوە لە App Store',abtTag:'دەربارەمان',abtTitle:'Dream Mulk',abtTitleEm:'کێیە؟',abtP1:'Dream Mulk دامەزراوە بۆ ئەوەی بازاڕی خانووبەرەی کوردستان ئاسانتر و ئاشکراتر بکات. ئێمە نیازمان بۆ ئەوەیە کە کڕیار و فرۆشیار ڕاستەوخۆ پەیوەندی بکەن — بێ ناوەڕاست، بێ کۆمیسیۆن.',abtP2:'لە بازاڕێک کە زۆرجار ئاڵۆزە و پر لە نهێنی، ئێمە شەفافیەت و ئاسانی دەهێنینەوە. تەکنەلۆژیامان لە خزمەتت دایە.',abtQuote:'«خانوو زەویە، بەڵام "مولک" مێژوویە. یارمەتیت دەدەین کە مێژووی خۆت بنووسیت.»',val1Title:'تایبەتی',val1Sub:'خانووی هەڵبژێردراو',val2Title:'پاکی و ئامانج',val2Sub:'ئاشکرایی تەواو',val3Title:'تەکنەلۆژیا',val3Sub:'ئەپ و وێبسایتی مۆدێرن',val4Title:'هەولێر',val4Sub:'دامەزراوە ٢٠٢٦',rdrTag:'بۆ ئۆفیسی خانووبەرە',rdrTitle:'بزنسەکەت گەشە پێ بدە',rdrWith:'لەگەڵ',rdrDesc:'ئۆفیسەکەت تۆمار بکە و بگەیە بە هەزاران کڕیار و کرێیار. خانوو لیست بکە، ئەجێنت بەڕێوەبەرە، مامەڵەکان ببەستە.',rdrBtn1:'چوونەژوورەوەی ئۆفیس',rdrBtn2:'بگەڕێ بەبێ تۆمارکردن',ftTag:'باشترین پلاتفۆرمی خانووبەرەی کوردستان. بێ کارمزد. بێ کۆمیسیۆن.',ftCol1:'پلاتفۆرم',ftCol2:'خزمەتگوزاری',ftCol3:'ئەپەکە دابەزێنە',ftLink1:'خانووەکان ببینە',ftLink2:'چوونەژوورەوەی کڕیار',ftLink3:'پۆرتاڵی ئەجێنت',ftLink4:'دەربارەمان',ftLink5:'کڕینی خانوو',ftLink6:'فرۆشتنی خانوو',ftLink7:'کرێی خانوو',ftLink8:'ئەجێنت بدۆزەرەوە',ftLink9:'پەیوەندیمان پێوە بکە',fabAgent:'پۆرتاڵی ئەجێنت',fabOffice:'چوونەژوورەوەی ئۆفیس'},
-    en:{dir:'ltr',eyebrow:'Premium Real Estate',sub1:'Buy, sell & rent properties across Kurdistan — zero commission',sub2:'Kurdistan • Erbil • Est. 2026',tabBuy:'🏠 Buy',tabRent:'🔑 Rent',tabSell:'💰 Sell',searchBtn:'Search',placeholderBuy:'Search in Erbil, Sulaymaniyah...',placeholderRent:'Find rentals in Kurdistan...',placeholderSell:'List your property...',popular:'Popular:',erbil:'Erbil',suli:'Sulaymaniyah',duhok:'Duhok',explore:'Explore Properties',appBtn:'Download App',scroll:'Scroll',navHome:'Home',navProps:'Properties',navApp:'App',navAbout:'About Us',navContact:'Contact',loginBtn:'Client Login',browseBtn:'Browse Properties',statLabel1:'Listed Properties',statLabel2:'Verified Agents',svcTag:'Our Services',svcTitle:'What We',svcTitleEm:'Offer',svc1Title:'Buy a Property',svc1Desc:'Find your dream home with advanced filters. Exclusive listings across Kurdistan with full price transparency.',svc1Cta:'Explore',svc2Title:'Sell a Property',svc2Desc:'List your property and reach serious buyers directly. No middlemen, no commissions, no hidden fees.',svc2Cta:'List Now',svc3Title:'Rent a Property',svc3Desc:'Find the right rental at the right price. Verified listings with transparent terms.',svc3Cta:'Find Rentals',appTag:'Mobile App',appTitle:'Properties',appTitleEm:'With You',appDesc:'The Dream Mulk app puts Kurdistan\'s real estate market in your pocket. Search, book viewings, and contact sellers directly.',appF1:'Live property listings & instant alerts',appF2:'Book property viewings instantly',appF3:'Kurdish, Arabic & English',appF4:'Secure messaging & documents',appF5:'Zero commission — always free',appStoreLabel:'Download on the',playStoreLabel:'Get it on',qrSub:'Free Download',qrHint:'Point camera to scan',qrBtn:'Open in App Store',abtTag:'About Us',abtTitle:'Dream Mulk',abtTitleEm:'Story',abtP1:'Dream Mulk was built to make Kurdistan\'s property market simpler and more transparent. We connect buyers and sellers directly — no middlemen, no commissions.',abtP2:'In a market full of complexity, we bring clarity and technology to every transaction.',abtQuote:'"Property is land, but Mulk is legacy. We help you write yours."',val1Title:'Exclusive',val1Sub:'Curated listings',val2Title:'Integrity',val2Sub:'Full transparency',val3Title:'Technology',val3Sub:'Modern app & platform',val4Title:'Erbil Based',val4Sub:'Est. 2026',rdrTag:'For Real Estate Offices',rdrTitle:'Grow Your Business',rdrWith:'With',rdrDesc:'Register your office and reach thousands of buyers and renters across Kurdistan. Manage listings, agents, and deals in one place.',rdrBtn1:'Office Login',rdrBtn2:'Browse Without Login',ftTag:'Kurdistan\'s real estate platform. No fees. No commissions. Always transparent.',ftCol1:'Platform',ftCol2:'Services',ftCol3:'Download App',ftLink1:'Browse Properties',ftLink2:'Client Login',ftLink3:'Agent Portal',ftLink4:'About Us',ftLink5:'Buy Property',ftLink6:'Sell Property',ftLink7:'Rent Property',ftLink8:'Find an Agent',ftLink9:'Contact Us',fabAgent:'Agent Portal',fabOffice:'Office Login'},
-    ar:{dir:'rtl',eyebrow:'عقارات كردستان',sub1:'شراء وبيع وإيجار العقارات في كردستان — بدون عمولة',sub2:'كردستان • أربيل • ٢٠٢٦',tabBuy:'🏠 شراء',tabRent:'🔑 إيجار',tabSell:'💰 بيع',searchBtn:'ابحث',placeholderBuy:'ابحث في أربيل، السليمانية...',placeholderRent:'ابحث عن شقق للإيجار...',placeholderSell:'أضف عقارك...',popular:'المدن:',erbil:'أربيل',suli:'السليمانية',duhok:'دهوك',explore:'استعرض العقارات',appBtn:'تحميل التطبيق',scroll:'انزل',navHome:'الرئيسية',navProps:'العقارات',navApp:'التطبيق',navAbout:'من نحن',navContact:'تواصل',loginBtn:'تسجيل الدخول',browseBtn:'استعرض العقارات',statLabel1:'عقارات مدرجة',statLabel2:'وكلاء موثقون',svcTag:'خدماتنا',svcTitle:'ماذا',svcTitleEm:'نقدم',svc1Title:'شراء عقار',svc1Desc:'اعثر على منزل أحلامك بفلاتر متطورة. قوائم حصرية في كردستان بأسعار واضحة.',svc1Cta:'استعرض',svc2Title:'بيع عقار',svc2Desc:'أدرج عقارك وتواصل مع مشترين مباشرة. بدون وسطاء وبدون عمولات.',svc2Cta:'أضف الآن',svc3Title:'إيجار عقار',svc3Desc:'ابحث عن إيجار مناسب بسعر واضح. قوائم موثقة وشروط شفافة.',svc3Cta:'ابحث عن إيجار',appTag:'تطبيق الجوال',appTitle:'العقارات',appTitleEm:'معك دائماً',appDesc:'تطبيق Dream Mulk يضع سوق العقارات في كردستان بين يديك. ابحث وحدد مواعيد وتواصل مع البائعين مباشرة.',appF1:'قوائم فورية وتنبيهات لحظية',appF2:'احجز موعد معاينة بسهولة',appF3:'الكردية والعربية والإنجليزية',appF4:'مراسلة آمنة ووثائق',appF5:'بدون عمولة — مجاني دائماً',appStoreLabel:'حمّل من',playStoreLabel:'احصل عليه من',qrSub:'تحميل مجاني',qrHint:'وجّه الكاميرا للمسح',qrBtn:'افتح في App Store',abtTag:'قصتنا',abtTitle:'Dream Mulk',abtTitleEm:'من نحن',abtP1:'بنينا Dream Mulk لجعل سوق العقارات في كردستان أبسط وأكثر شفافية. نربط المشترين بالبائعين مباشرة — بدون وسطاء وبدون عمولات.',abtP2:'في سوق يتسم بالتعقيد، نجلب الوضوح والتكنولوجيا لكل صفقة.',abtQuote:'"العقار أرض، لكن المُلك تاريخ. نساعدك على كتابة تاريخك."',val1Title:'الحصرية',val1Sub:'قوائم مختارة بعناية',val2Title:'النزاهة',val2Sub:'شفافية كاملة',val3Title:'التكنولوجيا',val3Sub:'منصة وتطبيق حديث',val4Title:'مقرنا أربيل',val4Sub:'تأسست ٢٠٢٦',rdrTag:'لمكاتب العقارات',rdrTitle:'نمّ أعمالك',rdrWith:'مع',rdrDesc:'سجّل مكتبك وتواصل مع آلاف المشترين والمستأجرين في كردستان. إدارة القوائم والوكلاء والصفقات في مكان واحد.',rdrBtn1:'دخول المكتب',rdrBtn2:'تصفح بدون تسجيل',ftTag:'منصة العقارات في كردستان. بدون رسوم. بدون عمولات.',ftCol1:'المنصة',ftCol2:'الخدمات',ftCol3:'تحميل التطبيق',ftLink1:'استعرض العقارات',ftLink2:'دخول العملاء',ftLink3:'بوابة الوكلاء',ftLink4:'من نحن',ftLink5:'شراء عقار',ftLink6:'بيع عقار',ftLink7:'إيجار عقار',ftLink8:'ابحث عن وكيل',ftLink9:'تواصل معنا',fabAgent:'بوابة الوكيل',fabOffice:'دخول المكتب'},
-  };
-}
-</script>
+document.addEventListener('DOMContentLoaded', () => {
 
-<script>
-// Scroll & nav
-const hdr=document.getElementById('hdr'),btt=document.getElementById('btt');
-window.addEventListener('scroll',()=>{
-  hdr.classList.toggle('sc',scrollY>60);
-  btt.classList.toggle('show',scrollY>300);
-},{passive:true});
-btt.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));
+/* ── 1. LENIS SMOOTH SCROLL ── */
+const lenis = new Lenis({
+  duration: 1.35,
+  easing: t => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+  smooth: true,
+  smoothTouch: false,   /* keep native scroll on touch */
+  touchMultiplier: 2,
+});
+/* Single RAF loop — sync with GSAP ticker */
+gsap.ticker.add(time => lenis.raf(time * 1000));
+gsap.ticker.lagSmoothing(0);
+lenis.on('scroll', ScrollTrigger.update);
 
-// Drawer
-const ham=document.getElementById('ham'),drw=document.getElementById('drw'),bdp=document.getElementById('bdp'),dx=document.getElementById('dx');
-const oD=()=>{
-  drw.classList.add('on');
-  bdp.classList.add('on');
-  document.body.style.overflow='hidden';
-};
-const cD=()=>{
-  drw.classList.remove('on');
-  bdp.classList.remove('on');
-  document.body.style.overflow='';
-};
-ham.addEventListener('click',oD);
-dx.addEventListener('click',cD);
-bdp.addEventListener('click',cD);
-drw.querySelectorAll('a').forEach(a=>a.addEventListener('click',cD));
-window.addEventListener('resize',()=>{if(innerWidth>1000)cD();},{passive:true});
-window.addEventListener('popstate',cD);
-
-// Counter animation
-let cnt=false;
-new IntersectionObserver(es=>{
-  if(es[0].isIntersecting&&!cnt){
-    cnt=true;
-    document.querySelectorAll('.stat-num[data-t]').forEach(el=>{
-      const tg=parseInt(el.dataset.t),sf=el.dataset.s||'';
-      let c=0,step=Math.ceil(tg/60);
-      const iv=setInterval(()=>{c=Math.min(c+step,tg);el.textContent=c+sf;if(c>=tg)clearInterval(iv);},20);
-    });
-  }
-}).observe(document.querySelector('.stats-bar'));
-
-// Scroll reveal
-const obs=new IntersectionObserver((es,o)=>{
-  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('on');o.unobserve(e.target);}});
-},{threshold:.08,rootMargin:'0px 0px -20px 0px'});
-document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
-
-// Smooth anchor links
-document.querySelectorAll('a[href^="#"]').forEach(a=>{
-  a.addEventListener('click',e=>{
-    const h=a.getAttribute('href');
-    if(h&&h.length>1){const t=document.querySelector(h);if(t){e.preventDefault();t.scrollIntoView({behavior:'smooth'});}}
+/* ── 2. SCROLL ANCHORS ── */
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const id = a.getAttribute('href');
+    if(id && id.length > 1){
+      const target = document.querySelector(id);
+      if(target){ e.preventDefault(); lenis.scrollTo(target, {duration:1.6}); }
+    }
   });
 });
 
-// Language system
-const i18n=new DreamMulkI18n({defaultLang:'ku'});
-var currentTab='buy';
-document.querySelectorAll('.lang-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>i18n.setLang(btn.getAttribute('data-lang')));
+/* ── 3. HEADER + BTT ── */
+const hdr = document.getElementById('hdr');
+const btt = document.getElementById('btt');
+window.addEventListener('scroll', () => {
+  hdr.classList.toggle('sc', window.scrollY > 60);
+  btt.classList.toggle('show', window.scrollY > 400);
+}, {passive:true});
+btt.addEventListener('click', () => lenis.scrollTo(0, {duration:1.6}));
+
+/* ── 4. DRAWER ── */
+const ham=document.getElementById('ham'), drw=document.getElementById('drw'),
+      bdp=document.getElementById('bdp'), dx=document.getElementById('dx');
+const openD  = () => { drw.classList.add('on'); bdp.classList.add('on'); document.body.style.overflow='hidden'; };
+const closeD = () => { drw.classList.remove('on'); bdp.classList.remove('on'); document.body.style.overflow=''; };
+ham.addEventListener('click', openD);
+dx.addEventListener('click', closeD);
+bdp.addEventListener('click', closeD);
+drw.querySelectorAll('a').forEach(a => a.addEventListener('click', closeD));
+window.addEventListener('resize', () => { if(window.innerWidth > 1000) closeD(); });
+
+/* ── 5. HERO ENTRANCE — 3D Character Flip ── */
+gsap.set('.char',    { rotationX: 88, opacity: 0, y: 28 });
+gsap.set('.eyebrow', { opacity: 0, y: 20 });
+gsap.set(['.kurd-sub','.sub','.hero-search','.hbtns','#scrl'], { opacity: 0, y: 18 });
+
+const heroTL = gsap.timeline({ delay: 0.15 });
+heroTL
+  .to('.eyebrow',    { opacity:1, y:0, duration:.85, ease:'power3.out' })
+  .to('.char',       { rotationX:0, opacity:1, y:0, duration:1.1, stagger:0.048, ease:'power4.out' }, '-=0.55')
+  .to('.kurd-sub',   { opacity:1, y:0, duration:.9,  ease:'power3.out' }, '-=0.75')
+  .to('.sub',        { opacity:1, y:0, duration:.7,  ease:'power3.out' }, '-=0.6')
+  .to('.hero-search',{ opacity:1, y:0, duration:.85, ease:'power3.out' }, '-=0.6')
+  .to('.hbtns',      { opacity:1, y:0, duration:.8,  ease:'power3.out' }, '-=0.65')
+  .to('#scrl',       { opacity:1, y:0, duration:.7,  ease:'power3.out' }, '-=0.4');
+
+/* ── 6. HERO SCROLL — Video parallax + content fade ── */
+const heroWrap = document.getElementById('hero-wrap');
+const heroVid  = document.getElementById('hero-vid');
+const heroHc   = document.getElementById('hc');
+
+gsap.to(heroVid, {
+  scale: 1.28,
+  opacity: 0.52,
+  ease: 'none',
+  scrollTrigger: {
+    trigger: heroWrap, start:'top top', end:'bottom top', scrub:1.4
+  }
+});
+gsap.to(heroHc, {
+  y: -90, opacity: 0,
+  ease: 'power1.in',
+  scrollTrigger: {
+    trigger: heroWrap, start:'top top', end:'55% top', scrub:1
+  }
+});
+gsap.to('#scrl', {
+  opacity: 0,
+  scrollTrigger: {
+    trigger: heroWrap, start:'top top', end:'12% top', scrub:.5
+  }
 });
 
-function setTab(el,type){
-  document.querySelectorAll('.hs-tab').forEach(t=>t.classList.remove('active'));
+/* ── 7. HERO 3D MOUSE PARALLAX ──────────────────────
+   Uses RAF + lerp for smooth tracking.
+   NO GSAP on every mousemove — avoids the jank
+   you experienced. Disabled on touch devices.
+──────────────────────────────────────────────────── */
+const isTouchDevice = window.matchMedia('(hover:none)').matches;
+
+if(!isTouchDevice){
+  const heroPin = document.getElementById('hero-pin');
+  let mouseX = 0, mouseY = 0, currentX = 0, currentY = 0;
+  let mouseActive = false;
+  let ticking = false;
+
+  heroPin.addEventListener('mousemove', e => {
+    const r = heroPin.getBoundingClientRect();
+    mouseX = ((e.clientX - r.left) / r.width  - .5) * 2; // -1 to 1
+    mouseY = ((e.clientY - r.top)  / r.height - .5) * 2;
+    mouseActive = true;
+    if(!ticking){
+      ticking = true;
+      requestAnimationFrame(tiltLoop);
+    }
+  }, {passive:true});
+
+  heroPin.addEventListener('mouseleave', () => { mouseActive = false; mouseX = 0; mouseY = 0; });
+
+  function tiltLoop(){
+    /* Lerp — smooth exponential decay toward target */
+    const speed = 0.055;
+    currentX += (mouseX - currentX) * speed;
+    currentY += (mouseY - currentY) * speed;
+
+    /* Only apply if scrolled near top */
+    if(window.scrollY < window.innerHeight * .3){
+      gsap.set(heroHc, {
+        rotationY:  currentX * 5,
+        rotationX: -currentY * 5,
+        x: -currentX * 8,
+        y: -currentY * 8,
+        force3D: true,
+      });
+    }
+
+    /* Keep looping only while needed */
+    if(mouseActive || Math.abs(currentX) > 0.002 || Math.abs(currentY) > 0.002){
+      requestAnimationFrame(tiltLoop);
+    } else {
+      ticking = false;
+      gsap.to(heroHc, {rotationY:0,rotationX:0,x:0,y:0,duration:.8,ease:'power2.out'});
+    }
+  }
+}
+
+/* ── 8. SECTION SCROLL REVEALS ── */
+document.querySelectorAll('.anim-up,.anim-scale,.anim-left,.anim-right').forEach(el => {
+  const props = { opacity:1, duration:1.1, ease:'power4.out',
+    scrollTrigger:{trigger:el, start:'top 87%', toggleActions:'play none none none'} };
+  if(el.classList.contains('anim-up'))    props.y = 0;
+  if(el.classList.contains('anim-scale')) props.scale = 1;
+  if(el.classList.contains('anim-left'))  props.x = 0;
+  if(el.classList.contains('anim-right')) props.x = 0;
+  gsap.to(el, props);
+});
+
+/* ── 9. STAT COUNTERS ── */
+let statsDone = false;
+ScrollTrigger.create({
+  trigger:'.stats-bar', start:'top 85%',
+  onEnter:() => {
+    if(statsDone) return; statsDone = true;
+    document.querySelectorAll('.stat-num[data-t]').forEach(el => {
+      const target = parseInt(el.dataset.t), suffix = el.dataset.s||'';
+      const obj = {v:0};
+      gsap.to(obj, { v:target, duration:2.4, ease:'power3.out',
+        onUpdate(){ el.textContent = Math.round(obj.v) + suffix; }
+      });
+    });
+  }
+});
+
+}); /* /DOMContentLoaded */
+
+/* ══════════════════════════════════════
+   SEARCH
+══════════════════════════════════════ */
+var currentTab = 'buy';
+window.setTab = function(el, type){
+  document.querySelectorAll('.hs-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  currentTab=type;
-  const T=i18n.translations[i18n.getCurrentLang()];
-  const inp=document.getElementById('hs-input');
-  if(inp) inp.placeholder={buy:T.placeholderBuy,rent:T.placeholderRent,sell:T.placeholderSell}[type];
+  currentTab = type;
+  const T = I18N[currentLang] || I18N['ku'];
+  const inp = document.getElementById('hs-input');
+  if(inp) inp.placeholder = {buy:T.placeholderBuy,rent:T.placeholderRent,sell:T.placeholderSell}[type] || T.placeholderBuy;
+};
+function doSearch(){
+  const kw = document.getElementById('hs-input').value.trim();
+  const base = '{{ route("property.list") }}';
+  const p = new URLSearchParams();
+  if(currentTab === 'rent') p.set('type','rent');
+  else if(currentTab === 'buy') p.set('type','sell');
+  if(kw) p.set('search', kw);
+  window.location.href = base + (p.toString() ? '?'+p.toString() : '');
 }
-
-function doHeroSearch(){
-  const keyword=document.getElementById('hs-input').value.trim();
-  const base='{{ route("property.list") }}';
-  const params=new URLSearchParams();
-  if(currentTab==='rent') params.set('type','rent');
-  else if(currentTab==='buy') params.set('type','sell');
-  if(keyword) params.set('search',keyword);
-  window.location.href=base+(params.toString()?'?'+params.toString():'');
-}
-
-document.getElementById('hs-btn').addEventListener('click',doHeroSearch);
-document.getElementById('hs-input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();doHeroSearch();}});
-
-document.querySelectorAll('.hs-quick a[data-city]').forEach(a=>{
-  a.addEventListener('click',e=>{
+document.getElementById('hs-btn').addEventListener('click', doSearch);
+document.getElementById('hs-input').addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); doSearch(); }});
+document.querySelectorAll('.hs-quick a[data-city]').forEach(a => {
+  a.addEventListener('click', e => {
     e.preventDefault();
-    const base='{{ route("property.list") }}';
-    const params=new URLSearchParams();
-    if(currentTab==='rent') params.set('type','rent');
-    else if(currentTab==='buy') params.set('type','sell');
-    params.set('city',a.dataset.city);
-    window.location.href=base+'?'+params.toString();
+    const p = new URLSearchParams();
+    if(currentTab === 'rent') p.set('type','rent');
+    else if(currentTab === 'buy') p.set('type','sell');
+    p.set('city', a.dataset.city);
+    window.location.href = '{{ route("property.list") }}?' + p.toString();
   });
 });
 
-document.getElementById('tab-buy').setAttribute('data-tab','buy');
-document.getElementById('tab-rent').setAttribute('data-tab','rent');
-document.getElementById('tab-sell').setAttribute('data-tab','sell');
+/* ══════════════════════════════════════
+   I18N
 
-i18n.init();
+   Kurdish/Arabic improvements:
+   - No letter-spacing in Arabic translations
+   - Larger, more natural phrasing
+   - Proper right-to-left reading order
+══════════════════════════════════════ */
+var currentLang = 'ku';
+const I18N = {
+  ku:{
+    dir:'rtl',
+    eyebrow:'خانوو و زەوی پریمیەم لە کوردستان',
+    sub1:'بۆ کڕین، فرۆشتن و کرێدانی خانوو لە کوردستان — بێ کارمزد',
+    sub2:'کوردستان • هەولێر • ٢٠٢٦',
+    tabBuy:'🏠 کڕین',tabRent:'🔑 کرێ',tabSell:'💰 فرۆشتن',
+    searchBtn:'بگەڕێ',
+    placeholderBuy:'بگەڕێ... هەولێر، سلێمانی، دهۆک',
+    placeholderRent:'خانوی کرێ بدۆزەرەوە...',
+    placeholderSell:'خانووەکەت بفرۆشە...',
+    popular:'شارەکان:',erbil:'هەولێر',suli:'سلێمانی',duhok:'دهۆک',
+    explore:'خانووەکان ببینە',appBtn:'ئەپەکە دابەزێنە',scroll:'دابەزە',
+    navHome:'سەرەتا',navProps:'خانووەکان',navApp:'ئەپ',navAbout:'دەربارەمان',navContact:'پەیوەندی',
+    loginBtn:'چوونەژوورەوە',browseBtn:'خانووەکان ببینە',
+    statLabel1:'خانووی تۆمارکراو',statLabel2:'ئەجێنتی پشتڕاستکراو',
+    svcTag:'خزمەتگوزاریەکانمان',svcTitle:'چی',svcTitleEm:'پێشکەش دەکەین',
+    svc1Title:'کڕینی خانوو',svc1Desc:'خانووی خەونەکەت بدۆزەرەوە. لیستی تایبەت لە سەرانسەری کوردستان بە نرخی ئاشکرا و بێ نهێنی.',svc1Cta:'بگەڕێ',
+    svc2Title:'فرۆشتنی خانوو',svc2Desc:'خانووەکەت تۆمار بکە و ڕاستەوخۆ بگەیە کڕیارە راستەقینەکان. بێ ناوەڕاست، بێ کۆمیسیۆن.',svc2Cta:'تۆمار بکە',
+    svc3Title:'کرێدانی خانوو',svc3Desc:'کرێی گونجاو بدۆزەرەوە بۆ ژیانت. لیستی پشتڕاستکراو بە نرخی ئاشکرا و مەرجی ڕوون.',svc3Cta:'کرێ بدۆزەرەوە',
+    appTag:'ئەپی مۆبایل',appTitle:'خانووەکان',appTitleEm:'لەگەڵ تۆ',
+    appDesc:'ئەپی Dream Mulk بازاڕی خانووبەرەی کوردستان دەهێنێتە نووکی پەنجەکانت. بگەڕێ، کاتی سەردانی خانوو دابنێ، و ڕاستەوخۆ پەیوەندی بکە بە فرۆشیارەکان.',
+    appF1:'لیستی خانووی نوێ و ئاگادارکردنەوەی خێرا',appF2:'کاتی بینینی خانوو بە ئەجێنت دابنێ',
+    appF3:'بە کوردی، عەرەبی و ئینگلیزی',appF4:'پەیامرێنی پارێزراو و بەڵگەنامەکان',appF5:'بێ کۆمیسیۆن — هەمیشە بەخۆڕایی',
+    appStoreLabel:'دابەزێنە لە',playStoreLabel:'وەربگرە لە',
+    qrSub:'بەخۆڕایی',qrHint:'کامێراکەت بەرەو ئەمە بگرە',qrBtn:'بکرەوە لە App Store',
+    abtTag:'چیرۆکی ئێمە',abtTitle:'Dream Mulk',abtTitleEm:'کێیە؟',
+    abtP1:'Dream Mulk بە ئامانجێکی بەهێز دامەزراوە: ئاسانکردن و ئاشکراکردنی بازاڕی خانووبەرەی کوردستان. ئێمە کڕیار و فرۆشیار ڕاستەوخۆ پەیوەند دەکەین — بێ ناوەڕاست، بێ کۆمیسیۆن.',
+    abtP2:'لە بازاڕێکدا کە زۆرجار ئاڵۆز و تاریکە، ئێمە ڕووناکی و شەفافیەت دەهێنینەوە بۆ هەر مامەڵەیەک.',
+    abtQuote:'«خانوو زەوییە، بەڵام "مولک" مێژوویە. یارمەتیت دەدەین کە مێژووی خۆت بنووسیت.»',
+    val1Title:'تایبەتمەندی',val1Sub:'خانووی هەڵبژێردراو',val2Title:'ئامانجداری',val2Sub:'ئاشکرایی تەواو',val3Title:'تەکنەلۆژیا',val3Sub:'ئەپ و وێبگەی مۆدێرن',val4Title:'لە هەولێر',val4Sub:'دامەزراوە ٢٠٢٦',
+    rdrTag:'بۆ کۆمپانیاکانی خانووبەرە',rdrTitle:'کاروبارەکەت بگەشێنە',rdrWith:'لەگەڵ',
+    rdrDesc:'کۆمپانیاکەت تۆمار بکە و بگەیە بە هەزاران کڕیار و کرێیار لە سەرانسەری کوردستان. خانوو لیست بکە، ئەجێنت بەڕێوەبەرە، مامەڵەکان تەواو بکە.',
+    rdrBtn1:'چوونەژوورەوەی کۆمپانیا',rdrBtn2:'بگەڕێ بەبێ تۆمارکردن',
+    ftTag:'باشترین پلاتفۆرمی خانووبەرەی کوردستان. بێ کارمزد. بێ کۆمیسیۆن. بێ نهێنی.',
+    ftCol1:'پلاتفۆرم',ftCol2:'خزمەتگوزاری',ftCol3:'ئەپەکە دابەزێنە',
+    ftLink1:'خانووەکان ببینە',ftLink2:'چوونەژوورەوەی کڕیار',ftLink3:'پۆرتاڵی ئەجێنت',ftLink4:'دەربارەی ئێمە',
+    ftLink5:'کڕینی خانوو',ftLink6:'فرۆشتنی خانوو',ftLink7:'کرێدانی خانوو',ftLink8:'ئەجێنت بدۆزەرەوە',ftLink9:'پەیوەندیمان پێوە بکە',
+  },
+  en:{
+    dir:'ltr',
+    eyebrow:'Premium Real Estate',
+    sub1:'Buy, sell & rent properties across Kurdistan — zero commission',
+    sub2:'Kurdistan • Erbil • Est. 2026',
+    tabBuy:'🏠 Buy',tabRent:'🔑 Rent',tabSell:'💰 Sell',
+    searchBtn:'Search',
+    placeholderBuy:'Search in Erbil, Sulaymaniyah...',
+    placeholderRent:'Find rentals in Kurdistan...',
+    placeholderSell:'List your property...',
+    popular:'Popular:',erbil:'Erbil',suli:'Sulaymaniyah',duhok:'Duhok',
+    explore:'Explore Properties',appBtn:'Download App',scroll:'Scroll',
+    navHome:'Home',navProps:'Properties',navApp:'App',navAbout:'About Us',navContact:'Contact',
+    loginBtn:'Client Login',browseBtn:'Browse Properties',
+    statLabel1:'Listed Properties',statLabel2:'Verified Agents',
+    svcTag:'Our Services',svcTitle:'What We',svcTitleEm:'Offer',
+    svc1Title:'Buy a Property',svc1Desc:'Find your dream home with advanced filters. Exclusive listings across Kurdistan.',svc1Cta:'Explore',
+    svc2Title:'Sell a Property',svc2Desc:'List your property and reach serious buyers. No middlemen, no commissions.',svc2Cta:'List Now',
+    svc3Title:'Rent a Property',svc3Desc:'Find the right rental at the right price. Verified listings with transparent terms.',svc3Cta:'Find Rentals',
+    appTag:'Mobile App',appTitle:'Properties',appTitleEm:'With You',
+    appDesc:'The Dream Mulk app puts Kurdistan\'s real estate market in your pocket. Search, book viewings, and contact sellers directly.',
+    appF1:'Live property listings & instant alerts',appF2:'Book property viewings instantly',
+    appF3:'Kurdish, Arabic & English',appF4:'Secure messaging & documents',appF5:'Zero commission — always free',
+    appStoreLabel:'Download on the',playStoreLabel:'Get it on',
+    qrSub:'Free Download',qrHint:'Point camera to scan',qrBtn:'Open in App Store',
+    abtTag:'About Us',abtTitle:'Dream Mulk',abtTitleEm:'Story',
+    abtP1:'Dream Mulk was built to make Kurdistan\'s property market simpler and more transparent. We connect buyers and sellers directly — no middlemen, no commissions.',
+    abtP2:'In a market full of complexity, we bring clarity and technology to every transaction.',
+    abtQuote:'"Property is land, but Mulk is legacy. We help you write yours."',
+    val1Title:'Exclusive',val1Sub:'Curated listings',val2Title:'Integrity',val2Sub:'Full transparency',val3Title:'Technology',val3Sub:'Modern app & platform',val4Title:'Erbil Based',val4Sub:'Est. 2026',
+    rdrTag:'For Real Estate Offices',rdrTitle:'Grow Your Business',rdrWith:'With',
+    rdrDesc:'Register your office and reach thousands of buyers and renters across Kurdistan.',
+    rdrBtn1:'Office Login',rdrBtn2:'Browse Without Login',
+    ftTag:'Kurdistan\'s real estate platform. No fees. No commissions. Always transparent.',
+    ftCol1:'Platform',ftCol2:'Services',ftCol3:'Download App',
+    ftLink1:'Browse Properties',ftLink2:'Client Login',ftLink3:'Agent Portal',ftLink4:'About Us',
+    ftLink5:'Buy Property',ftLink6:'Sell Property',ftLink7:'Rent Property',ftLink8:'Find an Agent',ftLink9:'Contact Us',
+  },
+  ar:{
+    dir:'rtl',
+    eyebrow:'عقارات كردستان المتميزة',
+    sub1:'شراء وبيع وإيجار العقارات في كردستان — بدون عمولة',
+    sub2:'كردستان • أربيل • ٢٠٢٦',
+    tabBuy:'🏠 شراء',tabRent:'🔑 إيجار',tabSell:'💰 بيع',
+    searchBtn:'ابحث الآن',
+    placeholderBuy:'ابحث في أربيل، السليمانية، دهوك...',
+    placeholderRent:'ابحث عن شقق وبيوت للإيجار...',
+    placeholderSell:'أضف عقارك وابدأ البيع...',
+    popular:'أشهر المدن:',erbil:'أربيل',suli:'السليمانية',duhok:'دهوك',
+    explore:'استعرض العقارات',appBtn:'حمّل التطبيق',scroll:'اكتشف المزيد',
+    navHome:'الرئيسية',navProps:'العقارات',navApp:'التطبيق',navAbout:'من نحن',navContact:'تواصل معنا',
+    loginBtn:'تسجيل الدخول',browseBtn:'استعرض العقارات',
+    statLabel1:'عقارات مدرجة',statLabel2:'وكلاء موثقون',
+    svcTag:'خدماتنا العقارية',svcTitle:'ماذا',svcTitleEm:'نقدم لك',
+    svc1Title:'شراء عقار',svc1Desc:'اعثر على منزل أحلامك بفلاتر ذكية. قوائم حصرية في كردستان بأسعار شفافة وموثوقة.',svc1Cta:'ابحث الآن',
+    svc2Title:'بيع عقار',svc2Desc:'أدرج عقارك وتواصل مع مشترين جادين مباشرة دون وسطاء أو عمولات مخفية.',svc2Cta:'أضف عقارك',
+    svc3Title:'إيجار عقار',svc3Desc:'ابحث عن إيجار يناسبك بسعر واضح. قوائم موثقة بشروط شفافة وضمانات حقيقية.',svc3Cta:'ابحث عن إيجار',
+    appTag:'تطبيق الجوال',appTitle:'العقارات',appTitleEm:'في متناول يدك',
+    appDesc:'تطبيق Dream Mulk يضع سوق عقارات كردستان بأكمله بين يديك. تصفح، احجز مواعيد المعاينة، وتواصل مع البائعين مباشرة.',
+    appF1:'قوائم عقارات فورية وإشعارات لحظية',appF2:'احجز موعد معاينة بخطوة واحدة',
+    appF3:'يدعم العربية والكردية والإنجليزية',appF4:'تراسل آمن ووثائق رسمية',appF5:'بدون عمولة — مجاني تماماً',
+    appStoreLabel:'حمّل من',playStoreLabel:'احصل عليه من',
+    qrSub:'تحميل مجاني',qrHint:'وجّه الكاميرا للمسح',qrBtn:'افتح في App Store',
+    abtTag:'قصتنا',abtTitle:'Dream Mulk',abtTitleEm:'من نحن',
+    abtP1:'أسسنا Dream Mulk لجعل سوق العقارات في كردستان أكثر شفافية وسهولة. نربط المشترين بالبائعين مباشرة — دون وسطاء ودون عمولات.',
+    abtP2:'في سوق يكتنفه التعقيد، نجلب الوضوح والتقنية الحديثة لكل صفقة عقارية.',
+    abtQuote:'«العقار أرض، لكن المُلك إرث. نساعدك على بناء إرثك.»',
+    val1Title:'الحصرية',val1Sub:'عقارات مختارة بعناية',val2Title:'النزاهة',val2Sub:'شفافية تامة وموثوقية',val3Title:'التقنية',val3Sub:'تطبيق ومنصة حديثة',val4Title:'مقرنا أربيل',val4Sub:'تأسست عام ٢٠٢٦',
+    rdrTag:'لشركات العقارات والمكاتب',rdrTitle:'طوّر أعمالك العقارية',rdrWith:'مع',
+    rdrDesc:'سجّل شركتك وتواصل مع آلاف المشترين والمستأجرين في كردستان. أدر قوائمك ووكلاءك وصفقاتك من مكان واحد.',
+    rdrBtn1:'دخول المكتب العقاري',rdrBtn2:'تصفح بدون تسجيل',
+    ftTag:'منصة العقارات الأولى في كردستان. بدون رسوم. بدون عمولات. شفافية تامة.',
+    ftCol1:'المنصة',ftCol2:'الخدمات',ftCol3:'حمّل التطبيق',
+    ftLink1:'استعرض العقارات',ftLink2:'دخول العملاء',ftLink3:'بوابة الوكلاء',ftLink4:'من نحن',
+    ftLink5:'شراء عقار',ftLink6:'بيع عقار',ftLink7:'إيجار عقار',ftLink8:'ابحث عن وكيل',ftLink9:'تواصل معنا',
+  }
+};
+
+function setLang(lang){
+  const T = I18N[lang]; if(!T) return;
+  currentLang = lang;
+  localStorage.setItem('dm_lang', lang);
+
+  /* Direction + body class */
+  document.body.dir = T.dir;
+  document.documentElement.lang = lang === 'ar' ? 'ar' : lang === 'ku' ? 'ku' : 'en';
+  document.body.classList.remove('lang-ku','lang-en','lang-ar','rtl');
+  document.body.classList.add('lang-' + lang);
+  if(T.dir === 'rtl') document.body.classList.add('rtl');
+
+  /* Hero title must ALWAYS stay LTR — it's a Latin brand name */
+  const htEl = document.getElementById('hero-title');
+  if(htEl){ htEl.dir = 'ltr'; htEl.style.direction = 'ltr'; }
+
+  /* Language buttons */
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+
+  /* data-i18n elements */
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    if(T[k] === undefined) return;
+    if(!el.children.length){ el.textContent = T[k]; }
+    else { for(let n of el.childNodes){ if(n.nodeType===Node.TEXT_NODE&&n.textContent.trim()){ n.textContent=T[k]; break; } } }
+  });
+
+  /* ID-based updates */
+  const idMap = {
+    't-eyebrow':'eyebrow','t-sub1':'sub1','t-sub2':'sub2',
+    'tab-buy':'tabBuy','tab-rent':'tabRent','tab-sell':'tabSell',
+    'hs-btn':'searchBtn','t-popular':'popular',
+    'q-erbil':'erbil','q-suli':'suli','q-duhok':'duhok',
+    't-explore':'explore','t-app':'appBtn','t-scroll':'scroll',
+    'nav-home':'navHome','nav-props':'navProps','nav-app':'navApp','nav-about':'navAbout','nav-contact':'navContact',
+    'drw-home':'navHome','drw-props':'navProps','drw-app':'navApp','drw-about':'navAbout','drw-contact':'navContact',
+    'drw-login':'loginBtn','drw-browse':'browseBtn',
+    'nav-login-btn':'loginBtn','nav-browse-btn':'browseBtn',
+  };
+  Object.entries(idMap).forEach(([id,key]) => {
+    const el = document.getElementById(id);
+    if(el && T[key] !== undefined) el.textContent = T[key];
+  });
+
+  /* Search placeholder */
+  const inp = document.getElementById('hs-input');
+  if(inp) inp.placeholder = {buy:T.placeholderBuy,rent:T.placeholderRent,sell:T.placeholderSell}[currentTab] || T.placeholderBuy;
+}
+
+document.querySelectorAll('.lang-btn').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
+setLang(localStorage.getItem('dm_lang') || 'ku');
 </script>
 </body>
 </html>
