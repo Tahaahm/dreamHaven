@@ -21,7 +21,7 @@ class GoogleAuthController extends Controller
         ]);
 
         try {
-            $credPath = storage_path('app/firebase-credentials.json');
+            $credPath = base_path('real-estate.json');
 
             Log::info('[GoogleAuth] cred file exists: ' . (file_exists($credPath) ? 'YES' : 'NO'));
             Log::info('[GoogleAuth] server time: ' . now()->toISOString());
