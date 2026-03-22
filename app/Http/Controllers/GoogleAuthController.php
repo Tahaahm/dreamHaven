@@ -26,8 +26,8 @@ class GoogleAuthController extends Controller
 
         // ── 1. Verify Firebase ID token ──────────────────────────────────────
         try {
-            $factory       = (new Factory)->withServiceAccount(
-                storage_path('app/firebase-credentials.json')
+            $factory = (new Factory)->withServiceAccount(
+                base_path('real-estate.json')  // ← points to project root
             );
             $auth          = $factory->createAuth();
             $verifiedToken = $auth->verifyIdToken($request->id_token);
