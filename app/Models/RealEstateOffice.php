@@ -47,6 +47,7 @@ class RealEstateOffice extends Authenticatable
         'availability_schedule',
         'device_tokens',  // ← ADDED
         'language',       // ← ADDED
+        'google_id',
     ];
 
     protected $hidden = [

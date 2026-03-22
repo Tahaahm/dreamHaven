@@ -50,7 +50,7 @@ class Agent extends Authenticatable
         'office_address',
         'latitude',
         'longitude',
-
+        'google_id',
         // Location Strings (Legacy/Display)
         'city',
         'district',

@@ -43,6 +43,7 @@ class User extends Authenticatable implements MustVerifyEmail
         // ✅ NEW: Property interaction tracking fields
         'recently_viewed_properties',
         'last_activity_at',
+        'google_id',
     ];
 
     protected $hidden = [

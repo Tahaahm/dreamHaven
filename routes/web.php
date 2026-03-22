@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\MarketTrendsController;
 use App\Http\Controllers\Api\PropertyValuationController;
 use App\Http\Controllers\OfficeDashboardApiController;
 use App\Http\Controllers\AppVersionController;
+use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\OfficeAuthController;
 use App\Http\Controllers\SubscriptionPlanController;
@@ -222,6 +223,8 @@ Route::prefix('api/v1')->group(function () {
     // ===== PUBLIC AUTHENTICATION ROUTES =====
     Route::prefix('auth')->group(function () {
         Route::post('/login', [UserController::class, 'login']);
+        Route::post('/google/mobile', [GoogleAuthController::class, 'mobileLogin']); // ← ADD
+
         Route::post('/register', [UserController::class, 'register']);
         Route::post('/forgot-password', [UserController::class, 'forgotPassword']);
         Route::post('/confirm-password-reset', [UserController::class, 'confirmPasswordReset']);
