@@ -749,26 +749,46 @@ body.rtl .fab-w{right:auto;left:32px;align-items:flex-start;}
             <i class="fab fa-apple"></i>
             <div><div class="sbtn-sm" data-i18n="appStoreLabel">دابەزێنە لە</div><div class="sbtn-nm">App Store</div></div>
           </a>
-          <a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener" class="sbtn">
+<a href="https://play.google.com/store/apps/details?id=com.dreammulk.dreamhaven" target="_blank" rel="noopener" class="sbtn">
             <i class="fab fa-google-play"></i>
             <div><div class="sbtn-sm" data-i18n="playStoreLabel">وەربگرە لە</div><div class="sbtn-nm">Google Play</div></div>
           </a>
         </div>
       </div>
       <div class="gsap-scroll" style="transition-delay: 0.2s">
-        <div class="qr-card">
-          <div class="qr-brand">
-            <div class="qr-ico"><i class="fab fa-apple"></i></div>
-            <div><div class="qr-t">Dream Mulk</div><div class="qr-s" data-i18n="qrSub">بەخۆڕایی</div></div>
-          </div>
-          <div class="qr-div"></div>
-          <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://apps.apple.com/us/app/dream-mulk/id6756894199&bgcolor=ffffff&color=1a225a&margin=10&format=png&qzone=1&ecc=M" alt="QR Code" class="qr-img" loading="lazy"/>
-          <div class="qr-hint"><i class="fas fa-mobile-alt"></i><span data-i18n="qrHint">کامێراکەت بەرەو ئەمە بگرە</span></div>
-          <div class="qr-div"></div>
-          <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="qr-lnk">
-            <i class="fab fa-apple"></i> <span data-i18n="qrBtn">بکرەوە لە App Store</span> <i class="fas fa-arrow-right"></i>
-          </a>
-        </div>
+        <div style="display:flex;flex-direction:column;gap:24px;">
+
+  <!-- iOS QR Card -->
+  <div class="qr-card">
+    <div class="qr-brand">
+      <div class="qr-ico"><i class="fab fa-apple"></i></div>
+      <div><div class="qr-t">Dream Mulk</div><div class="qr-s" data-i18n="qrSub">بەخۆڕایی</div></div>
+    </div>
+    <div class="qr-div"></div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://apps.apple.com/us/app/dream-mulk/id6756894199&bgcolor=ffffff&color=1a225a&margin=10&format=png&qzone=1&ecc=M" alt="QR Code" class="qr-img" loading="lazy"/>
+    <div class="qr-hint"><i class="fas fa-mobile-alt"></i><span data-i18n="qrHint">کامێراکەت بەرەو ئەمە بگرە</span></div>
+    <div class="qr-div"></div>
+    <a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener" class="qr-lnk">
+      <i class="fab fa-apple"></i> <span data-i18n="qrBtn">بکرەوە لە App Store</span> <i class="fas fa-arrow-right"></i>
+    </a>
+  </div>
+
+  <!-- Android QR Card -->
+  <div class="qr-card">
+    <div class="qr-brand">
+      <div class="qr-ico" style="background:linear-gradient(135deg,#0f9d58,#34a853);"><i class="fab fa-google-play"></i></div>
+      <div><div class="qr-t">Dream Mulk</div><div class="qr-s" data-i18n="qrSub">بەخۆڕایی</div></div>
+    </div>
+    <div class="qr-div"></div>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://play.google.com/store/apps/details?id=com.dreammulk.dreamhaven&bgcolor=ffffff&color=0f9d58&margin=10&format=png&qzone=1&ecc=M" alt="QR Code Android" class="qr-img" loading="lazy"/>
+    <div class="qr-hint"><i class="fas fa-mobile-alt"></i><span data-i18n="qrHint">کامێراکەت بەرەو ئەمە بگرە</span></div>
+    <div class="qr-div"></div>
+    <a href="https://play.google.com/store/apps/details?id=com.dreammulk.dreamhaven" target="_blank" rel="noopener" class="qr-lnk" style="background:linear-gradient(135deg,#0f9d58,#1a5c35);">
+      <i class="fab fa-google-play"></i> <span data-i18n="qrBtnAndroid">بکرەوە لە Google Play</span> <i class="fas fa-arrow-right"></i>
+    </a>
+  </div>
+
+</div>
       </div>
     </div>
   </section>
@@ -843,7 +863,7 @@ body.rtl .fab-w{right:auto;left:32px;align-items:flex-start;}
           <h5 data-i18n="ftCol3">ئەپەکە دابەزێنە</h5>
           <ul>
             <li><a href="https://apps.apple.com/us/app/dream-mulk/id6756894199" target="_blank" rel="noopener"><i class="fab fa-apple"></i> App Store</a></li>
-            <li><a href="https://play.google.com/store/apps/details?id=com.dreammulk" target="_blank" rel="noopener"><i class="fab fa-google-play"></i> Google Play</a></li>
+            <li><a href="https://play.google.com/store/apps/details?id=com.dreammulk.dreamhaven" target="_blank" rel="noopener"><i class="fab fa-google-play"></i> Google Play</a></li>
             <li><a href="{{ route('contact-us') }}" data-i18n="ftLink9">پەیوەندیمان پێوە بکە</a></li>
           </ul>
         </div>
