@@ -191,56 +191,28 @@
                                 class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all font-medium text-sm">
                         </div>
 
-                        {{-- Divider --}}
-                        <div class="flex items-center gap-3 pt-1">
-                            <div class="flex-1 h-px bg-gray-200"></div>
-                            <span class="text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                                <i class="fas fa-language mr-1"></i> Multilingual Content
-                            </span>
-                            <div class="flex-1 h-px bg-gray-200"></div>
-                        </div>
-
-                        {{-- Language column headers --}}
-                        <div class="grid grid-cols-3 gap-3 -mb-2">
-                            <div class="flex items-center gap-1.5 text-xs font-bold text-blue-600">
-                                <span class="w-5 h-5 rounded bg-blue-100 flex items-center justify-center">🇬🇧</span> English
-                            </div>
-                            <div class="flex items-center gap-1.5 text-xs font-bold text-green-600">
-                                <span class="w-5 h-5 rounded bg-green-100 flex items-center justify-center">🇮🇶</span> العربية
-                            </div>
-                            <div class="flex items-center gap-1.5 text-xs font-bold text-orange-600">
-                                <span class="w-5 h-5 rounded bg-orange-100 flex items-center justify-center">🏔️</span> کوردی
-                            </div>
-                        </div>
-
                         {{-- Company Bio --}}
                         <div>
                             <label class="block text-sm font-bold text-gray-900 mb-2">Company Bio <span class="text-xs font-normal text-gray-400">(Short tagline)</span></label>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <textarea name="company_bio_en" rows="3" class="w-full px-4 py-3 rounded-xl border-2 border-blue-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all text-sm resize-none" placeholder="Short tagline..." dir="ltr">{{ old('company_bio_en', $provider->company_bio_en) }}</textarea>
-                                <textarea name="company_bio_ar" rows="3" class="w-full px-4 py-3 rounded-xl border-2 border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-all text-sm resize-none" placeholder="الوصف القصير..." dir="rtl">{{ old('company_bio_ar', $provider->company_bio_ar) }}</textarea>
-                                <textarea name="company_bio_ku" rows="3" class="w-full px-4 py-3 rounded-xl border-2 border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all text-sm resize-none" placeholder="کورتەی کۆمپانیا..." dir="rtl">{{ old('company_bio_ku', $provider->company_bio_ku) }}</textarea>
-                            </div>
+                            <textarea name="company_bio" rows="3"
+                                class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all text-sm resize-none"
+                                placeholder="Short tagline about the company...">{{ old('company_bio', $provider->company_bio) }}</textarea>
                         </div>
 
                         {{-- Business Description --}}
                         <div>
                             <label class="block text-sm font-bold text-gray-900 mb-2">Business Description <span class="text-xs font-normal text-gray-400">(Detailed services)</span></label>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <textarea name="business_description_en" rows="4" class="w-full px-4 py-3 rounded-xl border-2 border-blue-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all text-sm resize-none" placeholder="Describe your services..." dir="ltr">{{ old('business_description_en', $provider->business_description_en) }}</textarea>
-                                <textarea name="business_description_ar" rows="4" class="w-full px-4 py-3 rounded-xl border-2 border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-all text-sm resize-none" placeholder="وصف الخدمات..." dir="rtl">{{ old('business_description_ar', $provider->business_description_ar) }}</textarea>
-                                <textarea name="business_description_ku" rows="4" class="w-full px-4 py-3 rounded-xl border-2 border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all text-sm resize-none" placeholder="وەسفی خزمەتگوزارییەکان..." dir="rtl">{{ old('business_description_ku', $provider->business_description_ku) }}</textarea>
-                            </div>
+                            <textarea name="business_description" rows="4"
+                                class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all text-sm resize-none"
+                                placeholder="Describe the services offered...">{{ old('business_description', $provider->business_description) }}</textarea>
                         </div>
 
                         {{-- Company Overview --}}
                         <div>
                             <label class="block text-sm font-bold text-gray-900 mb-2">Company Overview <span class="text-xs font-normal text-gray-400">(Full story)</span></label>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <textarea name="company_overview_en" rows="5" class="w-full px-4 py-3 rounded-xl border-2 border-blue-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all text-sm resize-none" placeholder="Full company story..." dir="ltr">{{ old('company_overview_en', $provider->company_overview_en) }}</textarea>
-                                <textarea name="company_overview_ar" rows="5" class="w-full px-4 py-3 rounded-xl border-2 border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-all text-sm resize-none" placeholder="نظرة عامة عن الشركة..." dir="rtl">{{ old('company_overview_ar', $provider->company_overview_ar) }}</textarea>
-                                <textarea name="company_overview_ku" rows="5" class="w-full px-4 py-3 rounded-xl border-2 border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all text-sm resize-none" placeholder="پوختەی کۆمپانیاکە..." dir="rtl">{{ old('company_overview_ku', $provider->company_overview_ku) }}</textarea>
-                            </div>
+                            <textarea name="company_overview" rows="5"
+                                class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all text-sm resize-none"
+                                placeholder="Full company story and history...">{{ old('company_overview', $provider->company_overview) }}</textarea>
                         </div>
 
                     </div>
@@ -391,14 +363,6 @@
         document.querySelector('.day-closed-' + day).classList.toggle('hidden', !closed);
     }
 
-    function langHeaders() {
-        return `<div class="grid grid-cols-3 gap-3 mb-1">
-            <span class="text-xs font-bold text-blue-600">🇬🇧 English</span>
-            <span class="text-xs font-bold text-green-600">🇮🇶 العربية</span>
-            <span class="text-xs font-bold text-orange-600">🏔️ کوردی</span>
-        </div>`;
-    }
-
     function addGalleryItem(data = null) {
         const container = document.getElementById('gallery-container');
         const item = document.createElement('div');
@@ -422,21 +386,11 @@
             </div>
             <div class="mb-3">
                 <label class="block text-sm font-bold text-gray-900 mb-2">Title</label>
-                ${langHeaders()}
-                <div class="grid grid-cols-3 gap-3">
-                    <input type="text" name="gallery_titles_en[]" value="${titleEn}" class="px-3 py-2.5 rounded-xl border-2 border-blue-200 text-sm w-full" placeholder="Project title" dir="ltr">
-                    <input type="text" name="gallery_titles_ar[]" value="${titleAr}" class="px-3 py-2.5 rounded-xl border-2 border-green-200 text-sm w-full" placeholder="عنوان المشروع" dir="rtl">
-                    <input type="text" name="gallery_titles_ku[]" value="${titleKu}" class="px-3 py-2.5 rounded-xl border-2 border-orange-200 text-sm w-full" placeholder="ناوی پرۆژە" dir="rtl">
-                </div>
+                <input type="text" name="gallery_titles[]" value="${titleEn}" class="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 text-sm" placeholder="Project title">
             </div>
             <div>
                 <label class="block text-sm font-bold text-gray-900 mb-2">Description</label>
-                ${langHeaders()}
-                <div class="grid grid-cols-3 gap-3">
-                    <input type="text" name="gallery_descriptions_en[]" value="${descEn}" class="px-3 py-2.5 rounded-xl border-2 border-blue-200 text-sm w-full" placeholder="Description" dir="ltr">
-                    <input type="text" name="gallery_descriptions_ar[]" value="${descAr}" class="px-3 py-2.5 rounded-xl border-2 border-green-200 text-sm w-full" placeholder="الوصف" dir="rtl">
-                    <input type="text" name="gallery_descriptions_ku[]" value="${descKu}" class="px-3 py-2.5 rounded-xl border-2 border-orange-200 text-sm w-full" placeholder="وەسف" dir="rtl">
-                </div>
+                <input type="text" name="gallery_descriptions[]" value="${descEn}" class="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 text-sm" placeholder="Project description">
             </div>`;
         container.appendChild(item);
     }
@@ -459,21 +413,11 @@
             </button>
             <div class="mb-3">
                 <label class="block text-sm font-bold text-gray-900 mb-2">Title</label>
-                ${langHeaders()}
-                <div class="grid grid-cols-3 gap-3">
-                    <input type="text" name="offering_titles_en[]" value="${titleEn}" class="px-3 py-2.5 rounded-xl border-2 border-blue-200 text-sm w-full" placeholder="Service Name" dir="ltr">
-                    <input type="text" name="offering_titles_ar[]" value="${titleAr}" class="px-3 py-2.5 rounded-xl border-2 border-green-200 text-sm w-full" placeholder="اسم الخدمة" dir="rtl">
-                    <input type="text" name="offering_titles_ku[]" value="${titleKu}" class="px-3 py-2.5 rounded-xl border-2 border-orange-200 text-sm w-full" placeholder="ناوی خزمەتگوزاری" dir="rtl">
-                </div>
+                <input type="text" name="offering_titles[]" value="${titleEn}" class="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 text-sm" placeholder="Service Name">
             </div>
             <div class="mb-3">
                 <label class="block text-sm font-bold text-gray-900 mb-2">Description</label>
-                ${langHeaders()}
-                <div class="grid grid-cols-3 gap-3">
-                    <textarea name="offering_descriptions_en[]" rows="3" class="px-3 py-2.5 rounded-xl border-2 border-blue-200 text-sm w-full resize-none" placeholder="Details..." dir="ltr">${descEn}</textarea>
-                    <textarea name="offering_descriptions_ar[]" rows="3" class="px-3 py-2.5 rounded-xl border-2 border-green-200 text-sm w-full resize-none" placeholder="التفاصيل..." dir="rtl">${descAr}</textarea>
-                    <textarea name="offering_descriptions_ku[]" rows="3" class="px-3 py-2.5 rounded-xl border-2 border-orange-200 text-sm w-full resize-none" placeholder="وردەکارییەکان..." dir="rtl">${descKu}</textarea>
-                </div>
+                <textarea name="offering_descriptions[]" rows="3" class="w-full px-3 py-2.5 rounded-xl border-2 border-gray-200 text-sm resize-none" placeholder="Details...">${descEn}</textarea>
             </div>
             <div class="flex items-center gap-4">
                 <div class="flex-1">
