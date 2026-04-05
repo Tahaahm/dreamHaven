@@ -7,19 +7,15 @@ use App\Models\ServiceProvider;
 use App\Models\ServiceProviderGallery;
 use App\Models\ServiceProviderOffering;
 use App\Models\ServiceProviderReview;
-use App\Models\ServiceProviderPlan;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class ServiceProviderController extends Controller
 {
-    // =========================================================================
     // CATEGORIES METHODS
-    // =========================================================================
 
     /**
      * Get all categories
@@ -113,9 +109,7 @@ class ServiceProviderController extends Controller
         ]);
     }
 
-    // =========================================================================
-    // SERVICE PROVIDERS METHODS (API)
-    // =========================================================================
+    // SERVICE PROVIDERS METHODS
 
     /**
      * Get all service providers with filtering
@@ -124,21 +118,32 @@ class ServiceProviderController extends Controller
     {
         $query = ServiceProvider::with(['category', 'galleries', 'activeOfferings', 'reviews']);
 
+        // Filter by category
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         }
+
+        // Filter by verified status
         if ($request->filled('verified')) {
             $query->verified();
         }
+
+        // Filter by city
         if ($request->filled('city')) {
             $query->byCity($request->city);
         }
+
+        // Filter by district
         if ($request->filled('district')) {
             $query->byDistrict($request->district);
         }
+
+        // Filter by minimum rating
         if ($request->filled('min_rating')) {
             $query->withMinRating($request->min_rating);
         }
+
+        // Location-based search
         if ($request->filled(['latitude', 'longitude', 'radius'])) {
             $query->withinRadius(
                 $request->latitude,
@@ -146,10 +151,13 @@ class ServiceProviderController extends Controller
                 $request->radius
             );
         }
+
+        // Search by company name
         if ($request->filled('search')) {
             $query->where('company_name', 'like', '%' . $request->search . '%');
         }
 
+        // Pagination
         $perPage = $request->get('per_page', 15);
         $serviceProviders = $query->paginate($perPage);
 
@@ -181,15 +189,28 @@ class ServiceProviderController extends Controller
     }
 
     /**
-     * API - Create a new service provider
+     * Create a new service provider
      */
     public function createServiceProvider(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'category_id' => 'required|exists:categories,id',
             'company_name' => 'required|string|max:255',
-            'email_address' => 'nullable|email|max:255',
+            'company_bio' => 'nullable|string',
+            'profile_image' => 'nullable|string',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'city' => 'nullable|string|max:255',
+            'district' => 'nullable|string|max:255',
+            'business_type' => 'nullable|string|max:255',
+            'business_description' => 'nullable|string',
+            'years_in_business' => 'nullable|integer|min:0',
             'phone_number' => 'nullable|string|max:20',
+            'email_address' => 'nullable|email|max:255',
+            'website_url' => 'nullable|url|max:255',
+            'business_hours' => 'nullable|array',
+            'company_overview' => 'nullable|string',
+            'plan_id' => 'nullable|exists:service_provider_plans,id',
         ]);
 
         if ($validator->fails()) {
@@ -200,10 +221,7 @@ class ServiceProviderController extends Controller
             ], 422);
         }
 
-        $data = $request->all();
-        $data['business_hours'] = $this->parseBusinessHours($request);
-
-        $serviceProvider = ServiceProvider::create($data);
+        $serviceProvider = ServiceProvider::create($request->all());
 
         return response()->json([
             'success' => true,
@@ -213,16 +231,58 @@ class ServiceProviderController extends Controller
     }
 
     /**
+     * Update a service provider
+     */
+    public function updateServiceProvider(Request $request, $id): JsonResponse
+    {
+        $serviceProvider = ServiceProvider::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'category_id' => 'sometimes|exists:categories,id',
+            'company_name' => 'sometimes|string|max:255',
+            'company_bio' => 'nullable|string',
+            'profile_image' => 'nullable|string',
+            'latitude' => 'nullable|numeric|between:-90,90',
+            'longitude' => 'nullable|numeric|between:-180,180',
+            'city' => 'nullable|string|max:255',
+            'district' => 'nullable|string|max:255',
+            'business_type' => 'nullable|string|max:255',
+            'business_description' => 'nullable|string',
+            'years_in_business' => 'nullable|integer|min:0',
+            'phone_number' => 'nullable|string|max:20',
+            'email_address' => 'nullable|email|max:255',
+            'website_url' => 'nullable|url|max:255',
+            'business_hours' => 'nullable|array',
+            'company_overview' => 'nullable|string',
+            'is_verified' => 'nullable|boolean',
+            'plan_id' => 'nullable|exists:service_provider_plans,id',
+            'plan_active' => 'nullable|boolean',
+            'plan_expires_at' => 'nullable|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $serviceProvider->update($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Service provider updated successfully',
+            'data' => $serviceProvider->load(['category', 'plan'])
+        ]);
+    }
+
+    /**
      * Delete a service provider
      */
     public function deleteServiceProvider($id): JsonResponse
     {
         $serviceProvider = ServiceProvider::findOrFail($id);
-
-        if ($serviceProvider->profile_image && !filter_var($serviceProvider->profile_image, FILTER_VALIDATE_URL)) {
-            Storage::disk('public')->delete(str_replace('/storage/', '', $serviceProvider->profile_image));
-        }
-
         $serviceProvider->delete();
 
         return response()->json([
@@ -231,334 +291,370 @@ class ServiceProviderController extends Controller
         ]);
     }
 
-    // =========================================================================
-    // ADMIN WEB FORM - STORE METHOD
-    // =========================================================================
+    // GALLERY METHODS
 
     /**
-     * Handle the creation from Admin Blade form
+     * Add gallery images to service provider
      */
-    public function store(Request $request)
+    public function addGalleryImages(Request $request, $serviceProviderId): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'company_name' => 'required|string|max:255',
-            'category_id' => 'required|exists:categories,id',
-            'email_address' => 'required|email|max:255',
-            'phone_number' => 'required|string|max:20',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
-            'gallery_images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'images' => 'required|array',
+            'images.*.image_url' => 'required|string',
+            'images.*.description' => 'nullable|string',
+            'images.*.project_title' => 'nullable|string',
+            'images.*.sort_order' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
-            return redirect()->back()->withErrors($validator)->withInput();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        DB::beginTransaction();
-        try {
-            $data = $request->except([
-                '_token',
-                'profile_image',
-                'is_verified',
-                'hours_open',
-                'hours_close',
-                'hours_closed',
-                'gallery_images',
-                'gallery_titles',
-                'gallery_descriptions',
-                'offering_titles',
-                'offering_descriptions',
-                'offering_prices',
-                'offering_active',
-                'reviewer_names',
-                'reviewer_ratings',
-                'reviewer_contents',
-                'reviewer_service_types'
-            ]);
+        $serviceProvider = ServiceProvider::findOrFail($serviceProviderId);
+        $galleryImages = [];
 
-            $data['is_verified'] = $request->has('is_verified');
-
-            if ($request->hasFile('profile_image')) {
-                $path = $request->file('profile_image')->store('providers/profiles', 'public');
-                $data['profile_image'] = '/storage/' . $path;
-            }
-
-            // Create initial record
-            $provider = ServiceProvider::create($data);
-
-            // Explicitly handle and save business hours JSON
-            $provider->business_hours = $this->parseBusinessHours($request);
-            $provider->save();
-
-            // Handle Gallery
-            if ($request->hasFile('gallery_images')) {
-                $this->storeGallery($request, $provider);
-            }
-
-            // Handle Offerings & Reviews
-            $this->syncOfferings($request, $provider);
-            $this->syncReviews($request, $provider);
-
-            // Calculate Rating
-            $this->updateAverageRating($provider->id);
-
-            DB::commit();
-            return redirect()->route('admin.service-providers.index')->with('success', 'Service Provider created successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->withErrors(['error' => $e->getMessage()])->withInput();
+        foreach ($request->images as $imageData) {
+            $imageData['service_provider_id'] = $serviceProviderId;
+            $galleryImages[] = ServiceProviderGallery::create($imageData);
         }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Gallery images added successfully',
+            'data' => $galleryImages
+        ], 201);
     }
 
-    // =========================================================================
-    // ADMIN WEB FORM - UPDATE METHOD
-    // =========================================================================
-
     /**
-     * Handle update from Admin Blade form
+     * Update gallery image
      */
-    public function update(Request $request, $id)
+    public function updateGalleryImage(Request $request, $imageId): JsonResponse
     {
-        $provider = ServiceProvider::findOrFail($id);
-
         $validator = Validator::make($request->all(), [
-            'company_name' => 'required|string|max:255',
-            'category_id' => 'required|exists:categories,id',
-            'email_address' => 'required|email|max:255',
-            'phone_number' => 'required|string|max:20',
-            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image_url' => 'sometimes|string',
+            'description' => 'nullable|string',
+            'project_title' => 'nullable|string',
+            'sort_order' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
-            return redirect()->back()->withErrors($validator)->withInput();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        DB::beginTransaction();
-        try {
-            $data = $request->except([
-                '_token',
-                '_method',
-                'profile_image',
-                'is_verified',
-                'hours_open',
-                'hours_close',
-                'hours_closed',
-                'gallery_existing_images',
-                'gallery_images',
-                'gallery_titles',
-                'gallery_descriptions',
-                'offering_titles',
-                'offering_descriptions',
-                'offering_prices',
-                'offering_active',
-                'reviewer_names',
-                'reviewer_ratings',
-                'reviewer_contents',
-                'reviewer_service_types'
-            ]);
+        $galleryImage = ServiceProviderGallery::findOrFail($imageId);
+        $galleryImage->update($request->all());
 
-            $data['is_verified'] = $request->has('is_verified');
-
-            // Handle Profile Image Replacement
-            if ($request->hasFile('profile_image')) {
-                if ($provider->profile_image && !filter_var($provider->profile_image, FILTER_VALIDATE_URL)) {
-                    Storage::disk('public')->delete(str_replace('/storage/', '', $provider->profile_image));
-                }
-                $path = $request->file('profile_image')->store('providers/profiles', 'public');
-                $data['profile_image'] = '/storage/' . $path;
-            }
-
-            // Update main data
-            $provider->fill($data);
-            $provider->business_hours = $this->parseBusinessHours($request);
-            $provider->save();
-
-            // Sync Relationships
-            $this->syncGallery($request, $provider);
-            $this->syncOfferings($request, $provider);
-            $this->syncReviews($request, $provider);
-
-            // Update Rating
-            $this->updateAverageRating($provider->id);
-
-            DB::commit();
-            return redirect()->route('admin.service-providers.index')->with('success', 'Service Provider updated successfully.');
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->withErrors(['error' => $e->getMessage()])->withInput();
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Gallery image updated successfully',
+            'data' => $galleryImage
+        ]);
     }
 
-    // =========================================================================
-    // PRIVATE HELPERS (Logic & Sync)
-    // =========================================================================
+    /**
+     * Delete gallery image
+     */
+    public function deleteGalleryImage($imageId): JsonResponse
+    {
+        $galleryImage = ServiceProviderGallery::findOrFail($imageId);
+        $galleryImage->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Gallery image deleted successfully'
+        ]);
+    }
+
+    // OFFERINGS METHODS
 
     /**
-     * Parse Business Hours with Default Fallback
+     * Add service offering
      */
-    private function parseBusinessHours(Request $request): array
+    public function addOffering(Request $request, $serviceProviderId): JsonResponse
     {
-        if ($request->has('business_hours') && is_array($request->business_hours)) {
-            return $request->business_hours;
+        $validator = Validator::make($request->all(), [
+            'service_title' => 'required|string|max:255',
+            'service_description' => 'nullable|string',
+            'price_range' => 'nullable|string|max:255',
+            'sort_order' => 'nullable|integer',
+            'active' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        $hoursOpen = $request->input('hours_open', []);
-        $hoursClose = $request->input('hours_close', []);
-        $hoursClosed = $request->input('hours_closed', []);
+        $serviceProvider = ServiceProvider::findOrFail($serviceProviderId);
 
-        if (!empty($hoursOpen) || !empty($hoursClose) || !empty($hoursClosed)) {
-            $businessHours = [];
-            $days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        $offeringData = $request->all();
+        $offeringData['service_provider_id'] = $serviceProviderId;
+        $offeringData['active'] = $offeringData['active'] ?? true;
 
-            foreach ($days as $day) {
-                if (isset($hoursClosed[$day]) && $hoursClosed[$day] == "1") {
-                    $businessHours[$day] = ['closed' => true];
-                } else {
-                    $businessHours[$day] = [
-                        'open' => $hoursOpen[$day] ?? '08:00',
-                        'close' => $hoursClose[$day] ?? '17:00',
-                    ];
-                }
-            }
-            return $businessHours;
+        $offering = ServiceProviderOffering::create($offeringData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Service offering added successfully',
+            'data' => $offering
+        ], 201);
+    }
+
+    /**
+     * Update service offering
+     */
+    public function updateOffering(Request $request, $offeringId): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'service_title' => 'sometimes|string|max:255',
+            'service_description' => 'nullable|string',
+            'price_range' => 'nullable|string|max:255',
+            'sort_order' => 'nullable|integer',
+            'active' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        // Default Working Hours
-        return [
-            "sunday" => ["open" => "08:00", "close" => "17:00"],
-            "monday" => ["open" => "08:00", "close" => "17:00"],
-            "tuesday" => ["open" => "08:00", "close" => "17:00"],
-            "wednesday" => ["open" => "08:00", "close" => "17:00"],
-            "thursday" => ["open" => "08:00", "close" => "17:00"],
-            "friday" => ["closed" => true],
-            "saturday" => ["open" => "09:00", "close" => "14:00"]
+        $offering = ServiceProviderOffering::findOrFail($offeringId);
+        $offering->update($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Service offering updated successfully',
+            'data' => $offering
+        ]);
+    }
+
+    /**
+     * Delete service offering
+     */
+    public function deleteOffering($offeringId): JsonResponse
+    {
+        $offering = ServiceProviderOffering::findOrFail($offeringId);
+        $offering->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Service offering deleted successfully'
+        ]);
+    }
+
+    // REVIEWS METHODS
+
+    /**
+     * Add review for service provider
+     */
+    public function addReview(Request $request, $serviceProviderId): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'reviewer_name' => 'required|string|max:255',
+            'reviewer_avatar' => 'nullable|string',
+            'star_rating' => 'required|integer|between:1,5',
+            'review_content' => 'nullable|string',
+            'service_type' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $serviceProvider = ServiceProvider::findOrFail($serviceProviderId);
+
+        $reviewData = $request->all();
+        $reviewData['service_provider_id'] = $serviceProviderId;
+        $reviewData['review_date'] = now()->toDateString();
+
+        $review = ServiceProviderReview::create($reviewData);
+
+        // Update average rating
+        $this->updateAverageRating($serviceProviderId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Review added successfully',
+            'data' => $review
+        ], 201);
+    }
+
+    /**
+     * Get reviews for service provider
+     */
+    public function getReviews($serviceProviderId): JsonResponse
+    {
+        $reviews = ServiceProviderReview::where('service_provider_id', $serviceProviderId)
+            ->latest()
+            ->paginate(10);
+
+        return response()->json([
+            'success' => true,
+            'data' => $reviews
+        ]);
+    }
+
+    /**
+     * Update review verification status
+     */
+    public function updateReviewStatus(Request $request, $reviewId): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'is_verified' => 'nullable|boolean',
+            'is_featured' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $review = ServiceProviderReview::findOrFail($reviewId);
+        $review->update($request->all());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Review status updated successfully',
+            'data' => $review
+        ]);
+    }
+
+    /**
+     * Delete review
+     */
+    public function deleteReview($reviewId): JsonResponse
+    {
+        $review = ServiceProviderReview::findOrFail($reviewId);
+        $serviceProviderId = $review->service_provider_id;
+        $review->delete();
+
+        // Update average rating after deleting review
+        $this->updateAverageRating($serviceProviderId);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Review deleted successfully'
+        ]);
+    }
+
+    // PLAN MANAGEMENT METHODS
+
+    /**
+     * Assign plan to service provider
+     */
+    public function assignPlan(Request $request, $serviceProviderId): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'plan_id' => 'required|exists:service_provider_plans,id',
+            'duration_months' => 'required|integer|min:1|max:12',
+            'start_immediately' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $serviceProvider = ServiceProvider::findOrFail($serviceProviderId);
+
+        $startDate = $request->start_immediately ? now() : now()->addDay();
+        $expirationDate = $startDate->copy()->addMonths($request->duration_months);
+
+        $serviceProvider->update([
+            'plan_id' => $request->plan_id,
+            'plan_active' => true,
+            'plan_expires_at' => $expirationDate,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Plan assigned successfully',
+            'data' => $serviceProvider->load('plan')
+        ]);
+    }
+
+    /**
+     * Cancel service provider plan
+     */
+    public function cancelPlan($serviceProviderId): JsonResponse
+    {
+        $serviceProvider = ServiceProvider::findOrFail($serviceProviderId);
+
+        $serviceProvider->update([
+            'plan_active' => false,
+            'plan_expires_at' => now(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Plan cancelled successfully',
+            'data' => $serviceProvider->load('plan')
+        ]);
+    }
+
+    /**
+     * Get service provider plan status
+     */
+    public function getPlanStatus($serviceProviderId): JsonResponse
+    {
+        $serviceProvider = ServiceProvider::with('plan')->findOrFail($serviceProviderId);
+
+        $planStatus = [
+            'has_active_plan' => $serviceProvider->hasActivePlan(),
+            'remaining_days' => $serviceProvider->remainingPlanDays(),
+            'plan' => $serviceProvider->plan,
+            'plan_expires_at' => $serviceProvider->plan_expires_at,
+            'advertisement_slots' => $serviceProvider->getAdvertisementSlots(),
+            'banner_allowance' => $serviceProvider->getBannerAllowance(),
         ];
+
+        return response()->json([
+            'success' => true,
+            'data' => $planStatus
+        ]);
     }
 
-    /**
-     * Store Gallery for new record
-     */
-    private function storeGallery(Request $request, ServiceProvider $provider)
-    {
-        $files = $request->file('gallery_images', []);
-        $titles = $request->input('gallery_titles', []);
-        $descs = $request->input('gallery_descriptions', []);
-
-        foreach ($files as $index => $file) {
-            if ($file) {
-                $path = $file->store('providers/gallery', 'public');
-                ServiceProviderGallery::create([
-                    'service_provider_id' => $provider->id,
-                    'image_url' => '/storage/' . $path,
-                    'project_title' => $titles[$index] ?? null,
-                    'description' => $descs[$index] ?? null,
-                    'sort_order' => $index,
-                ]);
-            }
-        }
-    }
+    // HELPER METHODS
 
     /**
-     * Sync Gallery for existing record
-     */
-    private function syncGallery(Request $request, ServiceProvider $provider)
-    {
-        $existingDbImages = $provider->galleries()->pluck('image_url')->toArray();
-        $submittedExistingImages = $request->input('gallery_existing_images', []);
-
-        // Delete removed files
-        $imagesToDelete = array_diff($existingDbImages, $submittedExistingImages);
-        foreach ($imagesToDelete as $oldImage) {
-            if (!filter_var($oldImage, FILTER_VALIDATE_URL)) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $oldImage));
-            }
-        }
-
-        $provider->galleries()->delete();
-        $titles = $request->input('gallery_titles', []);
-        $descs = $request->input('gallery_descriptions', []);
-        $files = $request->file('gallery_images', []);
-
-        foreach ($titles as $index => $title) {
-            $url = $submittedExistingImages[$index] ?? null;
-            if (isset($files[$index])) {
-                $path = $files[$index]->store('providers/gallery', 'public');
-                $url = '/storage/' . $path;
-            }
-            if ($url) {
-                ServiceProviderGallery::create([
-                    'service_provider_id' => $provider->id,
-                    'image_url' => $url,
-                    'project_title' => $title,
-                    'description' => $descs[$index] ?? null,
-                    'sort_order' => $index,
-                ]);
-            }
-        }
-    }
-
-    /**
-     * Sync Offerings
-     */
-    private function syncOfferings(Request $request, ServiceProvider $provider)
-    {
-        $provider->offerings()->delete();
-        $titles = $request->input('offering_titles', []);
-        $descs = $request->input('offering_descriptions', []);
-        $prices = $request->input('offering_prices', []);
-
-        foreach ($titles as $index => $title) {
-            if (!empty($title)) {
-                ServiceProviderOffering::create([
-                    'service_provider_id' => $provider->id,
-                    'service_title' => $title,
-                    'service_description' => $descs[$index] ?? null,
-                    'price_range' => $prices[$index] ?? null,
-                    'active' => true,
-                    'sort_order' => $index,
-                ]);
-            }
-        }
-    }
-
-    /**
-     * Sync Reviews
-     */
-    private function syncReviews(Request $request, ServiceProvider $provider)
-    {
-        $provider->reviews()->delete();
-        $names = $request->input('reviewer_names', []);
-        $ratings = $request->input('reviewer_ratings', []);
-        $contents = $request->input('reviewer_contents', []);
-        $types = $request->input('reviewer_service_types', []);
-
-        foreach ($names as $index => $name) {
-            if (!empty($name)) {
-                ServiceProviderReview::create([
-                    'service_provider_id' => $provider->id,
-                    'reviewer_name' => $name,
-                    'star_rating' => $ratings[$index] ?? 5,
-                    'review_content' => $contents[$index] ?? null,
-                    'service_type' => $types[$index] ?? null,
-                    'review_date' => now()->toDateString(),
-                    'is_verified' => true,
-                ]);
-            }
-        }
-    }
-
-    /**
-     * Update Avg Rating
+     * Update average rating for service provider
      */
     private function updateAverageRating($serviceProviderId): void
     {
-        $avg = ServiceProviderReview::where('service_provider_id', $serviceProviderId)->avg('star_rating');
-        ServiceProvider::where('id', $serviceProviderId)->update(['average_rating' => round((float)$avg, 2)]);
+        $averageRating = ServiceProviderReview::where('service_provider_id', $serviceProviderId)
+            ->avg('star_rating');
+
+        ServiceProvider::where('id', $serviceProviderId)
+            ->update(['average_rating' => round($averageRating, 2)]);
     }
 
-    // =========================================================================
-    // ADDITIONAL API ENDPOINTS
-    // =========================================================================
-
+    /**
+     * Get statistics for dashboard
+     */
     public function getStatistics(): JsonResponse
     {
         $stats = [
@@ -566,24 +662,67 @@ class ServiceProviderController extends Controller
             'active_categories' => Category::active()->count(),
             'total_service_providers' => ServiceProvider::count(),
             'verified_service_providers' => ServiceProvider::verified()->count(),
+            'providers_with_active_plans' => ServiceProvider::withActivePlan()->count(),
+            'total_plans' => DB::table('service_provider_plans')->count(),
+            'active_plans' => DB::table('service_provider_plans')->where('active', true)->count(),
             'total_reviews' => ServiceProviderReview::count(),
-            'average_rating' => round(ServiceProviderReview::avg('star_rating') ?? 0, 2),
+            'average_rating' => ServiceProviderReview::avg('star_rating'),
+            'plan_distribution' => ServiceProvider::select('plan_id', DB::raw('count(*) as count'))
+                ->whereNotNull('plan_id')
+                ->groupBy('plan_id')
+                ->with('plan:id,name')
+                ->get(),
+            'revenue_this_month' => $this->calculateMonthlyRevenue(),
+            'new_providers_this_month' => ServiceProvider::whereMonth('created_at', now()->month)
+                ->whereYear('created_at', now()->year)
+                ->count(),
         ];
-        return response()->json(['success' => true, 'data' => $stats]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $stats
+        ]);
     }
 
+    /**
+     * Calculate monthly revenue from active plans
+     */
+    private function calculateMonthlyRevenue(): float
+    {
+        $activeProviders = ServiceProvider::withActivePlan()->with('plan')->get();
+
+        $totalRevenue = 0;
+        foreach ($activeProviders as $provider) {
+            if ($provider->plan) {
+                $totalRevenue += $provider->plan->monthly_price;
+            }
+        }
+
+        return round($totalRevenue, 2);
+    }
+
+    /**
+     * Get service providers by location
+     */
     public function getProvidersByLocation(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'latitude' => 'required|numeric',
-            'longitude' => 'required|numeric',
+            'latitude' => 'required|numeric|between:-90,90',
+            'longitude' => 'required|numeric|between:-180,180',
+            'radius' => 'nullable|numeric|min:1|max:100', // max 100km radius
+            'category_id' => 'nullable|exists:categories,id',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
-        $radius = $request->get('radius', 10);
+        $radius = $request->get('radius', 10); // default 10km
+
         $query = ServiceProvider::with(['category', 'activeOfferings'])
             ->withinRadius($request->latitude, $request->longitude, $radius);
 
@@ -591,19 +730,11 @@ class ServiceProviderController extends Controller
             $query->where('category_id', $request->category_id);
         }
 
-        return response()->json(['success' => true, 'data' => $query->take(20)->get()]);
-    }
+        $providers = $query->take(20)->get();
 
-    public function getPlanStatus($serviceProviderId): JsonResponse
-    {
-        $serviceProvider = ServiceProvider::with('plan')->findOrFail($serviceProviderId);
         return response()->json([
             'success' => true,
-            'data' => [
-                'has_active_plan' => $serviceProvider->hasActivePlan(),
-                'remaining_days' => $serviceProvider->remainingPlanDays(),
-                'plan' => $serviceProvider->plan,
-            ]
+            'data' => $providers
         ]);
     }
 }
