@@ -119,32 +119,15 @@
                     </div>
                     <div class="p-6 space-y-5">
 
-                        {{-- Company Name --}}
+                        {{-- Company Name - single field --}}
                         <div>
                             <label class="block text-sm font-bold text-gray-900 mb-2">
                                 Company Name <span class="text-red-500">*</span>
                             </label>
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div>
-                                    <p class="text-xs font-bold text-blue-600 mb-1.5">🇬🇧 English</p>
-                                    <input type="text" name="company_name_en" value="{{ old('company_name_en') }}"
-                                        class="w-full px-4 py-3 rounded-xl border-2 border-blue-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-medium text-sm"
-                                        placeholder="Company Name" dir="ltr">
-                                    @error('company_name_en') <p class="text-red-600 text-xs mt-1">{{ $message }}</p> @enderror
-                                </div>
-                                <div>
-                                    <p class="text-xs font-bold text-green-600 mb-1.5">🇮🇶 العربية</p>
-                                    <input type="text" name="company_name_ar" value="{{ old('company_name_ar') }}"
-                                        class="w-full px-4 py-3 rounded-xl border-2 border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-all font-medium text-sm"
-                                        placeholder="اسم الشركة" dir="rtl">
-                                </div>
-                                <div>
-                                    <p class="text-xs font-bold text-orange-600 mb-1.5">🏔️ کوردی</p>
-                                    <input type="text" name="company_name_ku" value="{{ old('company_name_ku') }}"
-                                        class="w-full px-4 py-3 rounded-xl border-2 border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-medium text-sm"
-                                        placeholder="ناوی کۆمپانیا" dir="rtl">
-                                </div>
-                            </div>
+                            <input type="text" name="company_name" value="{{ old('company_name') }}" required
+                                class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all font-medium text-sm"
+                                placeholder="Lenya Kitchen & Interiors">
+                            @error('company_name') <p class="text-red-600 text-xs mt-1">{{ $message }}</p> @enderror
                         </div>
 
                         {{-- Category + Business Type --}}
