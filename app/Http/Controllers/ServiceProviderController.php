@@ -430,30 +430,37 @@ class ServiceProviderController extends Controller
 
     private function parseBusinessHours(Request $request): array
     {
-        // 1. If API provides JSON array
+        // 1. If API provides JSON array directly
         if ($request->has('business_hours') && is_array($request->business_hours)) {
             return $request->business_hours;
         }
 
         // 2. If coming from Blade Form
-        if ($request->has('hours_open') || $request->has('hours_close') || $request->has('hours_closed')) {
+        $hoursOpen = $request->input('hours_open', []);
+        $hoursClose = $request->input('hours_close', []);
+        $hoursClosed = $request->input('hours_closed', []);
+
+        // If the form sent any of these arrays, parse them
+        if (!empty($hoursOpen) || !empty($hoursClose) || !empty($hoursClosed)) {
             $businessHours = [];
             $days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
             foreach ($days as $day) {
-                if ($request->has("hours_closed.{$day}")) {
+                // If the "closed" checkbox for this day was checked
+                if (isset($hoursClosed[$day]) && $hoursClosed[$day] == "1") {
                     $businessHours[$day] = ['closed' => true];
                 } else {
+                    // Otherwise, set the open and close times
                     $businessHours[$day] = [
-                        'open' => $request->input("hours_open.{$day}", '08:00'),
-                        'close' => $request->input("hours_close.{$day}", '17:00'),
+                        'open' => $hoursOpen[$day] ?? '08:00',
+                        'close' => $hoursClose[$day] ?? '17:00',
                     ];
                 }
             }
             return $businessHours;
         }
 
-        // 3. Absolute Default Fallback
+        // 3. Absolute Default Fallback (if no data was sent at all)
         return [
             "sunday"    => ["open" => "08:00", "close" => "17:00"],
             "monday"    => ["open" => "08:00", "close" => "17:00"],
