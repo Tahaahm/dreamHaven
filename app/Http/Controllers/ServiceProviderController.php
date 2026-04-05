@@ -430,27 +430,24 @@ class ServiceProviderController extends Controller
 
     private function parseBusinessHours(Request $request): array
     {
-        // 1. If API provides JSON array directly
+        // 1. If API provides JSON array
         if ($request->has('business_hours') && is_array($request->business_hours)) {
             return $request->business_hours;
         }
 
-        // 2. If coming from Blade Form
         $hoursOpen = $request->input('hours_open', []);
         $hoursClose = $request->input('hours_close', []);
         $hoursClosed = $request->input('hours_closed', []);
 
-        // If the form sent any of these arrays, parse them
+        // 2. If coming from Blade Form and it actually contains data
         if (!empty($hoursOpen) || !empty($hoursClose) || !empty($hoursClosed)) {
             $businessHours = [];
             $days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
             foreach ($days as $day) {
-                // If the "closed" checkbox for this day was checked
                 if (isset($hoursClosed[$day]) && $hoursClosed[$day] == "1") {
                     $businessHours[$day] = ['closed' => true];
                 } else {
-                    // Otherwise, set the open and close times
                     $businessHours[$day] = [
                         'open' => $hoursOpen[$day] ?? '08:00',
                         'close' => $hoursClose[$day] ?? '17:00',
@@ -460,7 +457,7 @@ class ServiceProviderController extends Controller
             return $businessHours;
         }
 
-        // 3. Absolute Default Fallback (if no data was sent at all)
+        // 3. Absolute Default Fallback (Triggered on brand new creation)
         return [
             "sunday"    => ["open" => "08:00", "close" => "17:00"],
             "monday"    => ["open" => "08:00", "close" => "17:00"],
