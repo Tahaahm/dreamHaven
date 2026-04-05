@@ -686,4 +686,121 @@ class ServiceProviderController extends Controller
 
         return response()->json(['success' => true, 'data' => $query->take(20)->get()]);
     }
+
+    // =========================================================================
+    // ADMIN WEB FORM STORE METHOD (Handles creating a new provider)
+    // =========================================================================
+
+    public function store(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'company_name' => 'required|string|max:255',
+            'category_id' => 'required|exists:categories,id',
+            'email_address' => 'required|email|max:255',
+            'phone_number' => 'required|string|max:20',
+            'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'gallery_images.*' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+        ]);
+
+        if ($request->expectsJson()) {
+            if ($validator->fails()) {
+                return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+            }
+        } else {
+            if ($validator->fails()) {
+                return redirect()->back()->withErrors($validator)->withInput();
+            }
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1. Prepare Basic Data (excluding dynamic arrays and files)
+            $data = $request->except([
+                '_token',
+                'profile_image',
+                'is_verified',
+                'hours_open',
+                'hours_close',
+                'hours_closed',
+                'gallery_images',
+                'gallery_titles',
+                'gallery_descriptions',
+                'offering_titles',
+                'offering_descriptions',
+                'offering_prices',
+                'offering_active',
+                'reviewer_names',
+                'reviewer_ratings',
+                'reviewer_contents',
+                'reviewer_service_types',
+                'reviewer_verified',
+                'reviewer_featured'
+            ]);
+
+            // Handle Verified Checkbox
+            $data['is_verified'] = $request->has('is_verified');
+
+            // 2. Handle Profile Image Upload
+            if ($request->hasFile('profile_image')) {
+                $path = $request->file('profile_image')->store('providers/profiles', 'public');
+                $data['profile_image'] = '/storage/' . $path;
+            }
+
+            // 3. Parse Business Hours (with Fallback)
+            $data['business_hours'] = $this->parseBusinessHours($request);
+
+            // Create Main Provider Record
+            $provider = ServiceProvider::create($data);
+
+            // 4. Insert Dynamic Relationships if arrays are present
+            if ($request->hasFile('gallery_images')) {
+                $this->storeGallery($request, $provider);
+            }
+            if ($request->has('offering_titles')) {
+                $this->syncOfferings($request, $provider); // Reusing sync method as it deletes and inserts
+            }
+            if ($request->has('reviewer_names')) {
+                $this->syncReviews($request, $provider); // Reusing sync method as it deletes and inserts
+            }
+
+            // Update Average Rating
+            $this->updateAverageRating($provider->id);
+
+            DB::commit();
+
+            if ($request->expectsJson()) {
+                return response()->json(['success' => true, 'message' => 'Created successfully', 'data' => $provider->fresh()]);
+            }
+            return redirect()->route('admin.service-providers.index')->with('success', 'Service Provider created successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            if ($request->expectsJson()) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            }
+            return redirect()->back()->withErrors(['error' => 'An error occurred: ' . $e->getMessage()])->withInput();
+        }
+    }
+
+    /**
+     * Specialized method for Storing Gallery on Creation (Doesn't need to check existing images)
+     */
+    private function storeGallery(Request $request, ServiceProvider $provider)
+    {
+        $titles = $request->input('gallery_titles', []);
+        $descriptions = $request->input('gallery_descriptions', []);
+        $files = $request->file('gallery_images', []);
+
+        foreach ($files as $index => $file) {
+            $path = $file->store('providers/gallery', 'public');
+            $imageUrl = '/storage/' . $path;
+
+            ServiceProviderGallery::create([
+                'service_provider_id' => $provider->id,
+                'image_url' => $imageUrl,
+                'project_title' => $titles[$index] ?? null,
+                'description' => $descriptions[$index] ?? null,
+                'sort_order' => $index,
+            ]);
+        }
+    }
 }
