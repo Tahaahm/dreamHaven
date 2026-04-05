@@ -216,8 +216,88 @@
                                 <select name="business_type"
                                     class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:ring-2 focus:ring-gray-900 focus:border-gray-900 transition-all font-medium">
                                     <option value="">Select Type</option>
-                                    @foreach(['contractor', 'consultant', 'supplier', 'service'] as $type)
-                                        <option value="{{ $type }}" {{ old('business_type') == $type ? 'selected' : '' }}>{{ ucfirst($type) }}</option>
+                                    @php
+                                        $businessTypes = [
+                                            'Construction & Building' => [
+                                                'General Contractor',
+                                                'Construction Company',
+                                                'Civil Engineering',
+                                                'Structural Engineering',
+                                            ],
+                                            'Design & Architecture' => [
+                                                'Architecture Studio',
+                                                'Interior Design',
+                                                'Kitchen & Interiors Design',
+                                                'Landscape Design',
+                                                'Urban Planning',
+                                            ],
+                                            'Home Services' => [
+                                                'Cleaning Services',
+                                                'Maintenance & Repair',
+                                                'Plumbing',
+                                                'Electrical Services',
+                                                'HVAC & Air Conditioning',
+                                                'Pest Control',
+                                            ],
+                                            'Finishing & Decoration' => [
+                                                'Interior Decoration',
+                                                'Flooring & Tiling',
+                                                'Painting & Wallpaper',
+                                                'Curtain & Blinds',
+                                                'Furniture & Carpentry',
+                                                'Lighting & Fixtures',
+                                                'Kitchen Cabinets',
+                                            ],
+                                            'Outdoor & Landscaping' => [
+                                                'Landscaping',
+                                                'Garden Design',
+                                                'Irrigation Systems',
+                                                'Swimming Pool',
+                                            ],
+                                            'Security & Technology' => [
+                                                'Security Systems',
+                                                'Smart Home',
+                                                'CCTV & Surveillance',
+                                                'Access Control',
+                                                'IT & Networking',
+                                            ],
+                                            'Real Estate' => [
+                                                'Real Estate Agency',
+                                                'Property Management',
+                                                'Real Estate Developer',
+                                                'Property Valuation',
+                                            ],
+                                            'Events & Exhibition' => [
+                                                'Event Management',
+                                                'Exhibition Organizer',
+                                                'Conference Services',
+                                            ],
+                                            'Consulting & Professional' => [
+                                                'Consultant',
+                                                'Legal Services',
+                                                'Financial Services',
+                                                'Project Management',
+                                            ],
+                                            'Supply & Manufacturing' => [
+                                                'Building Materials Supplier',
+                                                'Furniture Manufacturer',
+                                                'Equipment Supplier',
+                                                'Wholesaler',
+                                            ],
+                                            'Other' => [
+                                                'Service Provider',
+                                                'Other',
+                                            ],
+                                        ];
+                                    @endphp
+                                    @foreach($businessTypes as $group => $types)
+                                        <optgroup label="{{ $group }}">
+                                            @foreach($types as $type)
+                                                <option value="{{ $type }}" {{ old('business_type') == $type ? 'selected' : '' }}>
+                                                    {{ $type }}
+                                                </option>
+                                            @endforeach
+                                        </optgroup>
                                     @endforeach
                                 </select>
                             </div>
