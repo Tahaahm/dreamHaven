@@ -126,20 +126,20 @@
                             </label>
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div>
-                                    <x-lang-badge lang="en" />
+                                    <p class="text-xs font-bold text-blue-600 mb-1.5">🇬🇧 English</p>
                                     <input type="text" name="company_name_en" value="{{ old('company_name_en') }}"
                                         class="w-full px-4 py-3 rounded-xl border-2 border-blue-200 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 transition-all font-medium text-sm"
                                         placeholder="Company Name" dir="ltr">
                                     @error('company_name_en') <p class="text-red-600 text-xs mt-1">{{ $message }}</p> @enderror
                                 </div>
                                 <div>
-                                    <x-lang-badge lang="ar" />
+                                    <p class="text-xs font-bold text-green-600 mb-1.5">🇮🇶 العربية</p>
                                     <input type="text" name="company_name_ar" value="{{ old('company_name_ar') }}"
                                         class="w-full px-4 py-3 rounded-xl border-2 border-green-200 focus:ring-2 focus:ring-green-400 focus:border-green-400 transition-all font-medium text-sm"
                                         placeholder="اسم الشركة" dir="rtl">
                                 </div>
                                 <div>
-                                    <x-lang-badge lang="ku" />
+                                    <p class="text-xs font-bold text-orange-600 mb-1.5">🏔️ کوردی</p>
                                     <input type="text" name="company_name_ku" value="{{ old('company_name_ku') }}"
                                         class="w-full px-4 py-3 rounded-xl border-2 border-orange-200 focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all font-medium text-sm"
                                         placeholder="ناوی کۆمپانیا" dir="rtl">
