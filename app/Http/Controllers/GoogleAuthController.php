@@ -66,10 +66,14 @@ class GoogleAuthController extends Controller
     {
         Log::info('[GoogleAuth] handleUser: ' . $email);
 
+        $isNewUser = false;  // ← add
+
         $user = User::where('google_id', $firebaseUid)->first()
             ?? User::where('email', $email)->first();
 
         if (!$user) {
+            $isNewUser = true;  // ← add
+
             $base     = Str::slug(Str::lower($name), '_') ?: 'user';
             $username = $base;
             $i        = 1;
@@ -93,9 +97,9 @@ class GoogleAuthController extends Controller
             Log::info('[GoogleAuth] new User created: ' . $user->id);
         } else {
             $patch = [];
-            if (!$user->google_id)                          $patch['google_id']         = $firebaseUid;
-            if (!$user->email_verified_at && $emailVerified) $patch['email_verified_at'] = now();
-            if (!empty($patch))                              $user->update($patch);
+            if (!$user->google_id)                            $patch['google_id']         = $firebaseUid;
+            if (!$user->email_verified_at && $emailVerified)  $patch['email_verified_at'] = now();
+            if (!empty($patch))                               $user->update($patch);
 
             Log::info('[GoogleAuth] existing User: ' . $user->id);
         }
@@ -104,13 +108,13 @@ class GoogleAuthController extends Controller
         $token = $user->createToken('google-mobile')->plainTextToken;
 
         return response()->json([
-            'message' => 'Login successful',
-            'role'    => 'user',
-            'token'   => $token,
-            'data'    => ['user' => $user, 'token' => $token],
+            'message'      => 'Login successful',
+            'role'         => 'user',
+            'token'        => $token,
+            'is_new_user'  => $isNewUser,   // ← add
+            'data'         => ['user' => $user, 'token' => $token],
         ]);
     }
-
     // ── AGENT ─────────────────────────────────────────────────────────────────
     // KEY FIX: existing registered agents always get profileComplete = true.
     // Only brand-new Google-signup agents (both phone AND city empty) need
@@ -119,13 +123,14 @@ class GoogleAuthController extends Controller
     {
         Log::info('[GoogleAuth] handleAgent: ' . $email);
 
+        $isNewUser = false;  // ← add
+        $profileComplete = true;
+
         $agent = Agent::where('google_id', $firebaseUid)->first()
             ?? Agent::where('primary_email', $email)->first();
 
-        $profileComplete = true;
-
         if (!$agent) {
-            // Brand new agent via Google — needs phone + city
+            $isNewUser       = true;   // ← add
             $profileComplete = false;
 
             $agent                = new Agent();
@@ -145,7 +150,6 @@ class GoogleAuthController extends Controller
 
             Log::info('[GoogleAuth] new Agent created: ' . $agent->id);
         } else {
-            // Existing agent — link google_id if first Google login
             if (!$agent->google_id) {
                 $agent->update(['google_id' => $firebaseUid]);
             }
@@ -159,10 +163,7 @@ class GoogleAuthController extends Controller
                 'city'  => $city,
             ]);
 
-            // ONLY show completion screen if BOTH phone AND city are empty.
-            // If at least one is filled the agent registered normally → let in.
             $profileComplete = !($phone === '' && $city === '');
-
             Log::info('[GoogleAuth] profileComplete: ' . ($profileComplete ? 'true' : 'false'));
         }
 
@@ -172,6 +173,7 @@ class GoogleAuthController extends Controller
             'message'          => 'Login successful',
             'role'             => 'agent',
             'token'            => $token,
+            'is_new_user'      => $isNewUser,   // ← add
             'data'             => ['user' => $agent, 'token' => $token],
             'profile_complete' => $profileComplete,
             'missing_fields'   => $profileComplete ? [] : ['primary_phone', 'city'],
@@ -202,14 +204,14 @@ class GoogleAuthController extends Controller
         }
 
         $token = $office->createToken('google-mobile')->plainTextToken;
-
         Log::info('[GoogleAuth] office login success: ' . $office->id);
 
         return response()->json([
-            'message' => 'Login successful',
-            'role'    => 'office',
-            'token'   => $token,
-            'office'  => $office,
+            'message'     => 'Login successful',
+            'role'        => 'office',
+            'token'       => $token,
+            'is_new_user' => false,   // ← add (offices never self-register via Google)
+            'office'      => $office,
         ]);
     }
 }
