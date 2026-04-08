@@ -844,14 +844,31 @@ class PropertyController extends Controller
     {
         try {
             $user = auth('sanctum')->user();
+
             if (!$user) {
                 return ApiResponse::error('Authentication required', null, 401);
             }
 
-            $favoriteIds = UserFavoriteProperty::where('user_id', $user->id)
-                ->pluck('property_id');
+            // ✅ Use user_property_interactions table (which EXISTS on your server)
+            // interaction_type = 'favorite' means they favorited it
+            $favoritePropertyIds = \App\Models\UserPropertyInteraction::where('user_id', $user->id)
+                ->where('interaction_type', 'favorite')
+                ->orderByDesc('created_at')
+                ->pluck('property_id')
+                ->unique()
+                ->values();
 
-            $properties = Property::whereIn('id', $favoriteIds)
+            Log::info('💛 FAVORITES: user=' . $user->id . ' ids=' . $favoritePropertyIds->count());
+
+            if ($favoritePropertyIds->isEmpty()) {
+                return ApiResponse::success(
+                    'No favorite properties found',
+                    [],
+                    200
+                );
+            }
+
+            $properties = Property::whereIn('id', $favoritePropertyIds)
                 ->where('is_active', true)
                 ->orderByDesc('created_at')
                 ->get();
@@ -866,7 +883,7 @@ class PropertyController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Favorites error', ['message' => $e->getMessage()]);
+            Log::error('❌ Favorites error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get favorites', $e->getMessage(), 500);
         }
     }
