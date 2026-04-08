@@ -385,77 +385,81 @@ Route::prefix('v1/api/location')->group(function () {
 // ============================================
 // API ROUTES - Properties
 // ============================================
+// ============================================
+// API ROUTES - Properties
+// ============================================
 Route::prefix('v1/api/properties')->group(function () {
+
     // ============================================
     // PUBLIC ROUTES - Property Discovery
     // ============================================
-    Route::get('/search', [PropertyController::class, 'search']);
-    Route::get('/nearby', [PropertyController::class, 'nearby']);
-
-    // Property Discovery Endpoints
-    Route::get('/featured', [PropertyController::class, 'getFeatured']);
-    Route::get('/recommended', [PropertyController::class, 'getRecommended']); // ✅ NEW
-    Route::get('/boosted', [PropertyController::class, 'getBoosted']);
-    Route::get('/recent', [PropertyController::class, 'getRecent']); // ✅ NEW
-    Route::get('/popular', [PropertyController::class, 'getPopular']); // ✅ NEW
-
+    Route::get('/search',     [PropertyController::class, 'search']);
+    Route::get('/nearby',     [PropertyController::class, 'nearby']);
+    Route::get('/featured',   [PropertyController::class, 'getFeatured']);
+    Route::get('/recommended', [PropertyController::class, 'getRecommended']);
+    Route::get('/boosted',    [PropertyController::class, 'getBoosted']);
+    Route::get('/recent',     [PropertyController::class, 'getRecent']);
+    Route::get('/popular',    [PropertyController::class, 'getPopular']);
     Route::get('/statistics', [PropertyController::class, 'getStatistics']);
-    Route::get('/map', [PropertyController::class, 'getMapProperties']); // change post → get
+    Route::get('/map',        [PropertyController::class, 'getMapProperties']);
+
     Route::get('/owner/{ownerType}/{ownerId}', [PropertyController::class, 'getByOwner'])
         ->where(['ownerType' => 'User|Agent|RealEstateOffice']);
-    Route::get('/', [PropertyController::class, 'index']);
-    Route::get('/{id}', [PropertyController::class, 'show']);
+
+    // ✅ MUST BE BEFORE /{id} — otherwise /{id} swallows it
+    Route::get('/user/favorites/properties', [PropertyController::class, 'getFavoriteProperties']);
+
+    Route::get('/',      [PropertyController::class, 'index']);
     Route::post('/store', [PropertyController::class, 'store']);
+    Route::get('/{id}',  [PropertyController::class, 'show']);
 
     // ============================================
     // AUTHENTICATED ROUTES - User Actions
     // ============================================
     Route::middleware(['auth:sanctum'])->group(function () {
 
-        Route::post('/upload-images', [PropertyController::class, 'uploadImages']);
+        Route::post('/upload-images',              [PropertyController::class, 'uploadImages']);
+        Route::get('/recently-viewed',             [PropertyController::class, 'getRecentlyViewed']);
+        Route::get('/my-viewing-stats',            [PropertyController::class, 'getMyViewingStats']);
+        Route::get('/my-properties',               [PropertyController::class, 'getMyProperties']);
 
-        // ✅ NEW: Property Interaction Tracking Routes
-        Route::get('/recently-viewed', [PropertyController::class, 'getRecentlyViewed']);
-        Route::get('/my-viewing-stats', [PropertyController::class, 'getMyViewingStats']);
+        Route::put('/update/mobile/{id}',          [PropertyController::class, 'updateMobile']);
+        Route::patch('/update/mobile/{id}',        [PropertyController::class, 'updateMobile']);
 
-        Route::put('/update/mobile/{id}', [PropertyController::class, 'updateMobile']);
-        Route::patch('/update/mobile/{id}', [PropertyController::class, 'updateMobile']);
-
-        Route::post('/', [PropertyController::class, 'store']);
-        Route::put('/{id}', [PropertyController::class, 'update']);
-        Route::patch('/{id}', [PropertyController::class, 'update']);
-        Route::delete('/{id}', [PropertyController::class, 'destroy']);
-        Route::patch('/{id}/status', [PropertyController::class, 'updateStatus']);
-        Route::patch('/{id}/boost', [PropertyController::class, 'toggleBoost']);
-        Route::post('/{id}/favorites', [PropertyController::class, 'addToFavorites']);
-        Route::delete('/{id}/favorites', [PropertyController::class, 'removeFromFavorites']);
-        Route::get('/my-properties', [PropertyController::class, 'getMyProperties']);
-        Route::patch('/bulk-update', [PropertyController::class, 'bulkUpdate']);
+        Route::post('/',                           [PropertyController::class, 'store']);
+        Route::put('/{id}',                        [PropertyController::class, 'update']);
+        Route::patch('/{id}',                      [PropertyController::class, 'update']);
+        Route::delete('/{id}',                     [PropertyController::class, 'destroy']);
+        Route::patch('/{id}/status',               [PropertyController::class, 'updateStatus']);
+        Route::patch('/{id}/boost',                [PropertyController::class, 'toggleBoost']);
+        Route::post('/{id}/favorites',             [PropertyController::class, 'addToFavorites']);
+        Route::delete('/{id}/favorites',           [PropertyController::class, 'removeFromFavorites']);
+        Route::patch('/bulk-update',               [PropertyController::class, 'bulkUpdate']);
     });
 
     // ============================================
     // ADMIN/AGENT ROUTES - Management
     // ============================================
     Route::middleware(['auth:sanctum', 'role:admin,agent'])->group(function () {
-        Route::patch('/{id}/verification', [PropertyController::class, 'toggleVerification']);
-        Route::patch('/{id}/active', [PropertyController::class, 'toggleActive']);
-        Route::patch('/{id}/publish', [PropertyController::class, 'togglePublish']);
-        Route::get('/analytics/overview', [PropertyController::class, 'getAnalyticsOverview']);
-        Route::get('/analytics/trends', [PropertyController::class, 'getTrends']);
-        Route::get('/{id}/analytics', [PropertyController::class, 'getPropertyAnalytics']);
-        Route::patch('/bulk-verify', [PropertyController::class, 'bulkVerify']);
-        Route::patch('/bulk-publish', [PropertyController::class, 'bulkPublish']);
-        Route::patch('/bulk-status', [PropertyController::class, 'bulkStatusUpdate']);
+        Route::patch('/{id}/verification',         [PropertyController::class, 'toggleVerification']);
+        Route::patch('/{id}/active',               [PropertyController::class, 'toggleActive']);
+        Route::patch('/{id}/publish',              [PropertyController::class, 'togglePublish']);
+        Route::get('/analytics/overview',          [PropertyController::class, 'getAnalyticsOverview']);
+        Route::get('/analytics/trends',            [PropertyController::class, 'getTrends']);
+        Route::get('/{id}/analytics',              [PropertyController::class, 'getPropertyAnalytics']);
+        Route::patch('/bulk-verify',               [PropertyController::class, 'bulkVerify']);
+        Route::patch('/bulk-publish',              [PropertyController::class, 'bulkPublish']);
+        Route::patch('/bulk-status',               [PropertyController::class, 'bulkStatusUpdate']);
     });
 
     // ============================================
     // SUPER ADMIN ROUTES - System Management
     // ============================================
     Route::middleware(['auth:sanctum', 'role:super_admin'])->group(function () {
-        Route::get('/admin/dashboard', [PropertyController::class, 'getAdminDashboard']);
-        Route::get('/admin/flagged', [PropertyController::class, 'getFlaggedProperties']);
-        Route::delete('/admin/bulk-delete', [PropertyController::class, 'bulkDelete']);
-        Route::patch('/admin/force-verify/{id}', [PropertyController::class, 'forceVerify']);
+        Route::get('/admin/dashboard',             [PropertyController::class, 'getAdminDashboard']);
+        Route::get('/admin/flagged',               [PropertyController::class, 'getFlaggedProperties']);
+        Route::delete('/admin/bulk-delete',        [PropertyController::class, 'bulkDelete']);
+        Route::patch('/admin/force-verify/{id}',   [PropertyController::class, 'forceVerify']);
     });
 });
 
