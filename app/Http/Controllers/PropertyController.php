@@ -2239,7 +2239,6 @@ class PropertyController extends Controller
     {
         try {
             $property = Property::find($id);
-
             if (!$property) {
                 return ApiResponse::error('Property not found', ['id' => $id], 404);
             }
@@ -2247,36 +2246,27 @@ class PropertyController extends Controller
             $user = auth('sanctum')->user();
 
             $property->increment('favorites_count');
-
-            $analytics                    = $property->favorites_analytics ?? [];
-            $analytics['last_30_days']    = ($analytics['last_30_days'] ?? 0) + 1;
+            $analytics = $property->favorites_analytics ?? [];
+            $analytics['last_30_days'] = ($analytics['last_30_days'] ?? 0) + 1;
             $property->favorites_analytics = $analytics;
             $property->save();
 
-            // ✅ FIX: Track favorite as an interaction signal so recommendations learn from it
+            // ✅ FIX: Write to user_property_interactions so getFavoriteProperties works
             if ($user) {
-                $this->interactionService->trackView($user->id, $property->id, [
+                \App\Models\UserPropertyInteraction::firstOrCreate([
+                    'user_id'          => $user->id,
+                    'property_id'      => $property->id,
                     'interaction_type' => 'favorite',
-                    'source'           => 'favorites',
                 ]);
-
-                $user->update(['last_activity_at' => now()]);
             }
 
             return ApiResponse::success(
                 'Property added to favorites',
-                [
-                    'id'              => $property->id,
-                    'favorites_count' => $property->favorites_count,
-                ],
+                ['id' => $property->id, 'favorites_count' => $property->favorites_count],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Add to favorites error', [
-                'message'     => $e->getMessage(),
-                'property_id' => $id,
-            ]);
-
+            Log::error('Add to favorites error', ['message' => $e->getMessage(), 'property_id' => $id]);
             return ApiResponse::error('Failed to add to favorites', $e->getMessage(), 500);
         }
     }
@@ -2369,39 +2359,32 @@ class PropertyController extends Controller
     {
         try {
             $property = Property::find($id);
-
             if (!$property) {
-                return ApiResponse::error(
-                    'Property not found',
-                    ['id' => $id],
-                    404
-                );
+                return ApiResponse::error('Property not found', ['id' => $id], 404);
             }
 
-            // Decrement favorites count (don't go below 0)
+            $user = auth('sanctum')->user();
+
             if ($property->favorites_count > 0) {
                 $property->decrement('favorites_count');
             }
 
+            // ✅ FIX: Remove from user_property_interactions
+            if ($user) {
+                \App\Models\UserPropertyInteraction::where('user_id', $user->id)
+                    ->where('property_id', $property->id)
+                    ->where('interaction_type', 'favorite')
+                    ->delete();
+            }
+
             return ApiResponse::success(
                 'Property removed from favorites',
-                [
-                    'id' => $property->id,
-                    'favorites_count' => $property->favorites_count
-                ],
+                ['id' => $property->id, 'favorites_count' => $property->favorites_count],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Remove from favorites error', [
-                'message' => $e->getMessage(),
-                'property_id' => $id
-            ]);
-
-            return ApiResponse::error(
-                'Failed to remove from favorites',
-                $e->getMessage(),
-                500
-            );
+            Log::error('Remove from favorites error', ['message' => $e->getMessage(), 'property_id' => $id]);
+            return ApiResponse::error('Failed to remove from favorites', $e->getMessage(), 500);
         }
     }
 
