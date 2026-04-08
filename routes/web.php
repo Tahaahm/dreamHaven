@@ -408,6 +408,8 @@ Route::prefix('v1/api/properties')->group(function () {
 
     // ✅ MUST BE BEFORE /{id} — otherwise /{id} swallows it
     Route::get('/user/favorites/properties', [PropertyController::class, 'getFavoriteProperties']);
+    Route::post('/{id}/view', [PropertyController::class, 'trackView']);
+
 
     Route::get('/',      [PropertyController::class, 'index']);
     Route::post('/store', [PropertyController::class, 'store']);

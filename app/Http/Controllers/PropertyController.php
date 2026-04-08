@@ -3766,4 +3766,37 @@ class PropertyController extends Controller
         // Return the LIST VIEW, not JSON
         return view('list', compact('properties'));
     }
+
+    public function trackView($id)
+    {
+        try {
+            $property = Property::find($id);
+            if (!$property) return ApiResponse::error('Not found', null, 404);
+
+            $user = auth('sanctum')->user();
+            if (!$user) return ApiResponse::success('OK', null, 200);
+
+            $alreadyViewedToday = \App\Models\UserPropertyInteraction::where('user_id', $user->id)
+                ->where('property_id', $property->id)
+                ->where('interaction_type', 'view')
+                ->whereDate('created_at', today())
+                ->exists();
+
+            if (!$alreadyViewedToday) {
+                $property->increment('views');
+
+                \App\Models\UserPropertyInteraction::create([
+                    'user_id'          => $user->id,
+                    'property_id'      => $property->id,
+                    'interaction_type' => 'view',
+                    'created_at'       => now(),
+                ]);
+            }
+
+            return ApiResponse::success('View tracked', null, 200);
+        } catch (\Exception $e) {
+            Log::error('Track view error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed', $e->getMessage(), 500);
+        }
+    }
 }
