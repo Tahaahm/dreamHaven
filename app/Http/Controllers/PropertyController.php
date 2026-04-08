@@ -235,9 +235,21 @@ class PropertyController extends Controller
             $user = auth('sanctum')->user();
 
             if ($user) {
+                // Track in user_property_interactions table
                 $this->interactionService->trackView($user->id, $property->id, [
-                    'source' => request()->header('X-Source', 'app'),
+                    'source'     => request()->header('X-Source', 'app'),
                     'user_agent' => request()->header('User-Agent'),
+                ]);
+
+                // ✅ FIX: Also update recently_viewed_properties JSON column on users table
+                $recentlyViewed = $user->recently_viewed_properties ?? [];
+                $recentlyViewed = array_filter($recentlyViewed, fn($pid) => $pid !== $property->id);
+                array_unshift($recentlyViewed, $property->id);
+                $recentlyViewed = array_slice(array_values($recentlyViewed), 0, 50);
+
+                $user->update([
+                    'recently_viewed_properties' => $recentlyViewed,
+                    'last_activity_at'           => now(),
                 ]);
             }
 
@@ -729,6 +741,26 @@ class PropertyController extends Controller
         } catch (\Exception $e) {
             Log::error('Nearby error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to find nearby properties', $e->getMessage(), 500);
+        }
+    }
+
+
+    private function getRecentlyViewedIds($user, int $hoursBack = 24): array
+    {
+        if (!$user) return [];
+
+        try {
+            // Primary source: user_property_interactions table (most accurate)
+            return \App\Models\UserPropertyInteraction::where('user_id', $user->id)
+                ->where('interaction_type', 'view')
+                ->where('created_at', '>=', now()->subHours($hoursBack))
+                ->pluck('property_id')
+                ->unique()
+                ->values()
+                ->toArray();
+        } catch (\Exception $e) {
+            // Fallback: recently_viewed_properties JSON column on users table
+            return $user->recently_viewed_properties ?? [];
         }
     }
 
@@ -2162,41 +2194,43 @@ class PropertyController extends Controller
             $property = Property::find($id);
 
             if (!$property) {
-                return ApiResponse::error(
-                    'Property not found',
-                    ['id' => $id],
-                    404
-                );
+                return ApiResponse::error('Property not found', ['id' => $id], 404);
             }
 
-            // Increment favorites count
+            $user = auth('sanctum')->user();
+
             $property->increment('favorites_count');
 
-            // Update favorites analytics
-            $analytics = $property->favorites_analytics ?? [];
-            $analytics['last_30_days'] = ($analytics['last_30_days'] ?? 0) + 1;
+            $analytics                    = $property->favorites_analytics ?? [];
+            $analytics['last_30_days']    = ($analytics['last_30_days'] ?? 0) + 1;
             $property->favorites_analytics = $analytics;
             $property->save();
+
+            // ✅ FIX: Track favorite as an interaction signal so recommendations learn from it
+            if ($user) {
+                $this->interactionService->trackView($user->id, $property->id, [
+                    'interaction_type' => 'favorite',
+                    'source'           => 'favorites',
+                ]);
+
+                $user->update(['last_activity_at' => now()]);
+            }
 
             return ApiResponse::success(
                 'Property added to favorites',
                 [
-                    'id' => $property->id,
-                    'favorites_count' => $property->favorites_count
+                    'id'              => $property->id,
+                    'favorites_count' => $property->favorites_count,
                 ],
                 200
             );
         } catch (\Exception $e) {
             Log::error('Add to favorites error', [
-                'message' => $e->getMessage(),
-                'property_id' => $id
+                'message'     => $e->getMessage(),
+                'property_id' => $id,
             ]);
 
-            return ApiResponse::error(
-                'Failed to add to favorites',
-                $e->getMessage(),
-                500
-            );
+            return ApiResponse::error('Failed to add to favorites', $e->getMessage(), 500);
         }
     }
     public function updateStatus($id, Request $request)
