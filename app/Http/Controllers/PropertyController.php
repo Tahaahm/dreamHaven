@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
 use App\Services\PropertyInteractionService; // <--- ADD THIS
 use Illuminate\Support\Facades\Cache;
+use App\Models\Support\UserFavoriteProperty;
 
 
 class PropertyController extends Controller
@@ -839,7 +840,36 @@ class PropertyController extends Controller
             );
         }
     }
+    public function getFavoriteProperties(Request $request)
+    {
+        try {
+            $user = auth('sanctum')->user();
+            if (!$user) {
+                return ApiResponse::error('Authentication required', null, 401);
+            }
 
+            $favoriteIds = UserFavoriteProperty::where('user_id', $user->id)
+                ->pluck('property_id');
+
+            $properties = Property::whereIn('id', $favoriteIds)
+                ->where('is_active', true)
+                ->orderByDesc('created_at')
+                ->get();
+
+            $transformedData = $properties->map(function ($property) {
+                return $this->transformPropertyData($property);
+            });
+
+            return ApiResponse::success(
+                'Favorite properties retrieved',
+                $transformedData,
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Favorites error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to get favorites', $e->getMessage(), 500);
+        }
+    }
 
     /**
      * Toggle verification status
