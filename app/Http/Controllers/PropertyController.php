@@ -2253,11 +2253,16 @@ class PropertyController extends Controller
 
             // ✅ FIX: Write to user_property_interactions so getFavoriteProperties works
             if ($user) {
-                \App\Models\UserPropertyInteraction::firstOrCreate([
-                    'user_id'          => $user->id,
-                    'property_id'      => $property->id,
-                    'interaction_type' => 'favorite',
-                ]);
+                \App\Models\UserPropertyInteraction::firstOrCreate(
+                    [
+                        'user_id'          => $user->id,
+                        'property_id'      => $property->id,
+                        'interaction_type' => 'favorite',
+                    ],
+                    [
+                        'created_at' => now(), // ✅ FIX: supply created_at manually
+                    ]
+                );
             }
 
             return ApiResponse::success(
