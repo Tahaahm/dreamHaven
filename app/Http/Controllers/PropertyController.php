@@ -149,6 +149,7 @@ class PropertyController extends Controller
 
     private function applyMultilingualSearchFilters($query, $request)
     {
+        // 1. Keyword Search (Multilingual)
         if ($request->filled('search')) {
             $searchTerm = $request->search;
 
@@ -169,10 +170,17 @@ class PropertyController extends Controller
             });
         }
 
+        // 2. Exact Match & Boolean Filters
         if ($request->has('listing_type')) {
             $query->where('listing_type', $request->listing_type);
         }
 
+        // ✅ NEW: Verified filter
+        if ($request->boolean('verified')) {
+            $query->where('verified', true);
+        }
+
+        // 3. Range & Value Filters (Price, Area, Rooms)
         $currency = strtolower($request->get('currency', 'usd'));
         if ($request->has('min_price')) {
             $query->whereRaw("JSON_EXTRACT(price, '$.{$currency}') >= ?", [$request->min_price]);
@@ -201,10 +209,21 @@ class PropertyController extends Controller
             $query->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?", [$type]);
         }
 
+        // 4. Utility Booleans
         if ($request->has('furnished')) {
             $query->where('furnished', $request->boolean('furnished'));
         }
+        if ($request->has('electricity')) {
+            $query->where('electricity', $request->boolean('electricity'));
+        }
+        if ($request->has('water')) {
+            $query->where('water', $request->boolean('water'));
+        }
+        if ($request->has('internet')) {
+            $query->where('internet', $request->boolean('internet'));
+        }
 
+        // 5. City Filter
         if ($request->has('city')) {
             $city = $request->city;
             $query->where(function ($q) use ($city) {
@@ -214,14 +233,18 @@ class PropertyController extends Controller
             });
         }
 
-        if ($request->has('electricity')) {
-            $query->where('electricity', $request->boolean('electricity'));
-        }
-        if ($request->has('water')) {
-            $query->where('water', $request->boolean('water'));
-        }
-        if ($request->has('internet')) {
-            $query->where('internet', $request->boolean('internet'));
+        // ✅ NEW: JSON Array Feature Searching
+        // Checks the JSON array column 'features' for exact string matches
+        $requestedFeatures = [];
+        if ($request->boolean('has_pool')) $requestedFeatures[] = 'pool';
+        if ($request->boolean('has_gym')) $requestedFeatures[] = 'gym';
+        if ($request->boolean('has_garden')) $requestedFeatures[] = 'garden';
+        if ($request->boolean('has_parking')) $requestedFeatures[] = 'parking';
+        if ($request->boolean('has_balcony')) $requestedFeatures[] = 'balcony';
+
+        foreach ($requestedFeatures as $feature) {
+            // MySQL JSON_CONTAINS needs the search string to be wrapped in double quotes
+            $query->whereRaw("JSON_CONTAINS(LOWER(features), '\"{$feature}\"')");
         }
     }
     public function show($id)

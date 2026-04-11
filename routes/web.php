@@ -1079,9 +1079,9 @@ Route::post('/admin/notifications/broadcast', [NotificationController::class, 's
     ->middleware(['auth:admin']);
 
 
-// Route::get('/profile-test', function () {
-//     return view('profile-test');
-// });
+Route::get('/profile-test', function () {
+    return view('profile-test');
+});
 
 
 Route::get('/download', [\App\Http\Controllers\AppRedirectController::class, 'redirect'])->name('app.download');
