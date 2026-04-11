@@ -279,7 +279,6 @@ Route::prefix('api/v1')->group(function () {
             Route::delete('/saved-filters/{id}', [UserController::class, 'deleteSavedFilter']);
 
             Route::post('/log-interaction', [UserController::class, 'logSearchInteraction']);
-
             // User Notifications Management
             Route::get('/notifications', [UserController::class, 'getNotifications']);
             Route::patch('/notifications/{id}/read', [UserController::class, 'markNotificationRead']);
