@@ -132,18 +132,28 @@ class PropertyController extends Controller
         }
     }
 
-    private function getDefaultSearchPreferences()
+    private function getDefaultSearchPreferences($user = null)
     {
+        if ($user) {
+            $saved = \App\Models\Support\UserSavedFilter::where('user_id', $user->id)
+                ->latest()
+                ->first();
+
+            if ($saved) {
+                return $saved->filters;
+            }
+        }
+
         return [
             'filters' => [
-                'price_enabled' => false,
+                'price_enabled'    => false,
                 'location_enabled' => false,
-                'property_types' => [],
+                'property_types'   => [],
             ],
             'sorting' => [
-                'price_enabled' => false,
+                'price_enabled'      => false,
                 'popularity_enabled' => true,
-            ]
+            ],
         ];
     }
 
@@ -2188,34 +2198,23 @@ class PropertyController extends Controller
     {
         try {
             $property = Property::find($id);
-
             if (!$property) {
-                return ApiResponse::error(
-                    'Property not found',
-                    ['id' => $id],
-                    404
-                );
+                return ApiResponse::error('Property not found', ['id' => $id], 404);
             }
 
             $validator = Validator::make($request->all(), [
-                'boost_start_date' => 'nullable|date|after_or_equal:today',
-                'boost_end_date' => 'nullable|date|after:boost_start_date',
+                'boost_start_date'    => 'nullable|date|after_or_equal:today',
+                'boost_end_date'      => 'nullable|date|after:boost_start_date',
                 'boost_duration_days' => 'nullable|integer|min:1|max:365'
             ]);
 
             if ($validator->fails()) {
-                return ApiResponse::error(
-                    'Invalid boost parameters',
-                    $validator->errors(),
-                    400
-                );
+                return ApiResponse::error('Invalid boost parameters', $validator->errors(), 400);
             }
 
-            $wasBoost = $property->is_boosted;
             $property->is_boosted = !$property->is_boosted;
 
             if ($property->is_boosted) {
-                // Setting boost
                 $property->boost_start_date = $request->get('boost_start_date', now());
 
                 if ($request->has('boost_end_date')) {
@@ -2224,35 +2223,40 @@ class PropertyController extends Controller
                     $property->boost_end_date = now()->addDays($request->boost_duration_days);
                 }
             } else {
-                // Removing boost
                 $property->boost_start_date = null;
-                $property->boost_end_date = null;
+                $property->boost_end_date   = null;
             }
 
             $property->save();
 
+            $this->bustFeaturedCache();
+
             return ApiResponse::success(
                 $property->is_boosted ? 'Property boosted successfully' : 'Property boost removed',
                 [
-                    'id' => $property->id,
-                    'is_boosted' => $property->is_boosted,
+                    'id'               => $property->id,
+                    'is_boosted'       => $property->is_boosted,
                     'boost_start_date' => $property->boost_start_date,
-                    'boost_end_date' => $property->boost_end_date,
-                    'boost_active' => $property->isBoosted()
+                    'boost_end_date'   => $property->boost_end_date,
+                    'boost_active'     => $property->isBoosted()
                 ],
                 200
             );
         } catch (\Exception $e) {
             Log::error('Toggle boost error', [
-                'message' => $e->getMessage(),
+                'message'     => $e->getMessage(),
                 'property_id' => $id
             ]);
+            return ApiResponse::error('Failed to toggle boost status', $e->getMessage(), 500);
+        }
+    }
 
-            return ApiResponse::error(
-                'Failed to toggle boost status',
-                $e->getMessage(),
-                500
-            );
+    private function bustFeaturedCache(): void
+    {
+        foreach (['balanced', 'premium', 'engagement', 'recent'] as $strategy) {
+            foreach ([5, 10, 20, 50] as $limit) {
+                Cache::forget("featured_properties_{$strategy}_{$limit}");
+            }
         }
     }
     /**
@@ -2267,34 +2271,52 @@ class PropertyController extends Controller
             }
 
             $user = auth('sanctum')->user();
+            if (!$user) {
+                return ApiResponse::error('Authentication required', null, 401);
+            }
+
+            $exists = \App\Models\UserPropertyInteraction::where('user_id', $user->id)
+                ->where('property_id', $property->id)
+                ->where('interaction_type', 'favorite')
+                ->exists();
+
+            if ($exists) {
+                return ApiResponse::success(
+                    'Property already in favorites',
+                    ['id' => $property->id, 'favorites_count' => $property->favorites_count],
+                    200
+                );
+            }
+
+            \App\Models\UserPropertyInteraction::create([
+                'user_id'          => $user->id,
+                'property_id'      => $property->id,
+                'interaction_type' => 'favorite',
+                'metadata'         => json_encode([
+                    'timestamp' => now()->toDateTimeString(),
+                    'source'    => request()->header('X-Source', 'app'),
+                ]),
+            ]);
 
             $property->increment('favorites_count');
+
             $analytics = $property->favorites_analytics ?? [];
             $analytics['last_30_days'] = ($analytics['last_30_days'] ?? 0) + 1;
             $property->favorites_analytics = $analytics;
             $property->save();
 
-            // ✅ FIX: Write to user_property_interactions so getFavoriteProperties works
-            if ($user) {
-                \App\Models\UserPropertyInteraction::firstOrCreate(
-                    [
-                        'user_id'          => $user->id,
-                        'property_id'      => $property->id,
-                        'interaction_type' => 'favorite',
-                    ],
-                    [
-                        'created_at' => now(), // ✅ FIX: supply created_at manually
-                    ]
-                );
-            }
+            $this->bustFeaturedCache();
 
             return ApiResponse::success(
                 'Property added to favorites',
-                ['id' => $property->id, 'favorites_count' => $property->favorites_count],
+                ['id' => $property->id, 'favorites_count' => $property->fresh()->favorites_count],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Add to favorites error', ['message' => $e->getMessage(), 'property_id' => $id]);
+            Log::error('Add to favorites error', [
+                'message'     => $e->getMessage(),
+                'property_id' => $id
+            ]);
             return ApiResponse::error('Failed to add to favorites', $e->getMessage(), 500);
         }
     }
@@ -2392,26 +2414,39 @@ class PropertyController extends Controller
             }
 
             $user = auth('sanctum')->user();
+            if (!$user) {
+                return ApiResponse::error('Authentication required', null, 401);
+            }
+
+            $deleted = \App\Models\UserPropertyInteraction::where('user_id', $user->id)
+                ->where('property_id', $property->id)
+                ->where('interaction_type', 'favorite')
+                ->delete();
+
+            if (!$deleted) {
+                return ApiResponse::success(
+                    'Property was not in favorites',
+                    ['id' => $property->id, 'favorites_count' => $property->favorites_count],
+                    200
+                );
+            }
 
             if ($property->favorites_count > 0) {
                 $property->decrement('favorites_count');
             }
 
-            // ✅ FIX: Remove from user_property_interactions
-            if ($user) {
-                \App\Models\UserPropertyInteraction::where('user_id', $user->id)
-                    ->where('property_id', $property->id)
-                    ->where('interaction_type', 'favorite')
-                    ->delete();
-            }
+            $this->bustFeaturedCache();
 
             return ApiResponse::success(
                 'Property removed from favorites',
-                ['id' => $property->id, 'favorites_count' => $property->favorites_count],
+                ['id' => $property->id, 'favorites_count' => $property->fresh()->favorites_count],
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Remove from favorites error', ['message' => $e->getMessage(), 'property_id' => $id]);
+            Log::error('Remove from favorites error', [
+                'message'     => $e->getMessage(),
+                'property_id' => $id
+            ]);
             return ApiResponse::error('Failed to remove from favorites', $e->getMessage(), 500);
         }
     }
@@ -2517,13 +2552,17 @@ class PropertyController extends Controller
     public function getMyProperties(Request $request)
     {
         try {
-            $user = Auth::user();
-            $perPage = $request->get('per_page', 20);
+            $user = auth('sanctum')->user();
+            if (!$user) {
+                return ApiResponse::error('Authentication required', null, 401);
+            }
+
+            $perPage  = $request->get('per_page', 20);
             $language = $request->get('language', 'en');
 
             $properties = Property::where('owner_id', $user->id)
                 ->where('owner_type', get_class($user))
-                ->whereNotIn('status', ['cancelled', 'pending'])  // Exclude cancelled and pending
+                ->whereNotIn('status', ['cancelled', 'pending'])
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
 
@@ -2534,13 +2573,14 @@ class PropertyController extends Controller
             return ApiResponse::success(
                 'Your properties retrieved',
                 [
-                    'data' => $transformedData,
-                    'total' => $properties->total(),
+                    'data'         => $transformedData,
+                    'total'        => $properties->total(),
                     'current_page' => $properties->currentPage(),
                 ],
                 200
             );
         } catch (\Exception $e) {
+            Log::error('Get my properties error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get your properties', $e->getMessage(), 500);
         }
     }

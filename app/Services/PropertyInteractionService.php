@@ -8,6 +8,7 @@ use App\Models\Property;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class PropertyInteractionService
 {
@@ -103,46 +104,82 @@ class PropertyInteractionService
             return $this->getGeneralRecommendations($limit);
         }
 
-        // Get user's viewing history from last 30 days
-        $viewedProperties = DB::table('user_property_interactions')
+        // ─── 1. Get both views AND favorites ───────────────────────
+        $interactions = DB::table('user_property_interactions')
             ->where('user_id', $userId)
-            ->where('interaction_type', 'view')
-            ->where('created_at', '>=', now()->subDays(30))
-            ->pluck('property_id')
-            ->toArray();
+            ->where('created_at', '>=', now()->subDays(60))
+            ->whereIn('interaction_type', ['view', 'favorite'])
+            ->select('property_id', 'interaction_type')
+            ->get();
 
-        if (empty($viewedProperties)) {
+        $viewedIds    = $interactions->where('interaction_type', 'view')
+            ->pluck('property_id')->toArray();
+        $favoritedIds = $interactions->where('interaction_type', 'favorite')
+            ->pluck('property_id')->toArray();
+
+        // Nothing at all → fall back
+        $allInteractedIds = array_unique(array_merge($viewedIds, $favoritedIds));
+        if (empty($allInteractedIds)) {
             return $this->getGeneralRecommendations($limit);
         }
 
-        // Analyze user preferences
-        $viewedPropertiesData = Property::whereIn('id', $viewedProperties)->get();
+        // ─── 2. Learn preferences (favorites weighted 3x over views) ─
+        $viewedData    = Property::whereIn('id', $viewedIds)->get();
+        $favoritedData = Property::whereIn('id', $favoritedIds)->get();
 
-        $preferredTypes = $viewedPropertiesData->pluck('type')
-            ->map(fn($type) => $type['category'] ?? null)
+        // Property types: favorites count 3x
+        $preferredTypes = collect()
+            ->merge($viewedData->pluck('type')->map(fn($t) => $t['category'] ?? null))
+            ->merge($favoritedData->pluck('type')->map(fn($t) => $t['category'] ?? null))
+            ->merge($favoritedData->pluck('type')->map(fn($t) => $t['category'] ?? null))
+            ->merge($favoritedData->pluck('type')->map(fn($t) => $t['category'] ?? null))
             ->filter()
-            ->unique()
+            ->countBy()
+            ->sortDesc()
+            ->keys()
+            ->take(3)
             ->toArray();
 
-        $avgPrice = $viewedPropertiesData->avg(function ($p) {
-            return $p->price['usd'] ?? 0;
-        });
+        // Listing type: favorites count 3x
+        $listingTypes = collect()
+            ->merge($viewedData->pluck('listing_type'))
+            ->merge($favoritedData->pluck('listing_type'))
+            ->merge($favoritedData->pluck('listing_type'))
+            ->merge($favoritedData->pluck('listing_type'))
+            ->filter();
+        $preferredListingType = $listingTypes->mode()[0] ?? null;
 
-        $preferredListingType = $viewedPropertiesData->pluck('listing_type')
-            ->mode()[0] ?? null;
+        // Price range: base on favorites if available, else views
+        $priceSource  = $favoritedData->isNotEmpty() ? $favoritedData : $viewedData;
+        $avgPrice     = $priceSource->avg(fn($p) => $p->price['usd'] ?? 0);
 
-        // Build recommendation query
+        // Cities: from favorites first, then views
+        $preferredCities = collect()
+            ->merge($favoritedData->map(fn($p) => $p->address_details['city']['en'] ?? null))
+            ->merge($favoritedData->map(fn($p) => $p->address_details['city']['en'] ?? null))
+            ->merge($favoritedData->map(fn($p) => $p->address_details['city']['en'] ?? null))
+            ->merge($viewedData->map(fn($p) => $p->address_details['city']['en'] ?? null))
+            ->filter()
+            ->countBy()
+            ->sortDesc()
+            ->keys()
+            ->take(3)
+            ->toArray();
+
+        // ─── 3. Build query ────────────────────────────────────────
         $query = Property::query()
             ->where('is_active', true)
             ->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->whereNotIn('id', $viewedProperties);
+            ->whereNotIn('id', $allInteractedIds); // exclude already seen AND favorited
 
-        // Apply preferences
         if (!empty($preferredTypes)) {
             $query->where(function ($q) use ($preferredTypes) {
                 foreach ($preferredTypes as $type) {
-                    $q->orWhereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?", [strtolower($type)]);
+                    $q->orWhereRaw(
+                        "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
+                        [strtolower($type)]
+                    );
                 }
             });
         }
@@ -152,33 +189,68 @@ class PropertyInteractionService
         }
 
         if ($avgPrice > 0) {
-            $minPrice = $avgPrice * 0.7;
-            $maxPrice = $avgPrice * 1.3;
             $query->whereBetween(
                 DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"),
-                [$minPrice, $maxPrice]
+                [$avgPrice * 0.65, $avgPrice * 1.35]
             );
         }
 
-        // Score and sort
-        return $query->selectRaw('
-                *,
-                (
-                    (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                    (CASE WHEN verified = 1 THEN 20 ELSE 0 END) +
-                    (LEAST(views, 100) * 0.15) +
-                    (LEAST(favorites_count, 50) * 0.5) +
-                    (rating * 5) +
-                    (CASE
-                        WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 15
-                        WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
-                        ELSE 0
-                    END)
-                ) as recommendation_score
-            ')
+        if (!empty($preferredCities)) {
+            $query->where(function ($q) use ($preferredCities) {
+                foreach ($preferredCities as $city) {
+                    $q->orWhereRaw(
+                        "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
+                        [strtolower($city)]
+                    );
+                }
+            });
+        }
+
+        // ─── 4. Score (favorites-aware) ────────────────────────────
+        $results = $query->selectRaw('
+            *,
+            (
+                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
+                (CASE WHEN verified = 1 THEN 20 ELSE 0 END) +
+                (LEAST(views, 100) * 0.15) +
+                (LEAST(favorites_count, 50) * 0.8) +
+                (rating * 5) +
+                (CASE
+                    WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
+                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
+                    ELSE 0
+                END)
+            ) as recommendation_score
+        ')
             ->orderByDesc('recommendation_score')
             ->limit($limit)
             ->get();
+
+        // ─── 5. If too few results, relax city filter and fill up ──
+        if ($results->count() < $limit) {
+            $needed     = $limit - $results->count();
+            $existingIds = $allInteractedIds + $results->pluck('id')->toArray();
+
+            $fallback = Property::query()
+                ->where('is_active', true)
+                ->where('published', true)
+                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                ->whereNotIn('id', $existingIds)
+                ->when($preferredListingType, fn($q) => $q->where('listing_type', $preferredListingType))
+                ->selectRaw('*, (
+                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
+                (CASE WHEN verified = 1 THEN 20 ELSE 0 END) +
+                (LEAST(favorites_count, 50) * 0.8) +
+                (rating * 5)
+            ) as recommendation_score')
+                ->orderByDesc('recommendation_score')
+                ->limit($needed)
+                ->get();
+
+            $results = $results->merge($fallback);
+        }
+
+        return $results;
     }
 
     /**
@@ -223,20 +295,25 @@ class PropertyInteractionService
             return;
         }
 
-
-
         try {
-            $timestamp = now();
-            $insertData = [];
-            $ip = request()->ip();
+            // ✅ Throttle: skip if same set tracked in last 5 minutes
+            $propertyIds = collect($properties)->pluck('id')->sort()->implode(',');
+            $cacheKey    = 'impressions_' . $userId . '_' . $sourceEndpoint . '_' . md5($propertyIds);
 
-            // ✅ Determine if guest or real user
-            $isGuest = str_starts_with($userId, 'guest_');
-            $sessionId = $isGuest ? str_replace('guest_', '', $userId) : session()->getId();
+            if (Cache::has($cacheKey)) {
+                return;
+            }
+            Cache::put($cacheKey, true, 300);
+
+            $timestamp  = now();
+            $insertData = [];
+            $ip         = request()->ip();
+            $isGuest    = str_starts_with($userId, 'guest_');
+            $sessionId  = $isGuest ? str_replace('guest_', '', $userId) : session()->getId();
 
             foreach ($properties as $property) {
                 $insertData[] = [
-                    'user_id'          => $isGuest ? null : $userId,  // null for guests
+                    'user_id'          => $isGuest ? null : $userId,
                     'session_id'       => $sessionId,
                     'property_id'      => $property->id,
                     'interaction_type' => 'impression',
@@ -248,12 +325,13 @@ class PropertyInteractionService
                     'created_at'       => $timestamp,
                 ];
             }
+
             Log::info('🔵 trackImpressions called', [
-                'userId' => $userId,
-                'isGuest' => $isGuest,
-                'sessionId' => $sessionId,
+                'userId'        => $userId,
+                'isGuest'       => $isGuest,
+                'sessionId'     => $sessionId,
                 'propertyCount' => count($insertData),
-                'endpoint' => $sourceEndpoint,
+                'endpoint'      => $sourceEndpoint,
             ]);
 
             UserPropertyInteraction::insert($insertData);
