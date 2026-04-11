@@ -262,8 +262,6 @@ Route::prefix('api/v1')->group(function () {
             Route::patch('/profile', [UserController::class, 'updateLocation']);
             Route::delete('/profile', [UserController::class, 'deleteAccount']);
 
-
-
             // Device Token Management
             Route::patch('/device-token', [UserController::class, 'updateDeviceToken']);
             Route::delete('/device-token', [UserController::class, 'removeDeviceToken']);
@@ -274,6 +272,11 @@ Route::prefix('api/v1')->group(function () {
             Route::patch('/search-preferences', [UserController::class, 'updateSearchPreferences']);
             Route::post('/search-preferences/reset', [UserController::class, 'resetSearchPreferences']);
             Route::get('/search-filters', [UserController::class, 'getSearchFilters']);
+
+            // ✅ NEW: Saved Filters Management
+            Route::get('/saved-filters', [UserController::class, 'getSavedFilters']);
+            Route::post('/saved-filters', [UserController::class, 'saveFilter']);
+            Route::delete('/saved-filters/{id}', [UserController::class, 'deleteSavedFilter']);
 
             // User Notifications Management
             Route::get('/notifications', [UserController::class, 'getNotifications']);
@@ -1079,9 +1082,9 @@ Route::post('/admin/notifications/broadcast', [NotificationController::class, 's
     ->middleware(['auth:admin']);
 
 
-Route::get('/profile-test', function () {
-    return view('profile-test');
-});
+// Route::get('/profile-test', function () {
+//     return view('profile-test');
+// });
 
 
 Route::get('/download', [\App\Http\Controllers\AppRedirectController::class, 'redirect'])->name('app.download');

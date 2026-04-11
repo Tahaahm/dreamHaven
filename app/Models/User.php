@@ -86,6 +86,13 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     // ===== RELATIONSHIPS =====
+
+    // ✅ NEW: Saved Filters Relationship
+    public function savedFilters(): HasMany
+    {
+        return $this->hasMany(\App\Models\Support\UserSavedFilter::class, 'user_id');
+    }
+
     public function notifications(): HasMany
     {
         return $this->hasMany(UserNotificationReference::class, 'user_id');
