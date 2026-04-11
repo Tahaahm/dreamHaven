@@ -261,6 +261,7 @@ Route::prefix('api/v1')->group(function () {
             Route::get('/profile', [UserController::class, 'getProfile']);
             Route::patch('/profile', [UserController::class, 'updateLocation']);
             Route::delete('/profile', [UserController::class, 'deleteAccount']);
+            Route::post('/log-interaction', [UserController::class, 'logSearchInteraction']);
 
             // Device Token Management
             Route::patch('/device-token', [UserController::class, 'updateDeviceToken']);
@@ -278,7 +279,6 @@ Route::prefix('api/v1')->group(function () {
             Route::post('/saved-filters', [UserController::class, 'saveFilter']);
             Route::delete('/saved-filters/{id}', [UserController::class, 'deleteSavedFilter']);
 
-            Route::post('/log-interaction', [UserController::class, 'logSearchInteraction']);
             // User Notifications Management
             Route::get('/notifications', [UserController::class, 'getNotifications']);
             Route::patch('/notifications/{id}/read', [UserController::class, 'markNotificationRead']);
