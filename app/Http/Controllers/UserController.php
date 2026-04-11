@@ -3796,4 +3796,166 @@ class UserController extends Controller
             );
         }
     }
+
+
+    /**
+     * Get user's saved search filters
+     */
+    public function getSavedFilters(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            $filters = \App\Models\Support\UserSavedFilter::where('user_id', $user->id)
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function ($filter) {
+                    return [
+                        'id' => $filter->id,
+                        'name' => $filter->name,
+                        'criteria' => $filter->criteria, // automatically cast to array by model
+                        'createdAt' => $filter->created_at->toIso8601String(),
+                    ];
+                });
+
+            // Return the array directly so Flutter's (body['data'] as List) parses perfectly
+            return ApiResponse::success('Saved filters retrieved successfully', $filters, 200);
+        } catch (\Exception $e) {
+            Log::error('Get saved filters error', [
+                'message' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+            return ApiResponse::error('Failed to get saved filters', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Save a new filter preset
+     */
+    public function saveFilter(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            $validator = Validator::make($request->all(), [
+                'name' => 'required|string|max:255',
+                'criteria' => 'required|array',
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            }
+
+            DB::beginTransaction();
+
+            // Enforce maximum of 5 saved filters per user
+            $count = \App\Models\Support\UserSavedFilter::where('user_id', $user->id)->count();
+
+            if ($count >= 5) {
+                // Delete the oldest one to make room
+                $oldest = \App\Models\Support\UserSavedFilter::where('user_id', $user->id)
+                    ->orderBy('created_at', 'asc')
+                    ->first();
+
+                if ($oldest) {
+                    $oldest->delete();
+                }
+            }
+
+            $filter = \App\Models\Support\UserSavedFilter::create([
+                'user_id' => $user->id,
+                'name' => $request->name,
+                'criteria' => $request->criteria,
+            ]);
+
+            DB::commit();
+
+            return ApiResponse::success('Filter saved successfully', [
+                'id' => $filter->id,
+                'name' => $filter->name,
+                'criteria' => $filter->criteria,
+                'createdAt' => $filter->created_at->toIso8601String(),
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Save filter error', [
+                'message' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+            return ApiResponse::error('Failed to save filter', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Delete a saved filter
+     */
+    public function deleteSavedFilter(Request $request, $id)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$id) {
+                return ApiResponse::error('Filter ID is required', null, 400);
+            }
+
+            $filter = \App\Models\Support\UserSavedFilter::where('id', $id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (!$filter) {
+                return ApiResponse::error('Filter not found', null, 404);
+            }
+
+            $filter->delete();
+
+            return ApiResponse::success('Filter deleted successfully', null, 200);
+        } catch (\Exception $e) {
+            Log::error('Delete saved filter error', [
+                'message' => $e->getMessage(),
+                'filter_id' => $id,
+                'user_id' => Auth::id()
+            ]);
+            return ApiResponse::error('Failed to delete filter', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Log a search interaction for recommendation engine
+     */
+    public function logSearchInteraction(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            $validator = Validator::make($request->all(), [
+                'filters' => 'required|array',
+                'results_count' => 'integer'
+            ]);
+
+            if ($validator->fails()) {
+                return ApiResponse::error('Invalid interaction data', $validator->errors(), 400);
+            }
+
+            $interaction = \App\Models\SearchInteraction::create([
+                'user_id' => $user ? $user->id : null,
+                'filters' => $request->filters,
+                'city' => $request->filters['city'] ?? null,
+                'property_type' => $request->filters['property_type'] ?? null,
+                'listing_type' => $request->filters['listing_type'] ?? null,
+                'results_count' => $request->results_count ?? 0,
+                'device_id' => $request->header('X-Device-ID') ?? $request->ip(),
+                'device_name' => $request->header('User-Agent'),
+            ]);
+
+            return ApiResponse::success('Interaction logged', [
+                'id' => $interaction->id
+            ], 201);
+        } catch (\Exception $e) {
+            Log::error('Log search interaction error', [
+                'message' => $e->getMessage(),
+                'user_id' => Auth::id()
+            ]);
+            return ApiResponse::error('Failed to log interaction', $e->getMessage(), 500);
+        }
+    }
 }
