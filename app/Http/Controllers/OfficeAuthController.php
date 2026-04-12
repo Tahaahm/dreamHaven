@@ -1094,6 +1094,7 @@ class OfficeAuthController extends Controller
                 'updated_at' => now(),
             ]);
 
+
             // ✅ INCREMENT PROPERTY COUNT IN SUBSCRIPTION
             $office->incrementPropertyCount();
 
@@ -1102,6 +1103,13 @@ class OfficeAuthController extends Controller
                 'office_id' => $office->id,
                 'properties_count' => $office->subscription->properties_activated_this_month ?? 0
             ]);
+
+            // 🔔 Notify users in the same city
+            try {
+                app(NotificationController::class)->sendNewPropertyNotifications($propertyId);
+            } catch (\Exception $e) {
+                Log::warning('Property saved but city notification failed: ' . $e->getMessage());
+            }
 
             return redirect()->route('office.properties')->with('success', '🎉 Property created successfully!');
         } catch (\Exception $e) {

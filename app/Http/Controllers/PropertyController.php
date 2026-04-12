@@ -507,6 +507,11 @@ class PropertyController extends Controller
             if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
                 $sanctumUser->incrementPropertyCount();
             }
+            try {
+                app(NotificationController::class)->sendNewPropertyNotifications($property->id);
+            } catch (\Exception $e) {
+                Log::warning('Property saved but city notification failed: ' . $e->getMessage());
+            }
 
             DB::commit();
 

@@ -392,6 +392,13 @@ class AgentAuthController extends Controller
                 'remaining_activations' => $agent->subscription->remaining_activations ?? 0
             ]);
 
+            // 🔔 Notify users in the same city
+            try {
+                app(NotificationController::class)->sendNewPropertyNotifications($propertyId);
+            } catch (\Exception $e) {
+                Log::warning('Property saved but city notification failed: ' . $e->getMessage());
+            }
+
             return redirect()->route('agent.properties')->with('success', '🎉 Property added successfully!');
         } catch (ValidationException $e) {
             Log::error('❌ VALIDATION FAILED:', $e->errors());

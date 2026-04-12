@@ -449,77 +449,136 @@ class NotificationController extends Controller
                 return false;
             }
 
-            // Get users who might be interested based on location and preferences
-            $interestedUsers = $this->findInterestedUsers($property);
+            // Pull city names from all three languages so we can match any of them
+            $addressDetails = is_array($property->address_details)
+                ? $property->address_details
+                : json_decode($property->address_details, true);
+
+            $cityEn = strtolower(trim($addressDetails['city']['en'] ?? ''));
+            $cityAr = trim($addressDetails['city']['ar'] ?? '');
+            $cityKu = trim($addressDetails['city']['ku'] ?? '');
+
+            // Find users whose saved city matches any language variant of the property city
+            $interestedUsers = $this->findInterestedUsers($property, $cityEn, $cityAr, $cityKu);
+
+            if ($interestedUsers->isEmpty()) {
+                Log::info("No interested users found for property: {$propertyId}");
+                return true;
+            }
+
+            // ── Per-user language resolution ─────────────────────────────
+            $titles = [
+                'en' => 'New Property Alert!',
+                'ar' => 'تنبيه عقار جديد!',
+                'ku' => 'ئاگادارکردنەوەی خانووی نوێ!',
+            ];
+
+            // Property name in all languages (fallback chain en → ar → ku → generic)
+            $propertyNames = is_array($property->name)
+                ? $property->name
+                : (json_decode($property->name, true) ?? []);
+
+            $messages = [
+                'en' => 'A new property matching your city has been listed: '
+                    . ($propertyNames['en'] ?? $propertyNames['ar'] ?? $propertyNames['ku'] ?? 'New Property'),
+                'ar' => 'تم إدراج عقار جديد في مدينتك: '
+                    . ($propertyNames['ar'] ?? $propertyNames['en'] ?? $propertyNames['ku'] ?? 'عقار جديد'),
+                'ku' => 'خانووێکی نوێ لە شارەکەتدا تۆمار کرا: '
+                    . ($propertyNames['ku'] ?? $propertyNames['en'] ?? $propertyNames['ar'] ?? 'خانووی نوێ'),
+            ];
 
             foreach ($interestedUsers as $user) {
-                // Create the notification record in database
+                // Resolve user language — default to 'en'
+                $lang = strtolower(trim($user->language ?? 'en'));
+                if (!isset($titles[$lang])) {
+                    $lang = 'en';
+                }
+
+                $title   = $titles[$lang];
+                $message = $messages[$lang];
+
+                // ── Database notification ────────────────────────────────
                 $notification = $this->createNotification([
-                    'user_id' => $user->id,
-                    'title' => 'New Property Alert!',
-                    'message' => "A new property matching your preferences has been listed: " . ($property->name['en'] ?? 'New Property'),
-                    'type' => 'property',
-                    'priority' => 'medium',
-                    'data' => [
-                        'property_id' => (string) $propertyId,
-                        'property_type' => $property->type['category'] ?? null,
-                        'price_usd' => $property->price['usd'] ?? null,
-                        'price_iqd' => $property->price['iqd'] ?? null,
-                        'location' => $property->locations[0] ?? null,
-                        'match_reason' => 'location_preference',
+                    'user_id'    => $user->id,
+                    'title'      => $title,
+                    'message'    => $message,
+                    'type'       => 'property',
+                    'priority'   => 'medium',
+                    'data'       => [
+                        'property_id'   => (string) $propertyId,
+                        'property_type' => $property->type['category']
+                            ?? (is_array($property->type) ? ($property->type['category'] ?? null) : null),
+                        'price_usd'     => is_array($property->price)
+                            ? ($property->price['usd'] ?? null)
+                            : (json_decode($property->price, true)['usd'] ?? null),
+                        'price_iqd'     => is_array($property->price)
+                            ? ($property->price['iqd'] ?? null)
+                            : (json_decode($property->price, true)['iqd'] ?? null),
+                        'city'          => $addressDetails['city'] ?? null,
+                        'match_reason'  => 'city_match',
+                        'language'      => $lang,
                     ],
-                    'action_url' => "/properties/{$propertyId}",
-                    'action_text' => 'View Property',
-                    'expires_at' => now()->addDays(30),
+                    'action_url'  => "/properties/{$propertyId}",
+                    'action_text' => $lang === 'ar' ? 'عرض العقار' : ($lang === 'ku' ? 'خانووەکە ببینە' : 'View Property'),
+                    'expires_at'  => now()->addDays(30),
                 ]);
 
-                // Send FCM notification using FirebaseService
+                // ── FCM notification ─────────────────────────────────────
                 if (class_exists('\App\Services\FirebaseService')) {
                     try {
                         $firebaseService = new \App\Services\FirebaseService();
 
                         $notificationPayload = [
-                            'title' => 'New Property Alert!',
-                            'message' => "A new property matching your preferences has been listed: " . ($property->name['en'] ?? 'New Property')
+                            'title'   => $title,
+                            'message' => $message,
                         ];
 
                         $dataPayload = [
-                            'type' => 'property',
-                            'id' => (string) ($notification->id ?? ''),
-                            'priority' => 'medium',
-                            'property_id' => (string) $propertyId,
-                            'property_type' => (string) ($property->type['category'] ?? ''),
-                            'price_usd' => (string) ($property->price['usd'] ?? ''),        // ← FIX: Convert to string
-                            'price_iqd' => (string) ($property->price['iqd'] ?? ''),        // ← FIX: Convert to string
-                            'location' => json_encode($property->locations[0] ?? null),
-                            'match_reason' => 'location_preference',
-                            'action_url' => "/properties/{$propertyId}",
-                            'action_text' => 'View Property'
+                            'type'          => 'property',
+                            'id'            => (string) ($notification->id ?? ''),
+                            'priority'      => 'medium',
+                            'property_id'   => (string) $propertyId,
+                            'property_type' => (string) (is_array($property->type)
+                                ? ($property->type['category'] ?? '')
+                                : ''),
+                            'price_usd'     => (string) (is_array($property->price)
+                                ? ($property->price['usd'] ?? '')
+                                : ''),
+                            'price_iqd'     => (string) (is_array($property->price)
+                                ? ($property->price['iqd'] ?? '')
+                                : ''),
+                            'city'          => json_encode($addressDetails['city'] ?? null),
+                            'match_reason'  => 'city_match',
+                            'language'      => $lang,
+                            'action_url'    => "/properties/{$propertyId}",
+                            'action_text'   => $lang === 'ar' ? 'عرض العقار'
+                                : ($lang === 'ku' ? 'خانووەکە ببینە' : 'View Property'),
                         ];
 
                         $fcmResult = $firebaseService->sendToUser($user, $notificationPayload, $dataPayload);
 
                         if ($fcmResult) {
                             Log::info('New property notification sent via FCM', [
-                                'user_id' => $user->id,
-                                'property_id' => $propertyId
+                                'user_id'     => $user->id,
+                                'property_id' => $propertyId,
+                                'language'    => $lang,
                             ]);
                         } else {
-                            Log::warning('FCM new property notification failed to send', [
-                                'user_id' => $user->id,
-                                'property_id' => $propertyId
+                            Log::warning('FCM new property notification failed', [
+                                'user_id'     => $user->id,
+                                'property_id' => $propertyId,
                             ]);
                         }
                     } catch (\Exception $e) {
                         Log::error('FCM new property notification error: ' . $e->getMessage(), [
-                            'user_id' => $user->id,
-                            'property_id' => $propertyId
+                            'user_id'     => $user->id,
+                            'property_id' => $propertyId,
                         ]);
                     }
                 }
             }
 
-            Log::info("Sent new property notifications to " . count($interestedUsers) . " users for property: {$propertyId}");
+            Log::info("Sent new property notifications to {$interestedUsers->count()} users for property: {$propertyId}");
             return true;
         } catch (\Exception $e) {
             Log::error('Error sending new property notifications: ' . $e->getMessage());
@@ -1740,28 +1799,52 @@ class NotificationController extends Controller
     /**
      * Find users who might be interested in a property
      */
-    private function findInterestedUsers(Property $property)
-    {
+    private function findInterestedUsers(
+        Property $property,
+        string $cityEn = '',
+        string $cityAr = '',
+        string $cityKu = ''
+    ) {
         try {
-            $query = User::where('search_preferences->behavior->enable_notifications', true);
+            // If city strings weren't pre-resolved by the caller, resolve them now
+            // (keeps the method usable when called from other places)
+            if ($cityEn === '' && $cityAr === '' && $cityKu === '') {
+                $addressDetails = is_array($property->address_details)
+                    ? $property->address_details
+                    : json_decode($property->address_details, true);
 
-            // Find users near the property location
-            if (isset($property->locations[0])) {
-                $propertyLat = $property->locations[0]['lat'];
-                $propertyLng = $property->locations[0]['lng'];
-                $radius = 20; // 20km radius
-
-                $query->whereRaw(
-                    "(6371 * acos(cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?)) + sin(radians(?)) * sin(radians(lat)))) <= ?",
-                    [$propertyLat, $propertyLng, $propertyLat, $radius]
-                );
+                $cityEn = strtolower(trim($addressDetails['city']['en'] ?? ''));
+                $cityAr = trim($addressDetails['city']['ar'] ?? '');
+                $cityKu = trim($addressDetails['city']['ku'] ?? '');
             }
 
-            // Additional filters based on user preferences could be added here
-            // For example: price range, property type, etc.
+            $query = User::where('search_preferences->behavior->enable_notifications', true);
 
-            return $query->limit(100)->get(); // Limit to prevent spam
+            // Match user's `place` field against any of the city language variants.
+            // `place` is a free-text field, so we use LIKE for partial matching.
+            $query->where(function ($q) use ($cityEn, $cityAr, $cityKu) {
+                if ($cityEn !== '') {
+                    $q->orWhereRaw('LOWER(place) LIKE ?', ['%' . $cityEn . '%']);
+                }
+                if ($cityAr !== '') {
+                    $q->orWhere('place', 'LIKE', '%' . $cityAr . '%');
+                }
+                if ($cityKu !== '') {
+                    $q->orWhere('place', 'LIKE', '%' . $cityKu . '%');
+                }
 
+                // Also try the JSON city field stored directly on the user
+                // (some apps store it as search_preferences->location->city)
+                if ($cityEn !== '') {
+                    $q->orWhereRaw(
+                        "LOWER(JSON_UNQUOTE(JSON_EXTRACT(search_preferences, '$.location.city'))) LIKE ?",
+                        ['%' . $cityEn . '%']
+                    );
+                }
+            });
+
+            // Safety limit — avoids blasting the whole platform on a large city
+            return $query->limit(200)->get();
         } catch (\Exception $e) {
             Log::error('Error finding interested users: ' . $e->getMessage());
             return collect();
