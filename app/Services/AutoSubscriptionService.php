@@ -153,21 +153,18 @@ class AutoSubscriptionService
             $title   = $titles[$lang]   ?? $titles['en'];
             $message = $messages[$lang] ?? $messages['en'];
 
-            // All values cast to string — FCM data payload only supports strings
             $notificationData = [
                 'subscription_id' => (string) $subscription->id,
                 'plan_name'       => (string) $plan->name,
                 'end_date'        => $subscription->end_date->toIso8601String(),
                 'max_properties'  => (string) ($plan->max_properties ?? 0),
-                'type'            => 'subscription',   // ← short value matching DB column limit
             ];
 
-            // 1. Persist to notifications table
+            // 1. Persist to notifications table — no 'type' field to avoid ENUM conflict
             \App\Models\Notification::create([
                 'user_id' => $office->id,
                 'title'   => $title,
                 'message' => $message,
-                'type'    => 'subscription',           // ← fixed: was 'subscription_activated' (too long)
                 'data'    => $notificationData,
                 'is_read' => false,
                 'read_at' => null,
@@ -218,15 +215,13 @@ class AutoSubscriptionService
                 'plan_name'       => (string) $plan->name,
                 'end_date'        => $subscription->end_date->toIso8601String(),
                 'max_properties'  => (string) ($plan->max_properties ?? 0),
-                'type'            => 'subscription',   // ← short value matching DB column limit
             ];
 
-            // 1. Persist to notifications table
+            // 1. Persist to notifications table — no 'type' field to avoid ENUM conflict
             \App\Models\Notification::create([
                 'user_id' => $agent->id,
                 'title'   => $title,
                 'message' => $message,
-                'type'    => 'subscription',           // ← fixed: was 'subscription_activated' (too long)
                 'data'    => $notificationData,
                 'is_read' => false,
                 'read_at' => null,
