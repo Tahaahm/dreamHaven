@@ -6,7 +6,7 @@ use App\Models\Agent;
 use App\Models\RealEstateOffice;
 use App\Models\SubscriptionPlan;
 use App\Models\Subscription\Subscription;
-use App\Services\FCMNotificationService;        // ← existing service, NOT modified
+use App\Services\FCMNotificationService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
@@ -133,16 +133,6 @@ class AutoSubscriptionService
         ]);
     }
 
-    /**
-     * Notify office of subscription activation.
-     *
-     * WHY we don't use FCMNotificationService::createAndSendNotification() here:
-     * That method has a strict `User $user` type-hint. Changing it would risk
-     * breaking all existing notification calls in production. Instead we:
-     *   1. Write the DB notification record directly (same columns, same table).
-     *   2. Call FCMNotificationService::sendToToken() which accepts a plain string
-     *      and is already used safely throughout the codebase.
-     */
     private function notifyOffice(RealEstateOffice $office, SubscriptionPlan $plan, Subscription $subscription): void
     {
         try {
@@ -169,22 +159,21 @@ class AutoSubscriptionService
                 'plan_name'       => (string) $plan->name,
                 'end_date'        => $subscription->end_date->toIso8601String(),
                 'max_properties'  => (string) ($plan->max_properties ?? 0),
-                'type'            => 'subscription_activated',
+                'type'            => 'subscription',   // ← short value matching DB column limit
             ];
 
-            // 1. Persist to notifications table (same structure existing code uses)
+            // 1. Persist to notifications table
             \App\Models\Notification::create([
                 'user_id' => $office->id,
                 'title'   => $title,
                 'message' => $message,
-                'type'    => 'subscription_activated',
+                'type'    => 'subscription',           // ← fixed: was 'subscription_activated' (too long)
                 'data'    => $notificationData,
                 'is_read' => false,
                 'read_at' => null,
             ]);
 
-            // 2. Push via FCM only if the model has tokens (at registration it likely won't,
-            //    but we attempt it anyway — sendToToken() handles failures gracefully)
+            // 2. Push via FCM only if the model has tokens
             $tokens = method_exists($office, 'getFCMTokens') ? $office->getFCMTokens() : [];
 
             if (!empty($tokens)) {
@@ -229,7 +218,7 @@ class AutoSubscriptionService
                 'plan_name'       => (string) $plan->name,
                 'end_date'        => $subscription->end_date->toIso8601String(),
                 'max_properties'  => (string) ($plan->max_properties ?? 0),
-                'type'            => 'subscription_activated',
+                'type'            => 'subscription',   // ← short value matching DB column limit
             ];
 
             // 1. Persist to notifications table
@@ -237,7 +226,7 @@ class AutoSubscriptionService
                 'user_id' => $agent->id,
                 'title'   => $title,
                 'message' => $message,
-                'type'    => 'subscription_activated',
+                'type'    => 'subscription',           // ← fixed: was 'subscription_activated' (too long)
                 'data'    => $notificationData,
                 'is_read' => false,
                 'read_at' => null,
