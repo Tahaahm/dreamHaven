@@ -55,10 +55,11 @@ class GoogleAuthController extends Controller
             ], 422);
         }
 
+        // $name + $avatar now passed to handleOffice too
         return match ($request->role) {
             'user'   => $this->handleUser($email, $name, $avatar, $firebaseUid, $emailVerified),
             'agent'  => $this->handleAgent($email, $name, $avatar, $firebaseUid),
-            'office' => $this->handleOffice($email, $firebaseUid),
+            'office' => $this->handleOffice($email, $name, $avatar, $firebaseUid),
         };
     }
 
@@ -122,7 +123,7 @@ class GoogleAuthController extends Controller
     // =========================================================================
     // AGENT
     // New agents  → created + auto-subscribed to default 6-month plan.
-    // Existing agents → login only, no subscription change.
+    // Existing agents → login only, subscription untouched.
     // =========================================================================
     private function handleAgent(string $email, string $name, ?string $avatar, string $firebaseUid)
     {
@@ -135,7 +136,6 @@ class GoogleAuthController extends Controller
             ?? Agent::where('primary_email', $email)->first();
 
         if (!$agent) {
-            // ── Brand-new agent via Google sign-up ───────────────────────────
             $isNewUser       = true;
             $profileComplete = false;
 
@@ -160,7 +160,7 @@ class GoogleAuthController extends Controller
             // Never throws — failure is logged and skipped silently.
             app(AutoSubscriptionService::class)->assignDefaultAgentSubscription($agent);
         } else {
-            // ── Existing agent — login only ───────────────────────────────────
+            // Existing agent — login only, no subscription change
             if (!$agent->google_id) {
                 $agent->update(['google_id' => $firebaseUid]);
             }
@@ -193,39 +193,80 @@ class GoogleAuthController extends Controller
 
     // =========================================================================
     // OFFICE
-    // Login only — offices CANNOT self-register via Google.
-    // No subscription logic here — subscription is assigned at registration
-    // time via OfficeAuthController::register() / registerApi().
+    // New offices  → created from Google claims + auto-subscribed to default
+    //               6-month plan. profile_complete = false so Flutter shows
+    //               the completion screen (phone_number + city needed).
+    // Existing offices → login only, subscription untouched.
     // =========================================================================
-    private function handleOffice(string $email, string $firebaseUid)
+    private function handleOffice(string $email, string $name, ?string $avatar, string $firebaseUid)
     {
         Log::info('[GoogleAuth] handleOffice: ' . $email);
+
+        $isNewUser       = false;
+        $profileComplete = true;
 
         $office = RealEstateOffice::where('google_id', $firebaseUid)->first()
             ?? RealEstateOffice::where('email_address', $email)->first();
 
         if (!$office) {
-            Log::warning('[GoogleAuth] office not found: ' . $email);
-            return response()->json([
-                'message'               => 'No office account found for this Google account. Please register your office first.',
-                'requires_registration' => true,
-                'role'                  => 'office',
-            ], 404);
-        }
+            $isNewUser       = true;
+            $profileComplete = false;
 
-        if (!$office->google_id) {
-            $office->update(['google_id' => $firebaseUid]);
+            // Ensure company_name is unique
+            $companyName = $name ?: 'Google Office';
+            $i           = 1;
+            while (RealEstateOffice::where('company_name', $companyName)->exists()) {
+                $companyName = ($name ?: 'Google Office') . ' ' . $i++;
+            }
+
+            $office = RealEstateOffice::create([
+                'company_name'  => $companyName,
+                'email_address' => $email,
+                'password'      => Hash::make(Str::random(32)),
+                'phone_number'  => '',
+                'city'          => '',
+                'profile_image' => $avatar,
+                'google_id'     => $firebaseUid,
+                'account_type'  => 'real_estate_official',
+                'is_verified'   => false,
+                'language'      => 'en',
+                'device_tokens' => [],
+            ]);
+
+            Log::info('[GoogleAuth] new Office created: ' . $office->id);
+
+            // Auto-subscribe to default 6-month office plan.
+            // Never throws — failure is logged and skipped silently.
+            app(AutoSubscriptionService::class)->assignDefaultOfficeSubscription($office);
+        } else {
+            // Existing office — login only, no subscription change
+            if (!$office->google_id) {
+                $office->update(['google_id' => $firebaseUid]);
+            }
+
+            $phone = trim((string) ($office->phone_number ?? ''));
+            $city  = trim((string) ($office->city ?? ''));
+
+            Log::info('[GoogleAuth] existing Office', [
+                'id'    => $office->id,
+                'phone' => $phone,
+                'city'  => $city,
+            ]);
+
+            $profileComplete = !($phone === '' && $city === '');
+            Log::info('[GoogleAuth] profileComplete: ' . ($profileComplete ? 'true' : 'false'));
         }
 
         $token = $office->createToken('google-mobile')->plainTextToken;
-        Log::info('[GoogleAuth] office login success: ' . $office->id);
 
         return response()->json([
-            'message'     => 'Login successful',
-            'role'        => 'office',
-            'token'       => $token,
-            'is_new_user' => false,
-            'office'      => $office,
+            'message'          => 'Login successful',
+            'role'             => 'office',
+            'token'            => $token,
+            'is_new_user'      => $isNewUser,
+            'data'             => ['office' => $office, 'token' => $token],
+            'profile_complete' => $profileComplete,
+            'missing_fields'   => $profileComplete ? [] : ['phone_number', 'city'],
         ]);
     }
 }
