@@ -9,6 +9,7 @@ use App\Models\Appointment;
 use App\Models\Project;
 use App\Models\Subscription\Subscription;
 use App\Models\Subscription\SubscriptionPlan;
+use App\Services\AutoSubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -70,11 +71,11 @@ class OfficeAuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'company_name' => 'required|string|max:255',
-            'email' => 'required|email|unique:real_estate_offices,email_address',
-            'password' => 'required|string|min:6|confirmed',
+            'email'        => 'required|email|unique:real_estate_offices,email_address',
+            'password'     => 'required|string|min:6|confirmed',
             'phone_number' => 'required|string|max:20',
-            'city' => 'required|string|max:255',
-            'district' => 'nullable|string|max:255',
+            'city'         => 'required|string|max:255',
+            'district'     => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -84,15 +85,19 @@ class OfficeAuthController extends Controller
         }
 
         $office = RealEstateOffice::create([
-            'company_name' => $request->company_name,
+            'company_name'  => $request->company_name,
             'email_address' => $request->email,
-            'password' => Hash::make($request->password),
-            'phone_number' => $request->phone_number,
-            'city' => $request->city,
-            'district' => $request->district,
-            'account_type' => 'real_estate_official',
-            'is_verified' => false,
+            'password'      => Hash::make($request->password),
+            'phone_number'  => $request->phone_number,
+            'city'          => $request->city,
+            'district'      => $request->district,
+            'account_type'  => 'real_estate_official',
+            'is_verified'   => false,
         ]);
+
+        // ── AUTO-SUBSCRIBE new office to default 6-month plan ────────────────────
+        // Never throws — failure is logged and skipped silently.
+        app(AutoSubscriptionService::class)->assignDefaultOfficeSubscription($office);
 
         Auth::guard('office')->login($office);
         $request->session()->regenerate();
@@ -2695,44 +2700,47 @@ class OfficeAuthController extends Controller
     } // Add this anywhere inside OfficeAuthController
     public function registerApi(Request $request)
     {
-        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
-            'company_name' => 'required|string|max:255',
+        $validator = Validator::make($request->all(), [
+            'company_name'  => 'required|string|max:255',
             'email_address' => 'required|email|unique:real_estate_offices,email_address',
-            'password' => 'required|string|min:6|confirmed',
-            'phone_number' => 'required|string|max:20',
-            'city' => 'required|string|max:255',
-            'district' => 'nullable|string|max:255',
+            'password'      => 'required|string|min:6|confirmed',
+            'phone_number'  => 'required|string|max:20',
+            'city'          => 'required|string|max:255',
+            'district'      => 'nullable|string|max:255',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
                 'message' => $validator->errors()->first(),
-                'errors' => $validator->errors()
+                'errors'  => $validator->errors(),
             ], 422);
         }
 
-        $office = \App\Models\RealEstateOffice::create([
-            'company_name' => $request->company_name,
+        $office = RealEstateOffice::create([
+            'company_name'  => $request->company_name,
             'email_address' => $request->email_address,
-            'password' => \Illuminate\Support\Facades\Hash::make($request->password),
-            'phone_number' => $request->phone_number,
-            'city' => $request->city,
-            'district' => $request->district,
-            'account_type' => 'real_estate_official',
-            'is_verified' => false,
+            'password'      => Hash::make($request->password),
+            'phone_number'  => $request->phone_number,
+            'city'          => $request->city,
+            'district'      => $request->district,
+            'account_type'  => 'real_estate_official',
+            'is_verified'   => false,
         ]);
 
-        // Generate Sanctum Token for Mobile App
+        // ── AUTO-SUBSCRIBE new office to default 6-month plan ────────────────────
+        // Never throws — failure is logged and skipped silently.
+        app(AutoSubscriptionService::class)->assignDefaultOfficeSubscription($office);
+
         $token = $office->createToken('OfficeAppToken')->plainTextToken;
 
         return response()->json([
             'success' => true,
             'message' => 'Office registered successfully',
-            'data' => [
-                'user' => $office,
-                'token' => $token
-            ]
+            'data'    => [
+                'user'  => $office->fresh(), // fresh() so subscription_id is included in response
+                'token' => $token,
+            ],
         ], 201);
     }
 }

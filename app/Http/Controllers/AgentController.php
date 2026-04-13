@@ -18,6 +18,7 @@ use App\Models\Support\UserFavoriteProperty;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Subscription\Subscription;
 use App\Models\SubscriptionPlan;
+use App\Services\AutoSubscriptionService;
 use App\Services\FCMNotificationService;
 
 
@@ -489,12 +490,12 @@ class AgentController extends Controller
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'agent_name' => 'required|string|max:255',
+            'agent_name'    => 'required|string|max:255',
             'primary_email' => 'required|email|unique:agents',
             'primary_phone' => 'required|string|max:20',
-            'type' => 'required|string',
-            'city' => 'required|string',
-            'company_id' => 'nullable|string|exists:real_estate_offices,id',
+            'type'          => 'required|string',
+            'city'          => 'required|string',
+            'company_id'    => 'nullable|string|exists:real_estate_offices,id',
         ]);
 
         if ($validator->fails()) {
@@ -505,17 +506,19 @@ class AgentController extends Controller
             );
         }
 
-        // Ensure company_id is included in fillable data
         $data = $request->only([
             'agent_name',
             'primary_email',
             'primary_phone',
             'type',
             'city',
-            'company_id'
+            'company_id',
         ]);
 
         $agent = Agent::create($data);
+
+        // ── AUTO-SUBSCRIBE new agent to default 6-month plan ─────────────────────
+        app(AutoSubscriptionService::class)->assignDefaultAgentSubscription($agent);
 
         return ApiResponse::success(
             ResponseDetails::successMessage('Agent created successfully'),
@@ -523,7 +526,6 @@ class AgentController extends Controller
             ResponseDetails::CODE_SUCCESS
         );
     }
-
 
     public function updateAgentProfile(Request $request, $id)
     {
@@ -616,16 +618,16 @@ class AgentController extends Controller
     public function createFromUser(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'user_id' => 'required|uuid|exists:users,id',
-            'priority' => 'sometimes|in:user,request',
-            'agent_name' => 'sometimes|string|max:255',
-            'agent_bio' => 'nullable|string',
+            'user_id'       => 'required|uuid|exists:users,id',
+            'priority'      => 'sometimes|in:user,request',
+            'agent_name'    => 'sometimes|string|max:255',
+            'agent_bio'     => 'nullable|string',
             'profile_image' => 'sometimes|url',
-            'type' => 'sometimes|string',
+            'type'          => 'sometimes|string',
             'primary_email' => 'sometimes|email',
             'primary_phone' => 'required|string|max:20',
-            'company_id' => 'sometimes|uuid|exists:real_estate_offices,id',
-            'company_name' => 'sometimes|string|max:255',
+            'company_id'    => 'sometimes|uuid|exists:real_estate_offices,id',
+            'company_name'  => 'sometimes|string|max:255',
             'transfer_data' => 'sometimes|boolean',
         ]);
 
@@ -643,21 +645,20 @@ class AgentController extends Controller
                 return back()->withErrors(['user_id' => 'An agent already exists for this user.']);
             }
 
-            $priority = $request->input('priority', 'user');
-            $transferData = $request->input('transfer_data', true); // Default to true
+            $priority     = $request->input('priority', 'user');
+            $transferData = $request->input('transfer_data', true);
 
-            // Map user data to agent
             $userMappedData = [
-                'agent_name' => $user->username,
-                'agent_bio' => $user->about_me ?? null,
+                'agent_name'    => $user->username,
+                'agent_bio'     => $user->about_me ?? null,
                 'profile_image' => $user->photo_image ?? null,
                 'primary_email' => $user->email,
                 'primary_phone' => $user->phone ?? null,
                 'subscriber_id' => $user->id,
-                'password' => $user->password, // Preserve hashed password
-                'city' => $user->place ?? null,
-                'latitude' => $user->lat ?? null,
-                'longitude' => $user->lng ?? null,
+                'password'      => $user->password,
+                'city'          => $user->place ?? null,
+                'latitude'      => $user->lat ?? null,
+                'longitude'     => $user->lng ?? null,
             ];
 
             $requestData = $request->except(['user_id', 'priority', 'transfer_data']);
@@ -666,18 +667,16 @@ class AgentController extends Controller
                 ? array_merge($requestData, array_filter($userMappedData, fn($v) => !is_null($v)))
                 : array_merge(array_filter($userMappedData, fn($v) => !is_null($v)), $requestData);
 
-            // Set defaults
-            $agentData['type'] = $agentData['type'] ?? 'real_estate_official';
-            $agentData['is_verified'] = false;
-            $agentData['overall_rating'] = 0.00;
-            $agentData['properties_uploaded_this_month'] = 0;
-            $agentData['remaining_property_uploads'] = 0;
-            $agentData['properties_sold'] = 0;
+            $agentData['type']                              = $agentData['type'] ?? 'real_estate_official';
+            $agentData['is_verified']                       = false;
+            $agentData['overall_rating']                    = 0.00;
+            $agentData['properties_uploaded_this_month']    = 0;
+            $agentData['remaining_property_uploads']        = 0;
+            $agentData['properties_sold']                   = 0;
 
-            // Create the agent
             $agent = Agent::create($agentData);
 
-            // Transfer data if requested
+            // Transfer user data if requested (existing logic — untouched)
             $transferResult = null;
             if ($transferData) {
                 $transferResult = $this->transferUserDataToAgent($user, $agent);
@@ -690,18 +689,21 @@ class AgentController extends Controller
 
             DB::commit();
 
+            // ── AUTO-SUBSCRIBE converted agent to default 6-month plan ───────────
+            // Called after commit so the agent row definitely exists in DB
+            app(AutoSubscriptionService::class)->assignDefaultAgentSubscription($agent);
+
             // Log in the new agent
             Auth::guard('agent')->login($agent);
             $request->session()->regenerate();
 
             Log::info('User converted to agent successfully', [
-                'user_id' => $userId,
-                'agent_id' => $agent->id,
+                'user_id'          => $userId,
+                'agent_id'         => $agent->id,
                 'data_transferred' => $transferData,
-                'transfer_result' => $transferResult
+                'transfer_result'  => $transferResult,
             ]);
 
-            // Determine redirect
             if ($agent->company_id) {
                 return redirect()->route('agent.profile', $agent->id)
                     ->with('success', 'Successfully converted to agent! Your data has been transferred.');
@@ -714,8 +716,8 @@ class AgentController extends Controller
 
             Log::error('Failed to convert user to agent', [
                 'user_id' => $request->user_id,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error'   => $e->getMessage(),
+                'trace'   => $e->getTraceAsString(),
             ]);
 
             return back()
@@ -723,7 +725,6 @@ class AgentController extends Controller
                 ->withInput();
         }
     }
-
 
     public function edit($id)
     {

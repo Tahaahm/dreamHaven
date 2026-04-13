@@ -10,6 +10,7 @@ use Kreait\Firebase\Factory;
 use App\Models\User;
 use App\Models\Agent;
 use App\Models\RealEstateOffice;
+use App\Services\AutoSubscriptionService;
 
 class GoogleAuthController extends Controller
 {
@@ -61,18 +62,20 @@ class GoogleAuthController extends Controller
         };
     }
 
-    // ── USER ──────────────────────────────────────────────────────────────────
+    // =========================================================================
+    // USER — unchanged from original, NO subscription logic for users
+    // =========================================================================
     private function handleUser(string $email, string $name, ?string $avatar, string $firebaseUid, bool $emailVerified)
     {
         Log::info('[GoogleAuth] handleUser: ' . $email);
 
-        $isNewUser = false;  // ← add
+        $isNewUser = false;
 
         $user = User::where('google_id', $firebaseUid)->first()
             ?? User::where('email', $email)->first();
 
         if (!$user) {
-            $isNewUser = true;  // ← add
+            $isNewUser = true;
 
             $base     = Str::slug(Str::lower($name), '_') ?: 'user';
             $username = $base;
@@ -108,29 +111,32 @@ class GoogleAuthController extends Controller
         $token = $user->createToken('google-mobile')->plainTextToken;
 
         return response()->json([
-            'message'      => 'Login successful',
-            'role'         => 'user',
-            'token'        => $token,
-            'is_new_user'  => $isNewUser,   // ← add
-            'data'         => ['user' => $user, 'token' => $token],
+            'message'     => 'Login successful',
+            'role'        => 'user',
+            'token'       => $token,
+            'is_new_user' => $isNewUser,
+            'data'        => ['user' => $user, 'token' => $token],
         ]);
     }
-    // ── AGENT ─────────────────────────────────────────────────────────────────
-    // KEY FIX: existing registered agents always get profileComplete = true.
-    // Only brand-new Google-signup agents (both phone AND city empty) need
-    // to complete their profile. One field filled = already registered = let in.
+
+    // =========================================================================
+    // AGENT
+    // New agents  → created + auto-subscribed to default 6-month plan.
+    // Existing agents → login only, no subscription change.
+    // =========================================================================
     private function handleAgent(string $email, string $name, ?string $avatar, string $firebaseUid)
     {
         Log::info('[GoogleAuth] handleAgent: ' . $email);
 
-        $isNewUser = false;  // ← add
+        $isNewUser       = false;
         $profileComplete = true;
 
         $agent = Agent::where('google_id', $firebaseUid)->first()
             ?? Agent::where('primary_email', $email)->first();
 
         if (!$agent) {
-            $isNewUser       = true;   // ← add
+            // ── Brand-new agent via Google sign-up ───────────────────────────
+            $isNewUser       = true;
             $profileComplete = false;
 
             $agent                = new Agent();
@@ -149,7 +155,12 @@ class GoogleAuthController extends Controller
             $agent->save();
 
             Log::info('[GoogleAuth] new Agent created: ' . $agent->id);
+
+            // Auto-subscribe to default 6-month agent plan.
+            // Never throws — failure is logged and skipped silently.
+            app(AutoSubscriptionService::class)->assignDefaultAgentSubscription($agent);
         } else {
+            // ── Existing agent — login only ───────────────────────────────────
             if (!$agent->google_id) {
                 $agent->update(['google_id' => $firebaseUid]);
             }
@@ -173,16 +184,19 @@ class GoogleAuthController extends Controller
             'message'          => 'Login successful',
             'role'             => 'agent',
             'token'            => $token,
-            'is_new_user'      => $isNewUser,   // ← add
+            'is_new_user'      => $isNewUser,
             'data'             => ['user' => $agent, 'token' => $token],
             'profile_complete' => $profileComplete,
             'missing_fields'   => $profileComplete ? [] : ['primary_phone', 'city'],
         ]);
     }
 
-    // ── OFFICE ────────────────────────────────────────────────────────────────
-    // Login only — offices cannot self-register via Google.
-    // Note: RealEstateOffice uses email_address not email.
+    // =========================================================================
+    // OFFICE
+    // Login only — offices CANNOT self-register via Google.
+    // No subscription logic here — subscription is assigned at registration
+    // time via OfficeAuthController::register() / registerApi().
+    // =========================================================================
     private function handleOffice(string $email, string $firebaseUid)
     {
         Log::info('[GoogleAuth] handleOffice: ' . $email);
@@ -210,7 +224,7 @@ class GoogleAuthController extends Controller
             'message'     => 'Login successful',
             'role'        => 'office',
             'token'       => $token,
-            'is_new_user' => false,   // ← add (offices never self-register via Google)
+            'is_new_user' => false,
             'office'      => $office,
         ]);
     }
