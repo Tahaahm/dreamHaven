@@ -160,17 +160,11 @@ class AutoSubscriptionService
                 'max_properties'  => (string) ($plan->max_properties ?? 0),
             ];
 
-            // 1. Persist to notifications table — no 'type' field to avoid ENUM conflict
-            \App\Models\Notification::create([
-                'user_id' => $office->id,
-                'title'   => $title,
-                'message' => $message,
-                'data'    => $notificationData,
-                'is_read' => false,
-                'read_at' => null,
-            ]);
+            // NOTE: No DB notification record here — notifications.user_id FK only
+            // references the users table. Office/Agent IDs are not users.
+            // FCM push is sufficient for the activation message.
 
-            // 2. Push via FCM only if the model has tokens
+            // Push via FCM only if the model has tokens
             $tokens = method_exists($office, 'getFCMTokens') ? $office->getFCMTokens() : [];
 
             if (!empty($tokens)) {
@@ -217,17 +211,11 @@ class AutoSubscriptionService
                 'max_properties'  => (string) ($plan->max_properties ?? 0),
             ];
 
-            // 1. Persist to notifications table — no 'type' field to avoid ENUM conflict
-            \App\Models\Notification::create([
-                'user_id' => $agent->id,
-                'title'   => $title,
-                'message' => $message,
-                'data'    => $notificationData,
-                'is_read' => false,
-                'read_at' => null,
-            ]);
+            // NOTE: No DB notification record here — notifications.user_id FK only
+            // references the users table. Agent IDs are not users.
+            // FCM push is sufficient for the activation message.
 
-            // 2. Push via FCM
+            // Push via FCM
             $tokens = method_exists($agent, 'getFCMTokens') ? $agent->getFCMTokens() : [];
 
             if (!empty($tokens)) {
