@@ -304,14 +304,62 @@ class PropertyController extends Controller
 
     public function uploadImages(Request $request)
     {
+        $requestId = uniqid('upload_');
+
+        Log::info("📤 [$requestId] uploadImages: Request received", [
+            'has_files'        => $request->hasFile('images'),
+            'files_count'      => $request->hasFile('images') ? count($request->file('images')) : 0,
+            'content_type'     => $request->header('Content-Type'),
+            'content_length'   => $request->header('Content-Length'),
+            'all_files'        => array_keys($request->allFiles()),
+            'all_input_keys'   => array_keys($request->all()),
+        ]);
+
         $urls = [];
 
         if ($request->hasFile('images')) {
-            foreach ($request->file('images') as $file) {
-                $path = $file->store('property_images', 'public');
-                $urls[] = asset('storage/' . $path);
+            foreach ($request->file('images') as $index => $file) {
+                Log::info("📎 [$requestId] uploadImages: Processing file [$index]", [
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime_type'     => $file->getMimeType(),
+                    'size_kb'       => round($file->getSize() / 1024, 2),
+                    'extension'     => $file->getClientOriginalExtension(),
+                    'is_valid'      => $file->isValid(),
+                    'error_code'    => $file->getError(),
+                ]);
+
+                try {
+                    $path = $file->store('property_images', 'public');
+                    $url  = asset('storage/' . $path);
+                    $urls[] = $url;
+
+                    Log::info("✅ [$requestId] uploadImages: File [$index] stored", [
+                        'path' => $path,
+                        'url'  => $url,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error("❌ [$requestId] uploadImages: File [$index] FAILED", [
+                        'error' => $e->getMessage(),
+                        'file'  => $e->getFile(),
+                        'line'  => $e->getLine(),
+                    ]);
+                }
             }
+        } else {
+            Log::warning("⚠️ [$requestId] uploadImages: No files found in request", [
+                'raw_files'    => $request->allFiles(),
+                'raw_post'     => array_keys($request->post()),
+                'server_vars'  => [
+                    'CONTENT_TYPE'   => $_SERVER['CONTENT_TYPE']   ?? 'missing',
+                    'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? 'missing',
+                ],
+            ]);
         }
+
+        Log::info("📤 [$requestId] uploadImages: Done", [
+            'uploaded_count' => count($urls),
+            'urls'           => $urls,
+        ]);
 
         return response()->json(['urls' => $urls]);
     }
@@ -321,38 +369,64 @@ class PropertyController extends Controller
 
     public function store(Request $request)
     {
+        $requestId = uniqid('store_');
+
         try {
-            Log::info('🔍 Raw request received', [
-                'has_files' => $request->hasFile('images'),
-                'images_data' => $request->input('images'),
+            // ═══════════════════════════════════════════════
+            // STEP 1 — Raw incoming request
+            // ═══════════════════════════════════════════════
+            Log::info("🏠 [$requestId] store: Request received", [
+                'method'         => $request->method(),
+                'content_type'   => $request->header('Content-Type'),
+                'content_length' => $request->header('Content-Length'),
+                'authorization'  => $request->header('Authorization') ? 'Bearer ***' : 'MISSING',
+                'all_input_keys' => array_keys($request->all()),
+                'has_files'      => $request->hasFile('images'),
+                'raw_images'     => $request->input('images'),
             ]);
 
-            // ✅ Determine owner from authenticated Sanctum token
+            // ═══════════════════════════════════════════════
+            // STEP 2 — Auth resolution
+            // ═══════════════════════════════════════════════
             $sanctumUser = auth('sanctum')->user();
 
-            if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
-                $request->merge([
-                    'owner_type' => 'RealEstateOffice',
-                    'owner_id'   => (string) $sanctumUser->id,
-                ]);
-            } elseif ($sanctumUser instanceof \App\Models\Agent) {
-                $request->merge([
-                    'owner_type' => 'Agent',
-                    'owner_id'   => (string) $sanctumUser->id,
-                ]);
-            } elseif ($sanctumUser instanceof \App\Models\User) {
-                $request->merge([
-                    'owner_type' => 'User',
-                    'owner_id'   => (string) $sanctumUser->id,
-                ]);
-            } elseif (Auth::guard('agent')->check()) {
-                $request->merge([
-                    'owner_type' => 'Agent',
-                    'owner_id'   => (string) Auth::guard('agent')->id(),
-                ]);
+            Log::info("🔐 [$requestId] store: Auth resolved", [
+                'sanctum_user_class' => $sanctumUser ? get_class($sanctumUser) : 'NULL — no valid token',
+                'sanctum_user_id'    => $sanctumUser?->id,
+                'agent_guard_check'  => Auth::guard('agent')->check(),
+                'agent_guard_id'     => Auth::guard('agent')->check() ? Auth::guard('agent')->id() : null,
+            ]);
+
+            if (!$sanctumUser) {
+                Log::error("🚫 [$requestId] store: UNAUTHENTICATED — no valid Sanctum token");
+                return response()->json([
+                    'status'  => false,
+                    'message' => 'Unauthenticated',
+                    'data'    => 'No valid Sanctum token provided',
+                ], 401);
             }
 
-            // ✅ PARSE JSON STRINGS FROM FLUTTER
+            // ═══════════════════════════════════════════════
+            // STEP 3 — Owner type merge
+            // ═══════════════════════════════════════════════
+            if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
+                $request->merge(['owner_type' => 'RealEstateOffice', 'owner_id' => (string) $sanctumUser->id]);
+            } elseif ($sanctumUser instanceof \App\Models\Agent) {
+                $request->merge(['owner_type' => 'Agent', 'owner_id' => (string) $sanctumUser->id]);
+            } elseif ($sanctumUser instanceof \App\Models\User) {
+                $request->merge(['owner_type' => 'User', 'owner_id' => (string) $sanctumUser->id]);
+            } elseif (Auth::guard('agent')->check()) {
+                $request->merge(['owner_type' => 'Agent', 'owner_id' => (string) Auth::guard('agent')->id()]);
+            }
+
+            Log::info("👤 [$requestId] store: Owner resolved", [
+                'owner_type' => $request->input('owner_type'),
+                'owner_id'   => $request->input('owner_id'),
+            ]);
+
+            // ═══════════════════════════════════════════════
+            // STEP 4 — JSON parsing
+            // ═══════════════════════════════════════════════
             $parsedData = [];
             foreach ($request->all() as $key => $value) {
                 if (is_string($value) && $this->isJson($value)) {
@@ -362,19 +436,38 @@ class PropertyController extends Controller
                 }
             }
 
-            Log::info('✅ Parsed data', ['parsed' => $parsedData]);
+            Log::info("🔄 [$requestId] store: Parsed data keys", [
+                'keys'           => array_keys($parsedData),
+                'images_type'    => gettype($parsedData['images'] ?? null),
+                'images_count'   => is_array($parsedData['images'] ?? null) ? count($parsedData['images']) : 'NOT_ARRAY',
+                'images_preview' => array_slice((array)($parsedData['images'] ?? []), 0, 2),
+                'name'           => $parsedData['name'] ?? 'MISSING',
+                'listing_type'   => $parsedData['listing_type'] ?? 'MISSING',
+                'owner_type'     => $parsedData['owner_type'] ?? 'MISSING',
+                'owner_id'       => $parsedData['owner_id'] ?? 'MISSING',
+                'price'          => $parsedData['price'] ?? 'MISSING',
+                'area'           => $parsedData['area'] ?? 'MISSING',
+                'locations'      => $parsedData['locations'] ?? 'MISSING',
+            ]);
 
-            // ✅ CHECK IMAGES ARE URLs (array) - NOT FILES
+            // ═══════════════════════════════════════════════
+            // STEP 5 — Image check
+            // ═══════════════════════════════════════════════
             if (!isset($parsedData['images']) || !is_array($parsedData['images']) || count($parsedData['images']) < 1) {
-                Log::error('❌ No images provided', ['images' => $parsedData['images'] ?? 'missing']);
+                Log::error("❌ [$requestId] store: Images missing or invalid", [
+                    'images_raw'  => $parsedData['images'] ?? 'KEY_NOT_SET',
+                    'images_type' => gettype($parsedData['images'] ?? null),
+                ]);
                 return response()->json([
                     'status'  => false,
                     'message' => 'Validation failed',
-                    'data'    => ['images' => ['At least one image is required']]
+                    'data'    => ['images' => ['At least one image is required']],
                 ], 400);
             }
 
-            // ✅ VALIDATION
+            // ═══════════════════════════════════════════════
+            // STEP 6 — Validation
+            // ═══════════════════════════════════════════════
             $validator = Validator::make($parsedData, [
                 'name'                    => 'required|array',
                 'name.en'                 => 'required|string|max:255',
@@ -407,26 +500,39 @@ class PropertyController extends Controller
             ]);
 
             if ($validator->fails()) {
-                Log::error('❌ Validation failed', ['errors' => $validator->errors()]);
+                Log::error("❌ [$requestId] store: Validation FAILED", [
+                    'errors'       => $validator->errors()->toArray(),
+                    'failed_rules' => $validator->failed(),
+                ]);
                 return response()->json([
                     'status'  => false,
                     'message' => 'Validation failed',
-                    'data'    => $validator->errors()
+                    'data'    => $validator->errors(),
                 ], 400);
             }
 
+            Log::info("✅ [$requestId] store: Validation passed");
+
+            // ═══════════════════════════════════════════════
+            // STEP 7 — DB insert
+            // ═══════════════════════════════════════════════
             DB::beginTransaction();
+            Log::info("🗄️ [$requestId] store: DB transaction started");
 
-            $imageUrls = $parsedData['images'];
-            Log::info('✅ Using image URLs', ['urls' => $imageUrls]);
+            $imageUrls   = $parsedData['images'];
+            $propertyId  = $this->generateUniquePropertyId();
 
-            // ✅ BUILD PROPERTY DATA
+            Log::info("🚀 [$requestId] store: Inserting property", [
+                'property_id' => $propertyId,
+                'owner_id'    => $parsedData['owner_id'],
+                'owner_type'  => $this->getFullOwnerType($parsedData['owner_type'] ?? 'User'),
+                'images_count' => count($imageUrls),
+            ]);
+
             $propertyData = [
-                'id'         => $this->generateUniquePropertyId(),
+                'id'         => $propertyId,
                 'owner_id'   => (string) $parsedData['owner_id'],
                 'owner_type' => $this->getFullOwnerType($parsedData['owner_type'] ?? 'User'),
-
-                // JSON fields
                 'name'           => json_encode($parsedData['name']),
                 'description'    => json_encode($parsedData['description']),
                 'type'           => json_encode($parsedData['type']),
@@ -434,49 +540,25 @@ class PropertyController extends Controller
                 'rooms'          => json_encode($parsedData['rooms']),
                 'locations'      => json_encode($parsedData['locations']),
                 'address_details' => json_encode($parsedData['address_details']),
-
-                // Simple fields
-                'listing_type' => $parsedData['listing_type'],
-                'area'         => (float) $parsedData['area'],
-                'address'      => $parsedData['address'] ?? null,
-
-                // Boolean fields
-                'furnished'   => ($parsedData['furnished'] ?? false)   ? 1 : 0,
-                'electricity' => ($parsedData['electricity'] ?? true)  ? 1 : 0,
-                'water'       => ($parsedData['water'] ?? true)        ? 1 : 0,
-                'internet'    => ($parsedData['internet'] ?? false)    ? 1 : 0,
-
-                // Images
-                'images' => json_encode($imageUrls),
-
-                // Optional arrays
-                'features'  => json_encode($parsedData['features'] ?? []),
-                'amenities' => json_encode($parsedData['amenities'] ?? []),
-
-                // Optional JSON objects
+                'listing_type'   => $parsedData['listing_type'],
+                'area'           => (float) $parsedData['area'],
+                'address'        => $parsedData['address'] ?? null,
+                'furnished'      => ($parsedData['furnished'] ?? false)  ? 1 : 0,
+                'electricity'    => ($parsedData['electricity'] ?? true) ? 1 : 0,
+                'water'          => ($parsedData['water'] ?? true)       ? 1 : 0,
+                'internet'       => ($parsedData['internet'] ?? false)   ? 1 : 0,
+                'images'         => json_encode($imageUrls),
+                'features'       => json_encode($parsedData['features']  ?? []),
+                'amenities'      => json_encode($parsedData['amenities'] ?? []),
                 'furnishing_details' => json_encode($parsedData['furnishing_details'] ?? ['status' => 'unfurnished']),
-                'floor_details'      => isset($parsedData['floor_details']) && is_array($parsedData['floor_details'])
-                    ? json_encode($parsedData['floor_details'])
-                    : null,
-
-                // Optional simple fields
-                'rental_period'    => $parsedData['rental_period'] ?? null,
+                'floor_details'  => isset($parsedData['floor_details']) && is_array($parsedData['floor_details'])
+                    ? json_encode($parsedData['floor_details']) : null,
+                'rental_period'    => $parsedData['rental_period']    ?? null,
                 'floor_number'     => isset($parsedData['floor_number'])  ? (int) $parsedData['floor_number']  : null,
                 'year_built'       => isset($parsedData['year_built'])    ? (int) $parsedData['year_built']    : null,
                 'virtual_tour_url' => $parsedData['virtual_tour_url'] ?? null,
                 'floor_plan_url'   => $parsedData['floor_plan_url']   ?? null,
-
-                // Availability
-                'availability' => json_encode([
-                    'status' => 'available',
-                    'labels' => [
-                        'en' => 'Available',
-                        'ar' => 'متوفر',
-                        'ku' => 'بەردەست'
-                    ]
-                ]),
-
-                // System fields
+                'availability'     => json_encode(['status' => 'available', 'labels' => ['en' => 'Available', 'ar' => 'متوفر', 'ku' => 'بەردەست']]),
                 'verified'           => 0,
                 'is_active'          => 1,
                 'published'          => 1,
@@ -485,56 +567,69 @@ class PropertyController extends Controller
                 'favorites_count'    => 0,
                 'rating'             => 0,
                 'is_boosted'         => 0,
-
-                // Analytics
                 'view_analytics'      => json_encode(['unique_views' => 0, 'returning_views' => 0]),
                 'favorites_analytics' => json_encode(['last_30_days' => 0]),
             ];
-
-            Log::info('🚀 Creating property', [
-                'owner_id'   => $propertyData['owner_id'],
-                'owner_type' => $propertyData['owner_type'],
-            ]);
 
             DB::table('properties')->insert($propertyData + [
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
 
-            $property = Property::find($propertyData['id']);
+            Log::info("✅ [$requestId] store: DB insert successful", ['property_id' => $propertyId]);
 
-            // ✅ INCREMENT SUBSCRIPTION COUNT IF OFFICE
+            $property = Property::find($propertyId);
+
+            if (!$property) {
+                Log::error("❌ [$requestId] store: Property not found after insert — ID mismatch?", [
+                    'attempted_id' => $propertyId,
+                ]);
+                DB::rollBack();
+                return response()->json(['status' => false, 'message' => 'Failed to retrieve property after insert'], 500);
+            }
+
+            // ═══════════════════════════════════════════════
+            // STEP 8 — Post-insert actions
+            // ═══════════════════════════════════════════════
             if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
                 $sanctumUser->incrementPropertyCount();
+                Log::info("📈 [$requestId] store: Office property count incremented");
             }
+
             try {
                 app(NotificationController::class)->sendNewPropertyNotifications($property->id);
+                Log::info("🔔 [$requestId] store: Notifications sent");
             } catch (\Exception $e) {
-                Log::warning('Property saved but city notification failed: ' . $e->getMessage());
+                Log::warning("⚠️ [$requestId] store: Notification failed (non-fatal)", [
+                    'error' => $e->getMessage(),
+                ]);
             }
 
             DB::commit();
-
-            Log::info('✅ Property created successfully', ['property_id' => $property->id]);
+            Log::info("🎉 [$requestId] store: SUCCESS — property created", ['property_id' => $property->id]);
 
             return response()->json([
                 'status'  => true,
                 'message' => 'Property created successfully',
-                'data'    => $property
+                'data'    => $property,
             ], 201);
         } catch (\Exception $e) {
-            DB::rollback();
-
-            Log::error('❌ Error creating property', [
-                'error' => $e->getMessage(),
-                'file'  => $e->getFile(),
-                'line'  => $e->getLine(),
+            DB::rollBack();
+            Log::error("💥 [$requestId] store: UNCAUGHT EXCEPTION", [
+                'error'   => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'trace'   => array_slice(
+                    array_map(fn($f) => ($f['file'] ?? '?') . ':' . ($f['line'] ?? '?'), $e->getTrace()),
+                    0,
+                    8
+                ),
             ]);
 
             return response()->json([
                 'status'  => false,
                 'message' => 'Failed to create property',
-                'data'    => $e->getMessage()
+                'data'    => $e->getMessage(),
             ], 500);
         }
     }
