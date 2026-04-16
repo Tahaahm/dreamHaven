@@ -1806,8 +1806,6 @@ class NotificationController extends Controller
         string $cityKu = ''
     ) {
         try {
-            // If city strings weren't pre-resolved by the caller, resolve them now
-            // (keeps the method usable when called from other places)
             if ($cityEn === '' && $cityAr === '' && $cityKu === '') {
                 $addressDetails = is_array($property->address_details)
                     ? $property->address_details
@@ -1818,32 +1816,50 @@ class NotificationController extends Controller
                 $cityKu = trim($addressDetails['city']['ku'] ?? '');
             }
 
-            $query = User::where('search_preferences->behavior->enable_notifications', true);
+            // ✅ Normalize city strings — lowercase + trim for case-insensitive matching
+            $cityEn = strtolower(trim($cityEn));
+            $cityAr = trim($cityAr);
+            $cityKu = trim($cityKu);
 
-            // Match user's `place` field against any of the city language variants.
-            // `place` is a free-text field, so we use LIKE for partial matching.
+            $query = User::where(function ($q) {
+                // Include users with notifications enabled OR preference not set at all
+                $q->where('search_preferences->behavior->enable_notifications', true)
+                    ->orWhereNull('search_preferences')
+                    ->orWhereRaw("JSON_EXTRACT(search_preferences, '$.behavior.enable_notifications') IS NULL");
+            });
+
+            // ✅ Must have at least one device token to receive FCM
+            $query->whereRaw("JSON_LENGTH(device_tokens) > 0");
+
+            // ✅ City matching: send to user if:
+            //    1. Their place matches the property city (case-insensitive)
+            //    2. OR their place is null/empty (they never set a city — notify them anyway)
             $query->where(function ($q) use ($cityEn, $cityAr, $cityKu) {
+                // Users with no city set — always notify
+                $q->whereNull('place')
+                    ->orWhere('place', '')
+                    ->orWhere('place', ' ');
+
+                // Users whose place matches property city (any language, case-insensitive)
                 if ($cityEn !== '') {
-                    $q->orWhereRaw('LOWER(place) LIKE ?', ['%' . $cityEn . '%']);
+                    $q->orWhereRaw('LOWER(TRIM(place)) LIKE ?', ['%' . $cityEn . '%']);
                 }
                 if ($cityAr !== '') {
-                    $q->orWhere('place', 'LIKE', '%' . $cityAr . '%');
+                    $q->orWhereRaw('TRIM(place) LIKE ?', ['%' . $cityAr . '%']);
                 }
                 if ($cityKu !== '') {
-                    $q->orWhere('place', 'LIKE', '%' . $cityKu . '%');
+                    $q->orWhereRaw('TRIM(place) LIKE ?', ['%' . $cityKu . '%']);
                 }
 
-                // Also try the JSON city field stored directly on the user
-                // (some apps store it as search_preferences->location->city)
+                // Also check search_preferences->location->city (case-insensitive)
                 if ($cityEn !== '') {
                     $q->orWhereRaw(
-                        "LOWER(JSON_UNQUOTE(JSON_EXTRACT(search_preferences, '$.location.city'))) LIKE ?",
+                        "LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(search_preferences, '$.location.city')))) LIKE ?",
                         ['%' . $cityEn . '%']
                     );
                 }
             });
 
-            // Safety limit — avoids blasting the whole platform on a large city
             return $query->limit(200)->get();
         } catch (\Exception $e) {
             Log::error('Error finding interested users: ' . $e->getMessage());
