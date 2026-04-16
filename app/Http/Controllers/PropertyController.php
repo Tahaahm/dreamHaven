@@ -307,36 +307,41 @@ class PropertyController extends Controller
         $requestId = uniqid('upload_');
 
         Log::info("📤 [$requestId] uploadImages: Request received", [
-            'has_files'        => $request->hasFile('images'),
-            'files_count'      => $request->hasFile('images') ? count($request->file('images')) : 0,
-            'content_type'     => $request->header('Content-Type'),
-            'content_length'   => $request->header('Content-Length'),
-            'all_files'        => array_keys($request->allFiles()),
-            'all_input_keys'   => array_keys($request->all()),
+            'has_files'      => $request->hasFile('images'),
+            'files_count'    => $request->hasFile('images') ? count($request->file('images')) : 0,
+            'content_type'   => $request->header('Content-Type'),
+            'content_length' => $request->header('Content-Length'),
         ]);
 
         $urls = [];
 
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $file) {
-                Log::info("📎 [$requestId] uploadImages: Processing file [$index]", [
-                    'original_name' => $file->getClientOriginalName(),
-                    'mime_type'     => $file->getMimeType(),
-                    'size_kb'       => round($file->getSize() / 1024, 2),
-                    'extension'     => $file->getClientOriginalExtension(),
-                    'is_valid'      => $file->isValid(),
-                    'error_code'    => $file->getError(),
-                ]);
-
                 try {
-                    $path = $file->store('property_images', 'public');
-                    $url  = asset('storage/' . $path);
-                    $urls[] = $url;
-
-                    Log::info("✅ [$requestId] uploadImages: File [$index] stored", [
-                        'path' => $path,
-                        'url'  => $url,
+                    Log::info("📎 [$requestId] uploadImages: Processing file [$index]", [
+                        'original_name' => $file->getClientOriginalName(),
+                        'mime_type'     => $file->getMimeType(),
+                        'size_kb'       => round($file->getSize() / 1024, 2),
+                        'is_valid'      => $file->isValid(),
                     ]);
+
+                    // ✅ Compress and resize the image
+                    $compressedPath = $this->compressImage($file);
+
+                    if ($compressedPath) {
+                        $url = asset('storage/' . $compressedPath);
+                        $urls[] = $url;
+                        Log::info("✅ [$requestId] uploadImages: File [$index] compressed & stored", [
+                            'path' => $compressedPath,
+                            'url'  => $url,
+                        ]);
+                    } else {
+                        // Fallback: store original if compression fails
+                        $path = $file->store('property_images', 'public');
+                        $url  = asset('storage/' . $path);
+                        $urls[] = $url;
+                        Log::warning("⚠️ [$requestId] uploadImages: File [$index] compression failed, stored original");
+                    }
                 } catch (\Exception $e) {
                     Log::error("❌ [$requestId] uploadImages: File [$index] FAILED", [
                         'error' => $e->getMessage(),
@@ -346,14 +351,7 @@ class PropertyController extends Controller
                 }
             }
         } else {
-            Log::warning("⚠️ [$requestId] uploadImages: No files found in request", [
-                'raw_files'    => $request->allFiles(),
-                'raw_post'     => array_keys($request->post()),
-                'server_vars'  => [
-                    'CONTENT_TYPE'   => $_SERVER['CONTENT_TYPE']   ?? 'missing',
-                    'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? 'missing',
-                ],
-            ]);
+            Log::warning("⚠️ [$requestId] uploadImages: No files found in request");
         }
 
         Log::info("📤 [$requestId] uploadImages: Done", [
@@ -362,6 +360,90 @@ class PropertyController extends Controller
         ]);
 
         return response()->json(['urls' => $urls]);
+    }
+
+    /**
+     * ✅ Compress and resize image using GD
+     * Max width: 1280px, Quality: 75%, Format: JPEG
+     */
+    private function compressImage($file): ?string
+    {
+        try {
+            $mime = $file->getMimeType();
+            $sourcePath = $file->getRealPath();
+
+            // Create image resource based on mime type
+            $sourceImage = match ($mime) {
+                'image/jpeg', 'image/jpg' => imagecreatefromjpeg($sourcePath),
+                'image/png'               => imagecreatefrompng($sourcePath),
+                'image/webp'              => imagecreatefromwebp($sourcePath),
+                default                   => null,
+            };
+
+            if (!$sourceImage) return null;
+
+            // Get original dimensions
+            $originalWidth  = imagesx($sourceImage);
+            $originalHeight = imagesy($sourceImage);
+
+            // ✅ Max dimensions
+            $maxWidth  = 1280;
+            $maxHeight = 1280;
+
+            // Calculate new dimensions keeping aspect ratio
+            $ratio     = min($maxWidth / $originalWidth, $maxHeight / $originalHeight);
+            $newWidth  = $ratio < 1 ? (int)($originalWidth * $ratio) : $originalWidth;
+            $newHeight = $ratio < 1 ? (int)($originalHeight * $ratio) : $originalHeight;
+
+            // Create new resized image
+            $resizedImage = imagecreatetruecolor($newWidth, $newHeight);
+
+            // Handle PNG transparency
+            if ($mime === 'image/png') {
+                imagealphablending($resizedImage, false);
+                imagesavealpha($resizedImage, true);
+                $transparent = imagecolorallocatealpha($resizedImage, 255, 255, 255, 127);
+                imagefilledrectangle($resizedImage, 0, 0, $newWidth, $newHeight, $transparent);
+            }
+
+            // Resize
+            imagecopyresampled(
+                $resizedImage,
+                $sourceImage,
+                0,
+                0,
+                0,
+                0,
+                $newWidth,
+                $newHeight,
+                $originalWidth,
+                $originalHeight
+            );
+
+            // Save to temp file
+            $tempPath  = sys_get_temp_dir() . '/' . uniqid('img_') . '.jpg';
+            imagejpeg($resizedImage, $tempPath, 75); // ✅ 75% quality
+
+            // Free memory
+            imagedestroy($sourceImage);
+            imagedestroy($resizedImage);
+
+            // Store compressed file to storage
+            $storagePath = 'property_images/' . uniqid('prop_') . '.jpg';
+            $fullPath    = storage_path('app/public/' . $storagePath);
+
+            // Ensure directory exists
+            if (!file_exists(dirname($fullPath))) {
+                mkdir(dirname($fullPath), 0755, true);
+            }
+
+            rename($tempPath, $fullPath);
+
+            return $storagePath;
+        } catch (\Exception $e) {
+            Log::error('Image compression failed', ['error' => $e->getMessage()]);
+            return null;
+        }
     }
 
 
