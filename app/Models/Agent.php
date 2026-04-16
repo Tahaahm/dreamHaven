@@ -347,4 +347,32 @@ class Agent extends Authenticatable
 
         $this->update(['device_tokens' => $tokens]);
     }
+
+    public function getFCMTokens(): array
+    {
+        $tokens = $this->device_tokens ?? [];
+
+        if (is_string($tokens)) {
+            $tokens = json_decode($tokens, true) ?? [];
+        }
+
+        return array_values(array_filter(
+            array_column($tokens, 'fcm_token')
+        ));
+    }
+
+    public function removeFCMToken(string $invalidToken): void
+    {
+        $tokens = $this->device_tokens ?? [];
+
+        if (is_string($tokens)) {
+            $tokens = json_decode($tokens, true) ?? [];
+        }
+
+        $filtered = array_values(
+            array_filter($tokens, fn($t) => ($t['fcm_token'] ?? '') !== $invalidToken)
+        );
+
+        $this->update(['device_tokens' => $filtered]);
+    }
 }
