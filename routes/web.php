@@ -43,6 +43,10 @@ Route::get('/test-middleware', function () {
     return "Middleware alias works!";
 })->middleware('agent.or.admin');
 
+
+Route::post('/upload-images', [PropertyController::class, 'uploadImages'])
+    ->middleware('auth:sanctum');
+
 // ============================================
 // PUBLIC WEB ROUTES
 // ============================================
@@ -110,9 +114,7 @@ Route::post('/email/verification-notification', function (Request $request) {
 // PROTECTED WEB ROUTES (Authenticated Users)
 // ============================================
 
-// Add this OUTSIDE any middleware group, near your other API routes
-Route::post('/upload-images', [PropertyController::class, 'uploadImages'])
-    ->middleware('auth:sanctum');
+
 
 Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(function () {
 
@@ -162,7 +164,7 @@ Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(functi
         Route::post('/{property_id}/remove-image', [PropertyController::class, 'removeImage'])->name('property.removeImage');
     });
 
-    Route::post('/upload-images', [PropertyController::class, 'uploadImages'])->name('property.uploadImages');
+    // Route::post('/upload-images', [PropertyController::class, 'uploadImages'])->name('property.uploadImages');
     Route::get('/properties/{property_id}/edit', [PropertyController::class, 'editProperty'])->name('property.edit');
 
     // Projects
