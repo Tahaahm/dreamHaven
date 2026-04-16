@@ -110,6 +110,10 @@ Route::post('/email/verification-notification', function (Request $request) {
 // PROTECTED WEB ROUTES (Authenticated Users)
 // ============================================
 
+// Add this OUTSIDE any middleware group, near your other API routes
+Route::post('/upload-images', [PropertyController::class, 'uploadImages'])
+    ->middleware('auth:sanctum');
+
 Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(function () {
 
     // Dashboard
