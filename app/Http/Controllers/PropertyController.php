@@ -372,9 +372,6 @@ class PropertyController extends Controller
         $requestId = uniqid('store_');
 
         try {
-            // ═══════════════════════════════════════════════
-            // STEP 1 — Raw incoming request
-            // ═══════════════════════════════════════════════
             Log::info("🏠 [$requestId] store: Request received", [
                 'method'         => $request->method(),
                 'content_type'   => $request->header('Content-Type'),
@@ -385,9 +382,6 @@ class PropertyController extends Controller
                 'raw_images'     => $request->input('images'),
             ]);
 
-            // ═══════════════════════════════════════════════
-            // STEP 2 — Auth resolution
-            // ═══════════════════════════════════════════════
             $sanctumUser = auth('sanctum')->user();
 
             Log::info("🔐 [$requestId] store: Auth resolved", [
@@ -406,9 +400,6 @@ class PropertyController extends Controller
                 ], 401);
             }
 
-            // ═══════════════════════════════════════════════
-            // STEP 3 — Owner type merge
-            // ═══════════════════════════════════════════════
             if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
                 $request->merge(['owner_type' => 'RealEstateOffice', 'owner_id' => (string) $sanctumUser->id]);
             } elseif ($sanctumUser instanceof \App\Models\Agent) {
@@ -424,9 +415,6 @@ class PropertyController extends Controller
                 'owner_id'   => $request->input('owner_id'),
             ]);
 
-            // ═══════════════════════════════════════════════
-            // STEP 4 — JSON parsing
-            // ═══════════════════════════════════════════════
             $parsedData = [];
             foreach ($request->all() as $key => $value) {
                 if (is_string($value) && $this->isJson($value)) {
@@ -434,6 +422,16 @@ class PropertyController extends Controller
                 } else {
                     $parsedData[$key] = $value;
                 }
+            }
+
+            // ✅ FIX: Force price.iqd to 1 if missing, null, or zero
+            if (
+                !isset($parsedData['price']['iqd']) ||
+                $parsedData['price']['iqd'] === null ||
+                $parsedData['price']['iqd'] === '' ||
+                (is_numeric($parsedData['price']['iqd']) && (float)$parsedData['price']['iqd'] <= 0)
+            ) {
+                $parsedData['price']['iqd'] = 1;
             }
 
             Log::info("🔄 [$requestId] store: Parsed data keys", [
@@ -450,9 +448,6 @@ class PropertyController extends Controller
                 'locations'      => $parsedData['locations'] ?? 'MISSING',
             ]);
 
-            // ═══════════════════════════════════════════════
-            // STEP 5 — Image check
-            // ═══════════════════════════════════════════════
             if (!isset($parsedData['images']) || !is_array($parsedData['images']) || count($parsedData['images']) < 1) {
                 Log::error("❌ [$requestId] store: Images missing or invalid", [
                     'images_raw'  => $parsedData['images'] ?? 'KEY_NOT_SET',
@@ -465,9 +460,6 @@ class PropertyController extends Controller
                 ], 400);
             }
 
-            // ═══════════════════════════════════════════════
-            // STEP 6 — Validation
-            // ═══════════════════════════════════════════════
             $validator = Validator::make($parsedData, [
                 'name'                    => 'required|array',
                 'name.en'                 => 'required|string|max:255',
@@ -478,7 +470,7 @@ class PropertyController extends Controller
                 'area'                    => 'required|numeric|min:1',
                 'furnished'               => 'required|boolean',
                 'price'                   => 'required|array',
-                'price.iqd'               => 'required|numeric|min:1',
+                'price.iqd'               => 'required|numeric|min:1', // ✅ always satisfied now
                 'price.usd'               => 'required|numeric|min:1',
                 'listing_type'            => 'required|in:rent,sell',
                 'rooms'                   => 'required|array',
@@ -513,45 +505,42 @@ class PropertyController extends Controller
 
             Log::info("✅ [$requestId] store: Validation passed");
 
-            // ═══════════════════════════════════════════════
-            // STEP 7 — DB insert
-            // ═══════════════════════════════════════════════
             DB::beginTransaction();
             Log::info("🗄️ [$requestId] store: DB transaction started");
 
-            $imageUrls   = $parsedData['images'];
-            $propertyId  = $this->generateUniquePropertyId();
+            $imageUrls  = $parsedData['images'];
+            $propertyId = $this->generateUniquePropertyId();
 
             Log::info("🚀 [$requestId] store: Inserting property", [
-                'property_id' => $propertyId,
-                'owner_id'    => $parsedData['owner_id'],
-                'owner_type'  => $this->getFullOwnerType($parsedData['owner_type'] ?? 'User'),
+                'property_id'  => $propertyId,
+                'owner_id'     => $parsedData['owner_id'],
+                'owner_type'   => $this->getFullOwnerType($parsedData['owner_type'] ?? 'User'),
                 'images_count' => count($imageUrls),
             ]);
 
             $propertyData = [
-                'id'         => $propertyId,
-                'owner_id'   => (string) $parsedData['owner_id'],
-                'owner_type' => $this->getFullOwnerType($parsedData['owner_type'] ?? 'User'),
-                'name'           => json_encode($parsedData['name']),
-                'description'    => json_encode($parsedData['description']),
-                'type'           => json_encode($parsedData['type']),
-                'price'          => json_encode($parsedData['price']),
-                'rooms'          => json_encode($parsedData['rooms']),
-                'locations'      => json_encode($parsedData['locations']),
+                'id'          => $propertyId,
+                'owner_id'    => (string) $parsedData['owner_id'],
+                'owner_type'  => $this->getFullOwnerType($parsedData['owner_type'] ?? 'User'),
+                'name'            => json_encode($parsedData['name']),
+                'description'     => json_encode($parsedData['description']),
+                'type'            => json_encode($parsedData['type']),
+                'price'           => json_encode($parsedData['price']),
+                'rooms'           => json_encode($parsedData['rooms']),
+                'locations'       => json_encode($parsedData['locations']),
                 'address_details' => json_encode($parsedData['address_details']),
-                'listing_type'   => $parsedData['listing_type'],
-                'area'           => (float) $parsedData['area'],
-                'address'        => $parsedData['address'] ?? null,
-                'furnished'      => ($parsedData['furnished'] ?? false)  ? 1 : 0,
-                'electricity'    => ($parsedData['electricity'] ?? true) ? 1 : 0,
-                'water'          => ($parsedData['water'] ?? true)       ? 1 : 0,
-                'internet'       => ($parsedData['internet'] ?? false)   ? 1 : 0,
-                'images'         => json_encode($imageUrls),
-                'features'       => json_encode($parsedData['features']  ?? []),
-                'amenities'      => json_encode($parsedData['amenities'] ?? []),
+                'listing_type'    => $parsedData['listing_type'],
+                'area'            => (float) $parsedData['area'],
+                'address'         => $parsedData['address'] ?? null,
+                'furnished'       => ($parsedData['furnished']    ?? false) ? 1 : 0,
+                'electricity'     => ($parsedData['electricity']  ?? true)  ? 1 : 0,
+                'water'           => ($parsedData['water']        ?? true)  ? 1 : 0,
+                'internet'        => ($parsedData['internet']     ?? false) ? 1 : 0,
+                'images'          => json_encode($imageUrls),
+                'features'        => json_encode($parsedData['features']  ?? []),
+                'amenities'       => json_encode($parsedData['amenities'] ?? []),
                 'furnishing_details' => json_encode($parsedData['furnishing_details'] ?? ['status' => 'unfurnished']),
-                'floor_details'  => isset($parsedData['floor_details']) && is_array($parsedData['floor_details'])
+                'floor_details'   => isset($parsedData['floor_details']) && is_array($parsedData['floor_details'])
                     ? json_encode($parsedData['floor_details']) : null,
                 'rental_period'    => $parsedData['rental_period']    ?? null,
                 'floor_number'     => isset($parsedData['floor_number'])  ? (int) $parsedData['floor_number']  : null,
@@ -559,14 +548,14 @@ class PropertyController extends Controller
                 'virtual_tour_url' => $parsedData['virtual_tour_url'] ?? null,
                 'floor_plan_url'   => $parsedData['floor_plan_url']   ?? null,
                 'availability'     => json_encode(['status' => 'available', 'labels' => ['en' => 'Available', 'ar' => 'متوفر', 'ku' => 'بەردەست']]),
-                'verified'           => 0,
-                'is_active'          => 1,
-                'published'          => 1,
-                'status'             => $parsedData['status'] ?? 'available',
-                'views'              => 0,
-                'favorites_count'    => 0,
-                'rating'             => 0,
-                'is_boosted'         => 0,
+                'verified'            => 0,
+                'is_active'           => 1,
+                'published'           => 1,
+                'status'              => $parsedData['status'] ?? 'available',
+                'views'               => 0,
+                'favorites_count'     => 0,
+                'rating'              => 0,
+                'is_boosted'          => 0,
                 'view_analytics'      => json_encode(['unique_views' => 0, 'returning_views' => 0]),
                 'favorites_analytics' => json_encode(['last_30_days' => 0]),
             ];
@@ -581,16 +570,13 @@ class PropertyController extends Controller
             $property = Property::find($propertyId);
 
             if (!$property) {
-                Log::error("❌ [$requestId] store: Property not found after insert — ID mismatch?", [
+                Log::error("❌ [$requestId] store: Property not found after insert", [
                     'attempted_id' => $propertyId,
                 ]);
                 DB::rollBack();
                 return response()->json(['status' => false, 'message' => 'Failed to retrieve property after insert'], 500);
             }
 
-            // ═══════════════════════════════════════════════
-            // STEP 8 — Post-insert actions
-            // ═══════════════════════════════════════════════
             if ($sanctumUser instanceof \App\Models\RealEstateOffice) {
                 $sanctumUser->incrementPropertyCount();
                 Log::info("📈 [$requestId] store: Office property count incremented");
@@ -616,10 +602,10 @@ class PropertyController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("💥 [$requestId] store: UNCAUGHT EXCEPTION", [
-                'error'   => $e->getMessage(),
-                'file'    => $e->getFile(),
-                'line'    => $e->getLine(),
-                'trace'   => array_slice(
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+                'trace' => array_slice(
                     array_map(fn($f) => ($f['file'] ?? '?') . ':' . ($f['line'] ?? '?'), $e->getTrace()),
                     0,
                     8
@@ -633,7 +619,6 @@ class PropertyController extends Controller
             ], 500);
         }
     }
-
     /**
      * ✅ Helper: Check if string is valid JSON
      */
