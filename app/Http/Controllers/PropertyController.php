@@ -46,6 +46,7 @@ class PropertyController extends Controller
             }
 
             $properties = $query->orderByDesc('created_at')->paginate($perPage);
+            $properties->load('owner'); // ← ADD HERE
 
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
@@ -102,6 +103,9 @@ class PropertyController extends Controller
 
             $perPage = $request->get('per_page', 20);
             $properties = $query->paginate($perPage);
+
+            $properties->load('owner'); // ← ADD HERE
+
 
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
@@ -910,6 +914,9 @@ class PropertyController extends Controller
 
             $properties = $query->limit($limit)->get();
 
+            $properties->load('owner'); // ← ADD HERE
+
+
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
                 $this->interactionService->trackImpressions(
@@ -1182,60 +1189,114 @@ class PropertyController extends Controller
      */
     private function transformPropertyData($property)
     {
+        // ── Resolve owner ──────────────────────────────────────────────────────
+        $ownerName    = null;
+        $ownerImage   = null;
+        $ownerPhone   = null;
+        $ownerLanguage = null;
+
+        try {
+            $ownerClass = $property->owner_type;
+            if ($ownerClass && class_exists($ownerClass)) {
+                $owner = $ownerClass::find($property->owner_id);
+
+                if ($owner) {
+                    switch ($ownerClass) {
+                        case 'App\\Models\\Agent':
+                            $ownerName     = $owner->agent_name;
+                            $ownerImage    = $owner->profile_image;
+                            $ownerPhone    = $owner->primary_phone ?? $owner->whatsapp_number;
+                            $ownerLanguage = $owner->language;
+                            break;
+
+                        case 'App\\Models\\RealEstateOffice':
+                            $ownerName     = $owner->company_name;
+                            $ownerImage    = $owner->profile_image;
+                            $ownerPhone    = $owner->phone_number;
+                            $ownerLanguage = $owner->language;
+                            break;
+
+                        case 'App\\Models\\User':
+                            $ownerName     = $owner->username ?? $owner->name;
+                            $ownerImage    = $owner->profile_image ?? $owner->avatar;
+                            $ownerPhone    = $owner->phone;
+                            $ownerLanguage = $owner->language;
+                            break;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('transformPropertyData: could not resolve owner', [
+                'property_id' => $property->id,
+                'owner_type'  => $property->owner_type,
+                'error'       => $e->getMessage(),
+            ]);
+        }
+
         return [
-            'id' => $property->id,
-            'owner_id' => $property->owner_id,
-            'owner_type' => $property->owner_type,
-            'name' => $property->name,
-            'description' => $property->description,
-            'images' => $property->images ?? [],
-            'main_image' => isset($property->images) && is_array($property->images) ? ($property->images[0] ?? null) : null,
-            'availability' => $property->availability ?? [],
-            'type' => $property->type ?? [],
-            'area' => $property->area,
-            'furnished' => $property->furnished,
+            'id'          => $property->id,
+            'owner_id'    => $property->owner_id,
+            'owner_type'  => $property->owner_type,
+
+            // ── NEW owner fields ───────────────────────────────────────────
+            'owner_name'     => $ownerName,
+            'owner_image'    => $ownerImage,
+            'owner_phone'    => $ownerPhone,
+            'owner_language' => $ownerLanguage,
+            // ──────────────────────────────────────────────────────────────
+
+            'name'            => $property->name,
+            // ... rest of your existing fields unchanged
+            'description'     => $property->description,
+            'images'          => $property->images ?? [],
+            'main_image'      => isset($property->images) && is_array($property->images)
+                ? ($property->images[0] ?? null) : null,
+            'availability'    => $property->availability ?? [],
+            'type'            => $property->type ?? [],
+            'area'            => $property->area,
+            'furnished'       => $property->furnished,
             'furnishing_details' => $property->furnishing_details ?? [],
-            'price' => $property->price ?? [],
-            'listing_type' => $property->listing_type,
-            'rental_period' => $property->rental_period,
-            'rooms' => $property->rooms ?? [],
-            'features' => $property->features ?? [],
-            'amenities' => $property->amenities ?? [],
-            'locations' => $property->locations ?? [],
+            'price'           => $property->price ?? [],
+            'listing_type'    => $property->listing_type,
+            'rental_period'   => $property->rental_period,
+            'rooms'           => $property->rooms ?? [],
+            'features'        => $property->features ?? [],
+            'amenities'       => $property->amenities ?? [],
+            'locations'       => $property->locations ?? [],
             'address_details' => $property->address_details ?? [],
-            'address' => $property->address,
-            'floor_number' => $property->floor_number,
-            'floor_details' => $property->floor_details ?? [],
-            'year_built' => $property->year_built,
-            'construction_details' => $property->construction_details ?? [],
-            'energy_rating' => $property->energy_rating,
-            'energy_details' => $property->energy_details ?? [],
-            'electricity' => $property->electricity,
-            'water' => $property->water,
-            'internet' => $property->internet,
-            'virtual_tour_url' => $property->virtual_tour_url,
-            'virtual_tour_details' => $property->virtual_tour_details ?? [],
-            'floor_plan_url' => $property->floor_plan_url,
-            'additional_media' => $property->additional_media ?? [],
-            'verified' => $property->verified,
-            'verification_details' => $property->verification_details ?? [],
-            'is_active' => $property->is_active,
-            'published' => $property->published,
-            'status' => $property->status,
-            'views' => $property->views,
-            'view_analytics' => $property->view_analytics ?? [],
-            'favorites_count' => $property->favorites_count,
-            'favorites_analytics' => $property->favorites_analytics ?? [],
-            'rating' => $property->rating,
-            'is_boosted' => $property->is_boosted,
-            'boost_start_date' => $property->boost_start_date,
-            'boost_end_date' => $property->boost_end_date,
-            'nearby_amenities' => $property->nearby_amenities ?? [],
-            'legal_information' => $property->legal_information ?? [],
-            'investment_analysis' => $property->investment_analysis ?? [],
-            'seo_metadata' => $property->seo_metadata ?? [],
-            'created_at' => $property->created_at,
-            'updated_at' => $property->updated_at,
+            'address'         => $property->address,
+            'floor_number'    => $property->floor_number,
+            'floor_details'   => $property->floor_details ?? [],
+            'year_built'      => $property->year_built,
+            'construction_details'  => $property->construction_details ?? [],
+            'energy_rating'         => $property->energy_rating,
+            'energy_details'        => $property->energy_details ?? [],
+            'electricity'           => $property->electricity,
+            'water'                 => $property->water,
+            'internet'              => $property->internet,
+            'virtual_tour_url'      => $property->virtual_tour_url,
+            'virtual_tour_details'  => $property->virtual_tour_details ?? [],
+            'floor_plan_url'        => $property->floor_plan_url,
+            'additional_media'      => $property->additional_media ?? [],
+            'verified'              => $property->verified,
+            'verification_details'  => $property->verification_details ?? [],
+            'is_active'             => $property->is_active,
+            'published'             => $property->published,
+            'status'                => $property->status,
+            'views'                 => $property->views,
+            'view_analytics'        => $property->view_analytics ?? [],
+            'favorites_count'       => $property->favorites_count,
+            'favorites_analytics'   => $property->favorites_analytics ?? [],
+            'rating'                => $property->rating,
+            'is_boosted'            => $property->is_boosted,
+            'boost_start_date'      => $property->boost_start_date,
+            'boost_end_date'        => $property->boost_end_date,
+            'nearby_amenities'      => $property->nearby_amenities ?? [],
+            'legal_information'     => $property->legal_information ?? [],
+            'investment_analysis'   => $property->investment_analysis ?? [],
+            'seo_metadata'          => $property->seo_metadata ?? [],
+            'created_at'            => $property->created_at,
+            'updated_at'            => $property->updated_at,
         ];
     }
 
@@ -1579,6 +1640,8 @@ class PropertyController extends Controller
                     ->get();
 
                 $properties = $personalized->merge($trending);
+                $properties->load('owner'); // ← ADD HERE
+
             } else {
                 $cacheKey = "guest_recommended_{$limit}";
 
@@ -1795,6 +1858,9 @@ class PropertyController extends Controller
                 ->limit($limit)
                 ->get();
 
+            $properties->load('owner'); // ← ADD HERE
+
+
             Log::info('✅ RECENT: Success', [
                 'properties_found' => $properties->count(),
             ]);
@@ -1962,6 +2028,9 @@ class PropertyController extends Controller
                 ->limit($limit)
                 ->get();
 
+            $properties->load('owner'); // ← ADD HERE
+
+
             Log::info('✅ POPULAR: Success', [
                 'properties_found' => $properties->count(),
             ]);
@@ -2012,6 +2081,8 @@ class PropertyController extends Controller
 
                 return $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
             });
+
+            $featured->load('owner'); // ← ADD HERE
 
             if ($featured->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
@@ -2215,6 +2286,8 @@ class PropertyController extends Controller
                 ->where('published', true)
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
+
+            $properties->load('owner'); // ← ADD HERE
 
             $transformedData = collect($properties->items())->map(function ($property) use ($language) {
                 return $this->transformPropertyForSearch($property, $language);
@@ -3200,6 +3273,9 @@ class PropertyController extends Controller
 
             $this->applyBasicMapFilters($query, $request);
             $properties = $query->limit($limit)->get();
+
+            $properties->load('owner'); // ← ADD HERE
+
 
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
