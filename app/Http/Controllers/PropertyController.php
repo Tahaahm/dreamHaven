@@ -2082,7 +2082,11 @@ class PropertyController extends Controller
                 return $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
             });
 
-            $featured->load('owner'); // ← ADD HERE
+            // ── FIX: re-fetch as Eloquent collection so ->load() works ──
+            $featuredIds = $featured->pluck('id');
+            $featured = Property::whereIn('id', $featuredIds)->get();
+            $featured->load('owner');
+
 
             if ($featured->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
