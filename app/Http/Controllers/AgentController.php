@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\FacadesLog;
 use App\Helper\ApiResponse;
 use App\Helper\ResponseDetails;
 use App\Models\Agent;
@@ -20,6 +20,7 @@ use App\Models\Subscription\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Services\AutoSubscriptionService;
 use App\Services\FCMNotificationService;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class AgentController extends Controller
@@ -334,23 +335,28 @@ class AgentController extends Controller
 
             // 8. Handle Bio Image Upload
             if ($request->hasFile('bio_image')) {
-                // Delete old image if exists
-                if ($agent->bio_image && file_exists(public_path($agent->bio_image))) {
-                    @unlink(public_path($agent->bio_image));
+
+                Log::info('Agent bio image upload started', [
+                    'agent_id' => $agent->id
+                ]);
+
+                // delete old
+                if ($agent->bio_image) {
+                    Storage::disk('public')->delete($agent->bio_image);
                 }
 
-                // Create directory if not exists
-                $bioDir = public_path('uploads/agents/bios');
-                if (!file_exists($bioDir)) {
-                    mkdir($bioDir, 0755, true);
+                $path = $this->compressAgentImage(
+                    $request->file('bio_image'),
+                    'agents/bios'
+                );
+
+                if ($path) {
+                    $updateData['bio_image'] = $path;
+                } else {
+                    Log::warning('Bio image compression failed', [
+                        'agent_id' => $agent->id
+                    ]);
                 }
-
-                // Store new image
-                $bioImage = $request->file('bio_image');
-                $bioImageName = 'agent_bio_' . $agent->id . '_' . time() . '.' . $bioImage->extension();
-                $bioImage->move($bioDir, $bioImageName);
-
-                $updateData['bio_image'] = '/uploads/agents/bios/' . $bioImageName;
             }
 
             // 9. Update the agent
@@ -755,7 +761,7 @@ class AgentController extends Controller
             $agent = $request->user(); // This gets the authenticated model (Agent or User)
 
             // ✅ Debug logging
-            \Log::info('Dashboard Stats Request', [
+            Log::info('Dashboard Stats Request', [
                 'authenticated_user' => $agent ? get_class($agent) : 'null',
                 'user_id' => $agent ? $agent->id : 'null',
                 'is_agent' => $agent instanceof \App\Models\Agent,
@@ -763,7 +769,7 @@ class AgentController extends Controller
 
             // ✅ Verify it's an Agent model
             if (!$agent || !($agent instanceof \App\Models\Agent)) {
-                \Log::error('Dashboard Stats: Not an agent', [
+                Log::error('Dashboard Stats: Not an agent', [
                     'user_type' => $agent ? get_class($agent) : 'null'
                 ]);
 
@@ -835,7 +841,7 @@ class AgentController extends Controller
                 ]
             ], 200);
         } catch (\Exception $e) {
-            \Log::error('Dashboard Stats Error', [
+            Log::error('Dashboard Stats Error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -1024,13 +1030,13 @@ class AgentController extends Controller
     {
         try {
 
-            \Log::info('STEP 1: Method started');
+            Log::info('STEP 1: Method started');
 
             $agent = $request->user();
-            \Log::info('STEP 2: User retrieved', ['agent_id' => $agent?->id]);
+            Log::info('STEP 2: User retrieved', ['agent_id' => $agent?->id]);
 
             if (!$agent || !($agent instanceof \App\Models\Agent)) {
-                \Log::warning('STEP 3: Unauthorized access');
+                Log::warning('STEP 3: Unauthorized access');
                 return response()->json([
                     'status' => false,
                     'code' => 401,
@@ -1039,7 +1045,7 @@ class AgentController extends Controller
                 ], 401);
             }
 
-            \Log::info('STEP 4: Loading relationships');
+            Log::info('STEP 4: Loading relationships');
 
             $agent->load([
                 'company:id,name',
@@ -1048,10 +1054,10 @@ class AgentController extends Controller
                 'area:id,name',
             ]);
 
-            \Log::info('STEP 5: Relationships loaded successfully');
+            Log::info('STEP 5: Relationships loaded successfully');
 
             // TEST working_hours specifically
-            \Log::info('STEP 6: Working hours raw value', [
+            Log::info('STEP 6: Working hours raw value', [
                 'working_hours' => $agent->working_hours
             ]);
 
@@ -1061,7 +1067,7 @@ class AgentController extends Controller
         |--------------------------------------------------------------------------
         */
 
-            \Log::info('STEP 7: Building agent data array');
+            Log::info('STEP 7: Building agent data array');
 
             $agentData = [
                 'id' => $agent->id,
@@ -1110,7 +1116,7 @@ class AgentController extends Controller
                 'currency' => $agent->currency,
             ];
 
-            \Log::info('STEP 8: Agent data array built successfully');
+            Log::info('STEP 8: Agent data array built successfully');
 
             /*
         |--------------------------------------------------------------------------
@@ -1122,7 +1128,7 @@ class AgentController extends Controller
 
             if ($agent->currentSubscription) {
 
-                \Log::info('STEP 9: Building subscription');
+                Log::info('STEP 9: Building subscription');
 
                 $subscription = $agent->currentSubscription;
 
@@ -1143,10 +1149,10 @@ class AgentController extends Controller
                         : null,
                 ];
 
-                \Log::info('STEP 10: Subscription built successfully');
+                Log::info('STEP 10: Subscription built successfully');
             }
 
-            \Log::info('STEP 11: Returning JSON response');
+            Log::info('STEP 11: Returning JSON response');
 
             return response()->json([
                 'status' => true,
@@ -1158,7 +1164,7 @@ class AgentController extends Controller
             ], 200);
         } catch (\Throwable $e) {
 
-            \Log::error('❌ CRASH DETECTED', [
+            Log::error('❌ CRASH DETECTED', [
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
