@@ -985,6 +985,7 @@ class AgentAuthController extends Controller
 
         Log::info('Agent Profile Update - Request Data:', [
             'agent_id' => $agent->id,
+            'language' => $request->input('language'), // Track language in logs
             'working_hours_raw' => $request->input('working_hours'),
             'has_profile_image' => $request->hasFile('profile_image'),
             'has_bio_image' => $request->hasFile('bio_image'),
@@ -1005,9 +1006,11 @@ class AgentAuthController extends Controller
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
             'bio_image' => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
             'working_hours' => 'nullable|string',
+            'language' => 'nullable|string|in:en,ar,ku', // ✅ Added validation rule
         ]);
 
         try {
+            // Handle Profile Image
             if ($request->hasFile('profile_image')) {
                 if ($agent->profile_image) {
                     $oldPath = str_replace('storage/', '', $agent->profile_image);
@@ -1018,6 +1021,7 @@ class AgentAuthController extends Controller
                 $agent->profile_image = $request->file('profile_image')->store('agents/profiles', 'public');
             }
 
+            // Handle Bio Image
             if ($request->hasFile('bio_image')) {
                 if ($agent->bio_image) {
                     $oldPath = str_replace('storage/', '', $agent->bio_image);
@@ -1028,6 +1032,7 @@ class AgentAuthController extends Controller
                 $agent->bio_image = $request->file('bio_image')->store('agents/bio', 'public');
             }
 
+            // Standard Field Assignments
             $agent->agent_name = $request->agent_name;
             $agent->primary_phone = $request->primary_phone;
             $agent->whatsapp_number = $request->whatsapp_number;
@@ -1040,6 +1045,12 @@ class AgentAuthController extends Controller
             $agent->latitude = $request->latitude;
             $agent->longitude = $request->longitude;
 
+            // ✅ Assign Language if present in request
+            if ($request->has('language')) {
+                $agent->language = $request->language;
+            }
+
+            // Handle Working Hours JSON
             if ($request->filled('working_hours')) {
                 $rawHours = $request->input('working_hours');
                 $decodedHours = json_decode($rawHours, true);
@@ -1053,13 +1064,23 @@ class AgentAuthController extends Controller
                         'raw_input' => $rawHours
                     ]);
                 }
-            } else {
-                Log::info('No working hours provided in request.');
             }
 
             $agent->save();
 
+            // Refresh user in guard
             Auth::guard('agent')->setUser($agent->fresh());
+
+            // ✅ Check if call is from Flutter API or Web Dashboard
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Profile updated successfully',
+                    'data' => [
+                        'agent' => $agent->fresh()
+                    ]
+                ]);
+            }
 
             return redirect()->route('agent.profile', $agent->id)
                 ->with('success', 'Profile updated successfully!');
@@ -1069,6 +1090,13 @@ class AgentAuthController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Failed to update profile: ' . $e->getMessage()
+                ], 500);
+            }
 
             return back()->withInput()
                 ->with('error', 'Failed to update profile. ' . $e->getMessage());
