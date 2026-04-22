@@ -667,14 +667,22 @@ Route::middleware(['auth:web,agent'])->group(function () {
 
 
 Route::prefix('api/v1/office')->middleware('auth:sanctum')->group(function () {
-    Route::get('/dashboard', [OfficeDashboardApiController::class, 'index']);
+
+    // ── READ ──────────────────────────────────────────────────────────────────
+    Route::get('/dashboard',    [OfficeDashboardApiController::class, 'index']);
     Route::get('/appointments', [OfficeDashboardApiController::class, 'getAppointments']);
-    Route::get('/properties', [OfficeDashboardApiController::class, 'getProperties']);
-
+    Route::get('/properties',   [OfficeDashboardApiController::class, 'getProperties']);
     Route::get('/subscription', [OfficeDashboardApiController::class, 'getSubscriptionStatus']);
+    Route::get('/profile',      [OfficeDashboardApiController::class, 'getProfile']);
 
-    Route::get('/profile', [OfficeDashboardApiController::class, 'getProfile']);
+    // ── WRITE (new) ───────────────────────────────────────────────────────────
+    // POST used instead of PUT so Flutter can send multipart/form-data for images.
+    // If you never upload images you can use PUT.
+    Route::post('/profile',     [OfficeDashboardApiController::class, 'updateProfile']);
+    Route::put('/language',     [OfficeDashboardApiController::class, 'updateLanguage']);
+    Route::post('/fcm-token',   [OfficeDashboardApiController::class, 'updateFCMToken']);
 });
+
 // ============================================
 // REAL ESTATE OFFICE - WEB AUTHENTICATION & MANAGEMENT
 // ============================================

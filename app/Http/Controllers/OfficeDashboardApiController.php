@@ -521,4 +521,295 @@ class OfficeDashboardApiController extends Controller
             ], 500);
         }
     }
+
+
+
+    /**
+     * Update office general profile
+     * PUT/POST /api/v1/office/profile
+     *
+     * Mirrors AgentController::update() pattern.
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        try {
+            // 1. Resolve authenticated office
+            $office = Auth::guard('sanctum')->user()
+                ?? Auth::guard('office')->user();
+
+            if (! $office) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated.',
+                ], 401);
+            }
+
+            // 2. Validation
+            $validator = Validator::make($request->all(), [
+                // Basic Info
+                'company_name'      => 'sometimes|string|max:255',
+                'company_bio'       => 'nullable|string|max:2000',
+                'about_company'     => 'nullable|string|max:5000',
+                'phone_number'      => 'sometimes|string|max:20',
+
+                // Location
+                'office_address'    => 'nullable|string|max:500',
+                'city'              => 'nullable|string|max:100',
+                'district'          => 'nullable|string|max:100',
+                // Accept string or numeric because Flutter may send "36.123"
+                'latitude'          => 'nullable',
+                'longitude'         => 'nullable',
+
+                // Experience / Stats
+                'years_experience'  => 'nullable|integer|min:0|max:100',
+
+                // Availability Schedule (JSON string or array)
+                'availability_schedule' => 'nullable',
+
+                // Images
+                'profile_image'     => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'company_bio_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors'  => $validator->errors(),
+                ], 422);
+            }
+
+            // 3. Start transaction
+            \Illuminate\Support\Facades\DB::beginTransaction();
+
+            // 4. Build scalar update payload
+            $updateData = $request->only([
+                'company_name',
+                'company_bio',
+                'about_company',
+                'phone_number',
+                'office_address',
+                'city',
+                'district',
+                'latitude',
+                'longitude',
+                'years_experience',
+            ]);
+
+            // 5. Handle availability_schedule (same as agent working_hours)
+            if ($request->has('availability_schedule')) {
+                $schedule = $request->availability_schedule;
+
+                if (is_array($schedule)) {
+                    // Flutter sent a Map/List — encode for DB
+                    $updateData['availability_schedule'] = json_encode($schedule);
+                } elseif (is_string($schedule)) {
+                    // Validate it is real JSON before storing
+                    $decoded = json_decode($schedule, true);
+                    if (json_last_error() === JSON_ERROR_NONE) {
+                        $updateData['availability_schedule'] = $schedule;
+                    }
+                }
+            }
+
+            // 6. Handle profile_image upload
+            if ($request->hasFile('profile_image')) {
+                // Delete old file if it exists on disk
+                if ($office->profile_image && file_exists(public_path($office->profile_image))) {
+                    @unlink(public_path($office->profile_image));
+                }
+
+                $dir = public_path('uploads/offices/profiles');
+                if (! file_exists($dir)) {
+                    mkdir($dir, 0755, true);
+                }
+
+                $file     = $request->file('profile_image');
+                $filename = 'office_profile_' . $office->id . '_' . time() . '.' . $file->extension();
+                $file->move($dir, $filename);
+
+                $updateData['profile_image'] = '/uploads/offices/profiles/' . $filename;
+            }
+
+            // 7. Handle company_bio_image upload
+            if ($request->hasFile('company_bio_image')) {
+                if ($office->company_bio_image && file_exists(public_path($office->company_bio_image))) {
+                    @unlink(public_path($office->company_bio_image));
+                }
+
+                $dir = public_path('uploads/offices/bio');
+                if (! file_exists($dir)) {
+                    mkdir($dir, 0755, true);
+                }
+
+                $file     = $request->file('company_bio_image');
+                $filename = 'office_bio_' . $office->id . '_' . time() . '.' . $file->extension();
+                $file->move($dir, $filename);
+
+                $updateData['company_bio_image'] = '/uploads/offices/bio/' . $filename;
+            }
+
+            // 8. Persist
+            $office->update($updateData);
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            // 9. Return fresh model
+            $office->refresh();
+
+            Log::info('Office profile updated', [
+                'office_id'    => $office->id,
+                'company_name' => $office->company_name,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Profile updated successfully',
+                'data'    => [
+                    'id'                    => $office->id,
+                    'company_name'          => $office->company_name,
+                    'company_bio'           => $office->company_bio,
+                    'company_bio_image'     => $office->company_bio_image,
+                    'profile_image'         => $office->profile_image,
+                    'phone_number'          => $office->phone_number,
+                    'office_address'        => $office->office_address,
+                    'city'                  => $office->city,
+                    'district'              => $office->district,
+                    'latitude'              => $office->latitude,
+                    'longitude'             => $office->longitude,
+                    'years_experience'      => $office->years_experience,
+                    'about_company'         => $office->about_company,
+                    'availability_schedule' => $office->availability_schedule,
+                ],
+            ], 200);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+
+            Log::error('[OfficeDashboardApi::updateProfile] ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update profile.',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Update office language preference
+     * PUT /api/v1/office/language
+     *
+     * Mirrors AgentController::updateLanguage() pattern.
+     */
+    public function updateLanguage(Request $request): JsonResponse
+    {
+        try {
+            // 1. Resolve authenticated office
+            $office = Auth::guard('sanctum')->user()
+                ?? Auth::guard('office')->user();
+
+            if (! $office) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthenticated.',
+                ], 401);
+            }
+
+            // 2. Validate
+            $validator = Validator::make($request->all(), [
+                'language' => 'required|string|in:en,ar,ku',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors'  => $validator->errors(),
+                ], 422);
+            }
+
+            // 3. Update
+            $office->update(['language' => $request->language]);
+
+            Log::info('Office language updated', [
+                'office_id' => $office->id,
+                'language'  => $request->language,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Language updated successfully',
+                'data'    => [
+                    'id'       => $office->id,
+                    'language' => $office->language,
+                ],
+            ], 200);
+        } catch (\Throwable $e) {
+            Log::error('[OfficeDashboardApi::updateLanguage] ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update language.',
+                'error'   => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    /**
+     * Update FCM token for push notifications
+     * POST /api/v1/office/fcm-token
+     *
+     * Mirrors AgentController::updateFCMToken() pattern.
+     */
+    public function updateFCMToken(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'fcm_token'     => 'required|string',
+            'old_fcm_token' => 'nullable|string',
+            'device_name'   => 'nullable|string',
+            'language'      => 'nullable|in:en,ar,ku',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $office = Auth::guard('sanctum')->user()
+            ?? Auth::guard('office')->user();
+
+        if (! $office) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated.',
+            ], 401);
+        }
+
+        // Remove old token if provided (token rotation)
+        if ($request->old_fcm_token) {
+            $office->removeFCMToken($request->old_fcm_token);
+        }
+
+        // Add / update new token
+        $office->addFCMToken($request->fcm_token, $request->device_name ?? 'Unknown Device');
+
+        // Optionally persist language in the same call
+        if ($request->filled('language')) {
+            $office->update(['language' => $request->language]);
+        }
+
+        Log::info('Office FCM token updated', ['office_id' => $office->id]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'FCM token updated successfully',
+        ], 200);
+    }
 }
