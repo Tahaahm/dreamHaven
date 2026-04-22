@@ -334,64 +334,47 @@ Route::prefix('real-estate-offices')->group(function () {
 
 // In web.php - REPLACE the entire agents route section with this:
 Route::prefix('v1/api/agents')->group(function () {
-
-    // =========================
-    // PUBLIC ROUTES
-    // =========================
-    Route::get('/',                    [AgentController::class, 'index']);
+    // ✅ PUBLIC ROUTES FIRST
     Route::get('/search',              [AgentController::class, 'search']);
     Route::get('/top-rated',           [AgentController::class, 'getTopRated']);
     Route::get('/nearby',              [AgentController::class, 'getNearbyAgents']);
     Route::get('/company/{companyId}', [AgentController::class, 'getAgentsByCompany']);
-    Route::get('/{id}',                [AgentController::class, 'show']);
-    Route::get('/{id}/properties',     [AgentController::class, 'getAgentProperties']);
+    Route::post('/login',              [AgentController::class, 'login']);
+    Route::post('/users/{user_id}/convert-to-agent', [AgentController::class, 'createFromUser']);
 
-    // =========================
-    // AUTH ROUTES
-    // =========================
+    // ✅ AUTHENTICATED ROUTES
     Route::middleware(['auth:sanctum'])->group(function () {
+        // Profile & Dashboard
+        Route::get('/profile',          [AgentController::class, 'getAgentProfile']);
+        Route::get('/dashboard-stats',  [AgentController::class, 'getDashboardStats']);
+        Route::get('/my-properties',    [AgentController::class, 'getMyProperties']);
 
-        // Auth actions
-        Route::post('/login',  [AgentController::class, 'login']);
-        Route::post('/logout', [AgentController::class, 'logout']);
+        Route::post('/{id}/update', [AgentController::class, 'update']);
 
-        // Profile & dashboard
-        Route::get('/profile',         [AgentController::class, 'getAgentProfile']);
-        Route::get('/dashboard-stats', [AgentController::class, 'getDashboardStats']);
-        Route::get('/my-properties',   [AgentController::class, 'getMyProperties']);
-
-        // Language
         Route::post('/{id}/language', [AgentController::class, 'updateLanguage']);
 
-        // FCM
-        Route::post('/update-fcm-token', [AgentController::class, 'updateFCMToken']);
+        // FCM & Session — must be authenticated
+        Route::post('/logout',           [AgentController::class, 'logout']);          // ← ADD
+        Route::post('/update-fcm-token', [AgentController::class, 'updateFCMToken']); // ← MOVED inside auth
 
-        // Subscriptions & appointments
-        Route::get('/subscriptions/details',     [AgentController::class, 'getSubscriptionDetails']);
-        Route::get('/appointments',              [AgentController::class, 'getAppointments']);
-        Route::put('/appointments/{id}/status',  [AgentController::class, 'updateAppointmentStatus']);
+        // Subscriptions & Appointments
+        Route::get('/subscriptions/details',          [AgentController::class, 'getSubscriptionDetails']);
+        Route::get('/appointments',                   [AgentController::class, 'getAppointments']);
+        Route::put('/appointments/{id}/status',       [AgentController::class, 'updateAppointmentStatus']);
 
-        // =========================
-        // CRUD (IMPORTANT FOR FLUTTER)
-        // =========================
-
-        // Create
-        Route::post('/', [AgentController::class, 'store']);
-
-        // Update (IMPORTANT: used with multipart + _method=PUT)
-        Route::post('/{id}', [AgentController::class, 'update']);
-
-        // Alternative update methods (optional fallback)
-        Route::put('/{id}',   [AgentController::class, 'update']);
-        Route::patch('/{id}', [AgentController::class, 'update']);
-
-        // Delete
-        Route::delete('/{id}', [AgentController::class, 'destroy']);
-
-        // Extra actions
-        Route::patch('/{id}/verify',        [AgentController::class, 'toggleVerification']);
+        // CRUD
+        Route::post('/',               [AgentController::class, 'store']);
+        Route::put('/{id}',            [AgentController::class, 'update']);
+        Route::patch('/{id}',          [AgentController::class, 'update']);
+        Route::delete('/{id}',         [AgentController::class, 'destroy']);
+        Route::patch('/{id}/verify',   [AgentController::class, 'toggleVerification']);
         Route::patch('/{id}/remove-company', [AgentController::class, 'removeFromCompany']);
     });
+
+    // ✅ CATCH-ALL LAST
+    Route::get('/',                    [AgentController::class, 'index']);
+    Route::get('/{id}/properties',     [AgentController::class, 'getAgentProperties']);
+    Route::get('/{id}',                [AgentController::class, 'show']);
 });
 // ============================================
 // API ROUTES - Location
