@@ -183,7 +183,6 @@ class AgentController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            // 1. Find the agent
             $agent = Agent::find($id);
 
             if (!$agent) {
@@ -193,89 +192,61 @@ class AgentController extends Controller
                 ], 404);
             }
 
-            // 2. Get the currently authenticated user (Could be User OR Agent model)
             $user = $request->user();
 
-            // 3. Robust Authorization Logic
-            // Check if the logged-in entity is the Agent itself
-            $isSelf = ($user->id === $agent->id) && ($user instanceof \App\Models\Agent);
-
-            // Check if the logged-in entity is the "Owner" User (using subscriber_id)
-            // We use ?? null to prevent errors if a column is missing
+            $isSelf  = ($user->id === $agent->id) && ($user instanceof \App\Models\Agent);
             $ownerId = $agent->subscriber_id ?? $agent->user_id ?? null;
             $isOwner = ($user->id === $ownerId) && ($user instanceof \App\Models\User);
+            $isAdmin = isset($user->role) && $user->role === 'admin';
 
-            // Check if Admin
-            $isAdmin = false;
-            if (isset($user->role) && $user->role === 'admin') {
-                $isAdmin = true;
-            }
-
-            // Log for debugging
             Log::info('AGENT UPDATE AUTH CHECK', [
                 'request_user_id' => $user->id,
                 'target_agent_id' => $agent->id,
-                'is_self' => $isSelf,
-                'is_owner' => $isOwner,
-                'is_admin' => $isAdmin
+                'is_self'         => $isSelf,
+                'is_owner'        => $isOwner,
+                'is_admin'        => $isAdmin,
             ]);
 
-            // Gatekeeper
             if (!$isSelf && !$isOwner && !$isAdmin) {
                 return response()->json([
-                    'status' => false,
+                    'status'  => false,
                     'message' => 'Unauthorized to update this profile'
                 ], 403);
             }
 
-            // 4. Validation rules
             $validator = Validator::make($request->all(), [
-                // Basic Info
-                'agent_name' => 'sometimes|string|max:255',
-                'primary_phone' => 'sometimes|string|max:20',
-                'whatsapp_number' => 'nullable|string|max:20',
+                'agent_name'       => 'sometimes|string|max:255',
+                'primary_phone'    => 'sometimes|string|max:20',
+                'whatsapp_number'  => 'nullable|string|max:20',
                 'years_experience' => 'nullable|integer|min:0|max:50',
-
-                // Bio & Overview
-                'agent_bio' => 'nullable|string|max:1000',
-                'agent_overview' => 'nullable|string|max:2000',
-
-                // Professional
-                'license_number' => 'nullable|string|max:100',
-
-                // Location
-                'office_address' => 'nullable|string|max:500',
-                'district' => 'nullable|string|max:100',
-                // Accept string or numeric for lat/lng because Flutter might send "36.123" string
-                'latitude' => 'nullable',
-                'longitude' => 'nullable',
-                'city_id' => 'nullable',
-                'area_id' => 'nullable',
-
-                // Fees
-                'commission_rate' => 'nullable|string|max:10',
+                'agent_bio'        => 'nullable|string|max:1000',
+                'agent_overview'   => 'nullable|string|max:2000',
+                'license_number'   => 'nullable|string|max:100',
+                'office_address'   => 'nullable|string|max:500',
+                'district'         => 'nullable|string|max:100',
+                'city'             => 'nullable|string|max:255',
+                'city_id'          => 'nullable',
+                'area_id'          => 'nullable',
+                'latitude'         => 'nullable',
+                'longitude'        => 'nullable',
+                'commission_rate'  => 'nullable|string|max:10',
                 'consultation_fee' => 'nullable|string|max:20',
-
-                // Working Hours (Accepts JSON string or Array)
-                'working_hours' => 'nullable',
-
-                // Images
-                'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
-                'bio_image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'working_hours'    => 'nullable',
+                'profile_image'    => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+                'bio_image'        => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
-                    'status' => false,
+                    'status'  => false,
                     'message' => 'Validation failed',
-                    'errors' => $validator->errors()
+                    'errors'  => $validator->errors()
                 ], 422);
             }
 
-            // 5. Start transaction
             DB::beginTransaction();
 
-            // Prepare data for update
+            // ── Text fields ──────────────────────────────────────────────────────
             $updateData = $request->only([
                 'agent_name',
                 'primary_phone',
@@ -286,37 +257,39 @@ class AgentController extends Controller
                 'license_number',
                 'office_address',
                 'district',
-                'latitude',
-                'longitude',
+                'city',        // ← now included
                 'city_id',
                 'area_id',
+                'latitude',
+                'longitude',
                 'commission_rate',
-                'consultation_fee'
+                'consultation_fee',
             ]);
 
-            // 6. Handle Working Hours (Array vs String fix)
+            // ── Working hours ────────────────────────────────────────────────────
             if ($request->has('working_hours')) {
                 $workingHours = $request->working_hours;
 
-                // If it's already an array (from Flutter Map), encode it for DB
                 if (is_array($workingHours)) {
                     $updateData['working_hours'] = json_encode($workingHours);
-                }
-                // If it's a JSON string, decode then re-encode to ensure validity, or save as is
-                else if (is_string($workingHours)) {
-                    // Optional: Validate it's real JSON
+                } elseif (is_string($workingHours)) {
                     $decoded = json_decode($workingHours, true);
                     if (json_last_error() === JSON_ERROR_NONE) {
-                        $updateData['working_hours'] = $workingHours;
+                        // store as decoded array so Laravel casts it cleanly
+                        $updateData['working_hours'] = json_encode($decoded);
                     }
                 }
             }
 
-            // 7. Handle Profile Image Upload
+            // ── Profile image ────────────────────────────────────────────────────
             if ($request->hasFile('profile_image')) {
-
                 if ($agent->profile_image) {
-                    Storage::disk('public')->delete(ltrim($agent->profile_image, '/'));
+                    // handle both full-URL and relative paths stored in DB
+                    $relativePath = ltrim(
+                        str_replace(rtrim(config('app.url'), '/') . '/storage/', '', $agent->profile_image),
+                        '/'
+                    );
+                    Storage::disk('public')->delete($relativePath);
                 }
 
                 $path = $this->compressAgentImage(
@@ -325,17 +298,21 @@ class AgentController extends Controller
                 );
 
                 if ($path) {
-                    $updateData['profile_image'] = $path;
+                    // store as full URL — consistent with updateProfile()
+                    $updateData['profile_image'] = $this->storageUrl($path);
                 }
             }
 
-            // 8. Handle Bio Image Upload
+            // ── Bio image ────────────────────────────────────────────────────────
             if ($request->hasFile('bio_image')) {
-
                 Log::info('Bio image upload started', ['agent_id' => $agent->id]);
 
                 if ($agent->bio_image) {
-                    Storage::disk('public')->delete(ltrim($agent->bio_image, '/'));
+                    $relativePath = ltrim(
+                        str_replace(rtrim(config('app.url'), '/') . '/storage/', '', $agent->bio_image),
+                        '/'
+                    );
+                    Storage::disk('public')->delete($relativePath);
                 }
 
                 $path = $this->compressAgentImage(
@@ -344,38 +321,39 @@ class AgentController extends Controller
                 );
 
                 if ($path) {
-                    $updateData['bio_image'] = $path;
+                    $updateData['bio_image'] = $this->storageUrl($path);
                 }
             }
 
-            // 9. Update the agent
             $agent->update($updateData);
 
-            // 10. Commit transaction
             DB::commit();
 
-            // 11. Reload agent with relationships
             $agent->load(['branch', 'area', 'subscription']);
 
+            // ── Return working_hours as decoded object, never raw string ─────────
+            $agentArray                  = $agent->toArray();
+            $agentArray['working_hours'] = is_string($agent->working_hours)
+                ? json_decode($agent->working_hours, true)
+                : $agent->working_hours;
+
             return response()->json([
-                'status' => true,
+                'status'  => true,
                 'message' => 'Profile updated successfully',
-                'data' => [
-                    'agent' => $agent
-                ]
+                'data'    => ['agent' => $agentArray]
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
 
             Log::error('Agent Update Error: ' . $e->getMessage(), [
                 'agent_id' => $id,
-                'trace' => $e->getTraceAsString()
+                'trace'    => $e->getTraceAsString(),
             ]);
 
             return response()->json([
-                'status' => false,
+                'status'  => false,
                 'message' => 'Server Error',
-                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred while updating profile'
+                'error'   => config('app.debug') ? $e->getMessage() : 'An error occurred while updating profile'
             ], 500);
         }
     }
@@ -1028,7 +1006,6 @@ class AgentController extends Controller
     public function getAgentProfile(Request $request)
     {
         try {
-
             Log::info('STEP 1: Method started');
 
             $agent = $request->user();
@@ -1037,10 +1014,10 @@ class AgentController extends Controller
             if (!$agent || !($agent instanceof \App\Models\Agent)) {
                 Log::warning('STEP 3: Unauthorized access');
                 return response()->json([
-                    'status' => false,
-                    'code' => 401,
+                    'status'  => false,
+                    'code'    => 401,
                     'message' => 'Unauthorized. Please login as an agent.',
-                    'data' => null
+                    'data'    => null
                 ], 401);
             }
 
@@ -1055,95 +1032,87 @@ class AgentController extends Controller
 
             Log::info('STEP 5: Relationships loaded successfully');
 
-            // TEST working_hours specifically
-            Log::info('STEP 6: Working hours raw value', [
-                'working_hours' => $agent->working_hours
-            ]);
+            // ── Decode working_hours once, return as object not raw string ───────
+            $workingHours = $agent->working_hours;
+            if (is_string($workingHours)) {
+                $decoded = json_decode($workingHours, true);
+                $workingHours = (json_last_error() === JSON_ERROR_NONE) ? $decoded : null;
+            }
 
-            /*
-        |--------------------------------------------------------------------------
-        | SERIALIZE AGENT
-        |--------------------------------------------------------------------------
-        */
+            Log::info('STEP 6: Working hours decoded', ['working_hours' => $workingHours]);
 
             Log::info('STEP 7: Building agent data array');
 
             $agentData = [
-                'id' => $agent->id,
-                'agent_name' => $agent->agent_name,
-                'agent_bio' => $agent->agent_bio,
-                'bio_image' => $agent->bio_image,
-                'profile_image' => $agent->profile_image,
-                'type' => $agent->type,
-                'subscriber_id' => $agent->subscriber_id,
-                'is_verified' => $agent->is_verified,
-                'status' => $agent->status ?? 'active',
-                'overall_rating' => $agent->overall_rating,
-                'current_plan' => optional($agent->currentSubscription?->currentPlan)->name,
-                'properties_uploaded_this_month' => $agent->properties_uploaded_this_month,
-                'remaining_property_uploads' => $agent->remaining_property_uploads,
-                'primary_email' => $agent->primary_email,
-                'primary_phone' => $agent->primary_phone,
-                'whatsapp_number' => $agent->whatsapp_number,
-                'office_address' => $agent->office_address,
-                'latitude' => $agent->latitude,
-                'longitude' => $agent->longitude,
-                'city' => $agent->city,
-                'district' => $agent->district,
-                'city_id' => $agent->city_id,
-                'area_id' => $agent->area_id,
-                'branch' => $agent->branch ? [
-                    'id' => $agent->branch->id,
+                'id'                              => $agent->id,
+                'agent_name'                      => $agent->agent_name,
+                'agent_bio'                       => $agent->agent_bio,
+                'bio_image'                       => $agent->bio_image,
+                'profile_image'                   => $agent->profile_image,
+                'type'                            => $agent->type,
+                'subscriber_id'                   => $agent->subscriber_id,
+                'is_verified'                     => $agent->is_verified,
+                'status'                          => $agent->status ?? 'active',
+                'overall_rating'                  => $agent->overall_rating,
+                'current_plan'                    => optional($agent->currentSubscription?->currentPlan)->name,
+                'properties_uploaded_this_month'  => $agent->properties_uploaded_this_month,
+                'remaining_property_uploads'      => $agent->remaining_property_uploads,
+                'primary_email'                   => $agent->primary_email,
+                'primary_phone'                   => $agent->primary_phone,
+                'whatsapp_number'                 => $agent->whatsapp_number,
+                'office_address'                  => $agent->office_address,
+                'latitude'                        => $agent->latitude,
+                'longitude'                       => $agent->longitude,
+                'city'                            => $agent->city,
+                'district'                        => $agent->district,
+                'city_id'                         => $agent->city_id,
+                'area_id'                         => $agent->area_id,
+                'branch'                          => $agent->branch ? [
+                    'id'   => $agent->branch->id,
                     'name' => $agent->branch->name,
                 ] : null,
-                'area' => $agent->area ? [
-                    'id' => $agent->area->id,
+                'area'                            => $agent->area ? [
+                    'id'   => $agent->area->id,
                     'name' => $agent->area->name,
                 ] : null,
-                'properties_sold' => $agent->properties_sold,
-                'years_experience' => $agent->years_experience,
-                'license_number' => $agent->license_number,
-                'company' => $agent->company ? [
-                    'id' => $agent->company->id,
+                'properties_sold'                 => $agent->properties_sold,
+                'years_experience'                => $agent->years_experience,
+                'license_number'                  => $agent->license_number,
+                'company'                         => $agent->company ? [
+                    'id'   => $agent->company->id,
                     'name' => $agent->company->name,
                 ] : null,
-                'employment_status' => $agent->employment_status,
-                'agent_overview' => $agent->agent_overview,
-                'working_hours' => $agent->working_hours,
-                'commission_rate' => $agent->commission_rate,
-                'consultation_fee' => $agent->consultation_fee,
-                'currency' => $agent->currency,
+                'employment_status'               => $agent->employment_status,
+                'agent_overview'                  => $agent->agent_overview,
+                'working_hours'                   => $workingHours,  // ← always decoded object
+                'commission_rate'                 => $agent->commission_rate,
+                'consultation_fee'                => $agent->consultation_fee,
+                'currency'                        => $agent->currency,
             ];
 
             Log::info('STEP 8: Agent data array built successfully');
 
-            /*
-        |--------------------------------------------------------------------------
-        | SUBSCRIPTION
-        |--------------------------------------------------------------------------
-        */
-
+            // ── Subscription ─────────────────────────────────────────────────────
             $subscriptionData = null;
 
             if ($agent->currentSubscription) {
-
                 Log::info('STEP 9: Building subscription');
 
                 $subscription = $agent->currentSubscription;
 
                 $subscriptionData = [
-                    'id' => $subscription->id,
-                    'plan_name' => optional($subscription->currentPlan)->name ?? 'Unknown Plan',
-                    'status' => $subscription->status,
-                    'start_date' => $subscription->start_date,
-                    'end_date' => $subscription->end_date,
-                    'property_activation_limit' => $subscription->property_activation_limit,
-                    'banner_activation_limit' => $subscription->banner_activation_limit,
-                    'remaining_activations' => $subscription->remaining_activations,
+                    'id'                              => $subscription->id,
+                    'plan_name'                       => optional($subscription->currentPlan)->name ?? 'Unknown Plan',
+                    'status'                          => $subscription->status,
+                    'start_date'                      => $subscription->start_date,
+                    'end_date'                        => $subscription->end_date,
+                    'property_activation_limit'       => $subscription->property_activation_limit,
+                    'banner_activation_limit'         => $subscription->banner_activation_limit,
+                    'remaining_activations'           => $subscription->remaining_activations,
                     'properties_activated_this_month' => $subscription->properties_activated_this_month,
-                    'is_active' => $subscription->status === 'active'
+                    'is_active'                       => $subscription->status === 'active'
                         && $subscription->end_date > now(),
-                    'days_remaining' => $subscription->end_date
+                    'days_remaining'                  => $subscription->end_date
                         ? (int) now()->diffInDays($subscription->end_date, false)
                         : null,
                 ];
@@ -1154,26 +1123,25 @@ class AgentController extends Controller
             Log::info('STEP 11: Returning JSON response');
 
             return response()->json([
-                'status' => true,
+                'status'  => true,
                 'message' => 'Agent profile retrieved successfully',
-                'data' => [
-                    'agent' => $agentData,
+                'data'    => [
+                    'agent'        => $agentData,
                     'subscription' => $subscriptionData,
                 ]
             ], 200);
         } catch (\Throwable $e) {
-
             Log::error('❌ CRASH DETECTED', [
                 'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
             ]);
 
             return response()->json([
-                'status' => false,
-                'code' => 500,
+                'status'  => false,
+                'code'    => 500,
                 'message' => 'Failed to retrieve agent profile',
-                'data' => null
+                'data'    => null
             ], 500);
         }
     }
