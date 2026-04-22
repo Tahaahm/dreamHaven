@@ -617,40 +617,38 @@ class OfficeDashboardApiController extends Controller
                 'files'   => $request->allFiles(),
             ]);
 
+            Log::info('Office image upload start', [
+                'hasFile' => $request->hasFile('company_bio_image'),
+                'file' => $request->file('company_bio_image')?->getClientOriginalName(),
+            ]);
+
             if ($request->hasFile('company_bio_image')) {
 
                 $file = $request->file('company_bio_image');
 
-                Log::info('Bio image received', [
-                    'original_name' => $file->getClientOriginalName(),
+                Log::info('Office image received', [
+                    'name' => $file->getClientOriginalName(),
                     'mime' => $file->getMimeType(),
                     'size' => $file->getSize(),
                     'valid' => $file->isValid(),
-                    'error' => $file->getError(),
                 ]);
 
-                if (! $file->isValid()) {
-                    Log::error('Bio image invalid upload', [
-                        'error' => $file->getErrorMessage(),
+                $path = $this->compressOfficeImage($file, 'offices/bio');
+
+                Log::info('Office image compressed result', [
+                    'path' => $path,
+                    'exists' => $path ? file_exists(storage_path('app/public/' . $path)) : false,
+                ]);
+
+                if ($path) {
+                    $updateData['company_bio_image'] = '/storage/' . $path;
+
+                    Log::info('Office image saved to DB field', [
+                        'company_bio_image' => $updateData['company_bio_image'],
                     ]);
+                } else {
+                    Log::error('Office image compression returned null');
                 }
-
-                $dir = public_path('uploads/offices/bio');
-
-                if (! file_exists($dir)) {
-                    Log::info('Creating bio directory', ['dir' => $dir]);
-                    mkdir($dir, 0755, true);
-                }
-
-                $filename = 'office_bio_' . $office->id . '_' . time() . '.' . $file->extension();
-
-                Log::info('Saving bio image', [
-                    'path' => $dir . '/' . $filename
-                ]);
-
-                $file->move($dir, $filename);
-
-                $updateData['company_bio_image'] = '/uploads/offices/bio/' . $filename;
             }
 
             // 8. Persist
@@ -815,5 +813,75 @@ class OfficeDashboardApiController extends Controller
             'success' => true,
             'message' => 'FCM token updated successfully',
         ], 200);
+    }
+
+    private function compressOfficeImage($file, string $folder = 'offices'): ?string
+    {
+        try {
+            $mime = $file->getMimeType();
+            $sourcePath = $file->getRealPath();
+
+            $sourceImage = match ($mime) {
+                'image/jpeg', 'image/jpg' => imagecreatefromjpeg($sourcePath),
+                'image/png'               => imagecreatefrompng($sourcePath),
+                'image/webp'              => imagecreatefromwebp($sourcePath),
+                default                   => null,
+            };
+
+            if (!$sourceImage) return null;
+
+            $originalWidth  = imagesx($sourceImage);
+            $originalHeight = imagesy($sourceImage);
+
+            $maxWidth  = 1280;
+            $maxHeight = 1280;
+
+            $ratio = min($maxWidth / $originalWidth, $maxHeight / $originalHeight);
+
+            $newWidth  = $ratio < 1 ? (int)($originalWidth * $ratio) : $originalWidth;
+            $newHeight = $ratio < 1 ? (int)($originalHeight * $ratio) : $originalHeight;
+
+            $resized = imagecreatetruecolor($newWidth, $newHeight);
+
+            if ($mime === 'image/png') {
+                imagealphablending($resized, false);
+                imagesavealpha($resized, true);
+                $transparent = imagecolorallocatealpha($resized, 255, 255, 255, 127);
+                imagefilledrectangle($resized, 0, 0, $newWidth, $newHeight, $transparent);
+            }
+
+            imagecopyresampled(
+                $resized,
+                $sourceImage,
+                0,
+                0,
+                0,
+                0,
+                $newWidth,
+                $newHeight,
+                $originalWidth,
+                $originalHeight
+            );
+
+            // 👇 OFFICE PATH (IMPORTANT CHANGE)
+            $relativePath = $folder . '/' . uniqid('office_') . '.jpg';
+            $fullPath = storage_path('app/public/' . $relativePath);
+
+            if (!file_exists(dirname($fullPath))) {
+                mkdir(dirname($fullPath), 0755, true);
+            }
+
+            imagejpeg($resized, $fullPath, 75);
+
+            imagedestroy($sourceImage);
+            imagedestroy($resized);
+
+            return $relativePath;
+        } catch (\Throwable $e) {
+            Log::error('Office image compression failed', [
+                'error' => $e->getMessage()
+            ]);
+            return null;
+        }
     }
 }
