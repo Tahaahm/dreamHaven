@@ -612,38 +612,42 @@ class OfficeDashboardApiController extends Controller
                 }
             }
 
-            // 6. Handle profile_image upload
-            if ($request->hasFile('profile_image')) {
-                // Delete old file if it exists on disk
-                if ($office->profile_image && file_exists(public_path($office->profile_image))) {
-                    @unlink(public_path($office->profile_image));
-                }
+            Log::info('Bio image debug check', [
+                'hasFile' => $request->hasFile('company_bio_image'),
+                'files'   => $request->allFiles(),
+            ]);
 
-                $dir = public_path('uploads/offices/profiles');
-                if (! file_exists($dir)) {
-                    mkdir($dir, 0755, true);
-                }
-
-                $file     = $request->file('profile_image');
-                $filename = 'office_profile_' . $office->id . '_' . time() . '.' . $file->extension();
-                $file->move($dir, $filename);
-
-                $updateData['profile_image'] = '/uploads/offices/profiles/' . $filename;
-            }
-
-            // 7. Handle company_bio_image upload
             if ($request->hasFile('company_bio_image')) {
-                if ($office->company_bio_image && file_exists(public_path($office->company_bio_image))) {
-                    @unlink(public_path($office->company_bio_image));
+
+                $file = $request->file('company_bio_image');
+
+                Log::info('Bio image received', [
+                    'original_name' => $file->getClientOriginalName(),
+                    'mime' => $file->getMimeType(),
+                    'size' => $file->getSize(),
+                    'valid' => $file->isValid(),
+                    'error' => $file->getError(),
+                ]);
+
+                if (! $file->isValid()) {
+                    Log::error('Bio image invalid upload', [
+                        'error' => $file->getErrorMessage(),
+                    ]);
                 }
 
                 $dir = public_path('uploads/offices/bio');
+
                 if (! file_exists($dir)) {
+                    Log::info('Creating bio directory', ['dir' => $dir]);
                     mkdir($dir, 0755, true);
                 }
 
-                $file     = $request->file('company_bio_image');
                 $filename = 'office_bio_' . $office->id . '_' . time() . '.' . $file->extension();
+
+                Log::info('Saving bio image', [
+                    'path' => $dir . '/' . $filename
+                ]);
+
                 $file->move($dir, $filename);
 
                 $updateData['company_bio_image'] = '/uploads/offices/bio/' . $filename;
