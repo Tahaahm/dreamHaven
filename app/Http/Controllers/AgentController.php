@@ -314,35 +314,28 @@ class AgentController extends Controller
 
             // 7. Handle Profile Image Upload
             if ($request->hasFile('profile_image')) {
-                // Delete old image if exists
-                if ($agent->profile_image && file_exists(public_path($agent->profile_image))) {
-                    @unlink(public_path($agent->profile_image));
+
+                if ($agent->profile_image) {
+                    Storage::disk('public')->delete(ltrim($agent->profile_image, '/'));
                 }
 
-                // Create directory if not exists
-                $profileDir = public_path('uploads/agents/profiles');
-                if (!file_exists($profileDir)) {
-                    mkdir($profileDir, 0755, true);
+                $path = $this->compressAgentImage(
+                    $request->file('profile_image'),
+                    'agents/profiles'
+                );
+
+                if ($path) {
+                    $updateData['profile_image'] = $path;
                 }
-
-                // Store new image
-                $profileImage = $request->file('profile_image');
-                $profileImageName = 'agent_profile_' . $agent->id . '_' . time() . '.' . $profileImage->extension();
-                $profileImage->move($profileDir, $profileImageName);
-
-                $updateData['profile_image'] = '/uploads/agents/profiles/' . $profileImageName;
             }
 
             // 8. Handle Bio Image Upload
             if ($request->hasFile('bio_image')) {
 
-                Log::info('Agent bio image upload started', [
-                    'agent_id' => $agent->id
-                ]);
+                Log::info('Bio image upload started', ['agent_id' => $agent->id]);
 
-                // delete old
                 if ($agent->bio_image) {
-                    Storage::disk('public')->delete($agent->bio_image);
+                    Storage::disk('public')->delete(ltrim($agent->bio_image, '/'));
                 }
 
                 $path = $this->compressAgentImage(
@@ -352,10 +345,6 @@ class AgentController extends Controller
 
                 if ($path) {
                     $updateData['bio_image'] = $path;
-                } else {
-                    Log::warning('Bio image compression failed', [
-                        'agent_id' => $agent->id
-                    ]);
                 }
             }
 
@@ -549,9 +538,19 @@ class AgentController extends Controller
         $agent->update($request->only(['agent_name', 'primary_email', 'primary_phone', 'type', 'city']));
 
         if ($request->hasFile('profile_image')) {
-            $path = $request->file('profile_image')->store('profile_images', 'public');
-            $agent->profile_image = $path;
-            $agent->save();
+
+            if ($agent->profile_image) {
+                Storage::disk('public')->delete(ltrim($agent->profile_image, '/'));
+            }
+
+            $path = $this->compressAgentImage(
+                $request->file('profile_image'),
+                'agents/profiles'
+            );
+
+            if ($path) {
+                $updateData['profile_image'] = $path;
+            }
         }
 
         return redirect()->route('agent.edit', $agent->id)
