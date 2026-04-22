@@ -1034,8 +1034,8 @@ class AgentAuthController extends Controller
             $agent->longitude       = $request->longitude;
 
             // ✅ CRITICAL FIX: Update the language field
-            if ($request->has('language')) {
-                $agent->language = $request->language;
+            if ($request->filled('language')) {
+                $agent->language = $request->input('language');
             }
 
             // Handle Working Hours
