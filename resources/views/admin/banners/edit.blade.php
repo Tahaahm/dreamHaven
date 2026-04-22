@@ -218,12 +218,20 @@
 
                         <div>
                             <label class="input-label">Placement</label>
-                            <select name="position" class="input-modern cursor-pointer">
-                                <option value="home_top" {{ $banner->position == 'home_top' ? 'selected' : '' }}>Home: Top Hero</option>
-                                <option value="home_middle" {{ $banner->position == 'home_middle' ? 'selected' : '' }}>Home: Middle Section</option>
-                                <option value="sidebar" {{ $banner->position == 'sidebar' ? 'selected' : '' }}>Sidebar</option>
-                                <option value="listing_page" {{ $banner->position == 'listing_page' ? 'selected' : '' }}>Listing Detail Page</option>
-                            </select>
+                            {{-- ✅ Values must match the ENUM: header,sidebar_top,sidebar_bottom, --}}
+{{--    content_top,content_middle,content_bottom,footer,popup,floating --}}
+<select name="position" class="input-modern cursor-pointer">
+    <option value="">— No Position —</option>
+    <option value="header"          {{ $banner->position == 'header'          ? 'selected' : '' }}>Home: Top Hero (header)</option>
+    <option value="content_top"     {{ $banner->position == 'content_top'     ? 'selected' : '' }}>Home: Top Content</option>
+    <option value="content_middle"  {{ $banner->position == 'content_middle'  ? 'selected' : '' }}>Home: Middle Section</option>
+    <option value="content_bottom"  {{ $banner->position == 'content_bottom'  ? 'selected' : '' }}>Home: Bottom Section</option>
+    <option value="sidebar_top"     {{ $banner->position == 'sidebar_top'     ? 'selected' : '' }}>Sidebar: Top</option>
+    <option value="sidebar_bottom"  {{ $banner->position == 'sidebar_bottom'  ? 'selected' : '' }}>Sidebar: Bottom</option>
+    <option value="footer"          {{ $banner->position == 'footer'          ? 'selected' : '' }}>Footer</option>
+    <option value="popup"           {{ $banner->position == 'popup'           ? 'selected' : '' }}>Popup</option>
+    <option value="floating"        {{ $banner->position == 'floating'        ? 'selected' : '' }}>Floating</option>
+</select>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
