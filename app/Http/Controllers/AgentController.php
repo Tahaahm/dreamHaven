@@ -1782,4 +1782,118 @@ class AgentController extends Controller
             ResponseDetails::CODE_SUCCESS
         );
     }
+
+
+    public function updateProfile(Request $request)
+    {
+        // 1. Get the authenticated agent
+        $agent = Auth::guard('agent')->user();
+
+        Log::info('Agent updateProfile request received', [
+            'all_request' => $request->all(),
+            'language' => $request->input('language'),
+            'has_language' => $request->has('language'),
+            'filled_language' => $request->filled('language'),
+        ]);
+
+        // 2. Comprehensive Validation
+        $request->validate([
+            'agent_name'       => 'required|string|max:255',
+            'primary_phone'    => 'required|string|max:20',
+            'whatsapp_number'  => 'nullable|string|max:20',
+            'city'             => 'required|string',
+            'district'         => 'nullable|string',
+            'license_number'   => 'nullable|string',
+            'years_experience' => 'nullable|integer|min:0',
+            'agent_bio'        => 'nullable|string|max:1000',
+            'office_address'   => 'nullable|string',
+            'latitude'         => 'nullable|numeric',
+            'longitude'        => 'nullable|numeric',
+            'profile_image'    => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+            'bio_image'        => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+            'working_hours'    => 'nullable|string',
+            'language'         => 'nullable|string|in:en,ar,ku', // ✅ MUST BE HERE
+        ]);
+
+        Log::info('Before assigning language', [
+            'current_db_language' => $agent->language,
+            'incoming_language' => $request->language,
+        ]);
+
+        try {
+            // Handle Images (Profile)
+            if ($request->hasFile('profile_image')) {
+                if ($agent->profile_image && Storage::disk('public')->exists(str_replace('storage/', '', $agent->profile_image))) {
+                    Storage::disk('public')->delete(str_replace('storage/', '', $agent->profile_image));
+                }
+                $agent->profile_image = $request->file('profile_image')->store('agents/profiles', 'public');
+            }
+
+            // Handle Images (Bio)
+            if ($request->hasFile('bio_image')) {
+                if ($agent->bio_image && Storage::disk('public')->exists(str_replace('storage/', '', $agent->bio_image))) {
+                    Storage::disk('public')->delete(str_replace('storage/', '', $agent->bio_image));
+                }
+                $agent->bio_image = $request->file('bio_image')->store('agents/bio', 'public');
+            }
+
+            // 3. Manual Assignment (Don't miss language!)
+            $agent->agent_name      = $request->agent_name;
+            $agent->primary_phone   = $request->primary_phone;
+            $agent->whatsapp_number = $request->whatsapp_number;
+            $agent->city            = $request->city;
+            $agent->district        = $request->district;
+            $agent->license_number  = $request->license_number;
+            $agent->years_experience = $request->years_experience;
+            $agent->agent_bio       = $request->agent_bio;
+            $agent->office_address  = $request->office_address;
+            $agent->latitude        = $request->latitude;
+            $agent->longitude       = $request->longitude;
+
+            // ✅ CRITICAL FIX: Update the language field
+            if ($request->filled('language')) {
+                $agent->language = $request->input('language');
+            }
+
+            Log::info('After assigning language (before save)', [
+                'agent_language' => $agent->language,
+            ]);
+
+            // Handle Working Hours
+            if ($request->filled('working_hours')) {
+                $decoded = json_decode($request->working_hours, true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $agent->working_hours = $decoded;
+                }
+            }
+
+            // 4. Save to Database
+            $agent->save();
+
+            // 5. Sync the Auth state
+            $updatedAgent = $agent->fresh();
+            Auth::guard('agent')->setUser($updatedAgent);
+
+            // 6. Respond based on request type
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json([
+                    'status'  => true,
+                    'message' => 'Profile updated successfully',
+                    'data'    => [
+                        'agent' => $updatedAgent // This will now include the language!
+                    ]
+                ]);
+            }
+
+            return redirect()->route('agent.profile', $agent->id)
+                ->with('success', 'Profile updated successfully!');
+        } catch (\Exception $e) {
+            Log::error('Agent Update Error: ' . $e->getMessage());
+
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
+            }
+            return back()->withInput()->with('error', 'Error: ' . $e->getMessage());
+        }
+    }
 }
