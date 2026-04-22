@@ -641,8 +641,7 @@ class OfficeDashboardApiController extends Controller
                 ]);
 
                 if ($path) {
-                    $updateData['company_bio_image'] = '/storage/' . $path;
-
+                    $updateData['company_bio_image'] = $this->storageUrl($path);
                     Log::info('Office image saved to DB field', [
                         'company_bio_image' => $updateData['company_bio_image'],
                     ]);
@@ -883,5 +882,10 @@ class OfficeDashboardApiController extends Controller
             ]);
             return null;
         }
+    }
+
+    private function storageUrl(string $path): string
+    {
+        return rtrim(config('app.url'), '/') . '/storage/' . ltrim($path, '/');
     }
 }
