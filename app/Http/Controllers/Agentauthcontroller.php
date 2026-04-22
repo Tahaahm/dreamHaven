@@ -984,6 +984,13 @@ class AgentAuthController extends Controller
         // 1. Get the authenticated agent
         $agent = Auth::guard('agent')->user();
 
+        Log::info('Agent updateProfile request received', [
+            'all_request' => $request->all(),
+            'language' => $request->input('language'),
+            'has_language' => $request->has('language'),
+            'filled_language' => $request->filled('language'),
+        ]);
+
         // 2. Comprehensive Validation
         $request->validate([
             'agent_name'       => 'required|string|max:255',
@@ -1001,6 +1008,11 @@ class AgentAuthController extends Controller
             'bio_image'        => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
             'working_hours'    => 'nullable|string',
             'language'         => 'nullable|string|in:en,ar,ku', // ✅ MUST BE HERE
+        ]);
+
+        Log::info('Before assigning language', [
+            'current_db_language' => $agent->language,
+            'incoming_language' => $request->language,
         ]);
 
         try {
@@ -1037,6 +1049,10 @@ class AgentAuthController extends Controller
             if ($request->filled('language')) {
                 $agent->language = $request->input('language');
             }
+
+            Log::info('After assigning language (before save)', [
+                'agent_language' => $agent->language,
+            ]);
 
             // Handle Working Hours
             if ($request->filled('working_hours')) {
