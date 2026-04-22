@@ -349,8 +349,7 @@ Route::prefix('v1/api/agents')->group(function () {
         Route::get('/dashboard-stats',  [AgentController::class, 'getDashboardStats']);
         Route::get('/my-properties',    [AgentController::class, 'getMyProperties']);
 
-        Route::post('/profile/update', [AgentController::class, 'updateProfile']);
-
+        Route::post('/{id}/language', [AgentController::class, 'updateLanguage']);
 
         // FCM & Session — must be authenticated
         Route::post('/logout',           [AgentController::class, 'logout']);          // ← ADD

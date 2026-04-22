@@ -1896,4 +1896,23 @@ class AgentController extends Controller
             return back()->withInput()->with('error', 'Error: ' . $e->getMessage());
         }
     }
+
+
+    public function updateLanguage(Request $request, $id)
+    {
+        $request->validate([
+            'language' => 'required|string|in:en,ar,ku',
+        ]);
+
+        $agent = Agent::findOrFail($id);
+
+        $agent->language = $request->language;
+        $agent->save();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Language updated successfully',
+            'data' => $agent
+        ]);
+    }
 }
