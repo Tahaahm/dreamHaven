@@ -20,7 +20,7 @@ use App\Models\Subscription\Subscription;
 use App\Models\SubscriptionPlan;
 use App\Services\AutoSubscriptionService;
 use App\Services\FCMNotificationService;
-
+use Illuminate\Support\Facades\Storage;
 
 class AgentController extends Controller
 {
@@ -1786,17 +1786,12 @@ class AgentController extends Controller
 
     public function updateProfile(Request $request)
     {
-        // 1. Get the authenticated agent
         $agent = Auth::guard('agent')->user();
 
         Log::info('Agent updateProfile request received', [
             'all_request' => $request->all(),
-            'language' => $request->input('language'),
-            'has_language' => $request->has('language'),
-            'filled_language' => $request->filled('language'),
         ]);
 
-        // 2. Comprehensive Validation
         $request->validate([
             'agent_name'       => 'required|string|max:255',
             'primary_phone'    => 'required|string|max:20',
@@ -1809,57 +1804,70 @@ class AgentController extends Controller
             'office_address'   => 'nullable|string',
             'latitude'         => 'nullable|numeric',
             'longitude'        => 'nullable|numeric',
-            'profile_image'    => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
-            'bio_image'        => 'nullable|image|mimes:jpeg,png,jpg|max:5120',
+            'profile_image'    => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
+            'bio_image'        => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
             'working_hours'    => 'nullable|string',
-            'language'         => 'nullable|string|in:en,ar,ku', // ✅ MUST BE HERE
-        ]);
-
-        Log::info('Before assigning language', [
-            'current_db_language' => $agent->language,
-            'incoming_language' => $request->language,
+            'language'         => 'nullable|string|in:en,ar,ku',
         ]);
 
         try {
-            // Handle Images (Profile)
+
+            // =========================
+            // PROFILE IMAGE
+            // =========================
             if ($request->hasFile('profile_image')) {
-                if ($agent->profile_image && Storage::disk('public')->exists(str_replace('storage/', '', $agent->profile_image))) {
-                    Storage::disk('public')->delete(str_replace('storage/', '', $agent->profile_image));
+
+                Log::info('Agent profile image upload detected');
+
+                $path = $this->compressAgentImage(
+                    $request->file('profile_image'),
+                    'agents/profiles'
+                );
+
+                if ($path) {
+                    $agent->profile_image = $this->storageUrl($path);
                 }
-                $agent->profile_image = $request->file('profile_image')->store('agents/profiles', 'public');
             }
 
-            // Handle Images (Bio)
+            // =========================
+            // BIO IMAGE
+            // =========================
             if ($request->hasFile('bio_image')) {
-                if ($agent->bio_image && Storage::disk('public')->exists(str_replace('storage/', '', $agent->bio_image))) {
-                    Storage::disk('public')->delete(str_replace('storage/', '', $agent->bio_image));
+
+                Log::info('Agent bio image upload detected');
+
+                $path = $this->compressAgentImage(
+                    $request->file('bio_image'),
+                    'agents/bio'
+                );
+
+                if ($path) {
+                    $agent->bio_image = $this->storageUrl($path);
                 }
-                $agent->bio_image = $request->file('bio_image')->store('agents/bio', 'public');
             }
 
-            // 3. Manual Assignment (Don't miss language!)
-            $agent->agent_name      = $request->agent_name;
-            $agent->primary_phone   = $request->primary_phone;
-            $agent->whatsapp_number = $request->whatsapp_number;
-            $agent->city            = $request->city;
-            $agent->district        = $request->district;
-            $agent->license_number  = $request->license_number;
+            // =========================
+            // FIELDS
+            // =========================
+            $agent->agent_name       = $request->agent_name;
+            $agent->primary_phone    = $request->primary_phone;
+            $agent->whatsapp_number  = $request->whatsapp_number;
+            $agent->city             = $request->city;
+            $agent->district         = $request->district;
+            $agent->license_number   = $request->license_number;
             $agent->years_experience = $request->years_experience;
-            $agent->agent_bio       = $request->agent_bio;
-            $agent->office_address  = $request->office_address;
-            $agent->latitude        = $request->latitude;
-            $agent->longitude       = $request->longitude;
+            $agent->agent_bio        = $request->agent_bio;
+            $agent->office_address   = $request->office_address;
+            $agent->latitude         = $request->latitude;
+            $agent->longitude        = $request->longitude;
 
-            // ✅ CRITICAL FIX: Update the language field
             if ($request->filled('language')) {
-                $agent->language = $request->input('language');
+                $agent->language = $request->language;
             }
 
-            Log::info('After assigning language (before save)', [
-                'agent_language' => $agent->language,
-            ]);
-
-            // Handle Working Hours
+            // =========================
+            // WORKING HOURS
+            // =========================
             if ($request->filled('working_hours')) {
                 $decoded = json_decode($request->working_hours, true);
                 if (json_last_error() === JSON_ERROR_NONE) {
@@ -1867,36 +1875,27 @@ class AgentController extends Controller
                 }
             }
 
-            // 4. Save to Database
             $agent->save();
 
-            // 5. Sync the Auth state
-            $updatedAgent = $agent->fresh();
-            Auth::guard('agent')->setUser($updatedAgent);
-
-            // 6. Respond based on request type
-            if ($request->expectsJson() || $request->is('api/*')) {
-                return response()->json([
-                    'status'  => true,
-                    'message' => 'Profile updated successfully',
-                    'data'    => [
-                        'agent' => $updatedAgent // This will now include the language!
-                    ]
-                ]);
-            }
-
-            return redirect()->route('agent.profile', $agent->id)
-                ->with('success', 'Profile updated successfully!');
+            return response()->json([
+                'status'  => true,
+                'message' => 'Profile updated successfully',
+                'data'    => [
+                    'agent' => $agent->fresh()
+                ]
+            ]);
         } catch (\Exception $e) {
-            Log::error('Agent Update Error: ' . $e->getMessage());
 
-            if ($request->expectsJson() || $request->is('api/*')) {
-                return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
-            }
-            return back()->withInput()->with('error', 'Error: ' . $e->getMessage());
+            Log::error('Agent Update Error', [
+                'message' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
-
 
     public function updateLanguage(Request $request, $id)
     {
@@ -1914,5 +1913,82 @@ class AgentController extends Controller
             'message' => 'Language updated successfully',
             'data' => $agent
         ]);
+    }
+
+    private function compressAgentImage($file, string $folder): ?string
+    {
+        try {
+            $mime = $file->getMimeType();
+            $sourcePath = $file->getRealPath();
+
+            $image = match ($mime) {
+                'image/jpeg', 'image/jpg' => imagecreatefromjpeg($sourcePath),
+                'image/png'               => imagecreatefrompng($sourcePath),
+                'image/webp'              => imagecreatefromwebp($sourcePath),
+                default                   => null,
+            };
+
+            if (!$image) {
+                Log::error('Unsupported image type', ['mime' => $mime]);
+                return null;
+            }
+
+            $width  = imagesx($image);
+            $height = imagesy($image);
+
+            $max = 1280;
+
+            $ratio = min($max / $width, $max / $height);
+            $newW = $ratio < 1 ? (int)($width * $ratio) : $width;
+            $newH = $ratio < 1 ? (int)($height * $ratio) : $height;
+
+            $newImage = imagecreatetruecolor($newW, $newH);
+
+            if ($mime === 'image/png') {
+                imagealphablending($newImage, false);
+                imagesavealpha($newImage, true);
+            }
+
+            imagecopyresampled(
+                $newImage,
+                $image,
+                0,
+                0,
+                0,
+                0,
+                $newW,
+                $newH,
+                $width,
+                $height
+            );
+
+            $relativePath = $folder . '/agent_' . uniqid() . '.jpg';
+            $fullPath = storage_path('app/public/' . $relativePath);
+
+            if (!file_exists(dirname($fullPath))) {
+                mkdir(dirname($fullPath), 0755, true);
+            }
+
+            imagejpeg($newImage, $fullPath, 75);
+
+            imagedestroy($image);
+            imagedestroy($newImage);
+
+            Log::info('Agent image compressed', [
+                'path' => $relativePath
+            ]);
+
+            return $relativePath;
+        } catch (\Throwable $e) {
+            Log::error('Agent image compression failed', [
+                'error' => $e->getMessage()
+            ]);
+
+            return null;
+        }
+    }
+    private function storageUrl(string $path): string
+    {
+        return rtrim(config('app.url'), '/') . '/storage/' . ltrim($path, '/');
     }
 }
