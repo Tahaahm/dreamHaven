@@ -296,8 +296,16 @@ class FirebaseAuthService
     /**
      * Check if user exists in Firebase Authentication
      */
+    /**
+     * Check if user exists in Firebase Authentication
+     */
     public function userExists($email)
     {
+        if (empty($email)) {
+            Log::warning('[FirebaseAuthService] userExists() called with null/empty email — skipping');
+            return false;
+        }
+
         try {
             $user = $this->auth->getUserByEmail($email);
             return true;
