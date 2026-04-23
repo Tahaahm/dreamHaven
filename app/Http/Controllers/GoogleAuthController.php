@@ -55,18 +55,73 @@ class GoogleAuthController extends Controller
             ], 422);
         }
 
-        // $name + $avatar now passed to handleOffice too
         return match ($request->role) {
-            'user'   => $this->handleUser($email, $name, $avatar, $firebaseUid, $emailVerified),
-            'agent'  => $this->handleAgent($email, $name, $avatar, $firebaseUid),
-            'office' => $this->handleOffice($email, $name, $avatar, $firebaseUid),
+            'user'   => $this->handleUser($email, $name, $avatar, $firebaseUid, $emailVerified, $request),
+            'agent'  => $this->handleAgent($email, $name, $avatar, $firebaseUid, $request),
+            'office' => $this->handleOffice($email, $name, $avatar, $firebaseUid, $request),
         };
     }
 
     // =========================================================================
-    // USER — unchanged from original, NO subscription logic for users
+    // FCM TOKEN HELPER
+    // Stores/replaces FCM token per device using X-Device-Name header.
+    // Same structure as existing device_tokens JSON array.
+    // Never throws — failure is logged and skipped silently.
     // =========================================================================
-    private function handleUser(string $email, string $name, ?string $avatar, string $firebaseUid, bool $emailVerified)
+    private function storeFcmToken($model, Request $request): void
+    {
+        $fcmToken = $request->input('fcm_token');
+        if (!$fcmToken) {
+            Log::info('[GoogleAuth] storeFcmToken: no fcm_token in request, skipping');
+            return;
+        }
+
+        $deviceName = $request->header('X-Device-Name')
+            ?? $request->input('device_name')
+            ?? 'unknown';
+
+        try {
+            $tokens = $model->device_tokens ?? [];
+
+            // Ensure it's an array (guard against null/malformed JSON)
+            if (!is_array($tokens)) {
+                $tokens = [];
+            }
+
+            // Remove any existing entry for this device name (dedup by device)
+            $tokens = array_values(array_filter(
+                $tokens,
+                fn($t) => is_array($t) && ($t['device_name'] ?? '') !== $deviceName
+            ));
+
+            // Append fresh entry
+            $tokens[] = [
+                'fcm_token'    => $fcmToken,
+                'device_name'  => $deviceName,
+                'created_at'   => now()->toDateTimeString(),
+                'last_login'   => now()->toDateTimeString(),
+                'last_updated' => now()->toDateTimeString(),
+            ];
+
+            $model->update(['device_tokens' => $tokens]);
+
+            Log::info('[GoogleAuth] FCM token stored', [
+                'model_id'    => $model->id,
+                'device_name' => $deviceName,
+                'token_count' => count($tokens),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[GoogleAuth] storeFcmToken failed: ' . $e->getMessage(), [
+                'model_id'    => $model->id,
+                'device_name' => $deviceName,
+            ]);
+        }
+    }
+
+    // =========================================================================
+    // USER — NO subscription logic for users
+    // =========================================================================
+    private function handleUser(string $email, string $name, ?string $avatar, string $firebaseUid, bool $emailVerified, Request $request)
     {
         Log::info('[GoogleAuth] handleUser: ' . $email);
 
@@ -101,14 +156,18 @@ class GoogleAuthController extends Controller
             Log::info('[GoogleAuth] new User created: ' . $user->id);
         } else {
             $patch = [];
-            if (!$user->google_id)                            $patch['google_id']         = $firebaseUid;
-            if (!$user->email_verified_at && $emailVerified)  $patch['email_verified_at'] = now();
-            if (!empty($patch))                               $user->update($patch);
+            if (!$user->google_id)                           $patch['google_id']         = $firebaseUid;
+            if (!$user->email_verified_at && $emailVerified) $patch['email_verified_at'] = now();
+            if (!empty($patch))                              $user->update($patch);
 
             Log::info('[GoogleAuth] existing User: ' . $user->id);
         }
 
         $user->update(['last_login_at' => now(), 'last_activity_at' => now()]);
+
+        // Store FCM token after user is guaranteed to exist
+        $this->storeFcmToken($user, $request);
+
         $token = $user->createToken('google-mobile')->plainTextToken;
 
         return response()->json([
@@ -125,7 +184,7 @@ class GoogleAuthController extends Controller
     // New agents  → created + auto-subscribed to default 6-month plan.
     // Existing agents → login only, subscription untouched.
     // =========================================================================
-    private function handleAgent(string $email, string $name, ?string $avatar, string $firebaseUid)
+    private function handleAgent(string $email, string $name, ?string $avatar, string $firebaseUid, Request $request)
     {
         Log::info('[GoogleAuth] handleAgent: ' . $email);
 
@@ -178,6 +237,9 @@ class GoogleAuthController extends Controller
             Log::info('[GoogleAuth] profileComplete: ' . ($profileComplete ? 'true' : 'false'));
         }
 
+        // Store FCM token after agent is guaranteed to exist
+        $this->storeFcmToken($agent, $request);
+
         $token = $agent->createToken('google-mobile')->plainTextToken;
 
         return response()->json([
@@ -198,7 +260,7 @@ class GoogleAuthController extends Controller
     //               the completion screen (phone_number + city needed).
     // Existing offices → login only, subscription untouched.
     // =========================================================================
-    private function handleOffice(string $email, string $name, ?string $avatar, string $firebaseUid)
+    private function handleOffice(string $email, string $name, ?string $avatar, string $firebaseUid, Request $request)
     {
         Log::info('[GoogleAuth] handleOffice: ' . $email);
 
@@ -256,6 +318,9 @@ class GoogleAuthController extends Controller
             $profileComplete = !($phone === '' && $city === '');
             Log::info('[GoogleAuth] profileComplete: ' . ($profileComplete ? 'true' : 'false'));
         }
+
+        // Store FCM token after office is guaranteed to exist
+        $this->storeFcmToken($office, $request);
 
         $token = $office->createToken('google-mobile')->plainTextToken;
 
