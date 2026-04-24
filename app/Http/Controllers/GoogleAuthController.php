@@ -19,6 +19,7 @@ class GoogleAuthController extends Controller
         $request->validate([
             'id_token' => 'required|string',
             'role'     => 'required|in:user,agent,office',
+            'language' => 'nullable|in:en,ar,ku',
         ]);
 
         try {
@@ -126,6 +127,7 @@ class GoogleAuthController extends Controller
         Log::info('[GoogleAuth] handleUser: ' . $email);
 
         $isNewUser = false;
+        $language  = $request->input('language', 'en');
 
         $user = User::where('google_id', $firebaseUid)->first()
             ?? User::where('email', $email)->first();
@@ -148,7 +150,7 @@ class GoogleAuthController extends Controller
                 'photo_image'       => $avatar,
                 'email_verified_at' => $emailVerified ? now() : null,
                 'is_verified'       => $emailVerified,
-                'language'          => 'en',
+                'language'          => $language,
                 'role'              => 'user',
                 'device_tokens'     => [],
             ]);
@@ -190,6 +192,7 @@ class GoogleAuthController extends Controller
 
         $isNewUser       = false;
         $profileComplete = true;
+        $language        = $request->input('language', 'en');
 
         $agent = Agent::where('google_id', $firebaseUid)->first()
             ?? Agent::where('primary_email', $email)->first();
@@ -209,8 +212,9 @@ class GoogleAuthController extends Controller
             $agent->status        = 'active';
             $agent->google_id     = $firebaseUid;
             $agent->profile_image = $avatar;
-            $agent->language      = 'en';
+            $agent->language      = $language;
             $agent->device_tokens = [];
+            $agent->type          = 'agent';
             $agent->save();
 
             Log::info('[GoogleAuth] new Agent created: ' . $agent->id);
@@ -266,6 +270,7 @@ class GoogleAuthController extends Controller
 
         $isNewUser       = false;
         $profileComplete = true;
+        $language        = $request->input('language', 'en');
 
         $office = RealEstateOffice::where('google_id', $firebaseUid)->first()
             ?? RealEstateOffice::where('email_address', $email)->first();
@@ -291,7 +296,7 @@ class GoogleAuthController extends Controller
                 'google_id'     => $firebaseUid,
                 'account_type'  => 'real_estate_official',
                 'is_verified'   => false,
-                'language'      => 'en',
+                'language'      => $language,
                 'device_tokens' => [],
             ]);
 
