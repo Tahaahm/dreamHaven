@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\MarketTrendsController;
 use App\Http\Controllers\Api\PropertyValuationController;
 use App\Http\Controllers\OfficeDashboardApiController;
 use App\Http\Controllers\AppVersionController;
+use App\Http\Controllers\BoostController;
 use App\Http\Controllers\GoogleAuthController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\OfficeAuthController;
@@ -1107,3 +1108,15 @@ Route::post('/admin/notifications/broadcast', [NotificationController::class, 's
 
 
 Route::get('/download', [\App\Http\Controllers\AppRedirectController::class, 'redirect'])->name('app.download');
+
+Route::get('boost/plans', [BoostController::class, 'getPlans']);
+
+// Property boost routes (auth required via Sanctum middleware)
+Route::middleware('auth:sanctum')->group(function () {
+    Route::prefix('properties/{id}/boost')->group(function () {
+        Route::post('purchase', [BoostController::class, 'purchase']);
+        Route::post('cancel',   [BoostController::class, 'cancel']);
+        Route::get('status',    [BoostController::class, 'status']);
+        Route::get('history',   [BoostController::class, 'history']);
+    });
+});
