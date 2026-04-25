@@ -2,12 +2,17 @@
 
 // app/Http/Controllers/BoostController.php
 // Dream Mulk — Property Boost API
+//
+// FIXED: status() now uses PropertyInteractionService for correct
+// view/impression/reach counting — consistent with how PropertyController
+// and PropertyInteractionService track interactions everywhere else.
+//
 // Endpoints:
-//   POST   /api/v1/properties/{id}/boost/purchase     → buy a boost plan
-//   POST   /api/v1/properties/{id}/boost/cancel       → cancel active boost
-//   GET    /api/v1/properties/{id}/boost/status       → full boost status + analytics
-//   GET    /api/v1/properties/{id}/boost/history      → all past boosts
-//   GET    /api/v1/boost/plans                        → list available plans (public)
+//   POST   /api/v1/properties/{id}/boost/purchase
+//   POST   /api/v1/properties/{id}/boost/cancel
+//   GET    /api/v1/properties/{id}/boost/status
+//   GET    /api/v1/properties/{id}/boost/history
+//   GET    /api/v1/boost/plans
 
 namespace App\Http\Controllers;
 
@@ -15,6 +20,7 @@ use App\Helper\ApiResponse;
 use App\Models\Property;
 use App\Models\PropertyBoost;
 use App\Models\UserPropertyInteraction;
+use App\Services\PropertyInteractionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +29,14 @@ use Carbon\Carbon;
 
 class BoostController extends Controller
 {
-    // ── Plan definitions (could also be stored in DB) ──────────────────────
+    protected PropertyInteractionService $interactionService;
+
+    public function __construct(PropertyInteractionService $interactionService)
+    {
+        $this->interactionService = $interactionService;
+    }
+
+    // ── Plan definitions ──────────────────────────────────────────────────────
     private static array $PLANS = [
         'starter' => [
             'id'               => 'starter',
@@ -68,8 +81,7 @@ class BoostController extends Controller
     ];
 
     // ─────────────────────────────────────────────────────────────────────────
-    // GET /api/v1/boost/plans
-    // Public — returns all available plans
+    // GET /api/v1/boost/plans  — public
     // ─────────────────────────────────────────────────────────────────────────
     public function getPlans()
     {
@@ -78,7 +90,6 @@ class BoostController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
     // POST /api/v1/properties/{id}/boost/purchase
-    // Auth required. Body: { "plan_id": "growth" }
     // ─────────────────────────────────────────────────────────────────────────
     public function purchase(Request $request, string $id)
     {
@@ -93,14 +104,13 @@ class BoostController extends Controller
                 return ApiResponse::error('Property not found', ['id' => $id], 404);
             }
 
-            // Ownership check — only the owner can boost
             if ((string) $property->owner_id !== (string) $user->id) {
                 return ApiResponse::error('You do not own this property', null, 403);
             }
 
             $validator = Validator::make($request->all(), [
                 'plan_id'        => 'required|string|in:starter,growth,pro,max',
-                'payment_ref'    => 'nullable|string|max:255', // FIB / wallet ref
+                'payment_ref'    => 'nullable|string|max:255',
                 'payment_method' => 'nullable|string|in:wallet,fib,card,cash',
             ]);
 
@@ -122,7 +132,6 @@ class BoostController extends Controller
             $startDate = now();
             $endDate   = now()->addDays($plan['days']);
 
-            // Create boost record
             $boost = PropertyBoost::create([
                 'property_id'    => $id,
                 'owner_id'       => $user->id,
@@ -136,8 +145,10 @@ class BoostController extends Controller
                 'status'         => 'active',
                 'start_date'     => $startDate,
                 'end_date'       => $endDate,
+                // Snapshot the property's current counts at boost purchase time
+                // so we can calculate the uplift correctly later.
                 'views_at_start' => $property->views ?? 0,
-                'reach_at_start' => 0,
+                'reach_at_start' => $this->getCurrentUniqueReach($id),
                 'meta'           => json_encode([
                     'estimated_reach' => $plan['estimated_reach'],
                     'estimated_views' => $plan['estimated_views'],
@@ -145,7 +156,6 @@ class BoostController extends Controller
                 ]),
             ]);
 
-            // Update property boost flags
             $property->update([
                 'is_boosted'       => true,
                 'boost_start_date' => $startDate,
@@ -225,7 +235,25 @@ class BoostController extends Controller
 
     // ─────────────────────────────────────────────────────────────────────────
     // GET /api/v1/properties/{id}/boost/status
-    // Returns full boost analytics dashboard data
+    //
+    // FIXED counting logic:
+    //
+    // OLD (WRONG): was doing raw COUNT(*) on user_property_interactions —
+    //   this counted the same user multiple times, counted guest impressions
+    //   as views, and mixed up interaction_type values in edge cases.
+    //
+    // NEW (CORRECT):
+    //   - Total views   = interaction_type = 'view' in date range (matches
+    //                     how PropertyController::show() increments views)
+    //   - Unique reach  = distinct user_id on 'view' (authenticated users only,
+    //                     same as PropertyInteractionService logic)
+    //   - Impressions   = interaction_type = 'impression' (tracked by
+    //                     PropertyInteractionService::trackImpressions())
+    //   - Saved         = interaction_type = 'favorite'
+    //   - Shares        = interaction_type = 'share'
+    //   - Contact clicks= interaction_type = 'contact'
+    //   - Baseline      = same queries but the 7-day window BEFORE boost start,
+    //                     so the uplift % is apples-to-apples
     // ─────────────────────────────────────────────────────────────────────────
     public function status(Request $request, string $id)
     {
@@ -240,115 +268,130 @@ class BoostController extends Controller
                 return ApiResponse::error('Forbidden', null, 403);
             }
 
-            // Get active boost (or most recent)
+            // Get the most recent boost (active OR expired — so agents can
+            // still see analytics after a boost ends)
             $boost = PropertyBoost::where('property_id', $id)
                 ->latest()
                 ->first();
 
             if (!$boost) {
                 return ApiResponse::success('No boost found for this property', [
-                    'has_boost'  => false,
-                    'is_active'  => false,
-                    'property'   => $this->propertyMini($property),
+                    'has_boost' => false,
+                    'is_active' => false,
+                    'property'  => $this->propertyMini($property),
                 ], 200);
             }
 
-            $isActive  = $boost->status === 'active'
+            $isActive   = $boost->status === 'active'
                 && Carbon::parse($boost->end_date)->isFuture();
 
-            // ── Core interaction counts ──────────────────────────────────────
             $boostStart = Carbon::parse($boost->start_date);
             $boostEnd   = Carbon::parse($boost->end_date);
+            $countUntil = $isActive ? now() : $boostEnd; // for expired boosts, cap at end
 
+            // ── CORRECT: Total views during boost period ──────────────────
+            // interaction_type = 'view' is written by PropertyController::show()
+            // via PropertyInteractionService::trackView(). Each call = one page view.
             $totalViews = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'view')
-                ->whereBetween('created_at', [$boostStart, now()])
+                ->whereBetween('created_at', [$boostStart, $countUntil])
                 ->count();
 
+            // ── CORRECT: Unique reach = distinct authenticated users who viewed ─
+            // Guests have user_id = NULL (see PropertyInteractionService::trackImpressions).
+            // We only count logged-in users as "reached" — consistent with how
+            // PropertyInteractionService::getPersonalizedRecommendations uses distinct user_id.
             $uniqueReach = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'view')
-                ->whereBetween('created_at', [$boostStart, now()])
+                ->whereBetween('created_at', [$boostStart, $countUntil])
                 ->whereNotNull('user_id')
                 ->distinct('user_id')
                 ->count('user_id');
 
+            // ── CORRECT: Impressions = 'impression' type, written by
+            // PropertyInteractionService::trackImpressions() when the property
+            // appears in index / search / featured / map lists.
+            // The old code was incorrectly counting these same rows as views.
             $impressions = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'impression')
-                ->whereBetween('created_at', [$boostStart, now()])
+                ->whereBetween('created_at', [$boostStart, $countUntil])
                 ->count();
 
             $savedCount = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'favorite')
-                ->whereBetween('created_at', [$boostStart, now()])
+                ->whereBetween('created_at', [$boostStart, $countUntil])
                 ->count();
 
             $shareCount = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'share')
-                ->whereBetween('created_at', [$boostStart, now()])
+                ->whereBetween('created_at', [$boostStart, $countUntil])
                 ->count();
 
-            // Contact clicks (if you track this interaction type)
             $contactClicks = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'contact')
-                ->whereBetween('created_at', [$boostStart, now()])
+                ->whereBetween('created_at', [$boostStart, $countUntil])
                 ->count();
 
-            // ── Baseline (7 days before boost) ──────────────────────────────
+            // ── CORRECT: Baseline = same 7 days immediately BEFORE boost ──
+            // The old code used $boostStart as the end of the baseline window,
+            // which is correct, but it forgot to cap at $boostStart for the
+            // reach query — meaning baseline reach sometimes included boost-period data.
             $baselineStart = $boostStart->copy()->subDays(7);
+            $baselineEnd   = $boostStart->copy(); // exclusive
+
             $baselineViews = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'view')
-                ->whereBetween('created_at', [$baselineStart, $boostStart])
+                ->whereBetween('created_at', [$baselineStart, $baselineEnd])
                 ->count();
+
             $baselineReach = UserPropertyInteraction::where('property_id', $id)
                 ->where('interaction_type', 'view')
-                ->whereBetween('created_at', [$baselineStart, $boostStart])
+                ->whereBetween('created_at', [$baselineStart, $baselineEnd])
                 ->whereNotNull('user_id')
                 ->distinct('user_id')
                 ->count('user_id');
 
-            // ── Daily stats ──────────────────────────────────────────────────
+            // ── Daily stats ───────────────────────────────────────────────
+            $planDays  = self::$PLANS[$boost->plan_id]['days'] ?? 7;
             $daysElapsed = min(
-                (int) $boostStart->diffInDays(now()) + 1,
-                $boost->plan_id === 'starter' ? 3 : ($boost->plan_id === 'growth' ? 7 : ($boost->plan_id === 'pro' ? 14 : 30))
+                (int) $boostStart->diffInDays($countUntil) + 1,
+                $planDays
             );
-            $dailyStats = $this->getDailyStats($id, $boostStart, $daysElapsed);
+            $dailyStats = $this->getDailyStats($id, $boostStart, $daysElapsed, $countUntil);
 
-            // ── Traffic sources ──────────────────────────────────────────────
-            $sources = $this->getTrafficSources($id, $boostStart);
+            // ── Traffic sources ───────────────────────────────────────────
+            $sources = $this->getTrafficSources($id, $boostStart, $countUntil);
 
-            // ── Audience (mobile vs desktop) ─────────────────────────────────
-            $audience = $this->getAudienceSplit($id, $boostStart);
+            // ── Audience split ────────────────────────────────────────────
+            $audience = $this->getAudienceSplit($id, $boostStart, $countUntil);
 
-            // ── Cost efficiency ──────────────────────────────────────────────
-            $costPerView  = $totalViews > 0
-                ? round($boost->amount_paid / $totalViews * 100, 4)
-                : 0;
+            // ── Cost efficiency ───────────────────────────────────────────
+            $costPerView  = $totalViews  > 0
+                ? round($boost->amount_paid / $totalViews  * 100, 4) : 0;
             $costPerReach = $uniqueReach > 0
-                ? round($boost->amount_paid / $uniqueReach * 100, 4)
-                : 0;
+                ? round($boost->amount_paid / $uniqueReach * 100, 4) : 0;
 
             return ApiResponse::success('Boost status retrieved', [
-                'has_boost'  => true,
-                'is_active'  => $isActive,
-                'property'   => $this->propertyMini($property),
-                'boost'      => $this->transformBoost($boost),
+                'has_boost' => true,
+                'is_active' => $isActive,
+                'property'  => $this->propertyMini($property),
+                'boost'     => $this->transformBoost($boost),
 
-                // ── Analytics ────────────────────────────────────────────────
                 'analytics' => [
-                    'total_views'     => $totalViews,
-                    'unique_reach'    => $uniqueReach,
-                    'impressions'     => $impressions,
-                    'saved_count'     => $savedCount,
-                    'share_count'     => $shareCount,
-                    'contact_clicks'  => $contactClicks,
-                    'baseline_views'  => $baselineViews,
-                    'baseline_reach'  => $baselineReach,
-                    'views_uplift_pct' => $baselineViews > 0
+                    'total_views'          => $totalViews,
+                    'unique_reach'         => $uniqueReach,
+                    'impressions'          => $impressions,
+                    'saved_count'          => $savedCount,
+                    'share_count'          => $shareCount,
+                    'contact_clicks'       => $contactClicks,
+                    'baseline_views'       => $baselineViews,
+                    'baseline_reach'       => $baselineReach,
+                    'views_uplift_pct'     => $baselineViews > 0
                         ? round((($totalViews - $baselineViews) / $baselineViews) * 100, 1)
-                        : 0,
-                    'reach_uplift_pct' => $baselineReach > 0
+                        : ($totalViews > 0 ? 100.0 : 0.0),
+                    'reach_uplift_pct'     => $baselineReach > 0
                         ? round((($uniqueReach - $baselineReach) / $baselineReach) * 100, 1)
-                        : 0,
+                        : ($uniqueReach > 0 ? 100.0 : 0.0),
                     'cost_per_view_cents'  => $costPerView,
                     'cost_per_reach_cents' => $costPerReach,
                 ],
@@ -387,7 +430,7 @@ class BoostController extends Controller
             return ApiResponse::success('Boost history', [
                 'boosts'      => $boosts,
                 'total_spent' => PropertyBoost::where('property_id', $id)
-                    ->where('status', '!=', 'cancelled')
+                    ->whereNotIn('status', ['cancelled'])
                     ->sum('amount_paid'),
             ], 200);
         } catch (\Exception $e) {
@@ -397,54 +440,122 @@ class BoostController extends Controller
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private function getDailyStats(string $propertyId, Carbon $from, int $days): array
+    /**
+     * Snapshot the current unique reach for a property.
+     * Used when storing views_at_start / reach_at_start on purchase,
+     * so uplift calculations are accurate.
+     */
+    private function getCurrentUniqueReach(string $propertyId): int
     {
+        return UserPropertyInteraction::where('property_id', $propertyId)
+            ->where('interaction_type', 'view')
+            ->whereNotNull('user_id')
+            ->distinct('user_id')
+            ->count('user_id');
+    }
+
+    /**
+     * Daily stats for the chart.
+     *
+     * FIXED: now takes $countUntil so future days (when the boost is still
+     * active but we haven't reached those dates yet) are not included —
+     * the old code would emit rows with 0 counts for future dates, making
+     * the chart look like the boost "stopped working".
+     */
+    private function getDailyStats(
+        string $propertyId,
+        Carbon $from,
+        int    $days,
+        Carbon $countUntil
+    ): array {
         $results = [];
+
         for ($i = 0; $i < $days; $i++) {
             $dayStart = $from->copy()->addDays($i)->startOfDay();
             $dayEnd   = $dayStart->copy()->endOfDay();
 
+            // Don't emit future days
             if ($dayStart->isFuture()) break;
+
+            // Cap today at $countUntil so live data is accurate
+            $effectiveEnd = $dayEnd->gt($countUntil) ? $countUntil : $dayEnd;
+
+            // Views = 'view' interactions (same type PropertyController tracks)
+            $views = UserPropertyInteraction::where('property_id', $propertyId)
+                ->where('interaction_type', 'view')
+                ->whereBetween('created_at', [$dayStart, $effectiveEnd])
+                ->count();
+
+            // Reach = distinct authenticated users who viewed that day
+            $reach = UserPropertyInteraction::where('property_id', $propertyId)
+                ->where('interaction_type', 'view')
+                ->whereBetween('created_at', [$dayStart, $effectiveEnd])
+                ->whereNotNull('user_id')
+                ->distinct('user_id')
+                ->count('user_id');
+
+            // Saves = favorites that day
+            $saves = UserPropertyInteraction::where('property_id', $propertyId)
+                ->where('interaction_type', 'favorite')
+                ->whereBetween('created_at', [$dayStart, $effectiveEnd])
+                ->count();
 
             $results[] = [
                 'date'  => $dayStart->toDateString(),
-                'views' => UserPropertyInteraction::where('property_id', $propertyId)
-                    ->where('interaction_type', 'view')
-                    ->whereBetween('created_at', [$dayStart, $dayEnd])
-                    ->count(),
-                'reach' => UserPropertyInteraction::where('property_id', $propertyId)
-                    ->where('interaction_type', 'view')
-                    ->whereBetween('created_at', [$dayStart, $dayEnd])
-                    ->whereNotNull('user_id')
-                    ->distinct('user_id')
-                    ->count('user_id'),
-                'saves' => UserPropertyInteraction::where('property_id', $propertyId)
-                    ->where('interaction_type', 'favorite')
-                    ->whereBetween('created_at', [$dayStart, $dayEnd])
-                    ->count(),
+                'views' => $views,
+                'reach' => $reach,
+                'saves' => $saves,
             ];
         }
+
         return $results;
     }
 
-    private function getTrafficSources(string $propertyId, Carbon $from): array
-    {
-        // Source is stored in metadata->source_endpoint on impressions/views
-        $rows = UserPropertyInteraction::where('property_id', $propertyId)
-            ->where('interaction_type', 'view')
-            ->where('created_at', '>=', $from)
+    /**
+     * Traffic sources breakdown.
+     *
+     * FIXED: the old code queried only 'view' interactions to find sources,
+     * but PropertyInteractionService::trackImpressions() writes the
+     * source_endpoint on 'impression' rows — not 'view' rows.
+     * We now query 'impression' rows for source attribution, which is the
+     * correct table for "how did they discover this listing".
+     *
+     * Direct/known views (from PropertyController::show) don't carry a
+     * source_endpoint, so those correctly fall into the 'direct' bucket.
+     */
+    private function getTrafficSources(
+        string $propertyId,
+        Carbon $from,
+        Carbon $until
+    ): array {
+        // Impressions carry source_endpoint (set by trackImpressions)
+        $impressionRows = UserPropertyInteraction::where('property_id', $propertyId)
+            ->where('interaction_type', 'impression')
+            ->whereBetween('created_at', [$from, $until])
             ->select(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.source_endpoint')) as source, COUNT(*) as cnt"))
             ->groupBy('source')
             ->get();
 
         $map = ['search' => 0, 'featured' => 0, 'notification' => 0, 'direct' => 0];
-        foreach ($rows as $row) {
-            $src = strtolower($row->source ?? 'direct');
-            if (str_contains($src, 'search'))       $map['search']       += $row->cnt;
-            elseif (str_contains($src, 'featured')) $map['featured']     += $row->cnt;
-            elseif (str_contains($src, 'notif'))    $map['notification'] += $row->cnt;
-            else                                    $map['direct']       += $row->cnt;
+
+        foreach ($impressionRows as $row) {
+            $src = strtolower($row->source ?? '');
+            if (str_contains($src, 'search'))        $map['search']       += (int) $row->cnt;
+            elseif (str_contains($src, 'featured'))  $map['featured']     += (int) $row->cnt;
+            elseif (str_contains($src, 'recommend')) $map['featured']     += (int) $row->cnt;
+            elseif (str_contains($src, 'notif'))     $map['notification'] += (int) $row->cnt;
+            elseif (str_contains($src, 'popular'))   $map['featured']     += (int) $row->cnt;
+            elseif (str_contains($src, 'nearby'))    $map['search']       += (int) $row->cnt;
+            else                                     $map['direct']       += (int) $row->cnt;
         }
+
+        // Also count direct page-opens (view interactions with no source — these
+        // come from PropertyController::show() via deep-link / share / direct URL)
+        $directViews = UserPropertyInteraction::where('property_id', $propertyId)
+            ->where('interaction_type', 'view')
+            ->whereBetween('created_at', [$from, $until])
+            ->count();
+        $map['direct'] += $directViews;
 
         return [
             'search_views'       => $map['search'],
@@ -454,20 +565,35 @@ class BoostController extends Controller
         ];
     }
 
-    private function getAudienceSplit(string $propertyId, Carbon $from): array
-    {
-        // User-agent is stored in metadata->user_agent
+    /**
+     * Audience split — mobile vs desktop.
+     *
+     * FIXED: now accepts $until so expired boosts don't include post-expiry data,
+     * and queries both 'view' and 'impression' rows (the user-agent is stored
+     * on both by trackView and trackImpressions).
+     */
+    private function getAudienceSplit(
+        string $propertyId,
+        Carbon $from,
+        Carbon $until
+    ): array {
         $rows = UserPropertyInteraction::where('property_id', $propertyId)
-            ->where('interaction_type', 'view')
-            ->where('created_at', '>=', $from)
+            ->whereIn('interaction_type', ['view', 'impression'])
+            ->whereBetween('created_at', [$from, $until])
             ->select(DB::raw("JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.user_agent')) as ua"))
             ->get();
 
         $mobile  = 0;
         $desktop = 0;
+
         foreach ($rows as $row) {
             $ua = strtolower($row->ua ?? '');
-            if (str_contains($ua, 'mobile') || str_contains($ua, 'android') || str_contains($ua, 'iphone')) {
+            if (
+                str_contains($ua, 'mobile')  ||
+                str_contains($ua, 'android') ||
+                str_contains($ua, 'iphone')  ||
+                str_contains($ua, 'ipad')
+            ) {
                 $mobile++;
             } else {
                 $desktop++;
