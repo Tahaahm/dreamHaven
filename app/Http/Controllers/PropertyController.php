@@ -264,7 +264,11 @@ class PropertyController extends Controller
     public function show($id)
     {
         try {
-            $property = Property::find($id);
+            $property = Property::where('id', $id)
+                ->where('published', true)
+                ->where('is_active', true)
+                ->first();
+
             if (!$property) {
                 return ApiResponse::error('Property not found', ['id' => $id], 404);
             }
@@ -903,7 +907,9 @@ class PropertyController extends Controller
             $query = Property::whereRaw(
                 "(6371 * acos(cos(radians(?)) * cos(radians(JSON_EXTRACT(locations, '$[0].lat'))) * cos(radians(JSON_EXTRACT(locations, '$[0].lng')) - radians(?)) + sin(radians(?)) * sin(radians(JSON_EXTRACT(locations, '$[0].lat'))))) <= ?",
                 [$lat, $lng, $lat, $radius]
-            )->where('is_active', true);
+            )->where('is_active', true)
+                ->where('published', true);
+
 
             if ($user) {
                 $todayViewed = $this->getRecentlyViewedIds($user, 24);
@@ -2398,6 +2404,7 @@ class PropertyController extends Controller
             $properties = Property::where('owner_type', $fullOwnerType)
                 ->where('owner_id', $ownerId)
                 ->where('is_active', true)
+                ->where('published', true)
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
 
@@ -2806,6 +2813,7 @@ class PropertyController extends Controller
 
             $properties = Property::where('owner_id', $user->id)
                 ->where('owner_type', get_class($user))
+                ->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending'])
                 ->orderBy('created_at', 'desc')
                 ->paginate($perPage);
@@ -3950,10 +3958,11 @@ class PropertyController extends Controller
     {
         $perPage = $request->get('per_page', 20);
 
-        $properties = \App\Models\Property::where(function ($query) {
-            $query->whereNotIn('status', ['cancelled', 'pending'])
-                ->orWhere('owner_type', 'Agent'); // ✅ include agent posts
-        })
+        $properties = \App\Models\Property::where('published', true)  // ← ADD THIS
+            ->where(function ($query) {
+                $query->whereNotIn('status', ['cancelled', 'pending'])
+                    ->orWhere('owner_type', 'Agent');
+            })
             ->paginate($perPage);
 
         return view('list', [
