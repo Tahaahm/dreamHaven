@@ -40,9 +40,10 @@ class BoostController extends Controller
     private static array $PLANS = [
         'starter' => [
             'id'               => 'starter',
-            'name'             => '3-Day Starter',
-            'days'             => 3,
-            'price_usd'        => 9.99,
+            'name'             => '4-Day Starter',
+            'days'             => 4,
+            'price_usd'        => 3.40,   // ~5,000 IQD at 1470 IQD/USD
+            'price_iqd'        => 5000,
             'estimated_reach'  => 1200,
             'estimated_views'  => 340,
             'badge'            => 'Starter',
@@ -52,7 +53,8 @@ class BoostController extends Controller
             'id'               => 'growth',
             'name'             => '7-Day Growth',
             'days'             => 7,
-            'price_usd'        => 19.99,
+            'price_usd'        => 6.80,   // ~10,000 IQD
+            'price_iqd'        => 10000,
             'estimated_reach'  => 3800,
             'estimated_views'  => 920,
             'badge'            => 'Popular',
@@ -62,20 +64,11 @@ class BoostController extends Controller
             'id'               => 'pro',
             'name'             => '14-Day Pro',
             'days'             => 14,
-            'price_usd'        => 34.99,
+            'price_usd'        => 9.52,   // ~14,000 IQD
+            'price_iqd'        => 14000,
             'estimated_reach'  => 9500,
             'estimated_views'  => 2200,
             'badge'            => 'Pro',
-            'is_popular'       => false,
-        ],
-        'max' => [
-            'id'               => 'max',
-            'name'             => '30-Day Max',
-            'days'             => 30,
-            'price_usd'        => 59.99,
-            'estimated_reach'  => 22000,
-            'estimated_views'  => 5100,
-            'badge'            => 'Max',
             'is_popular'       => false,
         ],
     ];
@@ -109,7 +102,7 @@ class BoostController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'plan_id'        => 'required|string|in:starter,growth,pro,max',
+                'plan_id'        => 'required|string|in:starter,growth,pro',
                 'payment_ref'    => 'nullable|string|max:255',
                 'payment_method' => 'nullable|string|in:wallet,fib,card,cash',
             ]);
@@ -138,20 +131,20 @@ class BoostController extends Controller
                 'owner_type'     => get_class($user),
                 'plan_id'        => $plan['id'],
                 'plan_name'      => $plan['name'],
-                'amount_paid'    => $plan['price_usd'],
-                'currency'       => 'USD',
+                'amount_paid'    => $plan['price_iqd'],   // stored in IQD
+                'currency'       => 'IQD',
                 'payment_ref'    => $request->payment_ref ?? 'BOOST-' . strtoupper(uniqid()),
                 'payment_method' => $request->payment_method ?? 'card',
                 'status'         => 'active',
                 'start_date'     => $startDate,
                 'end_date'       => $endDate,
-                // Snapshot the property's current counts at boost purchase time
-                // so we can calculate the uplift correctly later.
                 'views_at_start' => $property->views ?? 0,
                 'reach_at_start' => $this->getCurrentUniqueReach($id),
                 'meta'           => json_encode([
                     'estimated_reach' => $plan['estimated_reach'],
                     'estimated_views' => $plan['estimated_views'],
+                    'price_usd'       => $plan['price_usd'],
+                    'price_iqd'       => $plan['price_iqd'],
                     'ip'              => $request->ip(),
                 ]),
             ]);
@@ -611,26 +604,30 @@ class BoostController extends Controller
         $isActive = $boost->status === 'active'
             && Carbon::parse($boost->end_date)->isFuture();
 
+        $meta = is_string($boost->meta)
+            ? json_decode($boost->meta, true)
+            : ($boost->meta ?? []);
+
         return [
-            'id'             => $boost->id,
-            'plan_id'        => $boost->plan_id,
-            'plan_name'      => $boost->plan_name,
-            'amount_paid'    => (float) $boost->amount_paid,
-            'currency'       => $boost->currency,
-            'payment_ref'    => $boost->payment_ref,
-            'payment_method' => $boost->payment_method,
-            'status'         => $boost->status,
-            'is_active'      => $isActive,
-            'start_date'     => $boost->start_date,
-            'end_date'       => $boost->end_date,
-            'cancelled_at'   => $boost->cancelled_at,
-            'created_at'     => $boost->created_at,
-            'days_remaining' => $isActive
+            'id'              => $boost->id,
+            'plan_id'         => $boost->plan_id,
+            'plan_name'       => $boost->plan_name,
+            'amount_paid'     => (float) $boost->amount_paid,   // in IQD
+            'amount_paid_iqd' => (float) $boost->amount_paid,
+            'amount_paid_usd' => (float) ($meta['price_usd'] ?? 0),
+            'currency'        => $boost->currency,
+            'payment_ref'     => $boost->payment_ref,
+            'payment_method'  => $boost->payment_method,
+            'status'          => $boost->status,
+            'is_active'       => $isActive,
+            'start_date'      => $boost->start_date,
+            'end_date'        => $boost->end_date,
+            'cancelled_at'    => $boost->cancelled_at,
+            'created_at'      => $boost->created_at,
+            'days_remaining'  => $isActive
                 ? max(0, (int) now()->diffInDays(Carbon::parse($boost->end_date), false))
                 : 0,
-            'meta'           => is_string($boost->meta)
-                ? json_decode($boost->meta, true)
-                : ($boost->meta ?? []),
+            'meta'            => $meta,
         ];
     }
 
