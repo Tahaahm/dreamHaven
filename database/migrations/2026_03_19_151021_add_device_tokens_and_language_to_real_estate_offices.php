@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('real_estate_offices', function (Blueprint $table) {
             $table->json('device_tokens')->nullable()->after('availability_schedule');
-            $table->string('language', 10)->default('en')->after('device_tokens');
+            $table->string('language', 10)->default('en')->after('updated_at');
         });
     }
 
