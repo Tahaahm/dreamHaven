@@ -1120,3 +1120,26 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('history',   [BoostController::class, 'history']);
     });
 });
+
+
+
+
+// ============================================
+// SITEMAP & SEO ROUTES
+// ============================================
+
+Route::get('/sitemap.xml', function () {
+    $properties = \App\Models\Property::select('id', 'updated_at')
+        ->where('is_active', true)
+        ->get();
+    $agents = \App\Models\Agent::select('id', 'updated_at')->get();
+    $offices = \App\Models\RealEstateOffice::select('id', 'updated_at')->get();
+
+    $content = view('sitemap', compact('properties', 'agents', 'offices'))->render();
+    return response($content, 200)->header('Content-Type', 'application/xml');
+});
+
+Route::get('/robots.txt', function () {
+    $content = "User-agent: *\nAllow: /\nSitemap: https://dreammulk.com/sitemap.xml";
+    return response($content, 200)->header('Content-Type', 'text/plain');
+});
