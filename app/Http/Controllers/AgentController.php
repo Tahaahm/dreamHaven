@@ -734,31 +734,28 @@ class AgentController extends Controller
     public function getDashboardStats(Request $request)
     {
         try {
-            // ✅ Get authenticated agent from Sanctum
-            $agent = $request->user(); // This gets the authenticated model (Agent or User)
+            $agent = $request->user();
 
-            // ✅ Debug logging
             Log::info('Dashboard Stats Request', [
                 'authenticated_user' => $agent ? get_class($agent) : 'null',
-                'user_id' => $agent ? $agent->id : 'null',
-                'is_agent' => $agent instanceof \App\Models\Agent,
+                'user_id'            => $agent ? $agent->id : 'null',
+                'is_agent'           => $agent instanceof \App\Models\Agent,
             ]);
 
-            // ✅ Verify it's an Agent model
             if (!$agent || !($agent instanceof \App\Models\Agent)) {
                 Log::error('Dashboard Stats: Not an agent', [
                     'user_type' => $agent ? get_class($agent) : 'null'
                 ]);
 
                 return response()->json([
-                    'status' => false,
-                    'code' => 401,
+                    'status'  => false,
+                    'code'    => 401,
                     'message' => 'Unauthorized. Please login as an agent.',
-                    'data' => null
+                    'data'    => null
                 ], 401);
             }
 
-            // ✅ Calculate stats
+            // ── Stats ────────────────────────────────────────────────────────────
             $stats = [
                 'total_properties' => \App\Models\Property::where('owner_id', $agent->id)
                     ->where('owner_type', 'App\\Models\\Agent')
@@ -782,38 +779,84 @@ class AgentController extends Controller
                     ->where('status', 'pending')
                     ->count(),
 
-                'total_revenue' => 0.0, // Calculate based on your business logic
-                'revenue_growth' => 12.5, // Calculate based on your business logic
+                'total_revenue'  => 0.0,
+                'revenue_growth' => 12.5,
             ];
 
-            // ✅ Get recent properties
+            // ── Recent Properties (full detail, casts handle JSON decoding) ───────
             $recentProperties = \App\Models\Property::where('owner_id', $agent->id)
                 ->where('owner_type', 'App\\Models\\Agent')
                 ->latest()
                 ->take(5)
                 ->get()
                 ->map(function ($property) {
-                    // Ensure JSON fields are properly formatted
                     return [
-                        'id' => $property->id,
-                        'name' => is_string($property->name) ? json_decode($property->name, true) : $property->name,
-                        'description' => is_string($property->description) ? json_decode($property->description, true) : $property->description,
-                        'price' => is_string($property->price) ? json_decode($property->price, true) : $property->price,
-                        'location' => $property->location ?? '',
-                        'image' => $property->image ?? '',
-                        'images' => is_string($property->images) ? json_decode($property->images, true) : ($property->images ?? []),
-                        'type' => is_string($property->type) ? json_decode($property->type, true) : $property->type,
-                        'status' => $property->status,
-                        'created_at' => $property->created_at?->toISOString(),
-                        'updated_at' => $property->updated_at?->toISOString(),
+                        // ── Identity ─────────────────────────────────────────────
+                        'id'                    => $property->id,
+                        'status'                => $property->status,
+                        'listing_type'          => $property->listing_type,
+                        'rental_period'         => $property->rental_period,
+                        'area'                  => $property->area,
+                        'floor_number'          => $property->floor_number,
+                        'year_built'            => $property->year_built,
+                        'address'               => $property->address,
+                        'virtual_tour_url'      => $property->virtual_tour_url,
+                        'floor_plan_url'        => $property->floor_plan_url,
+                        'energy_rating'         => $property->energy_rating,
+
+                        // ── Booleans ─────────────────────────────────────────────
+                        'furnished'             => $property->furnished,
+                        'electricity'           => $property->electricity,
+                        'water'                 => $property->water,
+                        'internet'              => $property->internet,
+                        'verified'              => $property->verified,
+                        'is_active'             => $property->is_active,
+                        'published'             => $property->published,
+                        'is_boosted'            => $property->is_boosted,
+                        'boost_start_date'      => $property->boost_start_date,
+                        'boost_end_date'        => $property->boost_end_date,
+
+                        // ── Metrics ──────────────────────────────────────────────
+                        'views'                 => $property->views,
+                        'favorites_count'       => $property->favorites_count,
+                        'rating'                => $property->rating,
+
+                        // ── JSON / Array fields (auto-decoded by $casts) ─────────
+                        'name'                  => $property->name,
+                        'description'           => $property->description,
+                        'images'                => $property->images,
+                        'availability'          => $property->availability,
+                        'type'                  => $property->type,
+                        'price'                 => $property->price,
+                        'rooms'                 => $property->rooms,
+                        'features'              => $property->features,
+                        'amenities'             => $property->amenities,
+                        'locations'             => $property->locations,
+                        'address_details'       => $property->address_details,
+                        'floor_details'         => $property->floor_details,
+                        'construction_details'  => $property->construction_details,
+                        'energy_details'        => $property->energy_details,
+                        'virtual_tour_details'  => $property->virtual_tour_details,
+                        'additional_media'      => $property->additional_media,
+                        'view_analytics'        => $property->view_analytics,
+                        'favorites_analytics'   => $property->favorites_analytics,
+                        'legal_information'     => $property->legal_information,
+                        'investment_analysis'   => $property->investment_analysis,
+                        'furnishing_details'    => $property->furnishing_details,
+                        'seo_metadata'          => $property->seo_metadata,
+                        'nearby_amenities'      => $property->nearby_amenities,
+
+                        // ── Timestamps ───────────────────────────────────────────
+                        'created_at'            => $property->created_at?->toISOString(),
+                        'updated_at'            => $property->updated_at?->toISOString(),
                     ];
                 });
 
             return response()->json([
-                'status' => true,
+                'status'  => true,
                 'message' => 'Dashboard stats retrieved successfully',
-                'data' => [
-                    'stats' => $stats,
+                'data'    => [
+                    'stats'             => $stats,
                     'recent_properties' => $recentProperties,
                 ]
             ], 200);
@@ -824,10 +867,10 @@ class AgentController extends Controller
             ]);
 
             return response()->json([
-                'status' => false,
-                'code' => 500,
+                'status'  => false,
+                'code'    => 500,
                 'message' => 'Failed to retrieve dashboard stats',
-                'data' => null
+                'data'    => null
             ], 500);
         }
     }
