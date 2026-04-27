@@ -764,7 +764,7 @@ class UserController extends Controller
                 }
 
                 // Sync with Firestore (if available)
-                if ($this->firebaseFirestore) {
+                if ($this->firebaseFirestore && $user instanceof \App\Models\User) {
                     Log::info('Syncing profile updates with Firestore', [
                         'user_id' => $user->id,
                         'email' => $user->email
@@ -776,17 +776,20 @@ class UserController extends Controller
                         if (!isset($firestoreUpdateResult['skipped'])) {
                             Log::warning('Firestore profile update failed', [
                                 'user_id' => $user->id,
-                                'email' => $user->email,
                                 'error' => $firestoreUpdateResult['error']
                             ]);
                         }
                     } else {
                         Log::info('Firestore profile updated successfully', [
                             'user_id' => $user->id,
-                            'email' => $user->email,
                             'updated_fields' => $firestoreUpdateResult['updated_fields'] ?? []
                         ]);
                     }
+                } elseif ($this->firebaseFirestore && !($user instanceof \App\Models\User)) {
+                    Log::info('Skipping Firestore sync for non-User model', [
+                        'model' => get_class($user),
+                        'id' => $user->id
+                    ]);
                 }
 
                 // Send nearby property notifications if location changed
