@@ -12,10 +12,13 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
+use \App\Models\Support\HasFeedActivity;
+use \App\Models\Support\HasFollowers;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, HasFeedActivity, HasFollowers;
+
 
     protected $keyType = 'string';
     public $incrementing = false;
@@ -44,6 +47,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'recently_viewed_properties',
         'last_activity_at',
         'google_id',
+        'followers_count',
+        'following_count',
     ];
 
     protected $hidden = [

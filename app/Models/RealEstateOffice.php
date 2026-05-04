@@ -18,10 +18,12 @@ use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use \App\Models\Support\HasFeedActivity;
+use \App\Models\Support\HasFollowers;
 
 class RealEstateOffice extends Authenticatable
 {
-    use HasFactory, HasUuids, Notifiable, HasApiTokens;
+    use HasFactory, HasUuids, Notifiable, HasApiTokens, HasFeedActivity, HasFollowers;
 
     protected $fillable = [
         'company_name',
@@ -48,6 +50,8 @@ class RealEstateOffice extends Authenticatable
         'device_tokens',  // ← ADDED
         'language',       // ← ADDED
         'google_id',
+        'followers_count',
+        'following_count',
     ];
 
     protected $hidden = [

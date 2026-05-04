@@ -17,6 +17,8 @@ use App\Models\Support\AgentUploadedProperty;
 // otherwise assume they are in App\Models
 use App\Models\Branch;
 use App\Models\Area;
+use \App\Models\Support\HasFeedActivity;
+use \App\Models\Support\HasFollowers;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -24,7 +26,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 class Agent extends Authenticatable
 {
-    use HasFactory, HasUuids, Notifiable, HasApiTokens;
+    use HasFactory, HasUuids, Notifiable, HasApiTokens, HasFeedActivity, HasFollowers;
 
     protected $table = 'agents';
     public $incrementing = false;
@@ -72,6 +74,8 @@ class Agent extends Authenticatable
         'currency',
         'device_tokens', // ← ADD THIS
         'language',      // ← ADD THIS
+        'followers_count',
+        'following_count',
 
     ];
 

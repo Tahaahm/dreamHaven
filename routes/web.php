@@ -15,6 +15,9 @@ use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AgentAuthController;
 use App\Http\Controllers\Api\AreaInsightsController;
+use App\Http\Controllers\Api\Feed\FeedCommentController;
+use App\Http\Controllers\Api\Feed\FeedFollowController;
+use App\Http\Controllers\Api\Feed\FeedPostController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MarketTrendsController;
 use App\Http\Controllers\Api\PropertyValuationController;
@@ -1119,6 +1122,61 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('status',    [BoostController::class, 'status']);
         Route::get('history',   [BoostController::class, 'history']);
     });
+});
+
+
+
+Route::prefix('api/v1')->group(function () {
+
+    // ── PUBLIC FEED ROUTES (no auth needed) ──────────────────────────────
+    Route::prefix('feed')->group(function () {
+
+        Route::get('/',          [FeedPostController::class, 'index']);        // Global feed
+        Route::get('/trending',  [FeedPostController::class, 'trending']);     // Trending posts
+
+        // Profile page (public — anyone can view)
+        Route::get('/profile/{type}/{id}', [FeedFollowController::class, 'profile'])
+            ->where(['type' => 'user|agent|office']);
+
+        // Single post + its comments (public)
+        Route::get('/{id}',              [FeedPostController::class, 'show']);
+        Route::get('/{postId}/comments', [FeedCommentController::class, 'index']);
+    });
+
+    // ── AUTHENTICATED FEED ROUTES ─────────────────────────────────────────
+    // Matches your existing pattern: auth:sanctum covers users
+    // auth:sanctum,agent,office covers all three actor types
+    Route::prefix('feed')
+        ->middleware(['auth:sanctum,agent,office'])
+        ->group(function () {
+
+            // ── Posts ─────────────────────────────────────────────────────
+            Route::post('/',         [FeedPostController::class, 'store']);
+            Route::put('/{id}',      [FeedPostController::class, 'update']);
+            Route::delete('/{id}',   [FeedPostController::class, 'destroy']);
+
+            // ── Likes & Saves ─────────────────────────────────────────────
+            Route::post('/{id}/like',   [FeedPostController::class, 'toggleLike']);
+            Route::post('/{id}/save',   [FeedPostController::class, 'toggleSave']);
+            Route::get('/saved',        [FeedPostController::class, 'savedPosts']);
+
+            // ── Reports ───────────────────────────────────────────────────
+            Route::post('/{id}/report', [FeedPostController::class, 'report']);
+
+            // ── Comments ──────────────────────────────────────────────────
+            Route::post('/{postId}/comments',  [FeedCommentController::class, 'store']);
+            Route::delete('/comments/{id}',    [FeedCommentController::class, 'destroy']);
+            Route::post('/comments/{id}/like', [FeedCommentController::class, 'toggleLike']);
+
+            // ── Following Feed ─────────────────────────────────────────────
+            Route::get('/following-feed', [FeedPostController::class, 'followingFeed']);
+
+            // ── Follow / Unfollow ──────────────────────────────────────────
+            Route::post('/follow',     [FeedFollowController::class, 'toggle']);
+            Route::get('/followers',   [FeedFollowController::class, 'followers']);
+            Route::get('/following',   [FeedFollowController::class, 'following']);
+            Route::get('/suggestions', [FeedFollowController::class, 'suggestions']);
+        });
 });
 
 
