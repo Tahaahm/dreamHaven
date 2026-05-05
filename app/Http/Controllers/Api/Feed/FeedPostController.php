@@ -137,7 +137,7 @@ class FeedPostController extends Controller
         $posts->getCollection()->transform(function ($post) use ($actor) {
             $post->is_liked    = $actor->hasLikedPost($post->id);
             $post->is_saved    = $actor->hasSavedPost($post->id);
-            $post->saves_count = DB::table('feed_post_saves')
+            $post->saves_count = DB::table('feed_saves')
                 ->where('post_id', $post->id)
                 ->count();
             return $post;
