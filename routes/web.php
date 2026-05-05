@@ -1126,73 +1126,69 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-Route::prefix('api/v1')->group(function () {
+Route::prefix('api/v1/feed')->group(function () {
 
     // =========================================================================
-    //  PUBLIC FEED ROUTES  (no auth needed)
+    //  ① ALL NAMED / FIXED-PATH GETS  — no {wildcard} — registered first
+    //     so they are never swallowed by GET /{id} below.
     // =========================================================================
-    Route::prefix('feed')->group(function () {
 
-        // ── Named / fixed paths FIRST ─────────────────────────────────────────
-        Route::get('/trending', [FeedPostController::class, 'trending']);
+    // Public — no auth
+    Route::get('/',         [FeedPostController::class,  'index']);
+    Route::get('/trending', [FeedPostController::class,  'trending']);
+    Route::get('/profile/{type}/{id}', [FeedFollowController::class, 'profile'])
+        ->where('type', 'user|agent|office');
 
-        // Public profile page (anyone can view an agent / office / user profile)
-        Route::get('/profile/{type}/{id}', [FeedFollowController::class, 'profile'])
-            ->where('type', 'user|agent|office');
-
-        // ── Wildcard paths LAST ───────────────────────────────────────────────
-        // ⚠️ These must come after all fixed paths above or they swallow them.
-        Route::get('/',                  [FeedPostController::class, 'index']);
-        Route::get('/{id}',              [FeedPostController::class, 'show']);
-        Route::get('/{postId}/comments', [FeedCommentController::class, 'index']);
+    // Auth-required — declared NOW, before GET /{id} is registered
+    Route::middleware('auth:sanctum,agent,office')->group(function () {
+        Route::get('/my-posts',       [FeedPostController::class,   'myPosts']);
+        Route::get('/saved',          [FeedPostController::class,   'savedPosts']);
+        Route::get('/following-feed', [FeedPostController::class,   'followingFeed']);
+        Route::get('/followers',      [FeedFollowController::class, 'followers']);
+        Route::get('/following',      [FeedFollowController::class, 'following']);
+        Route::get('/suggestions',    [FeedFollowController::class, 'suggestions']);
     });
 
     // =========================================================================
-    //  AUTHENTICATED FEED ROUTES
+    //  ② COMMENT FIXED-PATH ROUTES
+    //     DELETE /comments/{id} and POST /comments/{id}/like must come before
+    //     POST /{postId}/comments or they could be matched wrong.
     // =========================================================================
-    Route::prefix('feed')
-        ->middleware(['auth:sanctum,agent,office'])
-        ->group(function () {
+    Route::middleware('auth:sanctum,agent,office')->group(function () {
+        Route::delete('/comments/{id}',    [FeedCommentController::class, 'destroy']);
+        Route::post('/comments/{id}/like', [FeedCommentController::class, 'toggleLike']);
+    });
 
-            // ── Named / fixed paths FIRST (prevent wildcard collision) ─────────
+    // =========================================================================
+    //  ③ FOLLOW TOGGLE (fixed path, no wildcard risk)
+    // =========================================================================
+    Route::post('/follow', [FeedFollowController::class, 'toggle'])
+        ->middleware('auth:sanctum,agent,office');
 
-            // My posts list (current actor's own posts — edit / delete)
-            Route::get('/my-posts',       [FeedPostController::class, 'myPosts']);
+    // =========================================================================
+    //  ④ POST / PUT / DELETE using {id} — safe because HTTP method differs
+    //     from the GET /{id} below, so no collision.
+    // =========================================================================
+    Route::middleware('auth:sanctum,agent,office')->group(function () {
+        Route::post('/',       [FeedPostController::class, 'store']);
+        Route::put('/{id}',    [FeedPostController::class, 'update']);
+        Route::delete('/{id}', [FeedPostController::class, 'destroy']);
 
-            // Saved posts list
-            Route::get('/saved',          [FeedPostController::class, 'savedPosts']);
+        Route::post('/{id}/like',   [FeedPostController::class, 'toggleLike']);
+        Route::post('/{id}/save',   [FeedPostController::class, 'toggleSave']);
+        Route::post('/{id}/report', [FeedPostController::class, 'report']);
 
-            // Following feed
-            Route::get('/following-feed', [FeedPostController::class, 'followingFeed']);
+        Route::post('/{postId}/comments', [FeedCommentController::class, 'store']);
+    });
 
-            // Follow management
-            Route::post('/follow',        [FeedFollowController::class, 'toggle']);
-            Route::get('/followers',      [FeedFollowController::class, 'followers']);
-            Route::get('/following',      [FeedFollowController::class, 'following']);
-            Route::get('/suggestions',    [FeedFollowController::class, 'suggestions']);
-
-            // Comment actions (fixed paths — no post-ID wildcard prefix)
-            Route::delete('/comments/{id}',    [FeedCommentController::class, 'destroy']);
-            Route::post('/comments/{id}/like', [FeedCommentController::class, 'toggleLike']);
-
-            // ── Post CRUD ─────────────────────────────────────────────────────
-            Route::post('/',       [FeedPostController::class, 'store']);
-            Route::put('/{id}',    [FeedPostController::class, 'update']);
-            Route::delete('/{id}', [FeedPostController::class, 'destroy']);
-
-            // ── Per-post actions ──────────────────────────────────────────────
-            Route::post('/{id}/like',   [FeedPostController::class, 'toggleLike']);
-            Route::post('/{id}/save',   [FeedPostController::class, 'toggleSave']);
-            Route::post('/{id}/report', [FeedPostController::class, 'report']);
-
-            // ── Per-post comments ─────────────────────────────────────────────
-            // ⚠️ This must be AFTER /comments/{id} routes above or
-            //    POST /feed/comments/{id}/like would match /{postId}/comments
-            Route::post('/{postId}/comments', [FeedCommentController::class, 'store']);
-        });
+    // =========================================================================
+    //  ⑤ WILDCARD GET ROUTES — MUST BE LAST
+    //     Registered after every named GET above.
+    //     GET /{id} will no longer match /my-posts, /saved, etc.
+    // =========================================================================
+    Route::get('/{id}',              [FeedPostController::class,  'show']);
+    Route::get('/{postId}/comments', [FeedCommentController::class, 'index']);
 });
-
-
 
 
 // ============================================
