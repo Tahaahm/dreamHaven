@@ -1139,9 +1139,13 @@ Route::prefix('api/v1/feed')->group(function () {
     Route::get('/profile/{type}/{id}', [FeedFollowController::class, 'profile'])
         ->where('type', 'user|agent|office');
 
-    // Auth-required — declared NOW, before GET /{id} is registered
+    // ── my-posts: NO middleware — controller resolves token directly ─────────
+    // auth:sanctum,agent,office blocks users whose token Sanctum can't resolve.
+    // getActorFromToken() handles Sanctum + custom token columns transparently.
+    Route::get('/my-posts', [FeedPostController::class, 'myPosts']);
+
+    // Auth-required named GETs — declared before GET /{id}
     Route::middleware('auth:sanctum,agent,office')->group(function () {
-        Route::get('/my-posts',       [FeedPostController::class,   'myPosts']);
         Route::get('/saved',          [FeedPostController::class,   'savedPosts']);
         Route::get('/following-feed', [FeedPostController::class,   'followingFeed']);
         Route::get('/followers',      [FeedFollowController::class, 'followers']);
