@@ -1128,54 +1128,67 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::prefix('api/v1')->group(function () {
 
-    // ── PUBLIC FEED ROUTES (no auth needed) ──────────────────────────────
+    // =========================================================================
+    //  PUBLIC FEED ROUTES  (no auth needed)
+    // =========================================================================
     Route::prefix('feed')->group(function () {
 
-        Route::get('/',          [FeedPostController::class, 'index']);        // Global feed
-        Route::get('/trending',  [FeedPostController::class, 'trending']);     // Trending posts
+        // ── Named / fixed paths FIRST ─────────────────────────────────────────
+        Route::get('/trending', [FeedPostController::class, 'trending']);
 
-        // Profile page (public — anyone can view)
+        // Public profile page (anyone can view an agent / office / user profile)
         Route::get('/profile/{type}/{id}', [FeedFollowController::class, 'profile'])
-            ->where(['type' => 'user|agent|office']);
+            ->where('type', 'user|agent|office');
 
-        // Single post + its comments (public)
+        // ── Wildcard paths LAST ───────────────────────────────────────────────
+        // ⚠️ These must come after all fixed paths above or they swallow them.
+        Route::get('/',                  [FeedPostController::class, 'index']);
         Route::get('/{id}',              [FeedPostController::class, 'show']);
         Route::get('/{postId}/comments', [FeedCommentController::class, 'index']);
     });
 
-    // ── AUTHENTICATED FEED ROUTES ─────────────────────────────────────────
-    // Matches your existing pattern: auth:sanctum covers users
-    // auth:sanctum,agent,office covers all three actor types
+    // =========================================================================
+    //  AUTHENTICATED FEED ROUTES
+    // =========================================================================
     Route::prefix('feed')
         ->middleware(['auth:sanctum,agent,office'])
         ->group(function () {
 
-            // ── Posts ─────────────────────────────────────────────────────
-            Route::post('/',         [FeedPostController::class, 'store']);
-            Route::put('/{id}',      [FeedPostController::class, 'update']);
-            Route::delete('/{id}',   [FeedPostController::class, 'destroy']);
+            // ── Named / fixed paths FIRST (prevent wildcard collision) ─────────
 
-            // ── Likes & Saves ─────────────────────────────────────────────
-            Route::post('/{id}/like',   [FeedPostController::class, 'toggleLike']);
-            Route::post('/{id}/save',   [FeedPostController::class, 'toggleSave']);
-            Route::get('/saved',        [FeedPostController::class, 'savedPosts']);
+            // My posts list (current actor's own posts — edit / delete)
+            Route::get('/my-posts',       [FeedPostController::class, 'myPosts']);
 
-            // ── Reports ───────────────────────────────────────────────────
-            Route::post('/{id}/report', [FeedPostController::class, 'report']);
+            // Saved posts list
+            Route::get('/saved',          [FeedPostController::class, 'savedPosts']);
 
-            // ── Comments ──────────────────────────────────────────────────
-            Route::post('/{postId}/comments',  [FeedCommentController::class, 'store']);
+            // Following feed
+            Route::get('/following-feed', [FeedPostController::class, 'followingFeed']);
+
+            // Follow management
+            Route::post('/follow',        [FeedFollowController::class, 'toggle']);
+            Route::get('/followers',      [FeedFollowController::class, 'followers']);
+            Route::get('/following',      [FeedFollowController::class, 'following']);
+            Route::get('/suggestions',    [FeedFollowController::class, 'suggestions']);
+
+            // Comment actions (fixed paths — no post-ID wildcard prefix)
             Route::delete('/comments/{id}',    [FeedCommentController::class, 'destroy']);
             Route::post('/comments/{id}/like', [FeedCommentController::class, 'toggleLike']);
 
-            // ── Following Feed ─────────────────────────────────────────────
-            Route::get('/following-feed', [FeedPostController::class, 'followingFeed']);
+            // ── Post CRUD ─────────────────────────────────────────────────────
+            Route::post('/',       [FeedPostController::class, 'store']);
+            Route::put('/{id}',    [FeedPostController::class, 'update']);
+            Route::delete('/{id}', [FeedPostController::class, 'destroy']);
 
-            // ── Follow / Unfollow ──────────────────────────────────────────
-            Route::post('/follow',     [FeedFollowController::class, 'toggle']);
-            Route::get('/followers',   [FeedFollowController::class, 'followers']);
-            Route::get('/following',   [FeedFollowController::class, 'following']);
-            Route::get('/suggestions', [FeedFollowController::class, 'suggestions']);
+            // ── Per-post actions ──────────────────────────────────────────────
+            Route::post('/{id}/like',   [FeedPostController::class, 'toggleLike']);
+            Route::post('/{id}/save',   [FeedPostController::class, 'toggleSave']);
+            Route::post('/{id}/report', [FeedPostController::class, 'report']);
+
+            // ── Per-post comments ─────────────────────────────────────────────
+            // ⚠️ This must be AFTER /comments/{id} routes above or
+            //    POST /feed/comments/{id}/like would match /{postId}/comments
+            Route::post('/{postId}/comments', [FeedCommentController::class, 'store']);
         });
 });
 

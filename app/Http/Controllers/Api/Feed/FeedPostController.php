@@ -63,7 +63,7 @@ class FeedPostController extends Controller
     }
 
     /**
-     * GET /api/v1/feed/following
+     * GET /api/v1/feed/following-feed
      */
     public function followingFeed(Request $request): JsonResponse
     {
@@ -92,6 +92,53 @@ class FeedPostController extends Controller
             ->with(['author', 'media'])
             ->limit(20)
             ->get();
+
+        return response()->json(['success' => true, 'data' => $posts]);
+    }
+
+    // =========================================================================
+    // MY POSTS  ← NEW
+    // =========================================================================
+
+    /**
+     * GET /api/v1/feed/my-posts  (auth)
+     *
+     * Returns the currently authenticated actor's own posts,
+     * newest first, cursor-paginated.
+     *
+     * Enriches each post with:
+     *   - is_liked      bool
+     *   - is_saved      bool
+     *   - saves_count   int
+     *
+     * Supports optional query params:
+     *   cursor    string   — cursor from previous page (load-more)
+     *   per_page  int      — default 20, max 50
+     */
+    public function myPosts(Request $request): JsonResponse
+    {
+        $actor = $this->getActor($request);
+        if (!$actor) return $this->unauthenticated();
+
+        $perPage = min((int) $request->input('per_page', 20), 50);
+
+        $posts = FeedPost::where('author_id', $actor->id)
+            ->where('author_type', $actor->getMorphClass())
+            ->where('status', 'approved')
+            ->with(['author', 'media', 'tags'])
+            ->withCount(['likes', 'comments'])
+            ->orderByDesc('created_at')
+            ->cursorPaginate($perPage);
+
+        $posts->getCollection()->transform(function ($post) use ($actor) {
+            $post->is_liked    = $actor->hasLikedPost($post->id);
+            $post->is_saved    = $actor->hasSavedPost($post->id);
+            // saves_count is not on the model by default — compute it
+            $post->saves_count = DB::table('feed_post_saves')
+                ->where('post_id', $post->id)
+                ->count();
+            return $post;
+        });
 
         return response()->json(['success' => true, 'data' => $posts]);
     }
@@ -129,19 +176,9 @@ class FeedPostController extends Controller
     /**
      * POST /api/v1/feed
      *
-     * ✅ FIX: The mobile app (Flutter) was sending a plain `body` field.
-     *         The validator only checked body_en / body_ar / body_ku, so all
-     *         three were null → 422 "Post must have text or media."
-     *
-     *         Solution: accept a plain `body` field as a fallback alias.
-     *         If `body` is present and body_en/ar/ku are all absent, we
-     *         automatically copy `body` → body_en before validating.
-     *         This keeps full backward compatibility with any future locale
-     *         support while fixing the current mobile client immediately.
-     *
      * Multipart form data:
      *   post_type   string   required
-     *   body        string   nullable  ← mobile sends this (alias for body_en)
+     *   body        string   nullable  ← mobile alias for body_en
      *   body_en     string   nullable
      *   body_ar     string   nullable
      *   body_ku     string   nullable
@@ -152,13 +189,10 @@ class FeedPostController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
-        // ── Normalize plain `body` → body_en alias ────────────────────────────
-        // The Flutter app sends `body`. Laravel expects `body_en`.
-        // We merge it in so validation and model creation work correctly.
+        // Normalize plain `body` → body_en alias
         if ($request->filled('body') && !$request->filled('body_en')) {
             $request->merge(['body_en' => $request->input('body')]);
         }
-        // Also copy to body_ar / body_ku if they're empty — keeps DB consistent
         if ($request->filled('body_en')) {
             if (!$request->filled('body_ar')) {
                 $request->merge(['body_ar' => $request->input('body_en')]);
@@ -167,7 +201,6 @@ class FeedPostController extends Controller
                 $request->merge(['body_ku' => $request->input('body_en')]);
             }
         }
-        // ─────────────────────────────────────────────────────────────────────
 
         $request->validate([
             'post_type'   => 'required|in:general,listing_share,market_update,question,milestone,tip,office_announcement',
@@ -182,7 +215,6 @@ class FeedPostController extends Controller
             'media.*'     => 'file|mimes:jpg,jpeg,png,webp,mp4,mov|max:102400',
         ]);
 
-        // Require at least text (any locale) or media
         if (
             !$request->filled('body_en') &&
             !$request->filled('body_ar') &&
@@ -213,14 +245,12 @@ class FeedPostController extends Controller
                 'status'      => 'approved',
             ]);
 
-            // Tags
             if ($request->filled('tags')) {
                 foreach ($request->tags as $tag) {
                     $post->tags()->create(['tag' => strtolower(trim($tag))]);
                 }
             }
 
-            // Media
             if ($request->hasFile('media')) {
                 foreach ($request->file('media') as $index => $file) {
                     $this->attachMedia($post, $file, $index);
@@ -266,6 +296,14 @@ class FeedPostController extends Controller
         // Same body alias normalization as store()
         if ($request->filled('body') && !$request->filled('body_en')) {
             $request->merge(['body_en' => $request->input('body')]);
+        }
+        if ($request->filled('body_en')) {
+            if (!$request->filled('body_ar')) {
+                $request->merge(['body_ar' => $request->input('body_en')]);
+            }
+            if (!$request->filled('body_ku')) {
+                $request->merge(['body_ku' => $request->input('body_en')]);
+            }
         }
 
         $request->validate([
