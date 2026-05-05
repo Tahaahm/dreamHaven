@@ -4,15 +4,20 @@ namespace App\Http\Controllers\Api\Feed;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\Feed\NotifyFollowersOfNewPost;
+use App\Models\Agent;
 use App\Models\Feed\FeedComment;
 use App\Models\Feed\FeedPost;
 use App\Models\Feed\FeedPostMedia;
+use App\Models\RealEstateOffice;
+use App\Models\User;
 use App\Services\Feed\FeedNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class FeedPostController extends Controller
 {
@@ -37,6 +42,7 @@ class FeedPostController extends Controller
         if ($request->filled('branch_id')) {
             $query->where('branch_id', $request->branch_id);
         }
+
         if ($request->filled('type')) {
             $query->where('post_type', $request->type);
         }
@@ -99,27 +105,23 @@ class FeedPostController extends Controller
     // =========================================================================
 
     /**
-     * GET /api/v1/feed/my-posts  (no middleware — auth handled here)
+     * GET /api/v1/feed/my-posts  (auth)
      *
-     * Uses the same auth('sanctum')->user() pattern as PropertyController
-     * throughout your entire app. This bypasses middleware guard issues
-     * and resolves the user the same way every other endpoint does.
+     * Uses getActorFromToken() which resolves the actor directly from the
+     * Bearer token — bypasses guard resolution so it works regardless of
+     * whether auth:sanctum or a custom token system is used.
      */
     public function myPosts(Request $request): JsonResponse
     {
-        // ── Exact same pattern as PropertyController ──────────────────────────
-        $actor = auth('sanctum')->user();
-
-        // Also check agent and office guards (same fallback chain as getActor)
-        if (!$actor) $actor = auth('agent')->user();
-        if (!$actor) $actor = auth('office')->user();
+        // Use token-based resolution — works with any auth system
+        $actor = $this->getActorFromToken($request);
 
         if (!$actor) {
-            Log::warning('FeedPostController@myPosts: unauthenticated', [
-                'has_auth_header' => $request->hasHeader('Authorization'),
-                'token_prefix'    => $request->bearerToken()
-                    ? substr($request->bearerToken(), 0, 10) . '...'
-                    : 'none',
+            Log::warning('FeedPostController@myPosts: could not resolve actor', [
+                'auth_header' => $request->header('Authorization') ? 'present' : 'missing',
+                'guard_user'   => $request->user()?->id,
+                'guard_agent'  => $request->user('agent')?->id,
+                'guard_office' => $request->user('office')?->id,
             ]);
             return $this->unauthenticated();
         }
@@ -137,7 +139,7 @@ class FeedPostController extends Controller
         $posts->getCollection()->transform(function ($post) use ($actor) {
             $post->is_liked    = $actor->hasLikedPost($post->id);
             $post->is_saved    = $actor->hasSavedPost($post->id);
-            $post->saves_count = DB::table('feed_saves')
+            $post->saves_count = DB::table('feed_post_saves')
                 ->where('post_id', $post->id)
                 ->count();
             return $post;
@@ -185,10 +187,12 @@ class FeedPostController extends Controller
             $request->merge(['body_en' => $request->input('body')]);
         }
         if ($request->filled('body_en')) {
-            if (!$request->filled('body_ar'))
+            if (!$request->filled('body_ar')) {
                 $request->merge(['body_ar' => $request->input('body_en')]);
-            if (!$request->filled('body_ku'))
+            }
+            if (!$request->filled('body_ku')) {
                 $request->merge(['body_ku' => $request->input('body_en')]);
+            }
         }
 
         $request->validate([
@@ -205,8 +209,10 @@ class FeedPostController extends Controller
         ]);
 
         if (
-            !$request->filled('body_en') && !$request->filled('body_ar') &&
-            !$request->filled('body_ku') && !$request->hasFile('media')
+            !$request->filled('body_en') &&
+            !$request->filled('body_ar') &&
+            !$request->filled('body_ku') &&
+            !$request->hasFile('media')
         ) {
             return response()->json([
                 'success' => false,
@@ -218,6 +224,7 @@ class FeedPostController extends Controller
         if (!$actor) return $this->unauthenticated();
 
         DB::beginTransaction();
+
         try {
             $post = FeedPost::create([
                 'author_id'   => $actor->id,
@@ -232,16 +239,19 @@ class FeedPostController extends Controller
             ]);
 
             if ($request->filled('tags')) {
-                foreach ($request->tags as $tag)
+                foreach ($request->tags as $tag) {
                     $post->tags()->create(['tag' => strtolower(trim($tag))]);
+                }
             }
 
             if ($request->hasFile('media')) {
-                foreach ($request->file('media') as $index => $file)
+                foreach ($request->file('media') as $index => $file) {
                     $this->attachMedia($post, $file, $index);
+                }
             }
 
             DB::commit();
+
             NotifyFollowersOfNewPost::dispatch($post)->onQueue('notifications');
 
             return response()->json([
@@ -252,6 +262,7 @@ class FeedPostController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('FeedPostController@store failed', ['error' => $e->getMessage()]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create post. Please try again.',
@@ -271,16 +282,20 @@ class FeedPostController extends Controller
         $post  = FeedPost::findOrFail($id);
         $actor = $this->getActor($request);
 
-        if (!$actor || !$this->isAuthor($actor, $post))
+        if (!$actor || !$this->isAuthor($actor, $post)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
 
-        if ($request->filled('body') && !$request->filled('body_en'))
+        if ($request->filled('body') && !$request->filled('body_en')) {
             $request->merge(['body_en' => $request->input('body')]);
+        }
         if ($request->filled('body_en')) {
-            if (!$request->filled('body_ar'))
+            if (!$request->filled('body_ar')) {
                 $request->merge(['body_ar' => $request->input('body_en')]);
-            if (!$request->filled('body_ku'))
+            }
+            if (!$request->filled('body_ku')) {
                 $request->merge(['body_ku' => $request->input('body_en')]);
+            }
         }
 
         $request->validate([
@@ -296,8 +311,9 @@ class FeedPostController extends Controller
 
         if ($request->has('tags')) {
             $post->tags()->delete();
-            foreach ($request->tags as $tag)
+            foreach ($request->tags as $tag) {
                 $post->tags()->create(['tag' => strtolower(trim($tag))]);
+            }
         }
 
         return response()->json([
@@ -319,10 +335,12 @@ class FeedPostController extends Controller
         $post  = FeedPost::findOrFail($id);
         $actor = $this->getActor($request);
 
-        if (!$actor || !$this->isAuthor($actor, $post))
+        if (!$actor || !$this->isAuthor($actor, $post)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
 
         $post->delete();
+
         return response()->json(['success' => true, 'message' => 'Post deleted.']);
     }
 
@@ -330,9 +348,6 @@ class FeedPostController extends Controller
     // LIKE / UNLIKE
     // =========================================================================
 
-    /**
-     * POST /api/v1/feed/{id}/like
-     */
     public function toggleLike(Request $request, string $id): JsonResponse
     {
         $post  = FeedPost::findOrFail($id);
@@ -341,8 +356,9 @@ class FeedPostController extends Controller
 
         $result = $actor->togglePostLike($post->id);
 
-        if ($result['action'] === 'liked')
+        if ($result['action'] === 'liked') {
             $this->notifications->notifyPostLiked($post, $actor);
+        }
 
         return response()->json([
             'success'     => true,
@@ -355,9 +371,6 @@ class FeedPostController extends Controller
     // SAVE / UNSAVE
     // =========================================================================
 
-    /**
-     * POST /api/v1/feed/{id}/save
-     */
     public function toggleSave(Request $request, string $id): JsonResponse
     {
         $post  = FeedPost::findOrFail($id);
@@ -373,9 +386,6 @@ class FeedPostController extends Controller
         ]);
     }
 
-    /**
-     * GET /api/v1/feed/saved
-     */
     public function savedPosts(Request $request): JsonResponse
     {
         $actor = $this->getActor($request);
@@ -393,9 +403,6 @@ class FeedPostController extends Controller
     // REPORT
     // =========================================================================
 
-    /**
-     * POST /api/v1/feed/{id}/report
-     */
     public function report(Request $request, string $id): JsonResponse
     {
         $request->validate([
@@ -439,8 +446,9 @@ class FeedPostController extends Controller
 
     private function attachMedia(FeedPost $post, $file, int $index): void
     {
-        str_starts_with($file->getMimeType(), 'video/')
-            ? $this->attachVideo($post, $file, $index)
+        $mime    = $file->getMimeType();
+        $isVideo = str_starts_with($mime, 'video/');
+        $isVideo ? $this->attachVideo($post, $file, $index)
             : $this->attachImage($post, $file, $index);
     }
 
@@ -451,15 +459,17 @@ class FeedPostController extends Controller
             Log::warning('FeedPostController: image compression failed', [
                 'post_id' => $post->id,
                 'index' => $index,
+                'mime' => $file->getMimeType(),
             ]);
             return;
         }
         $fullPath = storage_path('app/public/' . $storagePath);
+        $url      = Storage::disk('public')->url($storagePath);
         FeedPostMedia::create([
             'post_id'         => $post->id,
             'media_type'      => 'image',
-            'url'             => Storage::disk('public')->url($storagePath),
-            'thumbnail_url'   => Storage::disk('public')->url($storagePath),
+            'url'             => $url,
+            'thumbnail_url'   => $url,
             'mime_type'       => 'image/jpeg',
             'file_size_bytes' => file_exists($fullPath) ? filesize($fullPath) : null,
             'sort_order'      => $index,
@@ -469,48 +479,53 @@ class FeedPostController extends Controller
     private function compressFeedImage($file): ?string
     {
         try {
-            $mime        = $file->getMimeType();
+            $mime       = $file->getMimeType();
+            $sourcePath = $file->getRealPath();
             $sourceImage = match ($mime) {
-                'image/jpeg', 'image/jpg' => imagecreatefromjpeg($file->getRealPath()),
-                'image/png'               => imagecreatefrompng($file->getRealPath()),
-                'image/webp'              => imagecreatefromwebp($file->getRealPath()),
+                'image/jpeg', 'image/jpg' => imagecreatefromjpeg($sourcePath),
+                'image/png'               => imagecreatefrompng($sourcePath),
+                'image/webp'              => imagecreatefromwebp($sourcePath),
                 default                   => null,
             };
-            if (!$sourceImage) return null;
-
-            $ow = imagesx($sourceImage);
-            $oh = imagesy($sourceImage);
-            $ratio = min(1280 / $ow, 1280 / $oh);
-            $nw    = $ratio < 1 ? (int)($ow * $ratio) : $ow;
-            $nh    = $ratio < 1 ? (int)($oh * $ratio) : $oh;
-
-            $canvas = imagecreatetruecolor($nw, $nh);
-            if ($mime === 'image/png') {
-                imagealphablending($canvas, false);
-                imagesavealpha($canvas, true);
-                imagefilledrectangle(
-                    $canvas,
-                    0,
-                    0,
-                    $nw,
-                    $nh,
-                    imagecolorallocatealpha($canvas, 255, 255, 255, 127)
-                );
+            if (!$sourceImage) {
+                Log::warning('compressFeedImage: unsupported mime', ['mime' => $mime]);
+                return null;
             }
-            imagecopyresampled($canvas, $sourceImage, 0, 0, 0, 0, $nw, $nh, $ow, $oh);
-
-            $tmp  = sys_get_temp_dir() . '/' . uniqid('feed_img_') . '.jpg';
-            imagejpeg($canvas, $tmp, 75);
+            $originalWidth  = imagesx($sourceImage);
+            $originalHeight = imagesy($sourceImage);
+            $ratio          = min(1280 / $originalWidth, 1280 / $originalHeight);
+            $newWidth       = $ratio < 1 ? (int)($originalWidth  * $ratio) : $originalWidth;
+            $newHeight      = $ratio < 1 ? (int)($originalHeight * $ratio) : $originalHeight;
+            $resizedImage   = imagecreatetruecolor($newWidth, $newHeight);
+            if ($mime === 'image/png') {
+                imagealphablending($resizedImage, false);
+                imagesavealpha($resizedImage, true);
+                $transparent = imagecolorallocatealpha($resizedImage, 255, 255, 255, 127);
+                imagefilledrectangle($resizedImage, 0, 0, $newWidth, $newHeight, $transparent);
+            }
+            imagecopyresampled(
+                $resizedImage,
+                $sourceImage,
+                0,
+                0,
+                0,
+                0,
+                $newWidth,
+                $newHeight,
+                $originalWidth,
+                $originalHeight
+            );
+            $tempPath = sys_get_temp_dir() . '/' . uniqid('feed_img_') . '.jpg';
+            imagejpeg($resizedImage, $tempPath, 75);
             imagedestroy($sourceImage);
-            imagedestroy($canvas);
-
-            $dest = 'feed/images/' . uniqid('feed_img_') . '.jpg';
-            $full = storage_path('app/public/' . $dest);
-            if (!is_dir(dirname($full))) mkdir(dirname($full), 0755, true);
-            rename($tmp, $full);
-            return $dest;
+            imagedestroy($resizedImage);
+            $storagePath = 'feed/images/' . uniqid('feed_img_') . '.jpg';
+            $fullPath    = storage_path('app/public/' . $storagePath);
+            if (!file_exists(dirname($fullPath))) mkdir(dirname($fullPath), 0755, true);
+            rename($tempPath, $fullPath);
+            return $storagePath;
         } catch (\Exception $e) {
-            Log::error('compressFeedImage', ['error' => $e->getMessage()]);
+            Log::error('compressFeedImage exception', ['error' => $e->getMessage(), 'line' => $e->getLine()]);
             return null;
         }
     }
@@ -518,23 +533,27 @@ class FeedPostController extends Controller
     private function attachVideo(FeedPost $post, $file, int $index): void
     {
         try {
-            $ext  = $file->getClientOriginalExtension();
-            $name = uniqid('feed_video_') . '.' . $ext;
-            $dest = 'feed/videos/' . $name;
-            $full = storage_path('app/public/' . $dest);
-            if (!is_dir(dirname($full))) mkdir(dirname($full), 0755, true);
-            $file->move(dirname($full), $name);
+            $extension   = $file->getClientOriginalExtension();
+            $filename    = uniqid('feed_video_') . '.' . $extension;
+            $storagePath = 'feed/videos/' . $filename;
+            $fullPath    = storage_path('app/public/' . $storagePath);
+            if (!file_exists(dirname($fullPath))) mkdir(dirname($fullPath), 0755, true);
+            $file->move(dirname($fullPath), $filename);
+            $url = Storage::disk('public')->url($storagePath);
             FeedPostMedia::create([
                 'post_id'         => $post->id,
                 'media_type'      => 'video',
-                'url'             => Storage::disk('public')->url($dest),
+                'url'             => $url,
                 'thumbnail_url'   => null,
                 'mime_type'       => $file->getClientMimeType(),
-                'file_size_bytes' => file_exists($full) ? filesize($full) : null,
+                'file_size_bytes' => file_exists($fullPath) ? filesize($fullPath) : null,
                 'sort_order'      => $index,
             ]);
         } catch (\Exception $e) {
-            Log::error('attachVideo failed', ['post_id' => $post->id, 'error' => $e->getMessage()]);
+            Log::error('FeedPostController@attachVideo failed', [
+                'post_id' => $post->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -543,24 +562,105 @@ class FeedPostController extends Controller
     // =========================================================================
 
     /**
-     * Resolve the current actor.
-     *
-     * Uses auth('sanctum')->user() as the primary lookup — exactly the same
-     * pattern used in PropertyController and every other controller in this app.
-     * Falls back to 'agent' and 'office' guards for non-user actors.
+     * Standard guard-based actor resolution.
+     * Works when the route middleware has already authenticated the request.
      */
     private function getActor(Request $request): ?object
     {
-        // Primary — same as PropertyController throughout the app
-        return auth('sanctum')->user()
-            ?? auth('agent')->user()
-            ?? auth('office')->user()
+        return $request->user()
+            ?? $request->user('agent')
+            ?? $request->user('office')
             ?? null;
+    }
+
+    /**
+     * Token-based actor resolution — reads the Bearer token from the
+     * Authorization header and looks it up directly in the database.
+     *
+     * This works regardless of which guard the route middleware uses,
+     * and also works on routes with no middleware at all.
+     *
+     * Lookup order:
+     *   1. personal_access_tokens  (Sanctum)
+     *   2. users.api_token         (custom token column on User)
+     *   3. agents.api_token        (custom token column on Agent)
+     *   4. real_estate_offices.api_token  (custom token column on Office)
+     *
+     * If your app uses a different column name (e.g. 'token', 'auth_token'),
+     * update the column names in steps 2-4 below to match your schema.
+     */
+    private function getActorFromToken(Request $request): ?object
+    {
+        // First try standard guard resolution (works if middleware ran)
+        $actor = $this->getActor($request);
+        if ($actor) return $actor;
+
+        // Extract Bearer token from Authorization header
+        $header = $request->header('Authorization', '');
+        if (!str_starts_with($header, 'Bearer ')) return null;
+        $token = substr($header, 7);
+        if (empty($token)) return null;
+
+        // ── 1. Sanctum personal_access_tokens ─────────────────────────────
+        // Sanctum stores SHA-256 hash. Token format: "{id}|{plaintext}"
+        try {
+            if (str_contains($token, '|')) {
+                [$id, $plain] = explode('|', $token, 2);
+                $pat = DB::table('personal_access_tokens')->find((int) $id);
+                if ($pat && hash_equals($pat->token, hash('sha256', $plain))) {
+                    [$modelType, $modelId] = [$pat->tokenable_type, $pat->tokenable_id];
+                    $model = $modelType::find($modelId);
+                    if ($model) return $model;
+                }
+            }
+        } catch (\Throwable $e) {
+            // personal_access_tokens table may not exist — continue
+        }
+
+        // ── 2. Custom api_token on users table ─────────────────────────────
+        // Your app may store a plain token directly on the user row.
+        // Try the most common column names your app might use.
+        try {
+            $user = User::where('api_token', $token)->first()
+                ?? User::where('auth_token', $token)->first()
+                ?? User::where('token', $token)->first()
+                ?? User::where('remember_token', $token)->first();
+            if ($user) return $user;
+        } catch (\Throwable $e) {
+            // Column doesn't exist — continue
+        }
+
+        // ── 3. Custom api_token on agents table ────────────────────────────
+        try {
+            $agent = Agent::where('api_token', $token)->first()
+                ?? Agent::where('auth_token', $token)->first()
+                ?? Agent::where('token', $token)->first();
+            if ($agent) return $agent;
+        } catch (\Throwable $e) {
+            // Column doesn't exist — continue
+        }
+
+        // ── 4. Custom api_token on offices table ───────────────────────────
+        try {
+            $office = RealEstateOffice::where('api_token', $token)->first()
+                ?? RealEstateOffice::where('auth_token', $token)->first()
+                ?? RealEstateOffice::where('token', $token)->first();
+            if ($office) return $office;
+        } catch (\Throwable $e) {
+            // Column doesn't exist — continue
+        }
+
+        Log::warning('getActorFromToken: token present but no matching actor found', [
+            'token_length' => strlen($token),
+            'token_prefix' => substr($token, 0, 8) . '...',
+        ]);
+
+        return null;
     }
 
     private function isAuthor(object $actor, FeedPost $post): bool
     {
-        return $actor->id    === $post->author_id
+        return $actor->id === $post->author_id
             && $actor->getMorphClass() === $post->author_type;
     }
 
