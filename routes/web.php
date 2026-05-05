@@ -1126,22 +1126,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
-<?php
-
-// routes/api.php  — Feed section
-//
-// KEY RULES:
-//  1. Single Route::prefix block — two separate prefix groups cause wildcard
-//     collision where GET /{id} swallows GET /my-posts etc.
-//  2. All named/fixed GETs registered BEFORE any {wildcard} GET.
-//  3. my-posts has NO middleware — FeedPostController::myPosts() calls
-//     auth('sanctum')->user() directly, same as PropertyController does
-//     throughout the entire app.
-
-use App\Http\Controllers\Api\Feed\FeedCommentController;
-use App\Http\Controllers\Api\Feed\FeedFollowController;
-use App\Http\Controllers\Api\Feed\FeedPostController;
-use Illuminate\Support\Facades\Route;
 
 Route::prefix('api/v1/feed')->group(function () {
 
