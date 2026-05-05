@@ -1126,25 +1126,42 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
 
+<?php
+
+// routes/api.php  — Feed section
+//
+// KEY RULES:
+//  1. Single Route::prefix block — two separate prefix groups cause wildcard
+//     collision where GET /{id} swallows GET /my-posts etc.
+//  2. All named/fixed GETs registered BEFORE any {wildcard} GET.
+//  3. my-posts has NO middleware — FeedPostController::myPosts() calls
+//     auth('sanctum')->user() directly, same as PropertyController does
+//     throughout the entire app.
+
+use App\Http\Controllers\Api\Feed\FeedCommentController;
+use App\Http\Controllers\Api\Feed\FeedFollowController;
+use App\Http\Controllers\Api\Feed\FeedPostController;
+use Illuminate\Support\Facades\Route;
+
 Route::prefix('api/v1/feed')->group(function () {
 
     // =========================================================================
-    //  ① ALL NAMED / FIXED-PATH GETS  — no {wildcard} — registered first
-    //     so they are never swallowed by GET /{id} below.
+    //  ① PUBLIC — named/fixed GETs, no auth
     // =========================================================================
-
-    // Public — no auth
     Route::get('/',         [FeedPostController::class,  'index']);
     Route::get('/trending', [FeedPostController::class,  'trending']);
     Route::get('/profile/{type}/{id}', [FeedFollowController::class, 'profile'])
         ->where('type', 'user|agent|office');
 
-    // ── my-posts: NO middleware — controller resolves token directly ─────────
-    // auth:sanctum,agent,office blocks users whose token Sanctum can't resolve.
-    // getActorFromToken() handles Sanctum + custom token columns transparently.
+    // =========================================================================
+    //  ② MY POSTS — no middleware, controller resolves via auth('sanctum')
+    //     Must be above /{id} wildcard.
+    // =========================================================================
     Route::get('/my-posts', [FeedPostController::class, 'myPosts']);
 
-    // Auth-required named GETs — declared before GET /{id}
+    // =========================================================================
+    //  ③ AUTH — other named/fixed GETs, must stay above /{id}
+    // =========================================================================
     Route::middleware('auth:sanctum,agent,office')->group(function () {
         Route::get('/saved',          [FeedPostController::class,   'savedPosts']);
         Route::get('/following-feed', [FeedPostController::class,   'followingFeed']);
@@ -1154,41 +1171,30 @@ Route::prefix('api/v1/feed')->group(function () {
     });
 
     // =========================================================================
-    //  ② COMMENT FIXED-PATH ROUTES
-    //     DELETE /comments/{id} and POST /comments/{id}/like must come before
-    //     POST /{postId}/comments or they could be matched wrong.
+    //  ④ AUTH — comment fixed-path routes (before /{postId}/comments wildcard)
     // =========================================================================
     Route::middleware('auth:sanctum,agent,office')->group(function () {
         Route::delete('/comments/{id}',    [FeedCommentController::class, 'destroy']);
         Route::post('/comments/{id}/like', [FeedCommentController::class, 'toggleLike']);
+        Route::post('/follow',             [FeedFollowController::class,  'toggle']);
     });
 
     // =========================================================================
-    //  ③ FOLLOW TOGGLE (fixed path, no wildcard risk)
-    // =========================================================================
-    Route::post('/follow', [FeedFollowController::class, 'toggle'])
-        ->middleware('auth:sanctum,agent,office');
-
-    // =========================================================================
-    //  ④ POST / PUT / DELETE using {id} — safe because HTTP method differs
-    //     from the GET /{id} below, so no collision.
+    //  ⑤ AUTH — post CRUD + per-post actions (POST/PUT/DELETE safe alongside GET /{id})
     // =========================================================================
     Route::middleware('auth:sanctum,agent,office')->group(function () {
         Route::post('/',       [FeedPostController::class, 'store']);
         Route::put('/{id}',    [FeedPostController::class, 'update']);
         Route::delete('/{id}', [FeedPostController::class, 'destroy']);
 
-        Route::post('/{id}/like',   [FeedPostController::class, 'toggleLike']);
-        Route::post('/{id}/save',   [FeedPostController::class, 'toggleSave']);
-        Route::post('/{id}/report', [FeedPostController::class, 'report']);
-
+        Route::post('/{id}/like',         [FeedPostController::class,   'toggleLike']);
+        Route::post('/{id}/save',         [FeedPostController::class,   'toggleSave']);
+        Route::post('/{id}/report',       [FeedPostController::class,   'report']);
         Route::post('/{postId}/comments', [FeedCommentController::class, 'store']);
     });
 
     // =========================================================================
-    //  ⑤ WILDCARD GET ROUTES — MUST BE LAST
-    //     Registered after every named GET above.
-    //     GET /{id} will no longer match /my-posts, /saved, etc.
+    //  ⑥ PUBLIC — wildcard GETs LAST (must never be moved up)
     // =========================================================================
     Route::get('/{id}',              [FeedPostController::class,  'show']);
     Route::get('/{postId}/comments', [FeedCommentController::class, 'index']);
