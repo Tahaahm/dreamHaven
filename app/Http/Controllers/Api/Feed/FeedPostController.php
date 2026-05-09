@@ -49,7 +49,9 @@ class FeedPostController extends Controller
 
         $posts = $query->cursorPaginate(20);
 
-        $actor = $this->getActor($request);
+        // ── Use token-based resolution so is_liked/is_saved work on public routes
+        $actor = $this->getActorFromToken($request);  // ← was getActor()
+
         if ($actor) {
             $followingKeys = $actor->getFollowingKeys();
             $posts->getCollection()->transform(function ($post) use ($actor, $followingKeys) {
@@ -163,7 +165,7 @@ class FeedPostController extends Controller
 
         $post->incrementViews();
 
-        $actor = $this->getActor($request);
+        $actor = $this->getActorFromToken($request);  // ← was getActor()
 
         return response()->json([
             'success' => true,
@@ -391,8 +393,9 @@ class FeedPostController extends Controller
         $actor = $this->getActor($request);
         if (!$actor) return $this->unauthenticated();
 
-        $saves = $actor->feedSaves()
-            ->with(['post.author', 'post.media'])
+        $saves = DB::table('feed_saves')
+            ->where('saver_id', $actor->id)
+            ->where('saver_type', $actor->getMorphClass())
             ->latest()
             ->cursorPaginate(20);
 
