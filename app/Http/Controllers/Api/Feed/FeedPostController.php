@@ -379,7 +379,24 @@ class FeedPostController extends Controller
         $actor = $this->getActor($request);
         if (!$actor) return $this->unauthenticated();
 
+        // Check BEFORE toggle
+        $existing = DB::table('feed_saves')
+            ->where('post_id',    $post->id)
+            ->where('saver_id',   $actor->id)
+            ->where('saver_type', $actor->getMorphClass())
+            ->first();
+
+        Log::info('toggleSave', [
+            'post_id'      => $post->id,
+            'actor_id'     => $actor->id,
+            'actor_type'   => $actor->getMorphClass(),
+            'existing_row' => $existing,   // null = not saved = will SAVE
+            // object = saved = will UNSAVE
+        ]);
+
         $result = $actor->togglePostSave($post->id);
+
+        Log::info('toggleSave result', ['action' => $result['action']]);
 
         return response()->json([
             'success'     => true,
@@ -393,13 +410,48 @@ class FeedPostController extends Controller
         $actor = $this->getActor($request);
         if (!$actor) return $this->unauthenticated();
 
-        $saves = DB::table('feed_saves')
-            ->where('saver_id', $actor->id)
-            ->where('saver_type', $actor->getMorphClass())
-            ->latest()
+        $actorId   = $actor->id;
+        $actorType = $actor->getMorphClass();
+
+        Log::info('savedPosts called', [
+            'actor_id'   => $actorId,
+            'actor_type' => $actorType,
+        ]);
+
+        $posts = FeedPost::whereExists(function ($query) use ($actorId, $actorType) {
+            $query->from('feed_saves')
+                ->whereColumn('feed_saves.post_id', 'feed_posts.id')
+                ->where('feed_saves.saver_id',   $actorId)
+                ->where('feed_saves.saver_type', $actorType);
+        })
+            ->with(['author', 'media', 'tags'])
+            ->withCount(['likes', 'comments', 'saves'])
+            ->orderByDesc('created_at')
             ->cursorPaginate(20);
 
-        return response()->json(['success' => true, 'data' => $saves]);
+        Log::info('savedPosts query result', [
+            'count'      => $posts->count(),
+            'actor_id'   => $actorId,
+            'actor_type' => $actorType,
+        ]);
+
+        // Log the actual saver_type values stored in feed_saves for this actor
+        $rawSaves = DB::table('feed_saves')
+            ->where('saver_id', $actorId)
+            ->get(['id', 'post_id', 'saver_id', 'saver_type']);
+
+        Log::info('feed_saves raw rows for actor', [
+            'rows' => $rawSaves->toArray(),
+        ]);
+
+        $posts->getCollection()->transform(function ($post) use ($actor) {
+            $post->is_liked = $actor->hasLikedPost($post->id);
+            $post->is_saved = true;
+            $post->body     = $post->body_en ?? $post->body_ar ?? $post->body_ku ?? '';
+            return $post;
+        });
+
+        return response()->json(['success' => true, 'data' => $posts]);
     }
 
     // =========================================================================
