@@ -9,5 +9,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::job(new \App\Jobs\FlushPendingFeedNotificationsJob)
-    ->everyThirtyMinutes()
-    ->onQueue('notifications');
+    ->everyThirtyMinutes();
