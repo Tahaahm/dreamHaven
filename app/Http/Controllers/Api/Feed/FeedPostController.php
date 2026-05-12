@@ -360,6 +360,8 @@ class FeedPostController extends Controller
 
         if ($result['action'] === 'liked') {
             $this->notifications->notifyPostLiked($post, $actor);
+        } elseif ($result['action'] === 'unliked') {
+            $this->notifications->notifyPostUnliked($post, $actor);
         }
 
         return response()->json([
@@ -673,8 +675,6 @@ class FeedPostController extends Controller
         }
 
         // ── 2. Custom api_token on users table ─────────────────────────────
-        // Your app may store a plain token directly on the user row.
-        // Try the most common column names your app might use.
         try {
             $user = User::where('api_token', $token)->first()
                 ?? User::where('auth_token', $token)->first()

@@ -158,10 +158,7 @@ class FeedCommentController extends Controller
             $comment->increment('likes_count');
             $action = 'liked';
 
-            // Notify comment author
-            if ($action === 'liked') {
-                $this->notifications->notifyCommentLiked($comment, $actor);
-            }
+            $this->notifications->notifyCommentLiked($comment, $actor);
         }
 
         return response()->json([

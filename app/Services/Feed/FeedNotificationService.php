@@ -74,8 +74,8 @@ class FeedNotificationService
     public function notifyPostUnliked(FeedPost $post, object $liker): void
     {
         $this->dequeuePending(
-            postId: $post->id,
-            actorId: $liker->id,
+            postId: (string) $post->id,
+            actorId: (string) $liker->id,
             actorType: $this->shortType($liker),
             actionType: 'like',
         );
@@ -316,7 +316,7 @@ class FeedNotificationService
      */
     private function queuePending(
         FeedPost $post,
-        int      $actorId,
+        string   $actorId,
         string   $actorType,
         string   $actorName,
         string   $actionType,
@@ -411,8 +411,8 @@ class FeedNotificationService
      * Remove an actor from pending (called on unlike/unsave)
      */
     private function dequeuePending(
-        int    $postId,
-        int    $actorId,
+        string $postId,
+        string $actorId,
         string $actorType,
         string $actionType,
     ): void {
