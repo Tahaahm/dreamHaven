@@ -251,10 +251,10 @@ class FlushPendingFeedNotificationsJob implements ShouldQueue
             ];
 
             $result = match ($pending->post_author_type) {
-                'user'   => $firebaseService->sendToUser($author, $fcmNotification, $fcmData),
-                'agent'  => $firebaseService->sendToAgent($author, $fcmNotification, $fcmData),
-                'office' => $firebaseService->sendToOffice($author, $fcmNotification, $fcmData),
-                default  => false,
+                'user',   'App\Models\User'             => $firebaseService->sendToUser($author, $fcmNotification, $fcmData),
+                'agent',  'App\Models\Agent'            => $firebaseService->sendToAgent($author, $fcmNotification, $fcmData),
+                'office', 'App\Models\RealEstateOffice' => $firebaseService->sendToOffice($author, $fcmNotification, $fcmData),
+                default                                 => false,
             };
 
             if ($result) {
