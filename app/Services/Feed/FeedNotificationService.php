@@ -95,14 +95,28 @@ class FeedNotificationService
         if (!$author) return;
         if ($this->isSamePerson($author, $commenter)) return;
 
-        $this->queuePending(
-            post: $post,
-            actorId: $commenter->id,
-            actorType: $this->shortType($commenter),
-            actorName: $this->getName($commenter),
-            actionType: 'comment',
-            commentText: $comment->body_en ?? $comment->body_ar ?? $comment->body_ku,
-        );
+        $commenterName = $this->getName($commenter);
+        $preview       = $this->bodyPreview($comment);
+
+        $title = '💬 ' . $commenterName . ' commented on your post';
+        $body  = $preview ?: 'Tap to see the comment';
+
+        $data = [
+            'type'        => 'feed_post_commented',
+            'post_id'     => (string) $post->id,
+            'comment_id'  => (string) $comment->id,
+            'commenter_id'   => (string) $commenter->id,
+            'commenter_type' => $this->shortType($commenter),
+            'commenter_name' => $commenterName,
+            'action_url'  => '/feed/post/' . $post->id,
+            'action_text' => 'View Post',
+        ];
+
+        // 1. Save to notifications table
+        $this->saveInstantNotification($author, $title, $body, $data, 'medium');
+
+        // 2. Send FCM instantly
+        $this->sendToAuthor($author, $title, $body, $data);
     }
 
     // =========================================================================
