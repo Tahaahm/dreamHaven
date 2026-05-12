@@ -13,6 +13,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        $schedule->job(new \App\Jobs\FlushPendingFeedNotificationsJob)
+                 ->everyThirtyMinutes()
+                 ->onQueue('notifications');
+
         $schedule->call(function () {
             Http::timeout(1800)
                 ->post('http://127.0.0.1:8001/re/train', [
