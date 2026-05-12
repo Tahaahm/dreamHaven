@@ -10,3 +10,7 @@ Artisan::command('inspire', function () {
 
 Schedule::job(new \App\Jobs\FlushPendingFeedNotificationsJob)
     ->everyThirtyMinutes();
+
+Schedule::command('queue:work --queue=notifications,default --stop-when-empty')
+    ->hourly()
+    ->withoutOverlapping();
