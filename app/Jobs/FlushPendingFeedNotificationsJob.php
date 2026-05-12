@@ -273,7 +273,8 @@ class FlushPendingFeedNotificationsJob implements ShouldQueue
 
     // ── Load author ────────────────────────────────────────────────────────
 
-    private function loadAuthor(string $type, int $id): mixed
+    private function loadAuthor(string $type, string $id): mixed
+
     {
         return match ($type) {
             'user'   => User::find($id),
