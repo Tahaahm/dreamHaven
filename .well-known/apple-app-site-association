@@ -5,7 +5,8 @@
             {
                 "appID": "XW62A364W6.com.example.dreamHaven",
                 "paths": [
-                    "/PropertyDetail/*"
+                    "/PropertyDetail/*",
+                    "/feed/*"
                 ]
             }
         ]

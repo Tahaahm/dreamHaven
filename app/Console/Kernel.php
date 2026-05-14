@@ -14,8 +14,8 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->job(new \App\Jobs\FlushPendingFeedNotificationsJob)
-                 ->everyThirtyMinutes()
-                 ->onQueue('notifications');
+            ->everyThirtyMinutes()
+            ->onQueue('notifications');
 
         $schedule->call(function () {
             Http::timeout(1800)
