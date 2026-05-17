@@ -421,6 +421,10 @@ Route::prefix('v1/api/properties')->group(function () {
     Route::get('/statistics', [PropertyController::class, 'getStatistics']);
     Route::get('/map',        [PropertyController::class, 'getMapProperties']);
 
+    Route::middleware(['auth:sanctum'])->group(function () {
+        Route::get('/my-properties', [PropertyController::class, 'getMyProperties']);
+    });
+
     Route::get('/owner/{ownerType}/{ownerId}', [PropertyController::class, 'getByOwner'])
         ->where(['ownerType' => 'User|Agent|RealEstateOffice']);
 
@@ -441,7 +445,7 @@ Route::prefix('v1/api/properties')->group(function () {
         Route::post('/upload-images',              [PropertyController::class, 'uploadImages']);
         Route::get('/recently-viewed',             [PropertyController::class, 'getRecentlyViewed']);
         Route::get('/my-viewing-stats',            [PropertyController::class, 'getMyViewingStats']);
-        Route::get('/my-properties',               [PropertyController::class, 'getMyProperties']);
+
 
         Route::put('/update/mobile/{id}',          [PropertyController::class, 'updateMobile']);
         Route::patch('/update/mobile/{id}',        [PropertyController::class, 'updateMobile']);
