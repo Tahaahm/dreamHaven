@@ -15,6 +15,7 @@ use App\Http\Controllers\ServiceProviderController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\AgentAuthController;
 use App\Http\Controllers\Api\AreaInsightsController;
+use App\Http\Controllers\Api\Chat\ChatController;
 use App\Http\Controllers\Api\Feed\FeedCommentController;
 use App\Http\Controllers\Api\Feed\FeedFollowController;
 use App\Http\Controllers\Api\Feed\FeedPostController;
@@ -1187,6 +1188,50 @@ Route::prefix('api/v1/feed')->group(function () {
     Route::get('/{id}',              [FeedPostController::class,  'show']);
     Route::get('/{postId}/comments', [FeedCommentController::class, 'index']);
 });
+
+
+
+Route::prefix('api/v1/chat')->middleware('auth:sanctum,agent,office')->group(function () {
+
+    // ── Conversations ──────────────────────────────────────────────────────────
+
+    // GET  /api/v1/chat/conversations          → inbox list (paginated)
+    Route::get('/conversations', [ChatController::class, 'index']);
+
+    // POST /api/v1/chat/conversations          → create or find direct / create group
+    Route::post('/conversations', [ChatController::class, 'store']);
+
+    // GET  /api/v1/chat/conversations/{id}     → single conversation details
+    Route::get('/conversations/{id}', [ChatController::class, 'show']);
+
+    // POST /api/v1/chat/conversations/{id}/read    → mark as read (reset unread_count)
+    Route::post('/conversations/{id}/read', [ChatController::class, 'markRead']);
+
+    // POST /api/v1/chat/conversations/{id}/notify  → called after Firestore write
+    //      updates last_message preview + expiry + unread counts + sends FCM
+    Route::post('/conversations/{id}/notify', [ChatController::class, 'notifyMessage']);
+
+    // ── Group management ───────────────────────────────────────────────────────
+
+    // POST   /api/v1/chat/conversations/{id}/participants  → add participant (admin only)
+    Route::post('/conversations/{id}/participants', [ChatController::class, 'addParticipantToGroup']);
+
+    // DELETE /api/v1/chat/conversations/{id}/leave         → leave group
+    Route::delete('/conversations/{id}/leave', [ChatController::class, 'leaveGroup']);
+
+    // ── Media ──────────────────────────────────────────────────────────────────
+
+    // POST /api/v1/chat/media/upload   → upload image/file, get back URL
+    Route::post('/media/upload', [ChatController::class, 'uploadMedia']);
+
+    // ── Unread badge ───────────────────────────────────────────────────────────
+
+    // GET /api/v1/chat/unread-count    → total unread across all conversations
+    Route::get('/unread-count', [ChatController::class, 'unreadCount']);
+
+    Route::post('/firebase-token', [ChatController::class, 'firebaseToken']);
+});
+
 
 
 // ============================================
