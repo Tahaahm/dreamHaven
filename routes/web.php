@@ -1230,6 +1230,8 @@ Route::prefix('api/v1/chat')->middleware('auth:sanctum,agent,office')->group(fun
     Route::get('/unread-count', [ChatController::class, 'unreadCount']);
 
     Route::post('/firebase-token', [ChatController::class, 'firebaseToken']);
+
+    Route::get('/contacts', [ChatController::class, 'contacts']);
 });
 
 

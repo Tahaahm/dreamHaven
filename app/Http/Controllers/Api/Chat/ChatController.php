@@ -736,4 +736,68 @@ class ChatController extends Controller
             Log::error('FCM unexpected error', ['error' => $e->getMessage()]);
         }
     }
+
+    public function contacts(Request $request): JsonResponse
+    {
+        [$actor, $morphType] = $this->resolveActor($request);
+
+        $contacts = collect();
+
+        // ── Users ──────────────────────────────────────────────────────────────
+        $users = \App\Models\User::select('id', 'username', 'photo_image')
+            ->where('id', '!=', $morphType === 'App\\Models\\User' ? $actor->id : null)
+            ->limit(100)
+            ->get()
+            ->map(fn($u) => [
+                'id'     => $u->id,
+                'name'   => $u->username ?? 'User',
+                'avatar' => $u->photo_image
+                    ? (str_starts_with($u->photo_image, 'http')
+                        ? $u->photo_image
+                        : Storage::disk('public')->url($u->photo_image))
+                    : null,
+                'type'   => 'user',
+            ]);
+
+        // ── Agents ─────────────────────────────────────────────────────────────
+        $agents = \App\Models\Agent::select('id', 'agent_name', 'profile_image')
+            ->where('id', '!=', $morphType === 'App\\Models\\Agent' ? $actor->id : null)
+            ->limit(100)
+            ->get()
+            ->map(fn($a) => [
+                'id'     => $a->id,
+                'name'   => $a->agent_name ?? 'Agent',
+                'avatar' => $a->profile_image
+                    ? (str_starts_with($a->profile_image, 'http')
+                        ? $a->profile_image
+                        : Storage::disk('public')->url($a->profile_image))
+                    : null,
+                'type'   => 'agent',
+            ]);
+
+        // ── Offices ────────────────────────────────────────────────────────────
+        $offices = \App\Models\RealEstateOffice::select('id', 'company_name', 'photo_image')
+            ->where('id', '!=', $morphType === 'App\\Models\\RealEstateOffice' ? $actor->id : null)
+            ->limit(100)
+            ->get()
+            ->map(fn($o) => [
+                'id'     => $o->id,
+                'name'   => $o->company_name ?? 'Office',
+                'avatar' => $o->photo_image
+                    ? (str_starts_with($o->photo_image, 'http')
+                        ? $o->photo_image
+                        : Storage::disk('public')->url($o->photo_image))
+                    : null,
+                'type'   => 'office',
+            ]);
+
+        $contacts = $users->merge($agents)->merge($offices)
+            ->sortBy('name')
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'data'    => $contacts,
+        ]);
+    }
 }

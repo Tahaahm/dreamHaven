@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\Notification;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Kreait\Firebase\Factory;
 use Kreait\Firebase\Messaging\CloudMessage;
@@ -107,65 +108,114 @@ class FCMNotificationService
         }
 
         try {
-            // Create FCM notification
             $notification = FCMNotification::create($title, $body);
 
-            // Build message
             $message = CloudMessage::withTarget('token', $deviceToken)
                 ->withNotification($notification)
                 ->withData(array_merge($data, [
                     'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
                 ]));
 
-            Log::info('FCM: Sending request (V1 API)', [
-                'token_preview' => substr($deviceToken, 0, 20) . '...',
-                'title' => $title
-            ]);
-
-            // Send message
             $result = $this->messaging->send($message);
 
-            Log::info('FCM: Notification sent successfully (V1 API)', [
-                'token_preview' => substr($deviceToken, 0, 20) . '...',
-                'message_id' => $result
+            Log::info('FCM batch notification sent', [
+                'token' => substr($deviceToken, 0, 20) . '...',
+                'message_name' => $result,
             ]);
 
             return [
-                'success' => true,
-                'message_id' => $result
+                'success'    => true,
+                'message_id' => $result,
             ];
         } catch (\Kreait\Firebase\Exception\Messaging\NotFound $e) {
-            Log::warning('FCM: Token not found or expired', [
+            // Token no longer valid — clean it up from all models
+            $this->removeStaleToken($deviceToken);
+
+            Log::warning('FCM: Token not found — removed', [
                 'token_preview' => substr($deviceToken, 0, 20) . '...',
-                'error' => $e->getMessage()
             ]);
 
-            return [
-                'success' => false,
-                'error' => 'Token not found or expired'
-            ];
+            return ['success' => false, 'error' => 'Token not found or expired'];
         } catch (\Kreait\Firebase\Exception\MessagingException $e) {
-            Log::error('FCM: Messaging exception', [
+            $errorMsg = $e->getMessage();
+
+            // Also clean up on UNREGISTERED / INVALID tokens
+            if (
+                str_contains($errorMsg, 'UNREGISTERED') ||
+                str_contains($errorMsg, 'INVALID_ARGUMENT') ||
+                str_contains($errorMsg, 'SENDER_ID_MISMATCH')
+            ) {
+                $this->removeStaleToken($deviceToken);
+            }
+
+            Log::warning('FCM: Messaging exception', [
                 'token_preview' => substr($deviceToken, 0, 20) . '...',
-                'error' => $e->getMessage()
+                'error'         => $errorMsg,
             ]);
 
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return ['success' => false, 'error' => $errorMsg];
         } catch (\Exception $e) {
             Log::error('FCM: Exception during send', [
                 'token_preview' => substr($deviceToken, 0, 20) . '...',
-                'error' => $e->getMessage()
+                'error'         => $e->getMessage(),
             ]);
 
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
+
+    private function removeStaleToken(string $token): void
+    {
+        try {
+            // Remove from users
+            DB::table('users')
+                ->whereJsonContains('device_tokens', $token)
+                ->each(function ($user) use ($token) {
+                    $tokens = array_values(array_filter(
+                        json_decode($user->device_tokens ?? '[]', true),
+                        fn($t) => $t !== $token
+                    ));
+                    DB::table('users')
+                        ->where('id', $user->id)
+                        ->update(['device_tokens' => json_encode($tokens)]);
+                });
+
+            // Remove from agents
+            DB::table('agents')
+                ->whereJsonContains('device_tokens', $token)
+                ->each(function ($agent) use ($token) {
+                    $tokens = array_values(array_filter(
+                        json_decode($agent->device_tokens ?? '[]', true),
+                        fn($t) => $t !== $token
+                    ));
+                    DB::table('agents')
+                        ->where('id', $agent->id)
+                        ->update(['device_tokens' => json_encode($tokens)]);
+                });
+
+            // Remove from offices
+            DB::table('real_estate_offices')
+                ->whereJsonContains('device_tokens', $token)
+                ->each(function ($office) use ($token) {
+                    $tokens = array_values(array_filter(
+                        json_decode($office->device_tokens ?? '[]', true),
+                        fn($t) => $t !== $token
+                    ));
+                    DB::table('real_estate_offices')
+                        ->where('id', $office->id)
+                        ->update(['device_tokens' => json_encode($tokens)]);
+                });
+
+            Log::info('FCM: Stale token removed from all models', [
+                'token_preview' => substr($token, 0, 20) . '...',
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('FCM: Could not remove stale token', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
 
     /**
      * Send notification to multiple users
