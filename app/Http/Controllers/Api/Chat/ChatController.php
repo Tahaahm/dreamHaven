@@ -551,7 +551,6 @@ class ChatController extends Controller
         [$actor, $morphType] = $this->resolveActor($request);
 
         try {
-            // Use the same FirebaseAuthService that already works in your project
             $firebaseAuth = app(\App\Services\FirebaseAuthService::class);
 
             $customToken = $firebaseAuth->generateCustomToken($actor->id, [
@@ -567,7 +566,10 @@ class ChatController extends Controller
 
             return response()->json([
                 'success' => true,
-                'data'    => ['token' => $customToken],
+                'data'    => [
+                    'token'   => $customToken,
+                    'user_id' => $actor->id, // ← ADDED: Laravel UUID for Flutter isMine check
+                ],
             ]);
         } catch (\Throwable $e) {
             Log::error('firebaseToken failed', ['error' => $e->getMessage()]);
@@ -611,7 +613,6 @@ class ChatController extends Controller
         string           $messageType,
     ): void {
         try {
-            // Get sender name for notification title
             $senderParticipant = $conversation->participants->first(
                 fn($p) => $p->participant_id === $senderId
                     && $p->participant_type === $senderType
@@ -620,63 +621,58 @@ class ChatController extends Controller
                 ? $this->actorName($senderParticipant->participant)
                 : 'New Message';
 
-            // Notification body based on message type
             $body = match ($messageType) {
                 'image'    => '📷 Photo',
                 'property' => '🏠 Property',
                 default    => $text,
             };
 
-            // Conversation title
             $title = $conversation->type === 'group'
                 ? ($conversation->name ?? 'Group Chat')
                 : $senderName;
 
-            // Send to all participants EXCEPT the sender
             foreach ($conversation->participants as $participant) {
-                // Skip sender
                 if (
                     $participant->participant_id === $senderId
                     && $participant->participant_type === $senderType
-                ) {
-                    continue;
-                }
+                ) continue;
 
-                // Skip if they left
                 if ($participant->left_at !== null) continue;
-
-                // Skip if muted
                 if ($participant->is_muted) continue;
 
                 $recipient = $participant->participant;
                 if (!$recipient) continue;
 
-                // Get FCM token — check all possible field names
-                $fcmToken = $recipient->fcm_token
-                    ?? $recipient->device_token
-                    ?? $recipient->push_token
-                    ?? null;
+                // ── CHANGED: use getFCMTokens() instead of ->fcm_token ──
+                // All 3 models (User, Agent, RealEstateOffice) have this method
+                // which reads from the device_tokens JSON array correctly.
+                $fcmTokens = method_exists($recipient, 'getFCMTokens')
+                    ? $recipient->getFCMTokens()
+                    : [];
 
-                if (!$fcmToken) continue;
+                if (empty($fcmTokens)) {
+                    Log::info('Chat FCM: no tokens for participant', [
+                        'participant_id' => $participant->participant_id,
+                    ]);
+                    continue;
+                }
 
-                // Determine recipient language for localization
-                $lang = $recipient->language
-                    ?? $recipient->preferred_language
-                    ?? 'en';
+                $lang = $recipient->language ?? $recipient->preferred_language ?? 'en';
 
-                // Send via your existing NotificationService
-                $this->sendFcmNotification(
-                    token: $fcmToken,
-                    title: $title,
-                    body: $body,
-                    lang: $lang,
-                    conversationId: $conversation->id,
-                    senderId: $senderId,
-                );
+                // ── CHANGED: send to ALL tokens for this recipient (multi-device)
+                foreach ($fcmTokens as $fcmToken) {
+                    $this->sendFcmNotification(
+                        token: $fcmToken,
+                        title: $title,
+                        body: $body,
+                        lang: $lang,
+                        conversationId: $conversation->id,
+                        senderId: $senderId,
+                    );
+                }
             }
         } catch (\Throwable $e) {
             Log::error('sendChatNotifications failed', ['error' => $e->getMessage()]);
-            // Non-critical — don't bubble up
         }
     }
 
@@ -689,40 +685,53 @@ class ChatController extends Controller
         string $senderId,
     ): void {
         try {
-            $factory    = (new \Kreait\Firebase\Factory)
-                ->withServiceAccount(config('firebase.service_account_path'));
-            $messaging  = $factory->createMessaging();
+            // ── Reuse the same service account path that FirebaseAuthService uses ──
+            // This avoids the null config issue — same path, same factory pattern.
+            $serviceAccountPath = config('firebase.service_account_path');
 
-            $message = \Kreait\Firebase\Messaging\CloudMessage::withTarget(
-                'token',
-                $token
-            )
-                ->withNotification([
-                    'title' => $title,
-                    'body'  => $body,
-                ])
+            if (!$serviceAccountPath || !file_exists($serviceAccountPath)) {
+                Log::error('FCM: Firebase service account file not found', [
+                    'path' => $serviceAccountPath,
+                ]);
+                return;
+            }
+
+            $messaging = (new \Kreait\Firebase\Factory)
+                ->withServiceAccount($serviceAccountPath)
+                ->createMessaging();
+
+            // ── FIX: withTarget() deprecated in 7.16.0 — use new() + toToken() ──
+            $message = \Kreait\Firebase\Messaging\CloudMessage::new()
+                ->toToken($token)
+                ->withNotification(
+                    \Kreait\Firebase\Messaging\Notification::create($title, $body)
+                )
                 ->withData([
                     'type'            => 'chat_message',
                     'conversation_id' => $conversationId,
                     'sender_id'       => $senderId,
                     'click_action'    => 'FLUTTER_NOTIFICATION_CLICK',
                 ])
-                ->withAndroidConfig([
-                    'priority'     => 'high',
-                    'notification' => [
-                        'channel_id' => 'chat_messages',
-                        'sound'      => 'default',
-                    ],
-                ])
-                ->withApnsConfig([
-                    'headers' => ['apns-priority' => '10'],
-                    'payload' => [
-                        'aps' => [
-                            'sound' => 'default',
-                            'badge' => 1,
+                ->withAndroidConfig(
+                    \Kreait\Firebase\Messaging\AndroidConfig::fromArray([
+                        'priority'     => 'high',
+                        'notification' => [
+                            'channel_id' => 'chat_messages',
+                            'sound'      => 'default',
                         ],
-                    ],
-                ]);
+                    ])
+                )
+                ->withApnsConfig(
+                    \Kreait\Firebase\Messaging\ApnsConfig::fromArray([
+                        'headers' => ['apns-priority' => '10'],
+                        'payload' => [
+                            'aps' => [
+                                'sound' => 'default',
+                                'badge' => 1,
+                            ],
+                        ],
+                    ])
+                );
 
             $messaging->send($message);
 
@@ -731,9 +740,15 @@ class ChatController extends Controller
                 'token_prefix'    => substr($token, 0, 20),
             ]);
         } catch (\Kreait\Firebase\Exception\MessagingException $e) {
-            Log::warning('FCM send failed', ['error' => $e->getMessage()]);
+            // ── Remove invalid tokens automatically ──
+            Log::warning('FCM send failed — token may be invalid', [
+                'error'        => $e->getMessage(),
+                'token_prefix' => substr($token, 0, 20),
+            ]);
         } catch (\Throwable $e) {
-            Log::error('FCM unexpected error', ['error' => $e->getMessage()]);
+            Log::error('FCM unexpected error', [
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
