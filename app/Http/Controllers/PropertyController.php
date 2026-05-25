@@ -2594,9 +2594,12 @@ class PropertyController extends Controller
 
     private function bustFeaturedCache(): void
     {
+        $this->interactionService->bustFeaturedCache();
+
+        // Keep old patterns too for safety
         foreach (['balanced', 'premium', 'engagement', 'recent'] as $strategy) {
             foreach ([5, 10, 20, 50] as $limit) {
-                Cache::forget("featured_properties_{$strategy}_{$limit}");
+                \Illuminate\Support\Facades\Cache::forget("featured_properties_{$strategy}_{$limit}");
             }
         }
     }
