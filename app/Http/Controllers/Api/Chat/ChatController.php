@@ -676,6 +676,153 @@ class ChatController extends Controller
         }
     }
 
+    private function sendChatNotifications(
+        ChatConversation $conversation,
+        string           $senderId,
+        string           $senderType,
+        string           $text,
+        string           $messageType,
+    ): void {
+        try {
+            $senderParticipant = $conversation->participants->first(
+                fn($p) => $p->participant_id === $senderId
+                    && $p->participant_type === $senderType
+            );
+            $senderName = $senderParticipant?->participant
+                ? $this->actorName($senderParticipant->participant)
+                : 'New Message';
+
+            $body = match ($messageType) {
+                'image'    => '📷 Photo',
+                'property' => '🏠 Property',
+                default    => $text,
+            };
+
+            $title = $conversation->type === 'group'
+                ? ($conversation->name ?? 'Group Chat')
+                : $senderName;
+
+            // ── LOG: notification dispatch started ────────────────────────────
+            Log::info('💬 FCM CHAT: Dispatching notifications', [
+                'conversation_id'   => $conversation->id,
+                'conversation_type' => $conversation->type,
+                'sender_id'         => $senderId,
+                'sender_name'       => $senderName,
+                'sender_type'       => $senderType,
+                'message_type'      => $messageType,
+                'title'             => $title,
+                'body_preview'      => mb_substr($body, 0, 50),
+                'total_participants' => $conversation->participants->count(),
+            ]);
+
+            $notifiedCount = 0;
+            $skippedCount  = 0;
+
+            foreach ($conversation->participants as $participant) {
+                // ── Skip sender ───────────────────────────────────────────────
+                if (
+                    $participant->participant_id === $senderId
+                    && $participant->participant_type === $senderType
+                ) {
+                    Log::info('💬 FCM CHAT: Skipping sender', [
+                        'participant_id' => $participant->participant_id,
+                    ]);
+                    continue;
+                }
+
+                // ── Skip left participants ────────────────────────────────────
+                if ($participant->left_at !== null) {
+                    Log::info('💬 FCM CHAT: Skipping — participant left', [
+                        'participant_id' => $participant->participant_id,
+                        'left_at'        => $participant->left_at,
+                    ]);
+                    $skippedCount++;
+                    continue;
+                }
+
+                // ── Skip muted participants ───────────────────────────────────
+                if ($participant->is_muted) {
+                    Log::info('💬 FCM CHAT: Skipping — participant muted', [
+                        'participant_id' => $participant->participant_id,
+                    ]);
+                    $skippedCount++;
+                    continue;
+                }
+
+                $recipient = $participant->participant;
+                if (!$recipient) {
+                    Log::warning('💬 FCM CHAT: Skipping — participant model not loaded', [
+                        'participant_id'   => $participant->participant_id,
+                        'participant_type' => $participant->participant_type,
+                    ]);
+                    $skippedCount++;
+                    continue;
+                }
+
+                $recipientName = $this->actorName($recipient);
+                $fcmTokens     = method_exists($recipient, 'getFCMTokens')
+                    ? $recipient->getFCMTokens()
+                    : [];
+
+                // ── LOG: recipient details ────────────────────────────────────
+                Log::info('💬 FCM CHAT: Processing recipient', [
+                    'recipient_id'    => $participant->participant_id,
+                    'recipient_name'  => $recipientName,
+                    'recipient_type'  => $participant->participant_type,
+                    'fcm_token_count' => count($fcmTokens),
+                    'has_tokens'      => !empty($fcmTokens),
+                ]);
+
+                if (empty($fcmTokens)) {
+                    Log::warning('💬 FCM CHAT: No FCM tokens — notification NOT sent', [
+                        'recipient_id'   => $participant->participant_id,
+                        'recipient_name' => $recipientName,
+                    ]);
+                    $skippedCount++;
+                    continue;
+                }
+
+                $lang = $recipient->language ?? $recipient->preferred_language ?? 'en';
+
+                foreach ($fcmTokens as $index => $fcmToken) {
+                    Log::info('💬 FCM CHAT: Sending to recipient', [
+                        'recipient_id'    => $participant->participant_id,
+                        'recipient_name'  => $recipientName,
+                        'token_index'     => $index,
+                        'token_prefix'    => substr($fcmToken, 0, 20) . '...',
+                        'lang'            => $lang,
+                        'title'           => $title,
+                        'body'            => $body,
+                    ]);
+
+                    $this->sendFcmNotification(
+                        token: $fcmToken,
+                        title: $title,
+                        body: $body,
+                        lang: $lang,
+                        conversationId: $conversation->id,
+                        senderId: $senderId,
+                        recipientName: $recipientName, // ← pass for logging
+                    );
+
+                    $notifiedCount++;
+                }
+            }
+
+            // ── LOG: summary ──────────────────────────────────────────────────
+            Log::info('💬 FCM CHAT: Dispatch complete', [
+                'conversation_id' => $conversation->id,
+                'notified_count'  => $notifiedCount,
+                'skipped_count'   => $skippedCount,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('💬 FCM CHAT: sendChatNotifications failed', [
+                'error'           => $e->getMessage(),
+                'conversation_id' => $conversation->id,
+            ]);
+        }
+    }
+
     private function sendFcmNotification(
         string $token,
         string $title,
@@ -683,15 +830,15 @@ class ChatController extends Controller
         string $lang,
         string $conversationId,
         string $senderId,
+        string $recipientName = 'Unknown', // ← added for logging
     ): void {
         try {
-            // ── Reuse the same service account path that FirebaseAuthService uses ──
-            // This avoids the null config issue — same path, same factory pattern.
             $serviceAccountPath = config('firebase.service_account_path');
 
             if (!$serviceAccountPath || !file_exists($serviceAccountPath)) {
-                Log::error('FCM: Firebase service account file not found', [
-                    'path' => $serviceAccountPath,
+                Log::error('💬 FCM CHAT: Service account file not found', [
+                    'path'           => $serviceAccountPath,
+                    'recipient_name' => $recipientName,
                 ]);
                 return;
             }
@@ -700,7 +847,6 @@ class ChatController extends Controller
                 ->withServiceAccount($serviceAccountPath)
                 ->createMessaging();
 
-            // ── FIX: withTarget() deprecated in 7.16.0 — use new() + toToken() ──
             $message = \Kreait\Firebase\Messaging\CloudMessage::new()
                 ->toToken($token)
                 ->withNotification(
@@ -735,19 +881,23 @@ class ChatController extends Controller
 
             $messaging->send($message);
 
-            Log::info('Chat FCM sent', [
+            Log::info('💬 FCM CHAT: ✅ Notification sent successfully', [
+                'recipient_name'  => $recipientName,
                 'conversation_id' => $conversationId,
-                'token_prefix'    => substr($token, 0, 20),
+                'title'           => $title,
+                'body'            => $body,
+                'token_prefix'    => substr($token, 0, 20) . '...',
             ]);
         } catch (\Kreait\Firebase\Exception\MessagingException $e) {
-            // ── Remove invalid tokens automatically ──
-            Log::warning('FCM send failed — token may be invalid', [
-                'error'        => $e->getMessage(),
-                'token_prefix' => substr($token, 0, 20),
+            Log::warning('💬 FCM CHAT: ❌ FCM send failed — token may be invalid', [
+                'recipient_name' => $recipientName,
+                'error'          => $e->getMessage(),
+                'token_prefix'   => substr($token, 0, 20) . '...',
             ]);
         } catch (\Throwable $e) {
-            Log::error('FCM unexpected error', [
-                'error' => $e->getMessage(),
+            Log::error('💬 FCM CHAT: ❌ Unexpected FCM error', [
+                'recipient_name' => $recipientName,
+                'error'          => $e->getMessage(),
             ]);
         }
     }
