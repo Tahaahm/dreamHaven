@@ -272,6 +272,10 @@ Route::prefix('api/v1')->group(function () {
         Route::prefix('user')->group(function () {
             Route::get('/profile', [UserController::class, 'getProfile']);
             Route::post('/calculator-signal', [UserBehaviorController::class, 'storeCalculatorSignal']);
+            Route::post('/track-search',  [UserBehaviorController::class, 'trackSearch']);
+            Route::post('/track-filter',  [UserBehaviorController::class, 'trackFilter']);
+            Route::post('/track-compare', [UserBehaviorController::class, 'trackCompare']);
+
 
             Route::patch('/profile', [UserController::class, 'updateLocation']);
             Route::delete('/profile', [UserController::class, 'deleteAccount']);
