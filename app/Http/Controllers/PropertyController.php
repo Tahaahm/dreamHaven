@@ -2006,39 +2006,85 @@ class PropertyController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'limit' => 'integer|min:1|max:50',
-                'language' => 'in:en,ar,ku',
+                'limit'        => 'integer|min:1|max:50',
+                'listing_type' => 'nullable|in:rent,sell',
+                'city'         => 'nullable|string|max:100',
+                'days'         => 'nullable|integer|min:1|max:90',
             ]);
 
             if ($validator->fails()) {
                 return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
             }
 
-            $limit = $request->get('limit', 20);
-            $user = auth('sanctum')->user();
+            $limit        = $request->get('limit', 20);
+            $listingType  = $request->get('listing_type');
+            $city         = $request->get('city');
+            $days         = $request->get('days', 30);
+            $user         = auth('sanctum')->user();
 
             Log::info('🔥 POPULAR: Request started', [
-                'endpoint' => 'getPopular',
-                'user_id' => $user?->id,
-                'limit' => $limit,
+                'endpoint'     => 'getPopular',
+                'user_id'      => $user?->id,
+                'limit'        => $limit,
+                'listing_type' => $listingType,
+                'city'         => $city,
+                'days'         => $days,
             ]);
 
-            $properties = Property::where('is_active', true)
-                ->where('published', true)
-                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                ->where(function ($q) {
-                    $q->where('views', '>', 0)
-                        ->orWhere('favorites_count', '>', 0);
-                })
-                ->orderByRaw('(views * 0.6) + (favorites_count * 2) + (rating * 10) DESC')
-                ->limit($limit)
-                ->get();
+            // ── Contextual city/listing_type from user signals if not provided ────
+            // If the caller doesn't pass city/listing_type, infer from the user's
+            // last filter or search signal so the "popular" list is locally relevant.
+            if ($user && (!$listingType || !$city)) {
+                try {
+                    $filterSignal = DB::table('user_property_interactions')
+                        ->where('user_id', $user->id)
+                        ->where('interaction_type', 'filter_applied')
+                        ->where('property_id', 'filter_signal')
+                        ->where('created_at', '>=', now()->subDays(60))
+                        ->latest('created_at')
+                        ->value('metadata');
 
-            $properties->load('owner'); // ← ADD HERE
+                    if ($filterSignal) {
+                        $fs = is_array($filterSignal) ? $filterSignal : json_decode($filterSignal, true);
+                        if (!$listingType && !empty($fs['listing_type'])) {
+                            $listingType = $fs['listing_type'];
+                        }
+                        if (!$city && !empty($fs['city'])) {
+                            $city = $fs['city'];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Non-fatal — just use global popular
+                }
+            }
 
+            // ── Get popular properties with full scoring ──────────────────────────
+            $properties = $this->interactionService->getPopularProperties(
+                limit: $limit,
+                listingType: $listingType,
+                city: $city,
+                days: $days
+            );
+
+            if ($properties->isEmpty()) {
+                // Fallback: return general popular if no signal-scored results
+                $properties = Property::where('is_active', true)
+                    ->where('published', true)
+                    ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                    ->where(function ($q) {
+                        $q->where('views', '>', 0)->orWhere('favorites_count', '>', 0);
+                    })
+                    ->orderByRaw('(views * 0.4) + (favorites_count * 2) + (rating * 10) DESC')
+                    ->limit($limit)
+                    ->get();
+            }
+
+            $properties->load('owner');
 
             Log::info('✅ POPULAR: Success', [
                 'properties_found' => $properties->count(),
+                'listing_type'     => $listingType,
+                'city'             => $city,
             ]);
 
             if ($properties->isNotEmpty()) {
@@ -2047,14 +2093,26 @@ class PropertyController extends Controller
             }
 
             $transformedData = $properties->map(function ($property) {
-                return $this->transformPropertyData($property);
+                $data = $this->transformPropertyData($property);
+
+                // Attach popularity metadata so Flutter can render "why popular" labels
+                $data['popularity_score']     = $property->popularity_score ?? null;
+                $data['popularity_breakdown'] = $property->popularity_breakdown ?? null;
+
+                return $data;
             });
 
             return ApiResponse::success(
                 'Popular properties retrieved',
                 [
-                    'data' => $transformedData,
-                    'total' => $transformedData->count()
+                    'data'         => $transformedData,
+                    'total'        => $transformedData->count(),
+                    'context'      => [
+                        'listing_type' => $listingType,
+                        'city'         => $city,
+                        'days_window'  => $days,
+                    ],
+                    'algorithm'    => 'search_ctr_weighted',
                 ],
                 200
             );
@@ -2069,57 +2127,89 @@ class PropertyController extends Controller
     public function getFeatured(Request $request)
     {
         try {
-            $limit = $request->get('limit', 10);
-            $strategy = $request->get('strategy', 'balanced');
-            $user = auth('sanctum')->user();
+            $limit  = $request->get('limit', 10);
+            $user   = auth('sanctum')->user();
+            $userId = $user?->id;
 
             Log::info('⭐ FEATURED: Request started', [
-                'limit' => $limit,
-                'strategy' => $strategy,
+                'user_id' => $userId,
+                'limit'   => $limit,
             ]);
 
-            $cacheKey = "featured_properties_{$strategy}_{$limit}";
+            // ── Per-user cache (10 min) ───────────────────────────────────────────
+            // Guest users share a global cache; authenticated users get their own.
+            $cacheKey = $userId
+                ? "featured_user_{$userId}_{$limit}"
+                : "featured_guest_{$limit}";
 
-            $featured = Cache::remember($cacheKey, 900, function () use ($limit, $strategy) {
-                $baseQuery = Property::where('is_active', true)
-                    ->where('published', true)
-                    ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
-
-                return $this->getFeaturedByStrategy($baseQuery, $strategy, $limit);
+            $featured = Cache::remember($cacheKey, 600, function () use ($limit, $userId) {
+                return $this->interactionService->getFeaturedProperties(
+                    limit: $limit,
+                    userId: $userId
+                );
             });
 
-            // ── FIX: re-fetch as Eloquent collection so ->load() works ──
+            // Re-fetch as Eloquent collection so ->load() works
             $featuredIds = $featured->pluck('id');
-            $featured = Property::whereIn('id', $featuredIds)->get();
+            $featured    = Property::whereIn('id', $featuredIds)->get();
+
+            // Re-attach computed scores (lost in re-fetch — attach from original)
+            $scoreLookup = collect($this->interactionService->getFeaturedProperties($limit, $userId))
+                ->keyBy('id');
+
+            $featured = $featured->map(function ($property) use ($scoreLookup) {
+                $scored = $scoreLookup->get($property->id);
+                if ($scored) {
+                    $property->featured_layer       = $scored->featured_layer       ?? 2;
+                    $property->featured_reason      = $scored->featured_reason      ?? [];
+                    $property->popularity_score     = $scored->popularity_score     ?? null;
+                    $property->popularity_breakdown = $scored->popularity_breakdown ?? null;
+                    $property->relevance_score      = $scored->relevance_score      ?? null;
+                }
+                return $property;
+            });
+
             $featured->load('owner');
 
-
             if ($featured->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $trackUserId = $userId ?? 'guest_' . session()->getId();
                 $this->interactionService->trackImpressions(
-                    $userId,
+                    $trackUserId,
                     $featured,
                     'featured'
                 );
             }
 
             $transformedData = $featured->map(function ($property) {
-                $propertyData = $this->transformPropertyData($property);
-                $propertyData['featured_reason'] = $this->getFeaturedReason($property);
-                $propertyData['featured_score'] = $property->featured_score ?? 0;
-                return $propertyData;
+                $data = $this->transformPropertyData($property);
+
+                // Featured-specific fields
+                $data['featured_layer']       = $property->featured_layer       ?? 2;
+                $data['featured_reason']      = $property->featured_reason      ?? [];
+                $data['popularity_score']     = $property->popularity_score     ?? null;
+                $data['relevance_score']      = $property->relevance_score      ?? null;
+
+                return $data;
             });
 
             Log::info('✅ FEATURED: Success', [
                 'properties_found' => $transformedData->count(),
+                'personalized'     => (bool) $userId,
+                'layer1_count'     => $transformedData->where('featured_layer', 1)->count(),
+                'layer2_count'     => $transformedData->where('featured_layer', 2)->count(),
             ]);
 
             return ApiResponse::success(
                 'Featured properties retrieved',
                 [
-                    'data' => $transformedData,
-                    'total' => $transformedData->count(),
-                    'strategy' => $strategy,
+                    'data'          => $transformedData,
+                    'total'         => $transformedData->count(),
+                    'personalized'  => (bool) $userId,
+                    'algorithm'     => 'two_layer_contextual',
+                    'layer_summary' => [
+                        'layer1_boosted'    => $transformedData->where('featured_layer', 1)->count(),
+                        'layer2_contextual' => $transformedData->where('featured_layer', 2)->count(),
+                    ],
                 ],
                 200
             );
