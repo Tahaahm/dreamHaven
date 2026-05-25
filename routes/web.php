@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Feed\FeedPostController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MarketTrendsController;
 use App\Http\Controllers\Api\PropertyValuationController;
+use App\Http\Controllers\Api\UserBehaviorController;
 use App\Http\Controllers\OfficeDashboardApiController;
 use App\Http\Controllers\AppVersionController;
 use App\Http\Controllers\BoostController;
@@ -270,6 +271,8 @@ Route::prefix('api/v1')->group(function () {
         // User Profile Management
         Route::prefix('user')->group(function () {
             Route::get('/profile', [UserController::class, 'getProfile']);
+            Route::post('/calculator-signal', [UserBehaviorController::class, 'storeCalculatorSignal']);
+
             Route::patch('/profile', [UserController::class, 'updateLocation']);
             Route::delete('/profile', [UserController::class, 'deleteAccount']);
             Route::post('/log-interaction', [UserController::class, 'logSearchInteraction']);
