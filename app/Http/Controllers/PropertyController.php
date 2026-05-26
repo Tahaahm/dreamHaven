@@ -3353,16 +3353,18 @@ class PropertyController extends Controller
     public function getMapProperties(Request $request)
     {
         try {
-            $user = auth('sanctum')->user();
+            $user   = auth('sanctum')->user();
             $bounds = $request->get('bounds');
-            $limit = $request->get('limit', 200);
+            $limit  = $request->get('limit', 200);
 
+            // ── Base query ────────────────────────────────────────────────────────
             $query = Property::query()
                 ->active()
                 ->published()
                 ->whereNotIn('status', ['cancelled', 'pending'])
                 ->whereNotNull('locations');
 
+            // ── Bounds filter ─────────────────────────────────────────────────────
             if ($bounds) {
                 $query->whereExists(function ($subQuery) use ($bounds) {
                     $subQuery->selectRaw('1')
@@ -3370,41 +3372,92 @@ class PropertyController extends Controller
                         ->whereColumn('p2.id', 'properties.id')
                         ->whereRaw("JSON_LENGTH(p2.locations) > 0")
                         ->whereRaw("
-                    JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lat') BETWEEN ? AND ?
-                    AND JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lng') BETWEEN ? AND ?
-                ", [$bounds['south'], $bounds['north'], $bounds['west'], $bounds['east']]);
+                        JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lat') BETWEEN ? AND ?
+                        AND JSON_EXTRACT(JSON_EXTRACT(p2.locations, '$[0]'), '$.lng') BETWEEN ? AND ?
+                    ", [$bounds['south'], $bounds['north'], $bounds['west'], $bounds['east']]);
                 });
             }
 
             $this->applyBasicMapFilters($query, $request);
+
+            // ── Smart ordering ────────────────────────────────────────────────────
+            // Best properties (boosted + verified + views + fresh) load first.
+            // This matters especially at low zoom where Flutter limits pin count.
+            $query->selectRaw("
+            properties.*,
+            (
+                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
+                (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
+                (LEAST(views, 100) * 0.15) +
+                (LEAST(favorites_count, 50) * 0.5) +
+                (CASE WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15 ELSE 0 END) +
+                (CASE WHEN DATEDIFF(NOW(), created_at) <= 30 THEN  5 ELSE 0 END)
+            ) as map_score
+        ")->orderByDesc('map_score');
+
             $properties = $query->limit($limit)->get();
+            $properties->load('owner');
 
-            $properties->load('owner'); // ← ADD HERE
+            // ── Recommendation & popularity IDs ───────────────────────────────────
+            $recommendedIds = collect();
+            $popularIds     = collect();
 
+            if ($user) {
+                // Personalized recommendation IDs (IDs only — lightweight)
+                try {
+                    $personalized   = $this->interactionService->getPersonalizedRecommendations($user->id, 60);
+                    $recommendedIds = $personalized->pluck('id');
+                } catch (\Throwable $e) {
+                    Log::warning('Map rec overlay non-fatal', ['error' => $e->getMessage()]);
+                }
 
-            if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
-                $this->interactionService->trackImpressions(
-                    $userId,
-                    $properties,
-                    'map',
-                    ['bounds' => $bounds]
-                );
+                // Popular property IDs
+                try {
+                    $popularIds = $this->interactionService->getPopularProperties(limit: 60)->pluck('id');
+                } catch (\Throwable $e) {
+                    // non-fatal
+                }
+            } else {
+                // Guest: treat boosted + high-engagement as "popular"
+                $popularIds = $properties
+                    ->filter(fn($p) => $p->is_boosted || $p->views > 50 || $p->favorites_count > 5)
+                    ->pluck('id');
             }
 
-            $transformedData = collect($properties)->map(function ($property) {
-                $propertyData = $this->transformPropertyData($property);
+            // ── Track impressions ─────────────────────────────────────────────────
+            if ($properties->isNotEmpty()) {
+                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $this->interactionService->trackImpressions($userId, $properties, 'map', ['bounds' => $bounds]);
+            }
+
+            // ── Transform ─────────────────────────────────────────────────────────
+            $transformedData = collect($properties)->map(function ($property) use ($recommendedIds, $popularIds) {
+                $data        = $this->transformPropertyData($property);
                 $coordinates = $this->getPropertyCoordinates($property);
-                $propertyData['coordinates'] = [
+
+                $data['coordinates'] = [
                     'lat'     => (float) ($coordinates['lat'] ?? 0),
                     'lng'     => (float) ($coordinates['lng'] ?? 0),
                     'polygon' => $this->getPropertyPolygon($property),
                 ];
-                return $propertyData;
-            })->filter(function ($property) {
-                return $property['coordinates']['lat'] != 0
-                    && $property['coordinates']['lng'] != 0;
-            });
+
+                $isRec = $recommendedIds->contains($property->id);
+                $isPop = $popularIds->contains($property->id);
+
+                $data['is_recommended'] = $isRec;
+                $data['is_popular']     = $isPop;
+                $data['map_score']      = round($property->map_score ?? 0, 2);
+                $data['map_badge']      = match (true) {
+                    $isRec                                          => 'for_you',
+                    $isPop                                          => 'trending',
+                    (bool) $property->is_boosted                   => 'promoted',
+                    (bool) $property->verified                     => 'verified',
+                    $property->created_at->diffInDays(now()) <= 7  => 'new',
+                    default                                        => null,
+                };
+
+                return $data;
+            })->filter(fn($p) => $p['coordinates']['lat'] != 0 && $p['coordinates']['lng'] != 0);
 
             return ApiResponse::success(
                 'Map properties retrieved successfully',
@@ -3412,6 +3465,11 @@ class PropertyController extends Controller
                     'data'   => $transformedData->values(),
                     'total'  => $transformedData->count(),
                     'bounds' => $bounds,
+                    'meta'   => [
+                        'recommended_count' => $recommendedIds->count(),
+                        'popular_count'     => $popularIds->count(),
+                        'personalized'      => (bool) $user,
+                    ],
                 ],
                 200
             );
