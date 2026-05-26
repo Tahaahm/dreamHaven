@@ -46,7 +46,6 @@ class SmartStripService
 
                 // Try each strip type in priority order, logging skips & wins
                 $stripTypes = [
-                    'price_drop'        => fn() => $this->tryPriceDrop($userId, $signals, $language),
                     'resume_search'     => fn() => $this->tryResumeSearch($userId, $signals, $language),
                     'budget_match'      => fn() => $this->tryBudgetMatch($userId, $signals, $language),
                     'area_focus'        => fn() => $this->tryAreaFocus($userId, $signals, $language),
@@ -231,48 +230,8 @@ class SmartStripService
         );
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  STRIP TYPE 1: PRICE DROP
-    // ──────────────────────────────────────────────────────────────────────────
 
-    private function tryPriceDrop(string $userId, array $signals, string $lang): ?array
-    {
-        if (empty($signals['recentlyViewedIds'])) return null;
 
-        $droppedProperties = Property::whereIn('id', $signals['recentlyViewedIds'])
-            ->where('is_active', true)
-            ->where('published', true)
-            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->whereNotNull('original_price')
-            ->whereRaw('price < original_price * ?', [1 - self::DROP_THRESHOLD])
-            ->orderByRaw('(original_price - price) / original_price DESC')
-            ->with('owner')
-            ->limit(10)
-            ->get();
-
-        if ($droppedProperties->isEmpty()) return null;
-
-        $count   = $droppedProperties->count();
-        $topDrop = $droppedProperties->first();
-        $dropPct = $topDrop->original_price > 0
-            ? round((($topDrop->original_price - $topDrop->price) / $topDrop->original_price) * 100)
-            : 0;
-
-        $filters = $this->buildFiltersFromProperties($droppedProperties);
-
-        return [
-            'type'       => 'price_drop',
-            'intent'     => 'active_buyer',
-            'confidence' => min(0.60 + ($count * 0.08), 0.95),
-            'icon'       => 'trending_down',
-            'headline'   => 'price_drop_headline',
-            'subline'    => 'price_drop_subline',
-            'params'     => ['count' => $count, 'drop_pct' => $dropPct],
-            'filters'    => $filters,
-            'count'      => $count,
-            'properties' => $this->transformProperties($droppedProperties->take(5), $lang),
-        ];
-    }
 
     // ──────────────────────────────────────────────────────────────────────────
     //  STRIP TYPE 2: RESUME SEARCH
