@@ -247,8 +247,44 @@ class SmartStripService
             return null;
         }
 
-        $min = (float) $calc['budget_min_usd'];
-        $max = (float) $calc['budget_max_usd'];
+        $minUsd = (float) $calc['budget_min_usd'];
+        $maxUsd = (float) $calc['budget_max_usd'];
+
+        // ── Currency detection ────────────────────────────────────────────────
+        // Properties in Dream Mulk are priced in IQD (Iraqi Dinar).
+        // The calculator stores budget in USD. We need to check both:
+        //  (a) Direct match: property.price is already in USD scale (< 10,000,000)
+        //  (b) IQD match:    property.price is in IQD (multiply USD by ~1300)
+        // We detect which by checking the median property price in the DB.
+        $sampleMedian = \DB::table('properties')
+            ->where('is_active', true)
+            ->where('published', true)
+            ->whereIn('listing_type', ['sell'])
+            ->whereNotNull('price')
+            ->where('price', '>', 0)
+            ->selectRaw('AVG(price) as avg_price')
+            ->value('avg_price');
+
+        // If median price > 1,000,000 — properties are stored in IQD
+        // Convert USD budget → IQD for comparison (1 USD ≈ 1300 IQD)
+        $iqd_rate = 1300;
+        $isIqd    = ($sampleMedian !== null && $sampleMedian > 1_000_000);
+
+        if ($isIqd) {
+            $min = $minUsd * $iqd_rate;
+            $max = $maxUsd * $iqd_rate;
+        } else {
+            $min = $minUsd;
+            $max = $maxUsd;
+        }
+
+        Log::info('SmartStrip[budget_match]: currency detection', [
+            'user_id'       => $userId,
+            'budget_usd'    => ['min' => $minUsd, 'max' => $maxUsd],
+            'is_iqd'        => $isIqd,
+            'sample_median' => $sampleMedian,
+            'query_range'   => ['min' => $min, 'max' => $max],
+        ]);
 
         $query = Property::query()
             ->where('is_active', true)
@@ -265,6 +301,7 @@ class SmartStripService
                 'user_id' => $userId,
                 'min' => $min,
                 'max' => $max,
+                'is_iqd' => $isIqd,
             ]);
             return null;
         }
@@ -273,8 +310,8 @@ class SmartStripService
 
         $filters = [
             'listing_type' => 'sell',
-            'min_price'    => (int) $min,
-            'max_price'    => (int) $max,
+            'min_price'    => (int) $minUsd, // always return USD to Flutter
+            'max_price'    => (int) $maxUsd,
         ];
 
         // Infer property type from user's viewed/compared/favorited history
@@ -318,6 +355,28 @@ class SmartStripService
     {
         // Prefer structured filter signal over bare search signal
         $filter = $signals['filterSignal'];
+
+        if ($filter) {
+            // ── Guard: skip filter signals that are all defaults (user opened
+            //    modal but changed nothing — listing_type="All", property_type="All",
+            //    bedrooms=0, no price range). These carry zero intent.
+            $isJunkFilter = (
+                (empty($filter['listing_type'])  || strtolower($filter['listing_type'])  === 'all') &&
+                (empty($filter['property_type']) || strtolower($filter['property_type']) === 'all') &&
+                empty($filter['city'])           &&
+                empty($filter['min_price'])      &&
+                empty($filter['max_price'])      &&
+                (empty($filter['bedrooms'])      || (int) $filter['bedrooms'] === 0)
+            );
+
+            if ($isJunkFilter) {
+                Log::info('SmartStrip[resume_search]: skip — filter signal is all-defaults (no real intent)', [
+                    'user_id' => $userId,
+                    'filter'  => $filter,
+                ]);
+                $filter = null; // fall through to check search signal instead
+            }
+        }
 
         if (!$filter) {
             $searchSignal = $signals['searchSignal'];
