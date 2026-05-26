@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Feed\FeedPostController;
 use App\Http\Controllers\Api\MapController;
 use App\Http\Controllers\Api\MarketTrendsController;
 use App\Http\Controllers\Api\PropertyValuationController;
+use App\Http\Controllers\Api\SmartStripController;
 use App\Http\Controllers\Api\UserBehaviorController;
 use App\Http\Controllers\OfficeDashboardApiController;
 use App\Http\Controllers\AppVersionController;
@@ -428,6 +429,10 @@ Route::prefix('v1/api/properties')->group(function () {
     Route::get('/popular',    [PropertyController::class, 'getPopular']);
     Route::get('/statistics', [PropertyController::class, 'getStatistics']);
     Route::get('/map',        [PropertyController::class, 'getMapProperties']);
+
+    Route::get('/smart-strip',         [SmartStripController::class, 'getStrip']);
+    Route::post('/smart-strip/dismiss', [SmartStripController::class, 'dismiss'])
+        ->middleware('auth:sanctum');
 
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/my-properties', [PropertyController::class, 'getMyProperties']);
