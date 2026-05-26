@@ -828,16 +828,34 @@ class SmartStripService
                 }
             }
 
-            // ── Price: use price_usd if available, fallback to price ───────
-            // Some property models store price in IQD and price_usd separately.
-            // We always send USD to Flutter for display.
+            // ── Price: Extract from JSON or fallback to raw numeric ───────
             $priceUsd = null;
+
+            // 1. Check if price_usd column exists and is valid
             if (!empty($property->price_usd) && $property->price_usd > 0) {
                 $priceUsd = (float) $property->price_usd;
-            } elseif (!empty($property->price) && $property->price > 0) {
-                $raw = (float) $property->price;
-                // Auto-detect IQD: if price > 1,000,000 assume IQD, convert to USD
-                $priceUsd = $raw > 1_000_000 ? round($raw / 1300) : $raw;
+            }
+            // 2. Handle 'price' column if it contains data
+            elseif (!empty($property->price)) {
+                // Parse the price whether it's an array (Laravel cast) or a raw JSON string
+                $priceData = is_string($property->price)
+                    ? json_decode($property->price, true)
+                    : (array) $property->price;
+
+                // Check if we have a parsed array with a valid 'usd' key
+                if (isset($priceData['usd']) && $priceData['usd'] > 0) {
+                    $priceUsd = (float) $priceData['usd'];
+                }
+                // Fallback to 'iqd' inside the JSON structure
+                elseif (isset($priceData['iqd']) && $priceData['iqd'] > 0) {
+                    $rawIqd = (float) $priceData['iqd'];
+                    $priceUsd = $rawIqd > 1_000_000 ? round($rawIqd / 1300) : $rawIqd;
+                }
+                // Fallback for older records where price is just a flat number
+                elseif (is_numeric($property->price) && $property->price > 0) {
+                    $raw = (float) $property->price;
+                    $priceUsd = $raw > 1_000_000 ? round($raw / 1300) : $raw;
+                }
             }
 
             Log::debug('SmartStrip[transformProperties]: price', [
