@@ -524,7 +524,7 @@ class SmartStripService
     {
         if (count($signals['recentlyViewedIds']) < 3) {
             Log::info('SmartStrip[area_focus]: skip — fewer than 3 recently viewed properties', [
-                'user_id' => $userId,
+                'user_id'      => $userId,
                 'viewed_count' => count($signals['recentlyViewedIds']),
             ]);
             return null;
@@ -532,7 +532,7 @@ class SmartStripService
 
         $viewedProperties = Property::whereIn('id', $signals['recentlyViewedIds'])
             ->whereNotNull('address_details')
-            ->get(['id', 'address_details', 'listing_type', 'property_type']);
+            ->get(['id', 'address_details', 'listing_type']); // ← removed property_type
 
         if ($viewedProperties->isEmpty()) return null;
 
@@ -552,8 +552,8 @@ class SmartStripService
 
         if ($topCityCount < 3) {
             Log::info('SmartStrip[area_focus]: skip — no dominant city (max views in one city < 3)', [
-                'user_id' => $userId,
-                'top_city' => $topCity,
+                'user_id'        => $userId,
+                'top_city'       => $topCity,
                 'top_city_count' => $topCityCount,
             ]);
             return null;
@@ -574,7 +574,7 @@ class SmartStripService
         if ($count === 0) {
             Log::info('SmartStrip[area_focus]: skip — 0 unseen properties in dominant city', [
                 'user_id' => $userId,
-                'city' => $topCity,
+                'city'    => $topCity,
             ]);
             return null;
         }
@@ -584,7 +584,7 @@ class SmartStripService
         $inferredPropType    = $this->inferPropertyType($signals);
 
         $filters = ['city' => $topCity];
-        if ($inferredListingType) $filters['listing_type'] = $inferredListingType;
+        if ($inferredListingType) $filters['listing_type']  = $inferredListingType;
         if ($inferredPropType)    $filters['property_type'] = $inferredPropType;
 
         $confidence = min(0.55 + ($topCityCount * 0.05), 0.85);
@@ -771,13 +771,13 @@ class SmartStripService
         ));
         if (empty($ids)) return null;
 
-        $counts = Property::whereIn('id', $ids)
-            ->selectRaw('property_type, COUNT(*) as cnt')
-            ->groupBy('property_type')
+        $result = Property::whereIn('id', $ids)
+            ->selectRaw("JSON_UNQUOTE(JSON_EXTRACT(type, '$.category')) as prop_type, COUNT(*) as cnt")
+            ->groupBy('prop_type')
             ->orderByDesc('cnt')
             ->first();
 
-        return $counts?->property_type;
+        return $result?->prop_type;
     }
 
     private function inferListingType(Collection $properties): ?string
