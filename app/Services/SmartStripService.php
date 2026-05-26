@@ -828,48 +828,40 @@ class SmartStripService
                 }
             }
 
-            // ── Price: Extract from JSON or fallback to raw numeric ───────
-            $priceUsd = null;
+            // ── Price: Extract strictly USD from the JSON structure ───────
+            $priceUsd = 0.0;
+            $rawPrice = $property->price;
 
-            // 1. Check if price_usd column exists and is valid
-            if (!empty($property->price_usd) && $property->price_usd > 0) {
-                $priceUsd = (float) $property->price_usd;
-            }
-            // 2. Handle 'price' column if it contains data
-            elseif (!empty($property->price)) {
-                // Parse the price whether it's an array (Laravel cast) or a raw JSON string
-                $priceData = is_string($property->price)
-                    ? json_decode($property->price, true)
-                    : (array) $property->price;
+            if (!empty($rawPrice)) {
+                // Handle both raw JSON strings and Laravel automatically casted arrays
+                $priceData = is_string($rawPrice) ? json_decode($rawPrice, true) : (array) $rawPrice;
 
-                // Check if we have a parsed array with a valid 'usd' key
+                // 1. Strictly retrieve the USD key from {"usd": 66000, "iqd": 1}
                 if (isset($priceData['usd']) && $priceData['usd'] > 0) {
                     $priceUsd = (float) $priceData['usd'];
                 }
-                // Fallback to 'iqd' inside the JSON structure
+                // 2. Fallback: If only IQD exists in the JSON, convert it to USD
                 elseif (isset($priceData['iqd']) && $priceData['iqd'] > 0) {
                     $rawIqd = (float) $priceData['iqd'];
                     $priceUsd = $rawIqd > 1_000_000 ? round($rawIqd / 1300) : $rawIqd;
                 }
-                // Fallback for older records where price is just a flat number
-                elseif (is_numeric($property->price) && $property->price > 0) {
-                    $raw = (float) $property->price;
-                    $priceUsd = $raw > 1_000_000 ? round($raw / 1300) : $raw;
+                // 3. Fallback: If it's an older listing where price is just a flat number
+                elseif (is_numeric($rawPrice) && $rawPrice > 0) {
+                    $rawNum = (float) $rawPrice;
+                    $priceUsd = $rawNum > 1_000_000 ? round($rawNum / 1300) : $rawNum;
                 }
             }
 
             Log::debug('SmartStrip[transformProperties]: price', [
                 'property_id' => $property->id,
                 'raw_price'   => $property->price,
-                'price_usd'   => $property->price_usd ?? null,
                 'sent_price'  => $priceUsd,
-                'currency'    => $property->currency ?? 'USD',
             ]);
 
             return [
                 'id'            => $property->id,
                 'name'          => $property->name          ?? '',
-                'price'         => $priceUsd ?? 0.0,
+                'price'         => $priceUsd,
                 'currency'      => $property->currency      ?? 'USD',
                 'listing_type'  => $property->listing_type  ?? '',
                 'property_type' => $property->property_type ?? '',
