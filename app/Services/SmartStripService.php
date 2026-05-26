@@ -828,10 +828,31 @@ class SmartStripService
                 }
             }
 
+            // ── Price: use price_usd if available, fallback to price ───────
+            // Some property models store price in IQD and price_usd separately.
+            // We always send USD to Flutter for display.
+            $priceUsd = null;
+            if (!empty($property->price_usd) && $property->price_usd > 0) {
+                $priceUsd = (float) $property->price_usd;
+            } elseif (!empty($property->price) && $property->price > 0) {
+                $raw = (float) $property->price;
+                // Auto-detect IQD: if price > 1,000,000 assume IQD, convert to USD
+                $priceUsd = $raw > 1_000_000 ? round($raw / 1300) : $raw;
+            }
+
+            Log::debug('SmartStrip[transformProperties]: price', [
+                'property_id' => $property->id,
+                'raw_price'   => $property->price,
+                'price_usd'   => $property->price_usd ?? null,
+                'sent_price'  => $priceUsd,
+                'currency'    => $property->currency ?? 'USD',
+            ]);
+
             return [
                 'id'            => $property->id,
                 'name'          => $property->name          ?? '',
-                'price'         => (float) ($property->price ?? 0),
+                'price'         => $priceUsd ?? 0.0,
+                'currency'      => $property->currency      ?? 'USD',
                 'listing_type'  => $property->listing_type  ?? '',
                 'property_type' => $property->property_type ?? '',
                 'city'          => $cityName,
