@@ -1,5 +1,5 @@
 {{-- resources/views/admin/notifications/broadcast.blade.php --}}
-@extends('layouts.admin')
+@extends('layouts.admin-layout')
 
 @section('title', 'Broadcast Notification')
 
