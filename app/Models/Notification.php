@@ -19,6 +19,8 @@ class Notification extends Model
         'title',
         'message',
         'type',
+        'image_url',      // ← ADD THIS
+
         'priority',
         'data',
         'action_url',
@@ -37,6 +39,8 @@ class Notification extends Model
             'read_at' => 'datetime',
             'sent_at' => 'datetime',
             'expires_at' => 'datetime',
+            'image_url'  => 'string',   // ← ADD THIS
+
         ];
     }
 
@@ -76,7 +80,7 @@ class Notification extends Model
     {
         return $query->where(function ($q) {
             $q->whereNull('expires_at')
-              ->orWhere('expires_at', '>', now());
+                ->orWhere('expires_at', '>', now());
         });
     }
 

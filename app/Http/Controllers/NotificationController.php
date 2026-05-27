@@ -2567,6 +2567,8 @@ class NotificationController extends Controller
                 'recipient_type' => 'required|in:users,agents,offices,all',
                 'action_url'     => 'nullable|string|max:255',
                 'action_text'    => 'nullable|string|max:100',
+                'image'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+                'image_url'      => 'nullable|string|max:500',
                 'expires_at'     => 'nullable|date|after:now',
                 'scheduled_at'   => 'nullable|date|after:now',
             ]);
@@ -2579,7 +2581,19 @@ class NotificationController extends Controller
                 );
             }
 
-            // Build multilingual payloads (only filled ones)
+            // ── Resolve image URL ─────────────────────────────────────────────
+            $imageUrl = null;
+            if ($request->hasFile('image') && $request->file('image')->isValid()) {
+                $path     = $request->file('image')->store('notifications', 'public');
+                $imageUrl = config('app.url') . \Illuminate\Support\Facades\Storage::url($path);
+            } elseif ($request->filled('image_url')) {
+                $url      = $request->image_url;
+                $imageUrl = str_starts_with($url, 'http')
+                    ? $url
+                    : rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
+            }
+
+            // ── Build multilingual payloads (only filled ones) ────────────────
             $titles = array_filter([
                 'en' => $request->title_en,
                 'ar' => $request->title_ar,
@@ -2591,7 +2605,7 @@ class NotificationController extends Controller
                 'ku' => $request->message_ku,
             ]);
 
-            // Collect recipients
+            // ── Collect recipients ────────────────────────────────────────────
             $users   = collect();
             $agents  = collect();
             $offices = collect();
@@ -2610,19 +2624,20 @@ class NotificationController extends Controller
             $notifications = [];
             $now           = now();
 
-            // ── USERS ──────────────────────────────────────────────
+            // ── USERS ─────────────────────────────────────────────────────────
             foreach ($users as $user) {
-                $resolved = $this->resolveLanguage($user->language, $titles, $messages);
+                $resolved        = $this->resolveLanguage($user->language, $titles, $messages);
                 $notifications[] = [
-                    'id'         => (string) Str::uuid(),
-                    'user_id'    => $user->id,
-                    'agent_id'   => null,
-                    'office_id'  => null,
-                    'title'      => $resolved['title'],
-                    'message'    => $resolved['message'],
-                    'type'       => $request->type,
-                    'priority'   => $request->priority,
-                    'data'       => json_encode([
+                    'id'          => (string) Str::uuid(),
+                    'user_id'     => $user->id,
+                    'agent_id'    => null,
+                    'office_id'   => null,
+                    'title'       => $resolved['title'],
+                    'message'     => $resolved['message'],
+                    'type'        => $request->type,
+                    'priority'    => $request->priority,
+                    'image_url'   => $imageUrl,
+                    'data'        => json_encode([
                         'broadcast' => true,
                         'titles'    => $titles,
                         'messages'  => $messages,
@@ -2637,19 +2652,20 @@ class NotificationController extends Controller
                 ];
             }
 
-            // ── AGENTS ─────────────────────────────────────────────
+            // ── AGENTS ────────────────────────────────────────────────────────
             foreach ($agents as $agent) {
-                $resolved = $this->resolveLanguage($agent->language, $titles, $messages);
+                $resolved        = $this->resolveLanguage($agent->language, $titles, $messages);
                 $notifications[] = [
-                    'id'         => (string) Str::uuid(),
-                    'user_id'    => null,
-                    'agent_id'   => $agent->id,
-                    'office_id'  => null,
-                    'title'      => $resolved['title'],
-                    'message'    => $resolved['message'],
-                    'type'       => $request->type,
-                    'priority'   => $request->priority,
-                    'data'       => json_encode([
+                    'id'          => (string) Str::uuid(),
+                    'user_id'     => null,
+                    'agent_id'    => $agent->id,
+                    'office_id'   => null,
+                    'title'       => $resolved['title'],
+                    'message'     => $resolved['message'],
+                    'type'        => $request->type,
+                    'priority'    => $request->priority,
+                    'image_url'   => $imageUrl,
+                    'data'        => json_encode([
                         'broadcast' => true,
                         'titles'    => $titles,
                         'messages'  => $messages,
@@ -2664,19 +2680,20 @@ class NotificationController extends Controller
                 ];
             }
 
-            // ── OFFICES ────────────────────────────────────────────
+            // ── OFFICES ───────────────────────────────────────────────────────
             foreach ($offices as $office) {
-                $resolved = $this->resolveLanguage($office->language ?? null, $titles, $messages);
+                $resolved        = $this->resolveLanguage($office->language ?? null, $titles, $messages);
                 $notifications[] = [
-                    'id'         => (string) Str::uuid(),
-                    'user_id'    => null,
-                    'agent_id'   => null,
-                    'office_id'  => $office->id,
-                    'title'      => $resolved['title'],
-                    'message'    => $resolved['message'],
-                    'type'       => $request->type,
-                    'priority'   => $request->priority,
-                    'data'       => json_encode([
+                    'id'          => (string) Str::uuid(),
+                    'user_id'     => null,
+                    'agent_id'    => null,
+                    'office_id'   => $office->id,
+                    'title'       => $resolved['title'],
+                    'message'     => $resolved['message'],
+                    'type'        => $request->type,
+                    'priority'    => $request->priority,
+                    'image_url'   => $imageUrl,
+                    'data'        => json_encode([
                         'broadcast' => true,
                         'titles'    => $titles,
                         'messages'  => $messages,
@@ -2691,47 +2708,60 @@ class NotificationController extends Controller
                 ];
             }
 
-            // Bulk insert in chunks
+            // ── Bulk insert in chunks of 500 ──────────────────────────────────
             foreach (array_chunk($notifications, 500) as $chunk) {
                 DB::table('notifications')->insert($chunk);
             }
 
-            // ── FCM — per-recipient language resolution ────────────
+            // ── FCM — per-recipient language + image ──────────────────────────
             if (class_exists('\App\Services\FirebaseService')) {
                 $firebaseService = new \App\Services\FirebaseService();
 
-                // Shared data payload (contains ALL languages so Flutter can also pick)
+                // Shared data payload (Flutter reads titles/messages JSON to pick its own lang)
                 $fcmData = [
                     'type'        => $request->type,
                     'priority'    => $request->priority,
                     'broadcast'   => 'true',
                     'titles'      => json_encode($titles),
                     'messages'    => json_encode($messages),
-                    'action_url'  => $request->action_url ?? '',
+                    'action_url'  => $request->action_url  ?? '',
                     'action_text' => $request->action_text ?? '',
+                    'image_url'   => $imageUrl ?? '',
                 ];
 
-                // Users — each gets FCM in their own language
+                // Users
                 foreach ($users as $user) {
                     $resolved = $this->resolveLanguage($user->language, $titles, $messages);
                     $firebaseService->sendToUser($user, [
                         'title'   => $resolved['title'],
                         'message' => $resolved['message'],
+                        'image'   => $imageUrl,
                     ], $fcmData);
                 }
 
-                // Agents — each gets FCM in their own language
+                // Agents
                 foreach ($agents as $agent) {
                     $resolved = $this->resolveLanguage($agent->language, $titles, $messages);
                     $firebaseService->sendToAgent($agent, [
                         'title'   => $resolved['title'],
                         'message' => $resolved['message'],
+                        'image'   => $imageUrl,
+                    ], $fcmData);
+                }
+
+                // ✅ FIX: Offices were missing FCM entirely in the original
+                foreach ($offices as $office) {
+                    $resolved = $this->resolveLanguage($office->language ?? null, $titles, $messages);
+                    $firebaseService->sendToOffice($office, [
+                        'title'   => $resolved['title'],
+                        'message' => $resolved['message'],
+                        'image'   => $imageUrl,
                     ], $fcmData);
                 }
             }
 
-            // Warn admin if some users have ku/ar but those weren't filled
-            $warnings = [];
+            // ── Translation warnings ──────────────────────────────────────────
+            $warnings        = [];
             $hasKuRecipients = $users->where('language', 'ku')->isNotEmpty()
                 || $agents->where('language', 'ku')->isNotEmpty();
             $hasArRecipients = $users->where('language', 'ar')->isNotEmpty()
@@ -2750,17 +2780,19 @@ class NotificationController extends Controller
                 'offices'  => $offices->count(),
                 'total'    => count($notifications),
                 'type'     => $request->type,
+                'image'    => $imageUrl,
                 'warnings' => $warnings,
             ]);
 
             return ApiResponse::success(
                 ResponseDetails::successMessage('Broadcast sent successfully'),
                 [
-                    'sent_to'  => count($notifications),
-                    'users'    => $users->count(),
-                    'agents'   => $agents->count(),
-                    'offices'  => $offices->count(),
-                    'warnings' => $warnings,
+                    'sent_to'   => count($notifications),
+                    'users'     => $users->count(),
+                    'agents'    => $agents->count(),
+                    'offices'   => $offices->count(),
+                    'image_url' => $imageUrl,
+                    'warnings'  => $warnings,
                 ],
                 ResponseDetails::CODE_SUCCESS
             );
@@ -2773,6 +2805,7 @@ class NotificationController extends Controller
             );
         }
     }
+
 
     /**
      * Resolve the correct title/message for a recipient based on their language.
