@@ -3,628 +3,668 @@
 
 @section('title', 'Broadcast Notification')
 
-@section('styles')
-<style>
-    /* ── Tokens ─────────────────────────────────────────── */
-    :root {
-        --dm-purple:   #6C3FC5;
-        --dm-purple-d: #5A2FB0;
-        --dm-purple-l: #F0EBFF;
-        --dm-purple-m: #7C4FD4;
-        --dm-gold:     #F5A623;
-        --dm-red:      #E53E3E;
-        --dm-green:    #38A169;
-        --dm-gray-50:  #F9FAFB;
-        --dm-gray-100: #F3F4F6;
-        --dm-gray-200: #E5E7EB;
-        --dm-gray-400: #9CA3AF;
-        --dm-gray-600: #4B5563;
-        --dm-gray-700: #374151;
-        --dm-gray-900: #111827;
-        --radius:      12px;
-        --shadow:      0 4px 24px rgba(108,63,197,.10);
-        --shadow-lg:   0 8px 40px rgba(108,63,197,.18);
-    }
-
-    * { box-sizing: border-box; }
-
-    body { background: var(--dm-gray-50); font-family: 'Segoe UI', system-ui, sans-serif; }
-
-    /* ── Page layout ─────────────────────────────────────── */
-    .bc-wrapper {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 32px 20px 80px;
-    }
-
-    .bc-header {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        margin-bottom: 32px;
-    }
-    .bc-header-icon {
-        width: 52px; height: 52px;
-        background: linear-gradient(135deg, var(--dm-purple), var(--dm-purple-m));
-        border-radius: 14px;
-        display: flex; align-items: center; justify-content: center;
-        box-shadow: var(--shadow);
-    }
-    .bc-header-icon svg { color: #fff; }
-    .bc-header h1 { font-size: 1.6rem; font-weight: 700; color: var(--dm-gray-900); margin: 0; }
-    .bc-header p  { font-size: .875rem; color: var(--dm-gray-400); margin: 2px 0 0; }
-
-    /* ── Two-column grid ─────────────────────────────────── */
-    .bc-grid {
-        display: grid;
-        grid-template-columns: 1fr 360px;
-        gap: 24px;
-        align-items: start;
-    }
-    @media (max-width: 820px) { .bc-grid { grid-template-columns: 1fr; } }
-
-    /* ── Cards ───────────────────────────────────────────── */
-    .bc-card {
-        background: #fff;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        overflow: hidden;
-    }
-    .bc-card-head {
-        padding: 18px 22px 14px;
-        border-bottom: 1px solid var(--dm-gray-100);
-        display: flex; align-items: center; gap: 10px;
-    }
-    .bc-card-head h2 {
-        font-size: .95rem; font-weight: 700;
-        color: var(--dm-gray-700); margin: 0;
-        text-transform: uppercase; letter-spacing: .05em;
-    }
-    .bc-card-head .badge {
-        font-size: .7rem; font-weight: 700;
-        padding: 2px 8px; border-radius: 20px;
-        background: var(--dm-purple-l); color: var(--dm-purple);
-    }
-    .bc-card-body { padding: 22px; }
-
-    /* ── Form elements ───────────────────────────────────── */
-    .bc-field { margin-bottom: 20px; }
-    .bc-field:last-child { margin-bottom: 0; }
-
-    label {
-        display: block;
-        font-size: .8rem; font-weight: 600;
-        color: var(--dm-gray-600);
-        text-transform: uppercase; letter-spacing: .05em;
-        margin-bottom: 6px;
-    }
-    label .req { color: var(--dm-red); margin-left: 2px; }
-    label .hint { font-weight: 400; text-transform: none; color: var(--dm-gray-400); margin-left: 6px; letter-spacing: 0; }
-
-    input[type=text],
-    input[type=url],
-    input[type=datetime-local],
-    select,
-    textarea {
-        width: 100%;
-        padding: 10px 14px;
-        border: 1.5px solid var(--dm-gray-200);
-        border-radius: 8px;
-        font-size: .925rem;
-        color: var(--dm-gray-700);
-        background: #fff;
-        transition: border-color .15s, box-shadow .15s;
-        outline: none;
-    }
-    input:focus, select:focus, textarea:focus {
-        border-color: var(--dm-purple);
-        box-shadow: 0 0 0 3px rgba(108,63,197,.12);
-    }
-    textarea { resize: vertical; min-height: 80px; }
-
-    /* ── Language tabs ───────────────────────────────────── */
-    .lang-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
-    .lang-tab {
-        padding: 6px 14px;
-        border-radius: 20px;
-        border: 1.5px solid var(--dm-gray-200);
-        background: #fff;
-        font-size: .8rem; font-weight: 600;
-        color: var(--dm-gray-600);
-        cursor: pointer; transition: all .15s;
-    }
-    .lang-tab.active {
-        background: var(--dm-purple);
-        border-color: var(--dm-purple);
-        color: #fff;
-    }
-    .lang-tab:hover:not(.active) { border-color: var(--dm-purple); color: var(--dm-purple); }
-
-    .lang-pane { display: none; }
-    .lang-pane.active { display: block; }
-
-    /* ── Image upload zone ───────────────────────────────── */
-    .image-zone {
-        border: 2px dashed var(--dm-gray-200);
-        border-radius: 10px;
-        padding: 24px;
-        text-align: center;
-        cursor: pointer;
-        transition: all .2s;
-        position: relative;
-        background: var(--dm-gray-50);
-    }
-    .image-zone:hover, .image-zone.dragover {
-        border-color: var(--dm-purple);
-        background: var(--dm-purple-l);
-    }
-    .image-zone input[type=file] {
-        position: absolute; inset: 0;
-        opacity: 0; cursor: pointer;
-        width: 100%; height: 100%;
-    }
-    .image-zone-icon { font-size: 2rem; margin-bottom: 8px; }
-    .image-zone p { margin: 0; font-size: .875rem; color: var(--dm-gray-400); }
-    .image-zone strong { color: var(--dm-purple); }
-
-    .image-preview-wrap {
-        margin-top: 14px;
-        position: relative;
-        display: none;
-    }
-    .image-preview-wrap.show { display: block; }
-    .image-preview-wrap img {
-        width: 100%; max-height: 160px;
-        object-fit: cover;
-        border-radius: 8px;
-        border: 1px solid var(--dm-gray-200);
-    }
-    .image-remove-btn {
-        position: absolute; top: 8px; right: 8px;
-        width: 26px; height: 26px;
-        border-radius: 50%;
-        background: rgba(0,0,0,.55);
-        border: none; cursor: pointer;
-        display: flex; align-items: center; justify-content: center;
-        color: #fff; font-size: .8rem;
-        transition: background .15s;
-    }
-    .image-remove-btn:hover { background: var(--dm-red); }
-
-    .image-url-row {
-        display: flex; gap: 8px; align-items: center;
-        margin-top: 10px;
-    }
-    .image-url-row input { flex: 1; }
-    .image-url-btn {
-        padding: 10px 14px;
-        border-radius: 8px;
-        border: 1.5px solid var(--dm-gray-200);
-        background: #fff;
-        font-size: .8rem; font-weight: 600;
-        color: var(--dm-gray-600); cursor: pointer;
-        white-space: nowrap; transition: all .15s;
-    }
-    .image-url-btn:hover { border-color: var(--dm-purple); color: var(--dm-purple); }
-
-    /* ── Recipient chips ─────────────────────────────────── */
-    .recipient-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-    }
-    .recipient-opt {
-        position: relative;
-    }
-    .recipient-opt input[type=radio] {
-        position: absolute; opacity: 0; width: 0;
-    }
-    .recipient-opt label {
-        display: flex; align-items: center; gap: 10px;
-        padding: 12px 14px;
-        border: 1.5px solid var(--dm-gray-200);
-        border-radius: 10px;
-        cursor: pointer;
-        transition: all .15s;
-        text-transform: none;
-        letter-spacing: 0;
-        font-size: .875rem;
-        font-weight: 600;
-        color: var(--dm-gray-600);
-    }
-    .recipient-opt input:checked + label {
-        border-color: var(--dm-purple);
-        background: var(--dm-purple-l);
-        color: var(--dm-purple);
-    }
-    .recipient-opt label .rc-icon {
-        font-size: 1.2rem;
-    }
-
-    /* ── Priority & Type selects ─────────────────────────── */
-    .select-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-    }
-
-    /* ── Preview card ────────────────────────────────────── */
-    .preview-card {
-        background: #fff;
-        border-radius: var(--radius);
-        box-shadow: var(--shadow);
-        overflow: hidden;
-        position: sticky;
-        top: 24px;
-    }
-    .preview-card-head {
-        padding: 16px 18px 12px;
-        border-bottom: 1px solid var(--dm-gray-100);
-        display: flex; align-items: center; gap: 10px;
-    }
-    .preview-card-head h2 {
-        font-size: .85rem; font-weight: 700;
-        text-transform: uppercase; letter-spacing: .05em;
-        color: var(--dm-gray-600); margin: 0;
-    }
-
-    /* Phone mockup */
-    .phone-mockup {
-        width: 240px;
-        margin: 20px auto;
-        background: var(--dm-gray-900);
-        border-radius: 32px;
-        padding: 14px 10px;
-        box-shadow: 0 16px 48px rgba(0,0,0,.25);
-        position: relative;
-    }
-    .phone-mockup::before {
-        content: '';
-        display: block;
-        width: 60px; height: 6px;
-        background: #333;
-        border-radius: 3px;
-        margin: 0 auto 12px;
-    }
-    .phone-screen {
-        background: #fff;
-        border-radius: 22px;
-        overflow: hidden;
-        min-height: 420px;
-    }
-    .phone-status {
-        background: var(--dm-gray-900);
-        color: #fff;
-        font-size: .55rem;
-        padding: 4px 14px;
-        display: flex; justify-content: space-between;
-    }
-    .phone-notif-bar {
-        background: #f1f1f1;
-        padding: 6px 8px;
-        font-size: .6rem;
-        color: var(--dm-gray-600);
-        border-bottom: 1px solid var(--dm-gray-200);
-    }
-
-    /* Notification bubble in preview */
-    .notif-bubble {
-        margin: 10px 8px;
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 2px 12px rgba(0,0,0,.12);
-        overflow: hidden;
-        border: 1px solid var(--dm-gray-100);
-    }
-    .notif-bubble-header {
-        display: flex; align-items: center; gap: 6px;
-        padding: 8px 10px 4px;
-    }
-    .notif-bubble-app {
-        width: 18px; height: 18px;
-        background: linear-gradient(135deg, var(--dm-purple), var(--dm-purple-m));
-        border-radius: 5px;
-    }
-    .notif-bubble-appname {
-        font-size: .55rem; font-weight: 700;
-        color: var(--dm-gray-400); text-transform: uppercase;
-        letter-spacing: .05em; flex: 1;
-    }
-    .notif-bubble-time { font-size: .55rem; color: var(--dm-gray-400); }
-    .notif-bubble-content { padding: 0 10px 8px; }
-    .notif-bubble-img {
-        width: 100%; max-height: 80px;
-        object-fit: cover;
-        display: none;
-        margin-bottom: 6px;
-        border-radius: 0;
-    }
-    .notif-bubble-img.show { display: block; }
-    .notif-bubble-title {
-        font-size: .7rem; font-weight: 700;
-        color: var(--dm-gray-900); margin-bottom: 3px;
-    }
-    .notif-bubble-msg {
-        font-size: .65rem;
-        color: var(--dm-gray-600);
-        line-height: 1.4;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-    }
-
-    /* Priority badge */
-    .priority-badge {
-        display: inline-flex; align-items: center; gap: 4px;
-        font-size: .6rem; font-weight: 700;
-        padding: 2px 8px; border-radius: 20px;
-        margin-top: 5px;
-    }
-    .priority-badge.low     { background: #EBF8FF; color: #2B6CB0; }
-    .priority-badge.medium  { background: #FFFBEB; color: #B45309; }
-    .priority-badge.high    { background: #FFF5F5; color: var(--dm-red); }
-    .priority-badge.urgent  { background: #FFF5F5; color: var(--dm-red); animation: pulse 1.2s infinite; }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; } 50% { opacity: .6; }
-    }
-
-    /* ── Stats preview ───────────────────────────────────── */
-    .stats-row {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-        padding: 14px 16px;
-        border-top: 1px solid var(--dm-gray-100);
-    }
-    .stat-item { text-align: center; }
-    .stat-item .num { font-size: 1.2rem; font-weight: 800; color: var(--dm-purple); }
-    .stat-item .lbl { font-size: .65rem; color: var(--dm-gray-400); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-
-    /* ── Submit button ───────────────────────────────────── */
-    .bc-submit-bar {
-        padding: 18px 22px;
-        border-top: 1px solid var(--dm-gray-100);
-    }
-    .bc-btn-primary {
-        width: 100%;
-        padding: 14px;
-        background: linear-gradient(135deg, var(--dm-purple), var(--dm-purple-m));
-        color: #fff;
-        border: none;
-        border-radius: 10px;
-        font-size: .95rem; font-weight: 700;
-        cursor: pointer;
-        display: flex; align-items: center; justify-content: center; gap: 8px;
-        transition: all .2s;
-        box-shadow: 0 4px 16px rgba(108,63,197,.3);
-    }
-    .bc-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(108,63,197,.4); }
-    .bc-btn-primary:active { transform: none; }
-    .bc-btn-primary:disabled { opacity: .6; cursor: not-allowed; transform: none; }
-
-    /* ── Result banner ───────────────────────────────────── */
-    .result-banner {
-        display: none;
-        margin-bottom: 24px;
-        padding: 14px 18px;
-        border-radius: 10px;
-        font-size: .9rem;
-        font-weight: 600;
-        gap: 10px;
-        align-items: flex-start;
-    }
-    .result-banner.show { display: flex; }
-    .result-banner.success { background: #F0FFF4; border: 1.5px solid #9AE6B4; color: #276749; }
-    .result-banner.error   { background: #FFF5F5; border: 1.5px solid #FEB2B2; color: #9B2C2C; }
-
-    /* ── Warnings ────────────────────────────────────────── */
-    .warnings-box {
-        display: none;
-        margin-top: 14px;
-        padding: 12px 14px;
-        background: #FFFBEB;
-        border: 1.5px solid #F6E05E;
-        border-radius: 8px;
-        font-size: .8rem;
-        color: #744210;
-    }
-    .warnings-box.show { display: block; }
-    .warnings-box ul { margin: 6px 0 0; padding-left: 16px; }
-    .warnings-box li { margin-bottom: 4px; }
-
-    /* ── Spinner ─────────────────────────────────────────── */
-    .spinner {
-        width: 18px; height: 18px;
-        border: 2px solid rgba(255,255,255,.3);
-        border-top-color: #fff;
-        border-radius: 50%;
-        animation: spin .7s linear infinite;
-        display: none;
-    }
-    .spinner.show { display: block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Char counter ────────────────────────────────────── */
-    .char-count {
-        font-size: .72rem;
-        color: var(--dm-gray-400);
-        text-align: right;
-        margin-top: 4px;
-    }
-    .char-count.warn { color: var(--dm-gold); }
-    .char-count.over { color: var(--dm-red); font-weight: 700; }
-</style>
-@endsection
-
 @section('content')
-<div class="bc-wrapper">
+
+{{-- ── ALL STYLES INLINED — works regardless of layout yield support ── --}}
+<style>
+:root {
+    --p:   #6C3FC5;
+    --pd:  #5A2FB0;
+    --pl:  #F0EBFF;
+    --pm:  #7C4FD4;
+    --gold:#F5A623;
+    --red: #E53E3E;
+    --g50: #F9FAFB;
+    --g100:#F3F4F6;
+    --g200:#E5E7EB;
+    --g300:#D1D5DB;
+    --g400:#9CA3AF;
+    --g500:#6B7280;
+    --g600:#4B5563;
+    --g700:#374151;
+    --g900:#111827;
+    --r:   12px;
+    --sh:  0 4px 24px rgba(108,63,197,.10);
+    --shl: 0 8px 40px rgba(108,63,197,.18);
+}
+
+.bc-page {
+    background: var(--g50);
+    min-height: 100vh;
+    padding: 32px 24px 80px;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    color: var(--g700);
+}
+
+/* ── Header ──────────────────────────────────────────── */
+.bc-hdr {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+}
+.bc-hdr-icon {
+    flex-shrink: 0;
+    width: 54px; height: 54px;
+    background: linear-gradient(135deg, var(--p), var(--pm));
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(108,63,197,.35);
+}
+.bc-hdr-icon svg { color: #fff; width: 26px; height: 26px; }
+.bc-hdr-text h1 {
+    font-size: 1.5rem; font-weight: 800;
+    color: var(--g900); margin: 0 0 3px;
+    letter-spacing: -.02em;
+}
+.bc-hdr-text p {
+    font-size: .85rem; color: var(--g400); margin: 0;
+}
+
+/* ── Result banner ───────────────────────────────────── */
+.bc-result {
+    display: none;
+    margin-bottom: 24px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: .875rem; font-weight: 600;
+    gap: 10px; align-items: flex-start;
+}
+.bc-result.show  { display: flex; }
+.bc-result.ok  { background:#F0FFF4; border:1.5px solid #9AE6B4; color:#276749; }
+.bc-result.err { background:#FFF5F5; border:1.5px solid #FEB2B2; color:#9B2C2C; }
+.bc-warn-box {
+    display: none;
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #FFFBEB;
+    border: 1.5px solid #F6E05E;
+    border-radius: 8px;
+    font-size: .8rem; color: #744210;
+}
+.bc-warn-box.show { display: block; }
+.bc-warn-box ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* ── Two-column grid ─────────────────────────────────── */
+.bc-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 22px;
+    align-items: start;
+    max-width: 1080px;
+}
+@media (max-width: 860px) { .bc-grid { grid-template-columns: 1fr; } }
+
+/* ── Card ────────────────────────────────────────────── */
+.bc-card {
+    background: #fff;
+    border-radius: var(--r);
+    box-shadow: var(--sh);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+.bc-card:last-child { margin-bottom: 0; }
+.bc-card-hd {
+    padding: 16px 20px 13px;
+    border-bottom: 1px solid var(--g100);
+    display: flex; align-items: center; gap: 10px;
+}
+.bc-card-hd h2 {
+    font-size: .8rem; font-weight: 800;
+    color: var(--g600); margin: 0;
+    text-transform: uppercase; letter-spacing: .07em;
+    flex: 1;
+}
+.bc-badge {
+    font-size: .65rem; font-weight: 700;
+    padding: 2px 9px; border-radius: 20px;
+    background: var(--pl); color: var(--p);
+    text-transform: uppercase; letter-spacing: .05em;
+}
+.bc-card-bd { padding: 20px; }
+
+/* ── Field ───────────────────────────────────────────── */
+.bc-f { margin-bottom: 18px; }
+.bc-f:last-child { margin-bottom: 0; }
+.bc-f > label {
+    display: block;
+    font-size: .72rem; font-weight: 700;
+    color: var(--g500);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: 6px;
+}
+.bc-f label .req  { color: var(--red); margin-left: 2px; }
+.bc-f label .hint { font-weight: 400; text-transform: none; color: var(--g400); margin-left: 5px; letter-spacing: 0; font-size: .72rem; }
+
+.bc-f input[type=text],
+.bc-f input[type=url],
+.bc-f input[type=datetime-local],
+.bc-f select,
+.bc-f textarea {
+    width: 100%;
+    padding: 10px 13px;
+    border: 1.5px solid var(--g200);
+    border-radius: 8px;
+    font-size: .9rem;
+    color: var(--g700);
+    background: #fff;
+    transition: border-color .15s, box-shadow .15s;
+    outline: none;
+    font-family: inherit;
+}
+.bc-f input:focus,
+.bc-f select:focus,
+.bc-f textarea:focus {
+    border-color: var(--p);
+    box-shadow: 0 0 0 3px rgba(108,63,197,.12);
+}
+.bc-f textarea { resize: vertical; min-height: 78px; }
+
+/* char counter */
+.bc-cc {
+    font-size: .7rem; color: var(--g400);
+    text-align: right; margin-top: 4px;
+}
+.bc-cc.warn { color: var(--gold); }
+.bc-cc.over { color: var(--red); font-weight: 700; }
+
+/* ── Lang tabs ───────────────────────────────────────── */
+.lang-tabs {
+    display: flex; gap: 6px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.lang-tab {
+    padding: 6px 15px;
+    border-radius: 20px;
+    border: 1.5px solid var(--g200);
+    background: #fff;
+    font-size: .78rem; font-weight: 700;
+    color: var(--g500);
+    cursor: pointer;
+    transition: all .15s;
+    font-family: inherit;
+}
+.lang-tab.active {
+    background: var(--p);
+    border-color: var(--p);
+    color: #fff;
+    box-shadow: 0 3px 10px rgba(108,63,197,.3);
+}
+.lang-tab:hover:not(.active) { border-color: var(--p); color: var(--p); }
+
+.lang-pane { display: none; }
+.lang-pane.on { display: block; }
+
+/* ── Image zone ──────────────────────────────────────── */
+.img-zone {
+    border: 2px dashed var(--g300);
+    border-radius: 10px;
+    padding: 28px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .2s;
+    position: relative;
+    background: var(--g50);
+}
+.img-zone:hover, .img-zone.over {
+    border-color: var(--p);
+    background: var(--pl);
+}
+.img-zone input[type=file] {
+    position: absolute; inset: 0;
+    opacity: 0; cursor: pointer;
+    width: 100%; height: 100%;
+}
+.img-zone-ico { font-size: 2.2rem; margin-bottom: 8px; display: block; }
+.img-zone p   { margin: 4px 0; font-size: .85rem; color: var(--g400); }
+.img-zone strong { color: var(--p); }
+
+.img-prev-wrap {
+    margin-top: 12px;
+    position: relative;
+    display: none;
+}
+.img-prev-wrap.show { display: block; }
+.img-prev-wrap img {
+    width: 100%; max-height: 150px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--g200);
+    display: block;
+}
+.img-rm-btn {
+    position: absolute; top: 8px; right: 8px;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: rgba(0,0,0,.6);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: .85rem;
+    transition: background .15s;
+    line-height: 1;
+}
+.img-rm-btn:hover { background: var(--red); }
+
+.img-url-row {
+    display: flex; gap: 8px; align-items: stretch;
+    margin-top: 12px;
+}
+.img-url-row input {
+    flex: 1;
+    padding: 9px 13px;
+    border: 1.5px solid var(--g200);
+    border-radius: 8px;
+    font-size: .875rem; color: var(--g700);
+    outline: none;
+    font-family: inherit;
+    transition: border-color .15s;
+}
+.img-url-row input:focus { border-color: var(--p); }
+.img-url-btn {
+    padding: 9px 14px;
+    border-radius: 8px;
+    border: 1.5px solid var(--g200);
+    background: #fff;
+    font-size: .78rem; font-weight: 700;
+    color: var(--g600); cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+    font-family: inherit;
+}
+.img-url-btn:hover { border-color: var(--p); color: var(--p); background: var(--pl); }
+
+/* ── Recipient chips ─────────────────────────────────── */
+.rc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+.rc-opt { position: relative; }
+.rc-opt input[type=radio] { position: absolute; opacity: 0; width: 0; height: 0; }
+.rc-opt label {
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px;
+    border: 1.5px solid var(--g200);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .15s;
+    font-size: .855rem; font-weight: 600;
+    color: var(--g600);
+    text-transform: none; letter-spacing: 0;
+    font-family: inherit;
+}
+.rc-opt label .rci { font-size: 1.15rem; }
+.rc-opt input:checked + label {
+    border-color: var(--p);
+    background: var(--pl);
+    color: var(--p);
+    box-shadow: 0 0 0 3px rgba(108,63,197,.08);
+}
+.rc-opt label:hover { border-color: var(--p); }
+
+/* ── Select row ──────────────────────────────────────── */
+.sel-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+/* ── Preview panel ───────────────────────────────────── */
+.prev-panel {
+    background: #fff;
+    border-radius: var(--r);
+    box-shadow: var(--sh);
+    overflow: hidden;
+    position: sticky;
+    top: 24px;
+}
+.prev-panel-hd {
+    padding: 15px 18px 12px;
+    border-bottom: 1px solid var(--g100);
+    display: flex; align-items: center; gap: 8px;
+}
+.prev-panel-hd svg { color: var(--g400); flex-shrink: 0; }
+.prev-panel-hd h2 {
+    font-size: .75rem; font-weight: 800;
+    color: var(--g500); margin: 0;
+    text-transform: uppercase; letter-spacing: .07em;
+}
+
+/* Phone */
+.phone {
+    width: 230px;
+    margin: 18px auto 0;
+    background: #1a1a2e;
+    border-radius: 30px;
+    padding: 12px 9px 16px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.30);
+}
+.phone::before {
+    content: '';
+    display: block;
+    width: 55px; height: 5px;
+    background: #2d2d4e;
+    border-radius: 3px;
+    margin: 0 auto 10px;
+}
+.phone-scr {
+    background: #f8f8f8;
+    border-radius: 20px;
+    overflow: hidden;
+    min-height: 380px;
+}
+.phone-bar {
+    background: #1a1a2e;
+    color: rgba(255,255,255,.7);
+    font-size: .5rem;
+    padding: 5px 14px;
+    display: flex; justify-content: space-between;
+}
+.phone-ntf-bar {
+    background: #ececec;
+    padding: 5px 10px;
+    font-size: .58rem;
+    color: var(--g500);
+    border-bottom: 1px solid #ddd;
+    font-weight: 600;
+}
+
+/* Notif bubble */
+.nb {
+    margin: 10px 8px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 3px 14px rgba(0,0,0,.13);
+    overflow: hidden;
+    border: 1px solid var(--g100);
+}
+.nb-hd {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 10px 4px;
+}
+.nb-app-ico {
+    width: 18px; height: 18px;
+    background: linear-gradient(135deg, var(--p), var(--pm));
+    border-radius: 5px; flex-shrink: 0;
+}
+.nb-app-name {
+    font-size: .52rem; font-weight: 800;
+    color: var(--g400); text-transform: uppercase;
+    letter-spacing: .06em; flex: 1;
+}
+.nb-time { font-size: .52rem; color: var(--g400); }
+.nb-body { padding: 0 10px 9px; }
+.nb-img {
+    width: 100%; max-height: 72px;
+    object-fit: cover;
+    display: none;
+    margin-bottom: 5px;
+}
+.nb-img.show { display: block; }
+.nb-title {
+    font-size: .68rem; font-weight: 800;
+    color: var(--g900); margin-bottom: 3px;
+    line-height: 1.3;
+}
+.nb-msg {
+    font-size: .63rem;
+    color: var(--g500);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.nb-badge {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: .58rem; font-weight: 700;
+    padding: 2px 8px; border-radius: 20px;
+    margin-top: 6px;
+}
+.nb-badge.low     { background: #EBF8FF; color: #2B6CB0; }
+.nb-badge.medium  { background: #FFFBEB; color: #B45309; }
+.nb-badge.high    { background: #FFF5F5; color: var(--red); }
+.nb-badge.urgent  { background: #FFF5F5; color: var(--red); animation: nb-pulse 1.2s infinite; }
+@keyframes nb-pulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+/* Stats row */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 6px;
+    padding: 14px 16px;
+    border-top: 1px solid var(--g100);
+}
+.stat-item { text-align: center; }
+.stat-num { font-size: 1.25rem; font-weight: 900; color: var(--p); line-height: 1; }
+.stat-lbl { font-size: .6rem; color: var(--g400); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-top: 3px; }
+
+/* Submit */
+.bc-sub-bar {
+    padding: 16px 18px;
+    border-top: 1px solid var(--g100);
+}
+.bc-btn-send {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--p) 0%, var(--pm) 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: .95rem; font-weight: 800;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    transition: all .2s;
+    box-shadow: 0 4px 16px rgba(108,63,197,.35);
+    font-family: inherit;
+    letter-spacing: -.01em;
+}
+.bc-btn-send:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 26px rgba(108,63,197,.45);
+}
+.bc-btn-send:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+.bc-btn-send svg { flex-shrink: 0; }
+
+.bc-spin {
+    width: 18px; height: 18px;
+    border: 2.5px solid rgba(255,255,255,.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    display: none; flex-shrink: 0;
+}
+.bc-spin.show { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.bc-sub-note {
+    text-align: center;
+    font-size: .72rem;
+    color: var(--g400);
+    margin: 9px 0 0;
+}
+</style>
+
+<div class="bc-page">
 
     {{-- Header --}}
-    <div class="bc-header">
-        <div class="bc-header-icon">
-            <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <div class="bc-hdr">
+        <div class="bc-hdr-icon">
+            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
             </svg>
         </div>
-        <div>
+        <div class="bc-hdr-text">
             <h1>Broadcast Notification</h1>
-            <p>Send push notifications to users, agents, and offices — with full multilingual support</p>
+            <p>Send push notifications to users, agents &amp; offices — full multilingual support</p>
         </div>
     </div>
 
     {{-- Result banner --}}
-    <div class="result-banner" id="resultBanner">
-        <span id="resultIcon"></span>
+    <div class="bc-result" id="bcResult">
         <div>
-            <div id="resultMsg"></div>
-            <div class="warnings-box" id="warningsBox">
+            <div id="bcResultMsg"></div>
+            <div class="bc-warn-box" id="bcWarnBox">
                 <strong>⚠ Translation warnings:</strong>
-                <ul id="warningsList"></ul>
+                <ul id="bcWarnList"></ul>
             </div>
         </div>
     </div>
 
-    <form id="broadcastForm" enctype="multipart/form-data">
+    <form id="bcForm" enctype="multipart/form-data">
         @csrf
 
         <div class="bc-grid">
-            {{-- LEFT COLUMN --}}
+
+            {{-- ── LEFT ── --}}
             <div>
 
-                {{-- Content card --}}
-                <div class="bc-card" style="margin-bottom:24px">
-                    <div class="bc-card-head">
+                {{-- Content --}}
+                <div class="bc-card">
+                    <div class="bc-card-hd">
                         <h2>Notification Content</h2>
-                        <span class="badge">Multilingual</span>
+                        <span class="bc-badge">Multilingual</span>
                     </div>
-                    <div class="bc-card-body">
+                    <div class="bc-card-bd">
 
-                        {{-- Language tabs --}}
                         <div class="lang-tabs">
-                            <button type="button" class="lang-tab active" data-lang="en">🇬🇧 English</button>
+                            <button type="button" class="lang-tab on" data-lang="en">🇬🇧 English</button>
                             <button type="button" class="lang-tab" data-lang="ar">🇸🇦 Arabic</button>
                             <button type="button" class="lang-tab" data-lang="ku">🟢 Kurdish</button>
                         </div>
 
                         {{-- EN --}}
-                        <div class="lang-pane active" id="pane-en">
-                            <div class="bc-field">
+                        <div class="lang-pane on" id="lp-en">
+                            <div class="bc-f">
                                 <label>Title <span class="req">*</span></label>
-                                <input type="text" name="title_en" id="title_en" maxlength="100" placeholder="e.g. New properties in your area!" oninput="updatePreview();updateCount(this,100,'cnt-title-en')">
-                                <div class="char-count" id="cnt-title-en">0 / 100</div>
+                                <input type="text" name="title_en" id="title_en" maxlength="100"
+                                    placeholder="e.g. New properties in your area!"
+                                    oninput="livePreview();cc(this,100,'cc-ten')">
+                                <div class="bc-cc" id="cc-ten">0 / 100</div>
                             </div>
-                            <div class="bc-field">
+                            <div class="bc-f">
                                 <label>Message <span class="req">*</span></label>
-                                <textarea name="message_en" id="message_en" maxlength="500" rows="3" placeholder="Describe what this notification is about…" oninput="updatePreview();updateCount(this,500,'cnt-msg-en')"></textarea>
-                                <div class="char-count" id="cnt-msg-en">0 / 500</div>
+                                <textarea name="message_en" id="message_en" maxlength="500" rows="3"
+                                    placeholder="Describe what this notification is about…"
+                                    oninput="livePreview();cc(this,500,'cc-men')"></textarea>
+                                <div class="bc-cc" id="cc-men">0 / 500</div>
                             </div>
                         </div>
 
                         {{-- AR --}}
-                        <div class="lang-pane" id="pane-ar">
-                            <div class="bc-field">
+                        <div class="lang-pane" id="lp-ar">
+                            <div class="bc-f">
                                 <label>Title <span class="hint">(optional)</span></label>
-                                <input type="text" name="title_ar" id="title_ar" maxlength="100" placeholder="مثال: عقارات جديدة في منطقتك!" dir="rtl">
+                                <input type="text" name="title_ar" maxlength="100"
+                                    placeholder="مثال: عقارات جديدة في منطقتك!" dir="rtl">
                             </div>
-                            <div class="bc-field">
+                            <div class="bc-f">
                                 <label>Message <span class="hint">(optional)</span></label>
-                                <textarea name="message_ar" id="message_ar" maxlength="500" rows="3" placeholder="وصف الإشعار…" dir="rtl"></textarea>
+                                <textarea name="message_ar" maxlength="500" rows="3"
+                                    placeholder="وصف الإشعار…" dir="rtl"></textarea>
                             </div>
                         </div>
 
                         {{-- KU --}}
-                        <div class="lang-pane" id="pane-ku">
-                            <div class="bc-field">
+                        <div class="lang-pane" id="lp-ku">
+                            <div class="bc-f">
                                 <label>Title <span class="hint">(optional)</span></label>
-                                <input type="text" name="title_ku" id="title_ku" maxlength="100" placeholder="نموونە: خانووی نوێ لە ناوچەکەتدا!" dir="rtl">
+                                <input type="text" name="title_ku" maxlength="100"
+                                    placeholder="نموونە: خانووی نوێ لە ناوچەکەتدا!" dir="rtl">
                             </div>
-                            <div class="bc-field">
+                            <div class="bc-f">
                                 <label>Message <span class="hint">(optional)</span></label>
-                                <textarea name="message_ku" id="message_ku" maxlength="500" rows="3" placeholder="ڕوونکردنەوەی ئاگادارکردنەوەکە…" dir="rtl"></textarea>
+                                <textarea name="message_ku" maxlength="500" rows="3"
+                                    placeholder="ڕوونکردنەوەی ئاگادارکردنەوەکە…" dir="rtl"></textarea>
                             </div>
                         </div>
 
                     </div>
                 </div>
 
-                {{-- Image card --}}
-                <div class="bc-card" style="margin-bottom:24px">
-                    <div class="bc-card-head">
+                {{-- Image --}}
+                <div class="bc-card">
+                    <div class="bc-card-hd">
                         <h2>Notification Image</h2>
-                        <span class="badge">Optional</span>
+                        <span class="bc-badge">Optional</span>
                     </div>
-                    <div class="bc-card-body">
-                        <p style="font-size:.85rem;color:var(--dm-gray-400);margin:0 0 16px">
-                            An image makes your notification stand out in the tray. Recommended: 1200×628 px, max 2 MB.
+                    <div class="bc-card-bd">
+                        <p style="font-size:.83rem;color:var(--g400);margin:0 0 14px;line-height:1.5">
+                            Images appear in the notification tray and boost open rates.<br>
+                            Recommended: <strong>1200 × 628 px</strong> · max 2 MB · JPG/PNG/WEBP
                         </p>
 
-                        {{-- Drop zone --}}
-                        <div class="image-zone" id="imageZone">
-                            <input type="file" name="image" id="imageFile" accept="image/jpeg,image/png,image/webp" onchange="handleFileSelect(this)">
-                            <div class="image-zone-icon">🖼</div>
-                            <p><strong>Click to upload</strong> or drag & drop</p>
-                            <p>JPG, PNG, WEBP · max 2 MB</p>
+                        <div class="img-zone" id="imgZone">
+                            <input type="file" name="image" id="imgFile"
+                                accept="image/jpeg,image/png,image/webp"
+                                onchange="onFileChange(this)">
+                            <span class="img-zone-ico">🖼️</span>
+                            <p><strong>Click to upload</strong> or drag &amp; drop</p>
+                            <p style="font-size:.78rem">JPG · PNG · WEBP &nbsp;·&nbsp; max 2 MB</p>
                         </div>
 
-                        <div class="image-preview-wrap" id="imgPreviewWrap">
-                            <img id="imgPreview" src="" alt="Preview">
-                            <button type="button" class="image-remove-btn" onclick="removeImage()" title="Remove image">✕</button>
+                        <div class="img-prev-wrap" id="imgPrevWrap">
+                            <img id="imgPrev" src="" alt="Preview">
+                            <button type="button" class="img-rm-btn" onclick="rmImg()" title="Remove">✕</button>
                         </div>
 
-                        <div style="margin-top:16px">
-                            <label>Or paste an image URL</label>
-                            <div class="image-url-row">
-                                <input type="url" name="image_url" id="imageUrl" placeholder="https://dreammulk.com/storage/..." oninput="handleUrlInput()">
-                                <button type="button" class="image-url-btn" onclick="previewFromUrl()">Preview</button>
+                        <div style="margin-top:14px">
+                            <label style="display:block;font-size:.72rem;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">
+                                Or paste an image URL
+                            </label>
+                            <div class="img-url-row">
+                                <input type="url" name="image_url" id="imgUrl"
+                                    placeholder="https://dreammulk.com/storage/notifications/…"
+                                    oninput="onUrlInput()">
+                                <button type="button" class="img-url-btn" onclick="prevFromUrl()">Preview</button>
                             </div>
                         </div>
-
                     </div>
                 </div>
 
-                {{-- Settings card --}}
+                {{-- Settings --}}
                 <div class="bc-card">
-                    <div class="bc-card-head">
+                    <div class="bc-card-hd">
                         <h2>Settings</h2>
                     </div>
-                    <div class="bc-card-body">
+                    <div class="bc-card-bd">
 
-                        <div class="bc-field">
+                        <div class="bc-f">
                             <label>Recipients <span class="req">*</span></label>
-                            <div class="recipient-grid">
-                                <div class="recipient-opt">
-                                    <input type="radio" name="recipient_type" id="r-all" value="all" checked onchange="updatePreview()">
-                                    <label for="r-all"><span class="rc-icon">🌍</span> Everyone</label>
+                            <div class="rc-grid">
+                                <div class="rc-opt">
+                                    <input type="radio" name="recipient_type" id="r-all" value="all" checked onchange="fetchCounts()">
+                                    <label for="r-all"><span class="rci">🌍</span> Everyone</label>
                                 </div>
-                                <div class="recipient-opt">
-                                    <input type="radio" name="recipient_type" id="r-users" value="users" onchange="updatePreview()">
-                                    <label for="r-users"><span class="rc-icon">👤</span> Users only</label>
+                                <div class="rc-opt">
+                                    <input type="radio" name="recipient_type" id="r-users" value="users" onchange="fetchCounts()">
+                                    <label for="r-users"><span class="rci">👤</span> Users only</label>
                                 </div>
-                                <div class="recipient-opt">
-                                    <input type="radio" name="recipient_type" id="r-agents" value="agents" onchange="updatePreview()">
-                                    <label for="r-agents"><span class="rc-icon">🏷</span> Agents only</label>
+                                <div class="rc-opt">
+                                    <input type="radio" name="recipient_type" id="r-agents" value="agents" onchange="fetchCounts()">
+                                    <label for="r-agents"><span class="rci">🏷️</span> Agents only</label>
                                 </div>
-                                <div class="recipient-opt">
-                                    <input type="radio" name="recipient_type" id="r-offices" value="offices" onchange="updatePreview()">
-                                    <label for="r-offices"><span class="rc-icon">🏢</span> Offices only</label>
+                                <div class="rc-opt">
+                                    <input type="radio" name="recipient_type" id="r-offices" value="offices" onchange="fetchCounts()">
+                                    <label for="r-offices"><span class="rci">🏢</span> Offices only</label>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="select-row bc-field">
+                        <div class="bc-f sel-row">
                             <div>
                                 <label>Type <span class="req">*</span></label>
-                                <select name="type" id="notifType" onchange="updatePreview()">
+                                <select name="type">
                                     <option value="system">🔧 System</option>
                                     <option value="property">🏠 Property</option>
                                     <option value="promotion">🎉 Promotion</option>
-                                    <option value="alert">⚠ Alert</option>
+                                    <option value="alert">⚠️ Alert</option>
                                 </select>
                             </div>
                             <div>
                                 <label>Priority <span class="req">*</span></label>
-                                <select name="priority" id="notifPriority" onchange="updatePreview()">
+                                <select name="priority" id="bcPriority" onchange="livePreview()">
                                     <option value="low">Low</option>
                                     <option value="medium" selected>Medium</option>
                                     <option value="high">High</option>
@@ -633,54 +673,57 @@
                             </div>
                         </div>
 
-                        <div class="bc-field">
+                        <div class="bc-f">
                             <label>Action URL <span class="hint">(where to open on tap)</span></label>
-                            <input type="text" name="action_url" id="actionUrl" placeholder="/properties or https://dreammulk.com/...">
+                            <input type="text" name="action_url"
+                                placeholder="/properties  or  https://dreammulk.com/…">
                         </div>
 
-                        <div class="bc-field">
+                        <div class="bc-f">
                             <label>Action Button Text <span class="hint">(optional)</span></label>
-                            <input type="text" name="action_text" id="actionText" maxlength="60" placeholder="e.g. View Properties">
+                            <input type="text" name="action_text" maxlength="60"
+                                placeholder="e.g. View Properties">
                         </div>
 
-                        <div class="bc-field">
-                            <label>Expires At <span class="hint">(leave blank = never)</span></label>
-                            <input type="datetime-local" name="expires_at" id="expiresAt">
+                        <div class="bc-f">
+                            <label>Expires At <span class="hint">(blank = never)</span></label>
+                            <input type="datetime-local" name="expires_at">
                         </div>
 
                     </div>
                 </div>
 
-            </div>
+            </div>{{-- /left --}}
 
-            {{-- RIGHT COLUMN — preview + submit --}}
+            {{-- ── RIGHT — preview + send ── --}}
             <div>
-                <div class="preview-card">
-                    <div class="preview-card-head">
-                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                <div class="prev-panel">
+                    <div class="prev-panel-hd">
+                        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                        </svg>
                         <h2>Live Preview</h2>
                     </div>
 
-                    <div style="padding:16px 16px 0">
-                        <div class="phone-mockup">
-                            <div class="phone-screen">
-                                <div class="phone-status">
-                                    <span>9:41 AM</span>
-                                    <span>▶ ● ☰</span>
+                    <div style="padding:0 16px">
+                        <div class="phone">
+                            <div class="phone-scr">
+                                <div class="phone-bar">
+                                    <span>9:41</span><span>●●● ▶ ☰</span>
                                 </div>
-                                <div class="phone-notif-bar">Notifications · 3 new</div>
-
-                                <div class="notif-bubble">
-                                    <div class="notif-bubble-header">
-                                        <div class="notif-bubble-app"></div>
-                                        <span class="notif-bubble-appname">Dream Mulk</span>
-                                        <span class="notif-bubble-time">now</span>
+                                <div class="phone-ntf-bar">Notifications · 3 new</div>
+                                <div class="nb">
+                                    <div class="nb-hd">
+                                        <div class="nb-app-ico"></div>
+                                        <span class="nb-app-name">Dream Mulk</span>
+                                        <span class="nb-time">now</span>
                                     </div>
-                                    <div class="notif-bubble-content">
-                                        <img id="previewImg" class="notif-bubble-img" src="" alt="">
-                                        <div class="notif-bubble-title" id="previewTitle">Your notification title</div>
-                                        <div class="notif-bubble-msg" id="previewMsg">Your notification message will appear here…</div>
-                                        <span class="priority-badge medium" id="previewBadge">● Medium</span>
+                                    <div class="nb-body">
+                                        <img id="prevImg" class="nb-img" src="" alt="">
+                                        <div class="nb-title" id="prevTitle">Your notification title</div>
+                                        <div class="nb-msg" id="prevMsg">Your notification message will appear here…</div>
+                                        <span class="nb-badge medium" id="prevBadge">● Medium</span>
                                     </div>
                                 </div>
                             </div>
@@ -689,247 +732,198 @@
 
                     <div class="stats-row">
                         <div class="stat-item">
-                            <div class="num" id="statUsers">—</div>
-                            <div class="lbl">Users</div>
+                            <div class="stat-num" id="sUsers">—</div>
+                            <div class="stat-lbl">Users</div>
                         </div>
                         <div class="stat-item">
-                            <div class="num" id="statAgents">—</div>
-                            <div class="lbl">Agents</div>
+                            <div class="stat-num" id="sAgents">—</div>
+                            <div class="stat-lbl">Agents</div>
                         </div>
                         <div class="stat-item">
-                            <div class="num" id="statOffices">—</div>
-                            <div class="lbl">Offices</div>
+                            <div class="stat-num" id="sOffices">—</div>
+                            <div class="stat-lbl">Offices</div>
                         </div>
                     </div>
 
-                    <div class="bc-submit-bar">
-                        <button type="submit" class="bc-btn-primary" id="submitBtn">
-                            <div class="spinner" id="submitSpinner"></div>
-                            <svg id="submitIcon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                            <span id="submitLabel">Send Broadcast</span>
+                    <div class="bc-sub-bar">
+                        <button type="submit" form="bcForm" class="bc-btn-send" id="bcBtn">
+                            <div class="bc-spin" id="bcSpin"></div>
+                            <svg id="bcBtnIco" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                            </svg>
+                            <span id="bcBtnLbl">Send Broadcast</span>
                         </button>
-                        <p style="text-align:center;font-size:.75rem;color:var(--dm-gray-400);margin:10px 0 0">
-                            This action is immediate and irreversible.
-                        </p>
+                        <p class="bc-sub-note">This action is immediate and irreversible.</p>
                     </div>
                 </div>
             </div>
 
         </div>{{-- /bc-grid --}}
     </form>
-</div>
-@endsection
 
-@section('scripts')
+</div>{{-- /bc-page --}}
+
 <script>
-// ── Lang tabs ──────────────────────────────────────────────────
-document.querySelectorAll('.lang-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-        const lang = tab.dataset.lang;
-        document.querySelectorAll('.lang-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.lang-pane').forEach(p => p.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById('pane-' + lang).classList.add('active');
+// ── Lang tabs ──────────────────────────────────────────
+document.querySelectorAll('.lang-tab').forEach(t => {
+    t.addEventListener('click', () => {
+        const lang = t.dataset.lang;
+        document.querySelectorAll('.lang-tab').forEach(x => x.classList.remove('on'));
+        document.querySelectorAll('.lang-pane').forEach(x => x.classList.remove('on'));
+        t.classList.add('on');
+        document.getElementById('lp-' + lang).classList.add('on');
     });
 });
 
-// ── Live preview ───────────────────────────────────────────────
-function updatePreview() {
-    const title    = document.getElementById('title_en').value || 'Your notification title';
-    const msg      = document.getElementById('message_en').value || 'Your notification message will appear here…';
-    const priority = document.getElementById('notifPriority').value;
-
-    document.getElementById('previewTitle').textContent = title;
-    document.getElementById('previewMsg').textContent   = msg;
-
-    const badge = document.getElementById('previewBadge');
-    const labels = { low: '● Low', medium: '● Medium', high: '● High', urgent: '🚨 Urgent' };
-    badge.textContent = labels[priority] || '● Medium';
-    badge.className   = 'priority-badge ' + priority;
+// ── Live preview ───────────────────────────────────────
+function livePreview() {
+    const title    = document.getElementById('title_en').value    || 'Your notification title';
+    const msg      = document.getElementById('message_en').value  || 'Your notification message will appear here…';
+    const priority = document.getElementById('bcPriority').value  || 'medium';
+    document.getElementById('prevTitle').textContent = title;
+    document.getElementById('prevMsg').textContent   = msg;
+    const badge  = document.getElementById('prevBadge');
+    const labels = { low:'● Low', medium:'● Medium', high:'● High', urgent:'🚨 Urgent' };
+    badge.textContent = labels[priority];
+    badge.className   = 'nb-badge ' + priority;
 }
 
-// ── Char counter ───────────────────────────────────────────────
-function updateCount(el, max, countId) {
-    const len   = el.value.length;
-    const el2   = document.getElementById(countId);
-    el2.textContent = len + ' / ' + max;
-    el2.className   = 'char-count' + (len > max * .9 ? (len >= max ? ' over' : ' warn') : '');
+// ── Char counter ───────────────────────────────────────
+function cc(el, max, id) {
+    const n = el.value.length;
+    const d = document.getElementById(id);
+    d.textContent = n + ' / ' + max;
+    d.className   = 'bc-cc' + (n >= max ? ' over' : n > max * .88 ? ' warn' : '');
 }
 
-// ── Image handling ─────────────────────────────────────────────
-let currentImgSrc = null;
-
-function handleFileSelect(input) {
-    const file = input.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-        alert('Image must be under 2 MB.');
-        input.value = '';
-        return;
-    }
-    const reader = new FileReader();
-    reader.onload = e => {
-        currentImgSrc = e.target.result;
-        showImagePreview(currentImgSrc);
-        // Clear URL field when file is chosen
-        document.getElementById('imageUrl').value = '';
-    };
-    reader.readAsDataURL(file);
+// ── Image ──────────────────────────────────────────────
+function onFileChange(input) {
+    const f = input.files[0];
+    if (!f) return;
+    if (f.size > 2097152) { alert('Image must be under 2 MB.'); input.value = ''; return; }
+    const r = new FileReader();
+    r.onload = e => { showPrev(e.target.result); document.getElementById('imgUrl').value = ''; };
+    r.readAsDataURL(f);
 }
-
-function handleUrlInput() {
-    // Clear file input if user types a URL
-    const urlVal = document.getElementById('imageUrl').value.trim();
-    if (urlVal) {
-        document.getElementById('imageFile').value = '';
+function onUrlInput() {
+    if (document.getElementById('imgUrl').value.trim()) {
+        document.getElementById('imgFile').value = '';
     }
 }
-
-function previewFromUrl() {
-    const url = document.getElementById('imageUrl').value.trim();
-    if (!url) return;
-    currentImgSrc = url;
-    showImagePreview(url);
+function prevFromUrl() {
+    const u = document.getElementById('imgUrl').value.trim();
+    if (u) showPrev(u);
 }
-
-function showImagePreview(src) {
-    document.getElementById('imgPreview').src = src;
-    document.getElementById('imgPreviewWrap').classList.add('show');
-
-    const previewImg = document.getElementById('previewImg');
-    previewImg.src = src;
-    previewImg.classList.add('show');
+function showPrev(src) {
+    document.getElementById('imgPrev').src  = src;
+    document.getElementById('imgPrevWrap').classList.add('show');
+    const pi = document.getElementById('prevImg');
+    pi.src = src; pi.classList.add('show');
 }
-
-function removeImage() {
-    currentImgSrc = null;
-    document.getElementById('imageFile').value = '';
-    document.getElementById('imageUrl').value  = '';
-    document.getElementById('imgPreviewWrap').classList.remove('show');
-    const p = document.getElementById('previewImg');
-    p.src = ''; p.classList.remove('show');
+function rmImg() {
+    document.getElementById('imgFile').value = '';
+    document.getElementById('imgUrl').value  = '';
+    document.getElementById('imgPrevWrap').classList.remove('show');
+    const pi = document.getElementById('prevImg');
+    pi.src = ''; pi.classList.remove('show');
 }
-
 // Drag & drop
-const zone = document.getElementById('imageZone');
-zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
-zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+const zone = document.getElementById('imgZone');
+zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('over'));
 zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('dragover');
-    const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        document.getElementById('imageFile').files = dt.files;
-        handleFileSelect(document.getElementById('imageFile'));
+    e.preventDefault(); zone.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) {
+        const dt = new DataTransfer(); dt.items.add(f);
+        document.getElementById('imgFile').files = dt.files;
+        onFileChange(document.getElementById('imgFile'));
     }
 });
 
-// ── Recipient counts (live via AJAX) ───────────────────────────
-let countDebounce;
+// ── Recipient counts ───────────────────────────────────
+let _cTimer;
 function fetchCounts() {
-    clearTimeout(countDebounce);
-    countDebounce = setTimeout(async () => {
+    clearTimeout(_cTimer);
+    _cTimer = setTimeout(async () => {
         const rType = document.querySelector('input[name=recipient_type]:checked')?.value || 'all';
         try {
-            const res = await fetch(`{{ route('admin.notifications.broadcast') }}?_counts=1&recipient_type=${rType}`, {
+            const r = await fetch(`{{ route('admin.notifications.broadcast') }}?_counts=1&recipient_type=${rType}`, {
                 headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
             });
-            if (!res.ok) return;
-            const json = await res.json();
-            if (json.counts) {
-                document.getElementById('statUsers').textContent   = json.counts.users   ?? '—';
-                document.getElementById('statAgents').textContent  = json.counts.agents  ?? '—';
-                document.getElementById('statOffices').textContent = json.counts.offices ?? '—';
+            if (!r.ok) return;
+            const j = await r.json();
+            if (j.counts) {
+                document.getElementById('sUsers').textContent   = j.counts.users   ?? '—';
+                document.getElementById('sAgents').textContent  = j.counts.agents  ?? '—';
+                document.getElementById('sOffices').textContent = j.counts.offices ?? '—';
             }
         } catch (_) {}
     }, 400);
 }
-document.querySelectorAll('input[name=recipient_type]').forEach(r => r.addEventListener('change', fetchCounts));
 fetchCounts();
 
-// ── Form submit ────────────────────────────────────────────────
-document.getElementById('broadcastForm').addEventListener('submit', async function(e) {
+// ── Submit ─────────────────────────────────────────────
+document.getElementById('bcForm').addEventListener('submit', async function(e) {
     e.preventDefault();
 
-    const titleEn = document.getElementById('title_en').value.trim();
-    const msgEn   = document.getElementById('message_en').value.trim();
-    if (!titleEn || !msgEn) {
-        showResult('error', '✕  English title and message are required.');
+    if (!document.getElementById('title_en').value.trim() ||
+        !document.getElementById('message_en').value.trim()) {
+        showRes('err', '✕ English title and message are required.');
         return;
     }
 
-    setLoading(true);
-
-    const formData = new FormData(this);
-
-    // If URL was provided but no file, ensure image_url is in the payload
-    const urlVal = document.getElementById('imageUrl').value.trim();
-    const fileInput = document.getElementById('imageFile');
-    if (!fileInput.files.length && urlVal) {
-        formData.set('image_url', urlVal);
+    setLoad(true);
+    const fd = new FormData(this);
+    const urlVal = document.getElementById('imgUrl').value.trim();
+    if (!document.getElementById('imgFile').files.length && urlVal) {
+        fd.set('image_url', urlVal);
     }
 
     try {
-        const res = await fetch('{{ route("admin.notifications.broadcast") }}', {
+        const res  = await fetch('{{ route("admin.notifications.broadcast") }}', {
             method: 'POST',
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                'Accept': 'application/json',
-            },
-            body: formData,
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+            body: fd,
         });
-
         const json = await res.json();
 
         if (res.ok && (json.status || json.success)) {
             const d = json.data ?? {};
-            showResult('success', `✓  Broadcast sent to <strong>${d.sent_to ?? '?'}</strong> recipients — ${d.users ?? 0} users, ${d.agents ?? 0} agents, ${d.offices ?? 0} offices.`);
-            if (d.warnings && d.warnings.length) showWarnings(d.warnings);
-            this.reset();
-            removeImage();
-            updatePreview();
+            showRes('ok', `✓ Broadcast sent to <strong>${d.sent_to ?? '?'}</strong> recipients — ${d.users ?? 0} users, ${d.agents ?? 0} agents, ${d.offices ?? 0} offices.`);
+            if (d.warnings?.length) showWarns(d.warnings);
+            this.reset(); rmImg(); livePreview();
         } else {
-            const errMsg = json.message ?? 'Failed to send broadcast. Please try again.';
-            const errors = json.errors ? '<br>' + Object.values(json.errors).flat().join('<br>') : '';
-            showResult('error', '✕  ' + errMsg + errors);
+            const errs = json.errors ? '<br>' + Object.values(json.errors).flat().join('<br>') : '';
+            showRes('err', '✕ ' + (json.message ?? 'Failed to send.') + errs);
         }
     } catch (err) {
-        showResult('error', '✕  Network error: ' + err.message);
+        showRes('err', '✕ Network error: ' + err.message);
     } finally {
-        setLoading(false);
+        setLoad(false);
     }
 });
 
-function setLoading(on) {
-    const btn    = document.getElementById('submitBtn');
-    const icon   = document.getElementById('submitIcon');
-    const lbl    = document.getElementById('submitLabel');
-    const spin   = document.getElementById('submitSpinner');
-    btn.disabled = on;
-    icon.style.display = on ? 'none' : '';
-    spin.classList.toggle('show', on);
-    lbl.textContent = on ? 'Sending…' : 'Send Broadcast';
+function setLoad(on) {
+    document.getElementById('bcBtn').disabled      = on;
+    document.getElementById('bcBtnIco').style.display = on ? 'none' : '';
+    document.getElementById('bcSpin').classList.toggle('show', on);
+    document.getElementById('bcBtnLbl').textContent = on ? 'Sending…' : 'Send Broadcast';
 }
-
-function showResult(type, html) {
-    const el  = document.getElementById('resultBanner');
-    const msg = document.getElementById('resultMsg');
-    el.className   = 'result-banner show ' + type;
-    msg.innerHTML  = html;
-    document.getElementById('warningsBox').classList.remove('show');
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+function showRes(type, html) {
+    const el = document.getElementById('bcResult');
+    el.className = 'bc-result show ' + type;
+    document.getElementById('bcResultMsg').innerHTML = html;
+    document.getElementById('bcWarnBox').classList.remove('show');
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-
-function showWarnings(warnings) {
-    const box  = document.getElementById('warningsBox');
-    const list = document.getElementById('warningsList');
-    list.innerHTML = warnings.map(w => `<li>${w}</li>`).join('');
+function showWarns(w) {
+    const box = document.getElementById('bcWarnBox');
+    document.getElementById('bcWarnList').innerHTML = w.map(x => `<li>${x}</li>`).join('');
     box.classList.add('show');
 }
 
-// Init preview
-updatePreview();
+livePreview();
 </script>
+
 @endsection

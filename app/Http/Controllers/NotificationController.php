@@ -1338,11 +1338,15 @@ class NotificationController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'title' => 'required|string|max:255',
-                'message' => 'required|string',
-                'priority' => 'required|in:low,medium,high,urgent',
+                'title'          => 'required|string|max:255',
+                'message'        => 'required|string',
+                'priority'       => 'required|in:low,medium,high,urgent',
                 'recipient_type' => 'required|in:users,agents,offices,all',
-                'expires_at' => 'nullable|date|after:now',
+                'expires_at'     => 'nullable|date|after:now',
+                'image'          => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+                'image_url'      => 'nullable|string|max:500',
+                'action_url'     => 'nullable|string|max:255',
+                'action_text'    => 'nullable|string|max:100',
             ]);
 
             if ($validator->fails()) {
@@ -1353,165 +1357,137 @@ class NotificationController extends Controller
                 );
             }
 
-            $recipientType = $request->recipient_type;
-            $notifications = [];
+            // ── Resolve image URL ─────────────────────────────────────────────
+            $imageUrl = null;
+            if ($request->hasFile('image') && $request->file('image')->isValid()) {
+                $path     = $request->file('image')->store('notifications', 'public');
+                $imageUrl = config('app.url') . \Illuminate\Support\Facades\Storage::url($path);
+            } elseif ($request->filled('image_url')) {
+                $url      = $request->image_url;
+                $imageUrl = str_starts_with($url, 'http')
+                    ? $url
+                    : rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
+            }
 
+            $recipientType   = $request->recipient_type;
+            $notifications   = [];
+            $now             = now();
+
+            $fcmNotification = [
+                'title'   => $request->title,
+                'message' => $request->message,
+                'image'   => $imageUrl,
+            ];
+
+            $fcmData = [
+                'type'         => 'system',
+                'priority'     => $request->priority,
+                'announcement' => 'true',
+                'action_url'   => $request->action_url  ?? '',
+                'action_text'  => $request->action_text ?? '',
+                'image_url'    => $imageUrl ?? '',
+            ];
+
+            $firebaseService = class_exists('\App\Services\FirebaseService')
+                ? new \App\Services\FirebaseService()
+                : null;
+
+            // ── USERS ─────────────────────────────────────────────────────────
             if ($recipientType === 'users' || $recipientType === 'all') {
                 $users = User::where('search_preferences->behavior->enable_notifications', true)->get();
                 foreach ($users as $user) {
                     $notifications[] = [
-                        'id' => (string) Str::uuid(),
-                        'user_id' => $user->id,
-                        'agent_id' => null,
-                        'office_id' => null,
-                        'title' => $request->title,
-                        'message' => $request->message,
-                        'type' => 'system',
-                        'priority' => $request->priority,
-                        'data' => json_encode(['announcement' => true]),
-                        'action_url' => $request->action_url,
+                        'id'          => (string) Str::uuid(),
+                        'user_id'     => $user->id,
+                        'agent_id'    => null,
+                        'office_id'   => null,
+                        'title'       => $request->title,
+                        'message'     => $request->message,
+                        'type'        => 'system',
+                        'priority'    => $request->priority,
+                        'image_url'   => $imageUrl,
+                        'data'        => json_encode(['announcement' => true]),
+                        'action_url'  => $request->action_url,
                         'action_text' => $request->action_text,
-                        'is_read' => false,
-                        'sent_at' => now(),
-                        'expires_at' => $request->expires_at,
-                        'created_at' => now(),
-                        'updated_at' => now(),
+                        'is_read'     => false,
+                        'sent_at'     => $now,
+                        'expires_at'  => $request->expires_at,
+                        'created_at'  => $now,
+                        'updated_at'  => $now,
                     ];
-                }
-
-                // Send FCM notifications to users
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => $request->title,
-                            'message' => $request->message
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'system',
-                            'priority' => $request->priority,
-                            'announcement' => 'true',
-                            'action_url' => $request->action_url,
-                            'action_text' => $request->action_text
-                        ];
-
-                        foreach ($users as $user) {
-                            $fcmResult = $firebaseService->sendToUser($user, $notificationPayload, $dataPayload);
-
-                            if ($fcmResult) {
-                                Log::info('System announcement sent via FCM to user', [
-                                    'user_id' => $user->id,
-                                    'title' => $request->title
-                                ]);
-                            } else {
-                                Log::warning('FCM system announcement failed to send to user', [
-                                    'user_id' => $user->id,
-                                    'title' => $request->title
-                                ]);
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM system announcement error for users: ' . $e->getMessage());
-                    }
+                    $firebaseService?->sendToUser($user, $fcmNotification, $fcmData);
                 }
             }
 
+            // ── AGENTS ────────────────────────────────────────────────────────
             if ($recipientType === 'agents' || $recipientType === 'all') {
                 $agents = Agent::where('is_verified', true)->get();
                 foreach ($agents as $agent) {
                     $notifications[] = [
-                        'id' => (string) Str::uuid(),
-                        'user_id' => null,
-                        'agent_id' => $agent->id,
-                        'office_id' => null,
-                        'title' => $request->title,
-                        'message' => $request->message,
-                        'type' => 'system',
-                        'priority' => $request->priority,
-                        'data' => json_encode(['announcement' => true]),
-                        'action_url' => $request->action_url,
+                        'id'          => (string) Str::uuid(),
+                        'user_id'     => null,
+                        'agent_id'    => $agent->id,
+                        'office_id'   => null,
+                        'title'       => $request->title,
+                        'message'     => $request->message,
+                        'type'        => 'system',
+                        'priority'    => $request->priority,
+                        'image_url'   => $imageUrl,
+                        'data'        => json_encode(['announcement' => true]),
+                        'action_url'  => $request->action_url,
                         'action_text' => $request->action_text,
-                        'is_read' => false,
-                        'sent_at' => now(),
-                        'expires_at' => $request->expires_at,
-                        'created_at' => now(),
-                        'updated_at' => now(),
+                        'is_read'     => false,
+                        'sent_at'     => $now,
+                        'expires_at'  => $request->expires_at,
+                        'created_at'  => $now,
+                        'updated_at'  => $now,
                     ];
-                }
-
-                // Send FCM notifications to agents
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => $request->title,
-                            'message' => $request->message
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'system',
-                            'priority' => $request->priority,
-                            'announcement' => 'true',
-                            'action_url' => $request->action_url,
-                            'action_text' => $request->action_text
-                        ];
-
-                        foreach ($agents as $agent) {
-                            $fcmResult = $firebaseService->sendToAgent($agent, $notificationPayload, $dataPayload);
-
-                            if ($fcmResult) {
-                                Log::info('System announcement sent via FCM to agent', [
-                                    'agent_id' => $agent->id,
-                                    'title' => $request->title
-                                ]);
-                            } else {
-                                Log::warning('FCM system announcement failed to send to agent', [
-                                    'agent_id' => $agent->id,
-                                    'title' => $request->title
-                                ]);
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM system announcement error for agents: ' . $e->getMessage());
-                    }
+                    $firebaseService?->sendToAgent($agent, $fcmNotification, $fcmData);
                 }
             }
 
+            // ── OFFICES ───────────────────────────────────────────────────────
             if ($recipientType === 'offices' || $recipientType === 'all') {
                 $offices = RealEstateOffice::where('is_verified', true)->get();
                 foreach ($offices as $office) {
                     $notifications[] = [
-                        'id' => (string) Str::uuid(),
-                        'user_id' => null,
-                        'agent_id' => null,
-                        'office_id' => $office->id,
-                        'title' => $request->title,
-                        'message' => $request->message,
-                        'type' => 'system',
-                        'priority' => $request->priority,
-                        'data' => json_encode(['announcement' => true]),
-                        'action_url' => $request->action_url,
+                        'id'          => (string) Str::uuid(),
+                        'user_id'     => null,
+                        'agent_id'    => null,
+                        'office_id'   => $office->id,
+                        'title'       => $request->title,
+                        'message'     => $request->message,
+                        'type'        => 'system',
+                        'priority'    => $request->priority,
+                        'image_url'   => $imageUrl,
+                        'data'        => json_encode(['announcement' => true]),
+                        'action_url'  => $request->action_url,
                         'action_text' => $request->action_text,
-                        'is_read' => false,
-                        'sent_at' => now(),
-                        'expires_at' => $request->expires_at,
-                        'created_at' => now(),
-                        'updated_at' => now(),
+                        'is_read'     => false,
+                        'sent_at'     => $now,
+                        'expires_at'  => $request->expires_at,
+                        'created_at'  => $now,
+                        'updated_at'  => $now,
                     ];
+                    // ✅ FIX: offices were in DB but never got FCM in original
+                    $firebaseService?->sendToOffice($office, $fcmNotification, $fcmData);
                 }
             }
 
-            // Bulk insert notifications
+            // ── Bulk insert ───────────────────────────────────────────────────
             if (!empty($notifications)) {
-                DB::table('notifications')->insert($notifications);
+                foreach (array_chunk($notifications, 500) as $chunk) {
+                    DB::table('notifications')->insert($chunk);
+                }
             }
 
             return ApiResponse::success(
                 ResponseDetails::successMessage('System announcement sent successfully'),
-                ['sent_to' => count($notifications), 'recipient_type' => $recipientType],
+                [
+                    'sent_to'       => count($notifications),
+                    'recipient_type' => $recipientType,
+                    'image_url'     => $imageUrl,
+                ],
                 ResponseDetails::CODE_SUCCESS
             );
         } catch (\Exception $e) {
@@ -2232,6 +2208,9 @@ class NotificationController extends Controller
     /**
      * Helper: Send Firebase notification to owner
      */
+    /**
+     * Helper: Send Firebase notification to property owner (user / agent / office).
+     */
     private function sendFirebaseToOwner($owner, $firebaseService, $notificationPayload, $dataPayload)
     {
         switch (get_class($owner)) {
@@ -2240,9 +2219,8 @@ class NotificationController extends Controller
             case 'App\\Models\\Agent':
                 return $firebaseService->sendToAgent($owner, $notificationPayload, $dataPayload);
             case 'App\\Models\\RealEstateOffice':
-                // You'll need to implement sendToOffice method in FirebaseService
-                Log::info('Office notification created', ['office_id' => $owner->id]);
-                return true;
+                // ✅ FIX: was a silent no-op (just logged). Now actually sends FCM.
+                return $firebaseService->sendToOffice($owner, $notificationPayload, $dataPayload);
             default:
                 return false;
         }
@@ -2509,7 +2487,6 @@ class NotificationController extends Controller
                 return redirect()->route('login-page')->with('error', 'Please log in to view your notifications');
             }
 
-            // Get user notifications (excluding expired ones)
             $notifications = DB::table('notifications')
                 ->where('user_id', $user->id)
                 ->where(function ($query) {
@@ -2519,33 +2496,34 @@ class NotificationController extends Controller
                 ->orderBy('sent_at', 'desc')
                 ->get()
                 ->map(function ($notification) {
-                    return (object)[
-                        'id' => $notification->id,
-                        'title' => $notification->title,
-                        'message' => $notification->message,
-                        'type' => $notification->type,
-                        'priority' => $notification->priority,
-                        'data' => json_decode($notification->data, true),
-                        'action_url' => $notification->action_url,
+                    return (object) [
+                        'id'          => $notification->id,
+                        'title'       => $notification->title,
+                        'message'     => $notification->message,
+                        'type'        => $notification->type,
+                        'priority'    => $notification->priority,
+                        'image_url'   => $notification->image_url ?? null,   // ← added
+                        'data'        => json_decode($notification->data, true),
+                        'action_url'  => $notification->action_url,
                         'action_text' => $notification->action_text,
-                        'is_read' => $notification->is_read,
-                        'read_at' => $notification->read_at,
-                        'sent_at' => $notification->sent_at,
-                        'created_at' => $notification->created_at,
-                        'updated_at' => $notification->updated_at
+                        'is_read'     => $notification->is_read,
+                        'read_at'     => $notification->read_at,
+                        'sent_at'     => $notification->sent_at,
+                        'created_at'  => $notification->created_at,
+                        'updated_at'  => $notification->updated_at,
                     ];
                 });
 
             Log::info('User notifications page loaded', [
-                'user_id' => $user->id,
-                'notifications_count' => $notifications->count()
+                'user_id'             => $user->id,
+                'notifications_count' => $notifications->count(),
             ]);
 
             return view('user.notifications', compact('notifications'));
         } catch (\Exception $e) {
             Log::error('Error loading user notifications page', [
                 'message' => $e->getMessage(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
 
             return redirect()->back()->with('error', 'Failed to load notifications');
