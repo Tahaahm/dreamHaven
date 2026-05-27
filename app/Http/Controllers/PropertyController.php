@@ -4269,4 +4269,110 @@ class PropertyController extends Controller
             return ApiResponse::error('Failed', $e->getMessage(), 500);
         }
     }
+
+    public function guestStats(Request $request)
+    {
+        try {
+            $city   = trim($request->get('city',   ''));
+            $type   = trim($request->get('type',   ''));
+            $budget = (int) $request->get('budget', 0);
+
+            // Cache key per context so Erbil guests get Erbil counts
+            $cacheKey = 'guest_stats_v2_'
+                . md5($city . '|' . $type . '|' . ($budget > 0 ? 'b' : ''));
+
+            $data = Cache::remember($cacheKey, now()->addMinutes(10), function ()
+            use ($city, $type, $budget) {
+
+                // ── Base query: active + published ────────────────────────
+                $base = Property::where('is_active', true)
+                    ->where('is_published', true);
+
+                // ── Apply city filter if provided ─────────────────────────
+                if ($city !== '') {
+                    $cityLower = strtolower($city);
+                    $base->where(function ($q) use ($cityLower) {
+                        $q->whereRaw(
+                            "LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en')))) LIKE ?",
+                            ['%' . $cityLower . '%']
+                        )->orWhereRaw(
+                            "LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku')))) LIKE ?",
+                            ['%' . $cityLower . '%']
+                        )->orWhereRaw(
+                            "LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar')))) LIKE ?",
+                            ['%' . $cityLower . '%']
+                        );
+                    });
+                }
+
+                // ── Apply type filter if provided ─────────────────────────
+                if ($type !== '') {
+                    $base->where(function ($q) use ($type) {
+                        $q->whereRaw(
+                            "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) LIKE ?",
+                            ['%' . strtolower($type) . '%']
+                        );
+                    });
+                }
+
+                // ── Total count (city+type filtered) ──────────────────────
+                $total = $base->count();
+
+                // ── Added today (same filters) ─────────────────────────────
+                $addedToday = (clone $base)
+                    ->whereDate('created_at', today())
+                    ->count();
+
+                // ── Top 3 cities — always global (helps guest discover) ───
+                // We always show global top cities in the pills regardless of
+                // filter, so the guest can see where most listings are.
+                $rawCities = Property::where('is_active', true)
+                    ->where('is_published', true)
+                    ->whereNotNull('address_details')
+                    ->selectRaw(
+                        "TRIM(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en')))
+                         as city, COUNT(*) as cnt"
+                    )
+                    ->groupBy('city')
+                    ->orderByDesc('cnt')
+                    ->limit(3)
+                    ->get();
+
+                $topCities = [];
+                foreach ($rawCities as $row) {
+                    $name = $row->city ?? '';
+                    if ($name === '' || $name === 'null') continue;
+                    $topCities[$name] = (int) $row->cnt;
+                }
+
+                return [
+                    'total'        => (int) $total,
+                    'added_today'  => (int) $addedToday,
+                    'top_cities'   => $topCities,
+                    // Echo back the context so Flutter knows what this count is for
+                    'city_context' => $city  ?: null,
+                    'type_context' => $type  ?: null,
+                ];
+            });
+
+            return response()->json([
+                'status' => true,
+                'data'   => $data,
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('guestStats error: ' . $e->getMessage());
+
+            // Always return valid JSON — never crash the guest home screen
+            return response()->json([
+                'status' => true,
+                'data'   => [
+                    'total'        => 0,
+                    'added_today'  => 0,
+                    'top_cities'   => (object) [],
+                    'city_context' => null,
+                    'type_context' => null,
+                ],
+            ], 200);
+        }
+    }
 }

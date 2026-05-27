@@ -432,7 +432,9 @@ Route::prefix('v1/api/properties')->group(function () {
 
     Route::get('/smart-strip',         [SmartStripController::class, 'getStrip']);
     Route::post('/smart-strip/dismiss', [SmartStripController::class, 'dismiss'])
+
         ->middleware('auth:sanctum');
+    Route::get('/guest-stats', [PropertyController::class, 'guestStats']);
 
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/my-properties', [PropertyController::class, 'getMyProperties']);
