@@ -189,38 +189,86 @@ class PropertyController extends Controller
             $query->where('listing_type', $request->listing_type);
         }
 
-        // ✅ NEW: Verified filter
         if ($request->boolean('verified')) {
             $query->where('verified', true);
         }
 
         // 3. Range & Value Filters (Price, Area, Rooms)
-        $currency = strtolower($request->get('currency', 'usd'));
-        if ($request->has('min_price')) {
-            $query->whereRaw("JSON_EXTRACT(price, '$.{$currency}') >= ?", [$request->min_price]);
-        }
-        if ($request->has('max_price')) {
-            $query->whereRaw("JSON_EXTRACT(price, '$.{$currency}') <= ?", [$request->max_price]);
+        //
+        // FIX: Default currency is now 'iqd' (not 'usd') because Kurdistan/Iraq
+        // properties are priced in IQD. Properties with price.usd = 0 were
+        // matching every USD max_price filter (0 <= any_value = true in MySQL).
+        //
+        // CAST + JSON_UNQUOTE handles both numeric JSON values and string-encoded
+        // JSON values correctly. The > 0 guard excludes properties where the
+        // requested currency field is null, missing, or zero — which happens on
+        // IQD-only listings when filtering by USD and vice versa.
+        $currency = strtolower($request->get('currency', 'iqd'));
+
+        if ($request->has('min_price') && $request->min_price > 0) {
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) >= ?",
+                [$request->min_price]
+            )->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) > 0"
+            );
         }
 
+        if ($request->has('max_price') && $request->max_price > 0) {
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) <= ?",
+                [$request->max_price]
+            )->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) > 0"
+            );
+        }
+
+        // Bedrooms — supports plain count and 5+ (bedrooms_plus=1)
         if ($request->has('bedrooms')) {
-            $query->whereRaw("JSON_EXTRACT(rooms, '$.bedroom.count') = ?", [$request->bedrooms]);
+            $bedroomCount = (int) $request->bedrooms;
+            if ($request->boolean('bedrooms_plus')) {
+                // 5+ → bedroom count >= 5
+                $query->whereRaw(
+                    "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) AS UNSIGNED) >= ?",
+                    [$bedroomCount]
+                );
+            } else {
+                $query->whereRaw(
+                    "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) AS UNSIGNED) = ?",
+                    [$bedroomCount]
+                );
+            }
         }
 
+        // Bathrooms — supports plain count and 5+
         if ($request->has('bathrooms')) {
-            $query->whereRaw("JSON_EXTRACT(rooms, '$.bathroom.count') = ?", [$request->bathrooms]);
+            $bathroomCount = (int) $request->bathrooms;
+            if ($request->boolean('bathrooms_plus')) {
+                $query->whereRaw(
+                    "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bathroom.count')) AS UNSIGNED) >= ?",
+                    [$bathroomCount]
+                );
+            } else {
+                $query->whereRaw(
+                    "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bathroom.count')) AS UNSIGNED) = ?",
+                    [$bathroomCount]
+                );
+            }
         }
 
         if ($request->has('min_area')) {
-            $query->where('area', '>=', $request->min_area);
+            $query->where('area', '>=', (float) $request->min_area);
         }
         if ($request->has('max_area')) {
-            $query->where('area', '<=', $request->max_area);
+            $query->where('area', '<=', (float) $request->max_area);
         }
 
         if ($request->has('property_type')) {
             $type = strtolower($request->property_type);
-            $query->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?", [$type]);
+            $query->whereRaw(
+                "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
+                [$type]
+            );
         }
 
         // 4. Utility Booleans
@@ -241,23 +289,30 @@ class PropertyController extends Controller
         if ($request->has('city')) {
             $city = $request->city;
             $query->where(function ($q) use ($city) {
-                $q->whereRaw("LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE LOWER(?)", ["%{$city}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar')) LIKE ?", ["%{$city}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku')) LIKE ?", ["%{$city}%"]);
+                $q->whereRaw(
+                    "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE LOWER(?)",
+                    ["%{$city}%"]
+                )
+                    ->orWhereRaw(
+                        "JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar')) LIKE ?",
+                        ["%{$city}%"]
+                    )
+                    ->orWhereRaw(
+                        "JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku')) LIKE ?",
+                        ["%{$city}%"]
+                    );
             });
         }
 
-        // ✅ NEW: JSON Array Feature Searching
-        // Checks the JSON array column 'features' for exact string matches
+        // 6. JSON Array Feature Searching
         $requestedFeatures = [];
-        if ($request->boolean('has_pool')) $requestedFeatures[] = 'pool';
-        if ($request->boolean('has_gym')) $requestedFeatures[] = 'gym';
-        if ($request->boolean('has_garden')) $requestedFeatures[] = 'garden';
+        if ($request->boolean('has_pool'))    $requestedFeatures[] = 'pool';
+        if ($request->boolean('has_gym'))     $requestedFeatures[] = 'gym';
+        if ($request->boolean('has_garden'))  $requestedFeatures[] = 'garden';
         if ($request->boolean('has_parking')) $requestedFeatures[] = 'parking';
         if ($request->boolean('has_balcony')) $requestedFeatures[] = 'balcony';
 
         foreach ($requestedFeatures as $feature) {
-            // MySQL JSON_CONTAINS needs the search string to be wrapped in double quotes
             $query->whereRaw("JSON_CONTAINS(LOWER(features), '\"{$feature}\"')");
         }
     }
