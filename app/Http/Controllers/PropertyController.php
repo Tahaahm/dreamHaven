@@ -4327,7 +4327,7 @@ class PropertyController extends Controller
                 // We always show global top cities in the pills regardless of
                 // filter, so the guest can see where most listings are.
                 $rawCities = Property::where('is_active', true)
-                    ->where('is_published', true)
+                    ->where('published', true)
                     ->whereNotNull('address_details')
                     ->selectRaw(
                         "TRIM(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en')))
