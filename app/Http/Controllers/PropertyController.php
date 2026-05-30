@@ -203,7 +203,7 @@ class PropertyController extends Controller
         // JSON values correctly. The > 0 guard excludes properties where the
         // requested currency field is null, missing, or zero — which happens on
         // IQD-only listings when filtering by USD and vice versa.
-        $currency = strtolower($request->get('currency', 'iqd'));
+        $currency = strtolower($request->get('currency', 'usd'));
 
         if ($request->has('min_price') && $request->min_price > 0) {
             $query->whereRaw(
