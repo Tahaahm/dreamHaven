@@ -883,13 +883,10 @@ class AdminController extends Controller
 
     public function propertiesIndex(Request $request)
     {
-
-
-        // AFTER
         $query = Property::with('owner')->withCount([
             'interactions as unique_viewers_count' => function ($q) {
                 $q->where('interaction_type', 'impression')
-                    ->select(DB::raw('COUNT(DISTINCT user_id)'));
+                    ->select(\DB::raw('COUNT(DISTINCT user_id)'));
             }
         ]);
 
@@ -915,12 +912,12 @@ class AdminController extends Controller
             $query->where('owner_type', $ownerType);
         }
 
-        $properties = $query->paginate(15)->withQueryString();
+        $properties = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
 
         $stats = [
-            'total' => Property::count(),
-            'active' => Property::where('is_active', true)->count(),
-            'pending' => Property::where('status', 'pending')->count(),
+            'total'    => Property::count(),
+            'active'   => Property::where('is_active', true)->count(),
+            'pending'  => Property::where('status', 'pending')->count(),
             'for_sale' => Property::where('listing_type', 'sale')->count(),
             'for_rent' => Property::where('listing_type', 'rent')->count(),
         ];
