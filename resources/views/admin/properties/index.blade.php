@@ -152,7 +152,7 @@
                 default     => ['bg-slate-100 border-slate-200 text-slate-600',      'fa-circle'],
             };
 
-            $uniqueViewers = $property->interactions->where('interaction_type', 'impression')->unique('user_id')->count();
+            $uniqueViewers = $property->unique_viewers_count ?? 0;
             $isNew = $property->created_at->diffInDays() < 7;
         @endphp
 
@@ -402,4 +402,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-@endsection
+@endsections
