@@ -402,4 +402,4 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-@endsections
+@endsection
