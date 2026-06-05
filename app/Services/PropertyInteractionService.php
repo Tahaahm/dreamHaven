@@ -5,15 +5,43 @@ namespace App\Services;
 use App\Models\UserPropertyInteraction;
 use App\Models\User;
 use App\Models\Property;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
+use App\Services\Intelligence\FeedBrain;
+use App\Services\Intelligence\UserTasteProfile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
+/**
+ * PropertyInteractionService (v2)
+ * --------------------------------
+ *  All tracking & popularity engines are UNCHANGED from v1 (so production
+ *  signals continue flowing exactly the same way).
+ *
+ *  REWRITTEN ONLY:
+ *    - getPersonalizedRecommendations()  → delegates to FeedBrain
+ *    - getFeaturedProperties()           → delegates to FeedBrain
+ *    - bustFeaturedCache()               → also invalidates taste profile
+ *
+ *  REMOVED (their work now lives in FeedBrain / UserTasteProfile — all were
+ *  PRIVATE so removing them breaks nothing externally):
+ *    - resolveUserContext, getContextualFeatured, getGlobalFeaturedFallback,
+ *      resolveFeaturedReason, getFilterMatchedRecommendations,
+ *      getBudgetMatchedRecommendations, getGeneralRecommendations
+ */
 class PropertyInteractionService
 {
+    /**
+     * The brain & profile are auto-resolved by Laravel's container.
+     * No service provider binding needed — both are concrete classes.
+     */
+    public function __construct(
+        private UserTasteProfile $profiles,
+        private FeedBrain $brain,
+    ) {}
+
     // ══════════════════════════════════════════════════════════════════════════
-    //  TRACK VIEW
+    //  TRACK VIEW  (UNCHANGED)
     // ══════════════════════════════════════════════════════════════════════════
     public function trackView(string $userId, string $propertyId, array $metadata = []): bool
     {
@@ -59,7 +87,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  TRACK SEARCH CLICK
+    //  TRACK SEARCH CLICK  (UNCHANGED)
     // ══════════════════════════════════════════════════════════════════════════
     public function trackSearchClick(
         string $userId,
@@ -96,7 +124,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  TRACK SEARCH IMPRESSIONS
+    //  TRACK SEARCH IMPRESSIONS  (UNCHANGED)
     // ══════════════════════════════════════════════════════════════════════════
     public function trackSearchImpressions(
         string $userId,
@@ -135,7 +163,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  CALCULATOR SIGNAL
+    //  CALCULATOR SIGNAL  (UNCHANGED behavior + 1 new cache key for v2)
     // ══════════════════════════════════════════════════════════════════════════
     public function storeCalculatorSignal(
         string $userId,
@@ -164,7 +192,12 @@ class PropertyInteractionService
                     'created_at' => now(),
                 ]
             );
+
+            // ── Calculator is a strong signal — invalidate so the next feed
+            //    reflects the new budget immediately (not in 15 min).
             Cache::forget("personalized_recs_{$userId}");
+            $this->bustPersonalizedCacheForUser($userId);
+            $this->profiles->invalidate($userId);
         } catch (\Throwable $e) {
             Log::warning('Calculator signal failed', ['error' => $e->getMessage()]);
         }
@@ -202,7 +235,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  FILTER SIGNAL
+    //  FILTER SIGNAL  (UNCHANGED)
     // ══════════════════════════════════════════════════════════════════════════
     private function getFilterSignal(string $userId): ?array
     {
@@ -221,7 +254,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  COMPARE SIGNAL
+    //  COMPARE SIGNAL  (UNCHANGED)
     // ══════════════════════════════════════════════════════════════════════════
     private function getComparedProperties(string $userId): Collection
     {
@@ -239,7 +272,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  SEARCH SIGNAL
+    //  SEARCH SIGNAL  (UNCHANGED)
     // ══════════════════════════════════════════════════════════════════════════
     private function getLatestSearchSignal(string $userId): ?array
     {
@@ -258,7 +291,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  POPULARITY ENGINE
+    //  POPULARITY ENGINE  (UNCHANGED — was already solid)
     // ══════════════════════════════════════════════════════════════════════════
     public function computePopularityScores(
         ?string $listingType = null,
@@ -389,726 +422,336 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  FEATURED ENGINE (2-layer)
+    //  FEATURED — REWRITTEN to use the brain
+    //  -------------------------------------
+    //  Layer 1 (40% of slots): boosted listings, ordered by listing-type match
+    //                          to the user, then by recent boost activity.
+    //                          Boosted properties pay for placement — they
+    //                          always appear regardless of taste profile.
+    //
+    //  Layer 2 (60% of slots): brain-ranked non-boosted candidates.
+    //                          Same FeedBrain that drives Personalized & Map,
+    //                          so the "why" labels are consistent everywhere.
+    //
+    //  Daily salt rotates the explore/exploit jitter so featured doesn't show
+    //  the exact same 10 cards every load.
     // ══════════════════════════════════════════════════════════════════════════
-    public function getFeaturedProperties(
-        int     $limit  = 10,
-        ?string $userId = null
-    ): Collection {
-        $context      = $this->resolveUserContext($userId);
-        $boostedLimit = (int) ceil($limit * 0.40);
+    public function getFeaturedProperties(int $limit = 10, ?string $userId = null): Collection
+    {
+        try {
+            $profile = $userId ? $this->profiles->build($userId) : $this->emptyProfile();
+            $salt    = (int) now()->format('Ymd');
 
-        $boostedQuery = Property::query()
-            ->where('is_active', true)->where('published', true)
-            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->where('is_boosted', true)
-            ->where('boost_start_date', '<=', now())
-            ->where(function ($q) {
-                $q->whereNull('boost_end_date')->orWhere('boost_end_date', '>=', now());
+            // ── Layer 1: paid boosted slots ──────────────────────────────────
+            $boostedLimit = (int) ceil($limit * 0.40);
+            $boostedQuery = Property::query()
+                ->where('is_active', true)
+                ->where('published', true)
+                ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                ->where('is_boosted', true)
+                ->where('boost_start_date', '<=', now())
+                ->where(function ($q) {
+                    $q->whereNull('boost_end_date')
+                        ->orWhere('boost_end_date', '>=', now());
+                });
+
+            // Prefer boosted listings matching the user's listing_type (sell/rent)
+            if (!empty($profile['listing_type'])) {
+                $boostedQuery->orderByRaw(
+                    "CASE WHEN listing_type = ? THEN 1 ELSE 2 END ASC",
+                    [$profile['listing_type']]
+                );
+            }
+
+            $boosted = $boostedQuery
+                ->orderByDesc('boost_start_date')
+                ->limit($boostedLimit)
+                ->get();
+
+            // Score boosted properties too so frontend sees consistent reasons
+            $boosted = $boosted->map(function ($p) use ($profile) {
+                $r = $this->brain->scoreProperty($p, $profile);
+                $p->feed_score    = $r['score'];
+                $p->feed_reasons  = $r['reasons'];
+                $p->featured_layer = 1;
+                $p->relevance_score = $r['relevance'];
+                return $p;
             });
 
-        if ($context['listing_type']) {
-            $boostedQuery->orderByRaw(
-                "CASE WHEN listing_type = ? THEN 1 ELSE 2 END ASC",
-                [$context['listing_type']]
-            );
-        }
-        if ($context['city']) {
-            $boostedQuery->orderByRaw(
-                "CASE WHEN LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ? THEN 1 ELSE 2 END ASC",
-                [strtolower($context['city'])]
-            );
-        }
+            // ── Layer 2: brain-ranked organic contextual quality ─────────────
+            $boostedIds = $boosted->pluck('id')->toArray();
+            $excludeIds = array_merge($boostedIds, $profile['seen_ids'] ?? []);
+            $remaining  = $limit - $boosted->count();
 
-        $boostedProperties = $boostedQuery
-            ->selectRaw("*, (
-                (CASE WHEN verified = 1 THEN 15 ELSE 0 END) +
-                (LEAST(favorites_count, 50) * 0.5) +
-                (rating * 5) +
-                (CASE
-                    WHEN DATEDIFF(NOW(), boost_start_date) <= 1  THEN 15
-                    WHEN DATEDIFF(NOW(), boost_start_date) <= 7  THEN 10
-                    WHEN DATEDIFF(NOW(), boost_start_date) <= 30 THEN 5
-                    ELSE 0
-                END)
-            ) as layer1_score")
-            ->orderByDesc('layer1_score')
-            ->limit($boostedLimit)
+            if ($remaining > 0) {
+                // Pull a generous pool — brain does the precision work
+                $poolSize = $remaining * 5;
+                $pool = Property::query()
+                    ->where('is_active', true)
+                    ->where('published', true)
+                    ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                    ->whereNotIn('id', $excludeIds ?: ['__none__'])
+                    ->orderByDesc('created_at')
+                    ->limit($poolSize)
+                    ->get();
+
+                $contextual = $this->brain->rank($pool, $profile, $remaining, $salt)
+                    ->map(function ($p) {
+                        $p->featured_layer = 2;
+                        return $p;
+                    });
+            } else {
+                $contextual = collect();
+            }
+
+            $merged = $boosted->merge($contextual)->values();
+
+            Log::info('⭐ FEATURED v2', [
+                'user_id'        => $userId,
+                'has_profile'    => $profile['has_history'] ?? false,
+                'intent_score'   => $profile['intent_score'] ?? 0,
+                'boosted_count'  => $boosted->count(),
+                'organic_count'  => $contextual->count(),
+                'total_returned' => $merged->count(),
+            ]);
+
+            return $merged;
+        } catch (\Throwable $e) {
+            Log::error('Featured v2 error', [
+                'user_id' => $userId,
+                'error'   => $e->getMessage(),
+                'line'    => $e->getLine(),
+            ]);
+            // Production safety: if anything fails, fall back to simple boosted+new
+            return $this->safeFallback($limit);
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  PERSONALIZED RECOMMENDATIONS — REWRITTEN to use the brain
+    //  ---------------------------------------------------------
+    //  The flow:
+    //    1. Build the user's taste profile (recency-weighted across all signals)
+    //    2. Fetch a wide candidate pool (tight match first, then loose)
+    //    3. Brain ranks with intent-adaptive weights + explore/exploit jitter
+    //    4. If somehow short, top up with general fallback
+    //
+    //  Daily salt means the same user sees a slightly reshuffled feed each day,
+    //  preventing "I've seen these 20 already" fatigue while keeping ranking
+    //  stable within a single session.
+    // ══════════════════════════════════════════════════════════════════════════
+    public function getPersonalizedRecommendations(string $userId, int $limit = 20): Collection
+    {
+        $cacheKey = "personalized_recs_v2_{$userId}_{$limit}";
+
+        return Cache::remember($cacheKey, 600, function () use ($userId, $limit) {
+            try {
+                $profile = $this->profiles->build($userId);
+                $salt    = (int) now()->format('Ymd');
+
+                Log::info('🎯 REC v2 start', [
+                    'user_id'       => $userId,
+                    'has_history'   => $profile['has_history'],
+                    'intent_score'  => $profile['intent_score'],
+                    'top_city'      => array_key_first($profile['cities']),
+                    'top_type'      => array_key_first($profile['types']),
+                    'listing_type'  => $profile['listing_type'],
+                    'price_target'  => $profile['price']['target'] ?? null,
+                    'bedrooms'      => $profile['bedrooms'],
+                    'signal_counts' => $profile['signal_counts'],
+                ]);
+
+                // No history → general fallback (still smart: boosted+new+popular)
+                if (!$profile['has_history']) {
+                    return $this->generalFallback($limit);
+                }
+
+                // Pull a wide candidate pool
+                $candidates = $this->fetchCandidates($profile, $limit * 4);
+
+                if ($candidates->isEmpty()) {
+                    Log::info('🎯 REC v2: empty candidates, falling back', ['user_id' => $userId]);
+                    return $this->generalFallback($limit);
+                }
+
+                // The brain ranks with intent-adaptive weights
+                $ranked = $this->brain->rank($candidates, $profile, $limit, $salt);
+
+                // Top up if brain didn't fill the limit (rare — only if pool too small)
+                if ($ranked->count() < $limit) {
+                    $needed     = $limit - $ranked->count();
+                    $existingIds = array_merge(
+                        $ranked->pluck('id')->toArray(),
+                        $profile['seen_ids']
+                    );
+                    $topup = $this->generalFallback($needed + 5)
+                        ->filter(fn($p) => !in_array($p->id, $existingIds))
+                        ->take($needed)
+                        ->map(function ($p) use ($profile) {
+                            // Score these too so frontend gets consistent labels
+                            $r = $this->brain->scoreProperty($p, $profile);
+                            $p->feed_score   = $r['score'];
+                            $p->feed_reasons = $r['reasons'];
+                            return $p;
+                        });
+                    $ranked = $ranked->merge($topup);
+                }
+
+                Log::info('🎯 REC v2 done', [
+                    'user_id'        => $userId,
+                    'returned'       => $ranked->count(),
+                    'avg_score'      => round($ranked->avg('feed_score') ?? 0, 1),
+                    'top_score'      => $ranked->max('feed_score'),
+                ]);
+
+                return $ranked->values();
+            } catch (\Throwable $e) {
+                Log::error('🎯 REC v2 error', [
+                    'user_id' => $userId,
+                    'error'   => $e->getMessage(),
+                    'line'    => $e->getLine(),
+                ]);
+                // Production safety
+                return $this->safeFallback($limit);
+            }
+        });
+    }
+
+    // ── Candidate selection (NEW, private) ───────────────────────────────────
+    //
+    //  Strategy: tight-then-loose. First query pulls properties matching the
+    //  user's PREFERRED city + listing_type (their strongest signals). If
+    //  that doesn't fill the pool, the second query relaxes the city filter.
+    //  Brain then scores everything and ranks.
+    //
+    //  Soft cap on price (2× user's max) prevents 5x-over-budget listings
+    //  from clogging the candidate pool. Brain still scores within that.
+    //
+    private function fetchCandidates(array $profile, int $poolSize): Collection
+    {
+        // Tight pass: city + listing match
+        $tight = $this->baseCandidateQuery($profile)
+            ->when($profile['listing_type'], fn($q) => $q->where('listing_type', $profile['listing_type']))
+            ->when(!empty($profile['cities']), function ($q) use ($profile) {
+                $cities = array_map('strtolower', array_keys($profile['cities']));
+                $q->where(function ($sub) use ($cities) {
+                    foreach ($cities as $c) {
+                        $sub->orWhereRaw(
+                            "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
+                            [$c]
+                        );
+                    }
+                });
+            })
+            ->orderByDesc('created_at')
+            ->limit($poolSize)
             ->get();
 
-        $boostedIds        = $boostedProperties->pluck('id')->toArray();
-        $contextualLimit   = $limit - $boostedProperties->count();
+        // If tight pool is big enough, just return it
+        if ($tight->count() >= $poolSize * 0.6) {
+            return $tight;
+        }
 
-        $contextualProperties = $this->getContextualFeatured(
-            limit: $contextualLimit,
-            context: $context,
-            excludeIds: $boostedIds,
-            userId: $userId
-        );
+        // Loose pass: drop city, keep listing_type
+        $existingIds = $tight->pluck('id')->toArray();
+        $loose = $this->baseCandidateQuery($profile)
+            ->whereNotIn('id', $existingIds ?: ['__none__'])
+            ->when($profile['listing_type'], fn($q) => $q->where('listing_type', $profile['listing_type']))
+            ->orderByDesc('created_at')
+            ->limit($poolSize - $tight->count())
+            ->get();
 
-        $merged = $boostedProperties->merge($contextualProperties);
-        return $merged->map(function ($property) use ($boostedIds) {
-            $property->featured_layer  = in_array($property->id, $boostedIds) ? 1 : 2;
-            $property->featured_reason = $this->resolveFeaturedReason($property);
-            return $property;
-        })->values();
+        return $tight->merge($loose);
     }
 
-    private function resolveUserContext(?string $userId): array
+    private function baseCandidateQuery(array $profile)
     {
-        $context = [
-            'city'          => null,
-            'listing_type'  => null,
-            'property_type' => null,
-            'min_price'     => null,
-            'max_price'     => null,
-            'bedrooms'      => null,
-        ];
-        if (!$userId) return $context;
+        $excludeIds = $profile['seen_ids'] ?: ['__none__'];
 
-        try {
-            $filterSignal = $this->getFilterSignal($userId);
-            if ($filterSignal) {
-                $context['city']          = $filterSignal['city']          ?? null;
-                $context['listing_type']  = $filterSignal['listing_type']  ?? null;
-                $context['property_type'] = $filterSignal['property_type'] ?? null;
-                $context['max_price']     = $filterSignal['max_price_usd'] ?? null;
-                $context['min_price']     = $filterSignal['min_price_usd'] ?? null;
-                $context['bedrooms']      = $filterSignal['bedrooms']      ?? null;
-            }
+        $query = Property::query()
+            ->where('is_active', true)
+            ->where('published', true)
+            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+            ->whereNotIn('id', $excludeIds);
 
-            $searchSignal = $this->getLatestSearchSignal($userId);
-            if ($searchSignal) {
-                $filters = $searchSignal['active_filters'] ?? [];
-                if (!$context['listing_type'] && !empty($filters['listing_type']))
-                    $context['listing_type'] = $filters['listing_type'];
-                if (!$context['city'] && !empty($filters['city']))
-                    $context['city'] = $filters['city'];
-            }
-
-            $calcSignal = $this->getCalculatorSignal($userId);
-            if ($calcSignal && !$context['max_price']) {
-                $context['max_price'] = $calcSignal['budget_max_usd'] ?? null;
-                $context['min_price'] = $calcSignal['budget_min_usd'] ?? null;
-            }
-
-            if (!$context['city'] || !$context['listing_type']) {
-                $virtualIds = ['calculator_signal', 'filter_signal', 'search_signal', 'search_signal_latest'];
-                $recentIds  = DB::table('user_property_interactions')
-                    ->where('user_id', $userId)
-                    ->whereIn('interaction_type', ['view', 'favorite'])
-                    ->where('created_at', '>=', now()->subDays(30))
-                    ->whereNotIn('property_id', $virtualIds)
-                    ->pluck('property_id')->unique()->take(20);
-
-                if ($recentIds->isNotEmpty()) {
-                    $recentProps = Property::whereIn('id', $recentIds)
-                        ->select('id', 'address_details', 'listing_type')->get();
-
-                    if (!$context['city']) {
-                        $cityMode = $recentProps
-                            ->map(fn($p) => $p->address_details['city']['en'] ?? null)
-                            ->filter()->mode();
-                        $context['city'] = $cityMode[0] ?? null;
-                    }
-                    if (!$context['listing_type']) {
-                        $typeMode = $recentProps->pluck('listing_type')->filter()->mode();
-                        $context['listing_type'] = $typeMode[0] ?? null;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            Log::warning('resolveUserContext failed', ['error' => $e->getMessage()]);
-        }
-        return $context;
-    }
-
-    private function getContextualFeatured(
-        int     $limit,
-        array   $context,
-        array   $excludeIds,
-        ?string $userId
-    ): Collection {
-        $popularityPool = $this->computePopularityScores(
-            listingType: $context['listing_type'],
-            city: null,
-            days: 30,
-            limit: $limit * 5
-        );
-
-        $scored = $popularityPool
-            ->filter(fn($p) => !in_array($p->id, $excludeIds))
-            ->filter(fn($p) => !in_array($p->status, ['sold', 'rented', 'cancelled', 'pending']))
-            ->map(function ($property) use ($context) {
-                $relevanceScore = 0;
-
-                if ($context['city']) {
-                    $propCity = strtolower($property->address_details['city']['en'] ?? '');
-                    if ($propCity === strtolower($context['city'])) $relevanceScore += 30;
-                }
-                if ($context['listing_type'] && $property->listing_type === $context['listing_type'])
-                    $relevanceScore += 25;
-                if ($context['property_type']) {
-                    $propType = strtolower($property->type['category'] ?? '');
-                    if ($propType === strtolower($context['property_type'])) $relevanceScore += 15;
-                }
-                $propPrice = $property->price['usd'] ?? 0;
-                if ($context['min_price'] && $context['max_price'] && $propPrice > 0) {
-                    if ($propPrice >= $context['min_price'] && $propPrice <= $context['max_price'])
-                        $relevanceScore += 20;
-                    elseif ($propPrice <= $context['max_price'])
-                        $relevanceScore += 10;
-                }
-                if ($context['bedrooms']) {
-                    $propBeds = (int) ($property->rooms['bedroom']['count'] ?? 0);
-                    if ($propBeds === (int) $context['bedrooms']) $relevanceScore += 10;
-                }
-
-                $property->layer2_score    = ($property->popularity_score ?? 0) + $relevanceScore;
-                $property->relevance_score = $relevanceScore;
-                return $property;
-            })
-            ->sortByDesc('layer2_score')
-            ->values();
-
-        $selected  = collect();
-        $cityCount = [];
-        $typeCount = [];
-        $cityMax   = max(2, (int) ceil($limit * 0.35));
-        $typeMax   = max(2, (int) ceil($limit * 0.45));
-
-        foreach ($scored as $property) {
-            if ($selected->count() >= $limit) break;
-            $city = strtolower($property->address_details['city']['en'] ?? 'unknown');
-            $type = strtolower($property->type['category']              ?? 'unknown');
-            $cityCount[$city] = $cityCount[$city] ?? 0;
-            $typeCount[$type] = $typeCount[$type] ?? 0;
-            if ($cityCount[$city] >= $cityMax || $typeCount[$type] >= $typeMax) continue;
-            $selected->push($property);
-            $cityCount[$city]++;
-            $typeCount[$type]++;
-        }
-
-        if ($selected->count() < $limit) {
-            $remaining = $scored->whereNotIn('id', $selected->pluck('id')->toArray())
-                ->take($limit - $selected->count());
-            $selected = $selected->merge($remaining);
-        }
-
-        if ($selected->count() < $limit) {
-            $fallback = $this->getGlobalFeaturedFallback(
-                $limit - $selected->count(),
-                array_merge($excludeIds, $selected->pluck('id')->toArray())
+        // Soft price ceiling: 2× their max keeps obviously-out-of-reach
+        // listings out of the pool. Brain handles precise band scoring.
+        if (!empty($profile['price']['max'])) {
+            $hardMax = $profile['price']['max'] * 2.0;
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) <= ?",
+                [$hardMax]
             );
-            $selected = $selected->merge($fallback);
         }
 
-        return $selected->values();
+        return $query;
     }
 
-    private function getGlobalFeaturedFallback(int $limit, array $excludeIds): Collection
+    // ── General fallback (NEW, private) ──────────────────────────────────────
+    //
+    //  No personalization signal available — still produce a quality feed:
+    //  boosted first, then verified + popular + fresh, with proper engagement
+    //  weighting. This is what guests and brand-new users see.
+    //
+    private function generalFallback(int $limit): Collection
     {
         return Property::query()
-            ->where('is_active', true)->where('published', true)
+            ->where('is_active', true)
+            ->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->whereNotIn('id', $excludeIds)
-            ->selectRaw("*, (
+            ->selectRaw('*, (
+                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
                 (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
                 (LEAST(favorites_count, 50) * 0.8) +
-                (rating * 5) +
                 (LEAST(views, 200) * 0.1) +
+                (rating * 5) +
                 (CASE
-                    WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
-                    WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 10
-                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 5
+                    WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 20
+                    WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15
+                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
                     ELSE 0
                 END)
-            ) as fallback_score")
+            ) as fallback_score')
             ->orderByDesc('fallback_score')
             ->limit($limit)
             ->get();
     }
 
-    private function resolveFeaturedReason(Property $property): array
+    // ── Absolute safety net (NEW, private) ───────────────────────────────────
+    // Used only inside catch blocks — must NEVER throw.
+    private function safeFallback(int $limit): Collection
     {
-        $reasons = [];
-        if ($property->is_boosted)
-            $reasons[] = ['key' => 'promoted',    'label' => 'Promoted listing'];
-        if ($property->verified)
-            $reasons[] = ['key' => 'verified',    'label' => 'Verified property'];
-        if (($property->popularity_breakdown['scores']['velocity_score'] ?? 0) > 8)
-            $reasons[] = ['key' => 'trending',    'label' => 'Trending now'];
-        if (($property->popularity_breakdown['scores']['click_score'] ?? 0) > 15)
-            $reasons[] = ['key' => 'high_demand', 'label' => 'High search demand'];
-        if (($property->popularity_breakdown['scores']['ctr_score'] ?? 0) > 10)
-            $reasons[] = ['key' => 'popular',     'label' => 'Frequently chosen from search'];
-        if (($property->relevance_score ?? 0) >= 30)
-            $reasons[] = ['key' => 'relevant',    'label' => 'Matches your preferences'];
-        if ($property->created_at->diffInDays(now()) <= 7)
-            $reasons[] = ['key' => 'new',         'label' => 'New listing'];
-        if ($property->favorites_count > 10)
-            $reasons[] = ['key' => 'saved',       'label' => 'Frequently saved'];
-        if (($property->popularity_breakdown['compare_count'] ?? 0) > 5)
-            $reasons[] = ['key' => 'compared',    'label' => 'Often compared by buyers'];
-        return $reasons ?: [['key' => 'quality', 'label' => 'Top quality listing']];
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  PERSONALIZED RECOMMENDATIONS — all 6 signals, both bugs fixed
-    //
-    //  SIGNAL WEIGHTS:
-    //  ┌──────────────────────┬──────┬──────────────────────────────────────┐
-    //  │ Signal               │ Wt   │ Contributes                          │
-    //  ├──────────────────────┼──────┼──────────────────────────────────────┤
-    //  │ favorite             │  5×  │ type, city, price, listing_type      │
-    //  │ compare              │  4×  │ type, city, price (near-decision)    │
-    //  │ filter_applied       │  3×  │ overrides: bedrooms, price, type     │
-    //  │ search_query         │  2×  │ listing_type hint                    │
-    //  │ view                 │  1×  │ type, city, price                    │
-    //  │ calculator_search    │  —   │ budget blend (0.0–1.0 weight)        │
-    //  └──────────────────────┴──────┴──────────────────────────────────────┘
-    //
-    //  BUG FIXES vs previous version:
-    //  - replicate() → manual repeated merge() calls (Collection has no replicate)
-    //  - $properties->load('owner') on merged() → re-fetch via Eloquent whereIn
-    // ══════════════════════════════════════════════════════════════════════════
-    public function getPersonalizedRecommendations(string $userId, int $limit = 20): Collection
-    {
-        $user = User::find($userId);
-        if (!$user) return $this->getGeneralRecommendations($limit);
-
-        // ── 1. Load all 6 signals ─────────────────────────────────────────────
-        $calcSignal   = $this->getCalculatorSignal($userId);
-        $filterSignal = $this->getFilterSignal($userId);
-        $searchSignal = $this->getLatestSearchSignal($userId);
-        $comparedData = $this->getComparedProperties($userId);
-
-        Log::info('🎯 REC: signals loaded', [
-            'user_id'       => $userId,
-            'has_calc'      => $calcSignal   !== null,
-            'has_filter'    => $filterSignal !== null,
-            'has_search'    => $searchSignal !== null,
-            'compared_count' => $comparedData->count(),
-        ]);
-
-        // ── 2. Load interaction history (views + favorites, 60 days) ──────────
-        $virtualIds = ['calculator_signal', 'filter_signal', 'search_signal', 'search_signal_latest'];
-
-        $interactions = DB::table('user_property_interactions')
-            ->where('user_id', $userId)
-            ->where('created_at', '>=', now()->subDays(60))
-            ->whereIn('interaction_type', ['view', 'favorite'])
-            ->whereNotIn('property_id', $virtualIds)
-            ->select('property_id', 'interaction_type')
-            ->get();
-
-        $viewedIds    = $interactions->where('interaction_type', 'view')
-            ->pluck('property_id')->toArray();
-        $favoritedIds = $interactions->where('interaction_type', 'favorite')
-            ->pluck('property_id')->toArray();
-        $comparedIds  = $comparedData->pluck('id')->toArray();
-
-        $allInteractedIds = array_unique(array_merge($viewedIds, $favoritedIds, $comparedIds));
-        $hasBrowseHistory = !empty($allInteractedIds);
-
-        // ── 3. Budget signal ──────────────────────────────────────────────────
-        $hasBudget      = $calcSignal !== null && ($calcSignal['budget_min_usd'] ?? 0) > 0;
-        $signalStrength = (int) ($calcSignal['signal_strength'] ?? 0);
-        $budgetWeight   = $hasBudget ? ($signalStrength / 100) : 0.0;
-
-        // ── 4. No history → signal-only recommendations ───────────────────────
-        if (!$hasBrowseHistory && $comparedData->isEmpty()) {
-            if ($filterSignal) {
-                Log::info('🎯 REC: no history, using filter signal');
-                return $this->getFilterMatchedRecommendations($filterSignal, $limit, []);
-            }
-            if ($hasBudget && $signalStrength >= 40) {
-                Log::info('🎯 REC: no history, using budget signal');
-                return $this->getBudgetMatchedRecommendations($calcSignal, $limit, []);
-            }
-            Log::info('🎯 REC: no history, using general fallback');
-            return $this->getGeneralRecommendations($limit);
-        }
-
-        // ── 5. Load property data for history ────────────────────────────────
-        $viewedData    = Property::whereIn('id', $viewedIds)->get();
-        $favoritedData = Property::whereIn('id', $favoritedIds)->get();
-
-        // ── 6. Build weighted type profile ───────────────────────────────────
-        // favorites×5, compared×4, viewed×1 — NO replicate(), manual merge
-        $favTypeVals  = $favoritedData->pluck('type')->map(fn($t) => $t['category'] ?? null);
-        $compTypeVals = $comparedData->pluck('type')->map(fn($t)  => $t['category'] ?? null);
-        $viewTypeVals = $viewedData->pluck('type')->map(fn($t)    => $t['category'] ?? null);
-
-        $preferredTypes = collect()
-            ->merge($viewTypeVals)                                      // ×1
-            ->merge($favTypeVals)->merge($favTypeVals)                  // ×2
-            ->merge($favTypeVals)->merge($favTypeVals)->merge($favTypeVals) // ×5 total
-            ->merge($compTypeVals)->merge($compTypeVals)               // ×2
-            ->merge($compTypeVals)->merge($compTypeVals)               // ×4 total
-            ->filter()->countBy()->sortDesc()->keys()->take(3)->toArray();
-
-        if ($filterSignal && !empty($filterSignal['property_type'])) {
-            array_unshift($preferredTypes, $filterSignal['property_type']);
-            $preferredTypes = array_unique($preferredTypes);
-        }
-
-        // ── 7. Build weighted listing type vote ───────────────────────────────
-        $favListVals  = $favoritedData->pluck('listing_type');
-        $compListVals = $comparedData->pluck('listing_type');
-        $viewListVals = $viewedData->pluck('listing_type');
-
-        $listingTypeVotes = collect()
-            ->merge($viewListVals)
-            ->merge($favListVals)->merge($favListVals)
-            ->merge($favListVals)->merge($favListVals)->merge($favListVals) // ×5
-            ->merge($compListVals)->merge($compListVals)
-            ->merge($compListVals)->merge($compListVals)                    // ×4
-            ->filter();
-
-        $preferredListingType = $listingTypeVotes->mode()[0] ?? null;
-
-        // Signal overrides
-        if ($filterSignal && !empty($filterSignal['listing_type']))
-            $preferredListingType = $filterSignal['listing_type'];
-        if ($searchSignal && !empty($searchSignal['active_filters']['listing_type']))
-            $preferredListingType = $searchSignal['active_filters']['listing_type'];
-
-        // ── 8. Build price range (behavior + compare + calculator blend) ──────
-        $priceSource  = $favoritedData->isNotEmpty() ? $favoritedData : $viewedData;
-        $behaviorAvg  = $priceSource->avg(fn($p) => $p->price['usd'] ?? 0) ?? 0;
-        $compareAvg   = $comparedData->avg(fn($p) => $p->price['usd'] ?? 0) ?? 0;
-
-        // Compare is ×4 weight so blend it in
-        if ($compareAvg > 0 && $behaviorAvg > 0)
-            $behaviorBlended = (($behaviorAvg * 1) + ($compareAvg * 4)) / 5;
-        elseif ($compareAvg > 0)
-            $behaviorBlended = $compareAvg;
-        else
-            $behaviorBlended = $behaviorAvg;
-
-        // Blend with calculator signal
-        if ($hasBudget && $behaviorBlended > 0) {
-            $calcMid    = ($calcSignal['budget_min_usd'] + $calcSignal['budget_max_usd']) / 2;
-            $blendedAvg = ($behaviorBlended * (1 - $budgetWeight)) + ($calcMid * $budgetWeight);
-        } elseif ($hasBudget) {
-            $blendedAvg = ($calcSignal['budget_min_usd'] + $calcSignal['budget_max_usd']) / 2;
-        } else {
-            $blendedAvg = $behaviorBlended;
-        }
-
-        $hardCeilingUsd       = null;
-        $hasExplicitFilter    = $filterSignal && !empty($filterSignal['max_price_usd']);
-        if ($hasExplicitFilter)
-            $hardCeilingUsd   = (float) $filterSignal['max_price_usd'];
-
-        $priceTolerance = $hasBudget
-            ? max(0.25, 0.45 - ($budgetWeight * 0.20))
-            : ($hasExplicitFilter ? 0.20 : 0.35);
-
-        // Bedrooms from filter signal
-        $preferredBedrooms = null;
-        if ($filterSignal && !empty($filterSignal['bedrooms']))
-            $preferredBedrooms = (int) $filterSignal['bedrooms'];
-
-        // ── 9. Build weighted city profile ────────────────────────────────────
-        $favCityVals  = $favoritedData->map(fn($p) => $p->address_details['city']['en'] ?? null);
-        $compCityVals = $comparedData->map(fn($p)  => $p->address_details['city']['en'] ?? null);
-        $viewCityVals = $viewedData->map(fn($p)    => $p->address_details['city']['en'] ?? null);
-
-        $preferredCities = collect()
-            ->merge($favCityVals)->merge($favCityVals)
-            ->merge($favCityVals)->merge($favCityVals)->merge($favCityVals) // favorites ×5
-            ->merge($compCityVals)->merge($compCityVals)
-            ->merge($compCityVals)->merge($compCityVals)                    // compared ×4
-            ->merge($viewCityVals)                                          // viewed ×1
-            ->filter()->countBy()->sortDesc()->keys()->take(3)->toArray();
-
-        if ($filterSignal && !empty($filterSignal['city'])) {
-            array_unshift($preferredCities, $filterSignal['city']);
-            $preferredCities = array_unique($preferredCities);
-        }
-
-        Log::info('🎯 REC: profile built', [
-            'user_id'              => $userId,
-            'preferred_types'      => $preferredTypes,
-            'preferred_listing'    => $preferredListingType,
-            'preferred_cities'     => $preferredCities,
-            'blended_avg_price'    => round($blendedAvg),
-            'price_tolerance_pct'  => round($priceTolerance * 100) . '%',
-            'hard_ceiling_usd'     => $hardCeilingUsd,
-            'preferred_bedrooms'   => $preferredBedrooms,
-            'budget_weight'        => round($budgetWeight, 2),
-            'all_interacted_count' => count($allInteractedIds),
-        ]);
-
-        // ── 10. Build recommendation query ────────────────────────────────────
-        $query = Property::query()
-            ->where('is_active', true)
-            ->where('published', true)
-            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->whereNotIn('id', $allInteractedIds);
-
-        if (!empty($preferredTypes)) {
-            $query->where(function ($q) use ($preferredTypes) {
-                foreach ($preferredTypes as $type) {
-                    $q->orWhereRaw(
-                        "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
-                        [strtolower($type)]
-                    );
-                }
-            });
-        }
-
-        if ($preferredListingType)
-            $query->where('listing_type', $preferredListingType);
-
-        if ($blendedAvg > 0) {
-            $priceMin = $blendedAvg * (1 - $priceTolerance);
-            $priceMax = $blendedAvg * (1 + $priceTolerance);
-            if ($hardCeilingUsd !== null) $priceMax = min($priceMax, $hardCeilingUsd);
-            $query->whereBetween(
-                DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"),
-                [$priceMin, $priceMax]
-            );
-        }
-
-        if ($preferredBedrooms !== null) {
-            $query->whereRaw(
-                "JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) = ?",
-                [$preferredBedrooms]
-            );
-        }
-
-        if (!empty($preferredCities)) {
-            $query->where(function ($q) use ($preferredCities) {
-                foreach ($preferredCities as $city) {
-                    $q->orWhereRaw(
-                        "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
-                        [strtolower($city)]
-                    );
-                }
-            });
-        }
-
-        // ── 11. Score with budget bonus ───────────────────────────────────────
-        $budgetBonusExpr = '0';
-        if ($hasBudget) {
-            $bMin  = (float) $calcSignal['budget_min_usd'];
-            $bMax  = (float) $calcSignal['budget_max_usd'];
-            $bonus = round(35 * $budgetWeight);
-            $budgetBonusExpr = "
-                (CASE
-                    WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))
-                         BETWEEN {$bMin} AND {$bMax}
-                    THEN {$bonus}
-                    ELSE 0
-                END)
-            ";
-        }
-
-        $results = $query->selectRaw("
-            *,
-            (
-                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
-                (LEAST(views, 100) * 0.15) +
-                (LEAST(favorites_count, 50) * 0.8) +
-                (rating * 5) +
-                (CASE
-                    WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
-                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
-                    ELSE 0
-                END) +
-                {$budgetBonusExpr}
-            ) as recommendation_score
-        ")
-            ->orderByDesc('recommendation_score')
-            ->limit($limit)
-            ->get();
-
-        Log::info('🎯 REC: primary query results', [
-            'user_id' => $userId,
-            'found'   => $results->count(),
-            'needed'  => $limit,
-        ]);
-
-        // ── 12. Fallback if not enough results ────────────────────────────────
-        if ($results->count() < $limit) {
-            $needed      = $limit - $results->count();
-            $existingIds = array_merge($allInteractedIds, $results->pluck('id')->toArray());
-
-            // Fallback 1: relax city constraint, keep type + listing
-            $fallback1 = Property::query()
-                ->where('is_active', true)->where('published', true)
+        try {
+            return Property::where('is_active', true)
+                ->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                ->whereNotIn('id', $existingIds)
-                ->when($preferredListingType, fn($q) => $q->where('listing_type', $preferredListingType))
-                ->when(!empty($preferredTypes), function ($q) use ($preferredTypes) {
-                    $q->where(function ($q2) use ($preferredTypes) {
-                        foreach ($preferredTypes as $type) {
-                            $q2->orWhereRaw(
-                                "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
-                                [strtolower($type)]
-                            );
-                        }
-                    });
-                })
-                ->selectRaw("*, (
-                    (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                    (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
-                    (LEAST(favorites_count, 50) * 0.8) +
-                    (rating * 5) +
-                    {$budgetBonusExpr}
-                ) as recommendation_score")
-                ->orderByDesc('recommendation_score')
-                ->limit($needed)
+                ->orderByDesc('is_boosted')
+                ->orderByDesc('created_at')
+                ->limit($limit)
                 ->get();
-
-            $results     = $results->merge($fallback1);
-            $existingIds = array_merge($existingIds, $fallback1->pluck('id')->toArray());
-
-            // Fallback 2: fully general if still short
-            if ($results->count() < $limit) {
-                $needed2  = $limit - $results->count();
-                $fallback2 = $this->getGeneralRecommendations($needed2 + 5)
-                    ->filter(fn($p) => !in_array($p->id, $existingIds))
-                    ->take($needed2);
-                $results = $results->merge($fallback2);
-            }
+        } catch (\Throwable $e) {
+            return collect();
         }
-
-        Log::info('🎯 REC: final result', [
-            'user_id'       => $userId,
-            'total_returned' => $results->count(),
-        ]);
-
-        return $results->values();
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  FILTER-MATCHED RECOMMENDATIONS
-    // ══════════════════════════════════════════════════════════════════════════
-    private function getFilterMatchedRecommendations(
-        array $filterSignal,
-        int   $limit,
-        array $excludeIds = []
-    ): Collection {
-        $query = Property::query()
-            ->where('is_active', true)->where('published', true)
-            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->whereNotIn('id', $excludeIds);
-
-        if (!empty($filterSignal['listing_type']))
-            $query->where('listing_type', $filterSignal['listing_type']);
-        if (!empty($filterSignal['property_type']))
-            $query->whereRaw(
-                "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
-                [strtolower($filterSignal['property_type'])]
-            );
-        if (!empty($filterSignal['city']))
-            $query->whereRaw(
-                "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
-                [strtolower($filterSignal['city'])]
-            );
-        if (!empty($filterSignal['max_price_usd']))
-            $query->whereRaw(
-                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) <= ?",
-                [(float) $filterSignal['max_price_usd']]
-            );
-        if (!empty($filterSignal['min_price_usd']))
-            $query->whereRaw(
-                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) >= ?",
-                [(float) $filterSignal['min_price_usd']]
-            );
-        if (!empty($filterSignal['bedrooms']))
-            $query->whereRaw(
-                "JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) = ?",
-                [(int) $filterSignal['bedrooms']]
-            );
-        if (!empty($filterSignal['furnished']))
-            $query->where('furnished', true);
-
-        return $query->selectRaw('*, (
-            (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-            (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
-            (LEAST(views, 100) * 0.15) +
-            (LEAST(favorites_count, 50) * 0.8) +
-            (rating * 5) +
-            (CASE WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
-                  WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)
-        ) as recommendation_score')
-            ->orderByDesc('recommendation_score')
-            ->limit($limit)
-            ->get();
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  BUDGET-MATCHED RECOMMENDATIONS
-    // ══════════════════════════════════════════════════════════════════════════
-    private function getBudgetMatchedRecommendations(
-        array $calcSignal,
-        int   $limit,
-        array $excludeIds = []
-    ): Collection {
-        $min = (float) ($calcSignal['budget_min_usd'] ?? 0);
-        $max = (float) ($calcSignal['budget_max_usd'] ?? 0);
-        if ($min <= 0 || $max <= 0) return $this->getGeneralRecommendations($limit);
-
-        $results = Property::query()
-            ->where('is_active', true)->where('published', true)
-            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->whereNotIn('id', $excludeIds)
-            ->whereBetween(
-                DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"),
-                [$min, $max]
-            )
-            ->selectRaw('*, (
-                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
-                (LEAST(views, 100) * 0.15) +
-                (LEAST(favorites_count, 50) * 0.8) +
-                (rating * 5) +
-                (CASE WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
-                      WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)
-            ) as recommendation_score')
-            ->orderByDesc('recommendation_score')
-            ->limit($limit)->get();
-
-        if ($results->count() < $limit) {
-            $needed  = $limit - $results->count();
-            $general = $this->getGeneralRecommendations($needed + 5)
-                ->filter(fn($p) => !in_array($p->id, array_merge($excludeIds, $results->pluck('id')->toArray())))
-                ->take($needed);
-            $results = $results->merge($general);
-        }
-        return $results;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    //  GENERAL FALLBACK
-    // ══════════════════════════════════════════════════════════════════════════
-    private function getGeneralRecommendations(int $limit): Collection
+    private function emptyProfile(): array
     {
-        return Property::query()
-            ->where('is_active', true)->where('published', true)
-            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->selectRaw('*, (
-                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
-                (LEAST(views, 100) * 0.15) +
-                (LEAST(favorites_count, 50) * 0.5) +
-                (rating * 5) +
-                (CASE WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 20
-                      WHEN DATEDIFF(NOW(), created_at) <= 14 THEN 15
-                      WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)
-            ) as recommendation_score')
-            ->orderByDesc('recommendation_score')
-            ->limit($limit)->get();
+        return [
+            'has_history'   => false,
+            'intent_score'  => 0,
+            'cities'        => [],
+            'types'         => [],
+            'listing_type'  => null,
+            'price'         => null,
+            'bedrooms'      => null,
+            'seen_ids'      => [],
+            'budget'        => null,
+            'signal_counts' => [],
+        ];
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  IMPRESSIONS TRACKER
+    //  IMPRESSIONS TRACKER  (UNCHANGED)
     // ══════════════════════════════════════════════════════════════════════════
     public function trackImpressions(string $userId, $properties, string $sourceEndpoint, array $extra = []): void
     {
@@ -1150,7 +793,7 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  CACHE BUSTING
+    //  CACHE BUSTING  (UNCHANGED + added profile & v2 keys)
     // ══════════════════════════════════════════════════════════════════════════
     public function bustPopularityCache(?string $listingType = null, ?string $city = null): void
     {
@@ -1165,11 +808,36 @@ class PropertyInteractionService
 
     public function bustFeaturedCache(?string $userId = null): void
     {
-        if ($userId) Cache::forget("featured_contextual_{$userId}");
+        if ($userId) {
+            // ── v1 keys (preserved) ──
+            Cache::forget("featured_contextual_{$userId}");
+            // ── v2 keys & taste profile ──
+            $this->bustPersonalizedCacheForUser($userId);
+            $this->profiles->invalidate($userId);
+        }
+
+        // Guest featured caches
+        foreach ([5, 10, 20] as $limit) {
+            Cache::forget("featured_guest_{$limit}");
+            if ($userId) Cache::forget("featured_user_{$userId}_{$limit}");
+        }
+
+        // Legacy featured strategy caches (kept for safety)
         foreach (['balanced', 'premium', 'engagement', 'recent', 'advanced'] as $strategy) {
             foreach ([5, 10, 20, 50] as $limit) {
                 Cache::forget("featured_properties_{$strategy}_{$limit}");
             }
+        }
+    }
+
+    /**
+     * Invalidate all known personalized_recs_v2 cache keys for a user.
+     * Called from any signal change that should affect the next /recommended.
+     */
+    private function bustPersonalizedCacheForUser(string $userId): void
+    {
+        foreach ([5, 10, 14, 20, 30, 40, 50] as $limit) {
+            Cache::forget("personalized_recs_v2_{$userId}_{$limit}");
         }
     }
 }
