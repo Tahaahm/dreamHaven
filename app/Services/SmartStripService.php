@@ -26,7 +26,7 @@ use Illuminate\Support\Facades\Log;
  *  • All JSON-column bugs from v1 fixed (see notes below).
  *
  * BUGS FIXED FROM v1 (all silently failing via the outer try/catch):
- *  • `is_published` column does not exist on properties → use `published`.
+ *  • `published` column does not exist on properties → use `published`.
  *  • `where('property_type', …)` — property type lives in JSON: type->category.
  *  • `where('bedrooms', …)`     — lives in JSON: rooms->bedroom->count.
  *  • `where('price', '>=', …)`  — price is JSON: price->usd.

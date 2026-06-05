@@ -4341,7 +4341,7 @@ class PropertyController extends Controller
 
                 // ── Base query: active + published ────────────────────────
                 $base = Property::where('is_active', true)
-                    ->where('is_published', true);
+                    ->where('published', true);
 
                 // ── Apply city filter if provided ─────────────────────────
                 if ($city !== '') {
