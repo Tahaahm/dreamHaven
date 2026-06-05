@@ -315,7 +315,7 @@ class SmartStripService
 
         $query = Property::query()
             ->where('is_active', true)
-            ->where('published', true) // FIXED: was is_published (column doesn't exist)
+            ->where('is_published', true) // FIXED: was is_published (column doesn't exist)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->where('listing_type', $listingType)
             ->whereRaw(
