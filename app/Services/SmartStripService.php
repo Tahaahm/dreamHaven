@@ -90,6 +90,22 @@ class SmartStripService
                     'calc_budget_max'       => $signals['calcSignal']['budget_max_usd'] ?? null,
                 ]);
 
+                Log::debug('SmartStrip v2: raw signals dump', [
+                    'user_id'        => $userId,
+                    'filterSignal'   => $signals['filterSignal'],
+                    'searchSignal'   => $signals['searchSignal'],
+                    'calcSignal'     => $signals['calcSignal'],
+                    'recentlyViewed' => $signals['recentlyViewedIds'],
+                    'favorites'      => $signals['favoriteIds'],
+                    'compare'        => $signals['compareIds'],
+                    'daysSinceVisit' => $signals['daysSinceVisit'],
+                ]);
+
+                Log::debug('SmartStrip v2: raw profile dump', [
+                    'user_id' => $userId,
+                    'profile' => $profile,
+                ]);
+
                 // ── Priority order ────────────────────────────────────────────
                 // 1. budget_match   — calculator signal = strongest buy intent
                 // 2. resume_search  — only real filters, NOT bare text searches
@@ -155,11 +171,13 @@ class SmartStripService
 
                 return $strip;
             } catch (\Throwable $e) {
-                Log::warning('SmartStrip v2: failed (non-fatal)', [
-                    'user_id' => $userId,
-                    'error'   => $e->getMessage(),
-                    'file'    => $e->getFile(),
-                    'line'    => $e->getLine(),
+                Log::error('SmartStrip v2: EXCEPTION', [  // changed warning → error so it's harder to miss
+                    'user_id'   => $userId,
+                    'message'   => $e->getMessage(),
+                    'exception' => get_class($e),
+                    'file'      => $e->getFile(),
+                    'line'      => $e->getLine(),
+                    'trace'     => $e->getTraceAsString(), // full trace
                 ]);
                 return null;
             }
@@ -315,7 +333,7 @@ class SmartStripService
 
         $query = Property::query()
             ->where('is_active', true)
-            ->where('is_published', true) // FIXED: was is_published (column doesn't exist)
+            ->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->where('listing_type', $listingType)
             ->whereRaw(
