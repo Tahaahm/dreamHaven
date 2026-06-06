@@ -654,204 +654,65 @@ class PropertyInteractionService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    //  PERSONALIZED RECOMMENDATIONS — all 6 signals, both bugs fixed
-    //
-    //  SIGNAL WEIGHTS:
-    //  ┌──────────────────────┬──────┬──────────────────────────────────────┐
-    //  │ Signal               │ Wt   │ Contributes                          │
-    //  ├──────────────────────┼──────┼──────────────────────────────────────┤
-    //  │ favorite             │  5×  │ type, city, price, listing_type      │
-    //  │ compare              │  4×  │ type, city, price (near-decision)    │
-    //  │ filter_applied       │  3×  │ overrides: bedrooms, price, type     │
-    //  │ search_query         │  2×  │ listing_type hint                    │
-    //  │ view                 │  1×  │ type, city, price                    │
-    //  │ calculator_search    │  —   │ budget blend (0.0–1.0 weight)        │
-    //  └──────────────────────┴──────┴──────────────────────────────────────┘
-    //
-    //  BUG FIXES vs previous version:
-    //  - replicate() → manual repeated merge() calls (Collection has no replicate)
-    //  - $properties->load('owner') on merged() → re-fetch via Eloquent whereIn
+    //  PERSONALIZED RECOMMENDATIONS (UserTasteProfile-backed)
+    //  All inference now lives in App\Services\Intelligence\UserTasteProfile.
+    //  This method only reads from the profile and runs the SQL.
     // ══════════════════════════════════════════════════════════════════════════
     public function getPersonalizedRecommendations(string $userId, int $limit = 20): Collection
     {
         $user = User::find($userId);
         if (!$user) return $this->getGeneralRecommendations($limit);
 
-        // ── 1. Load all 6 signals ─────────────────────────────────────────────
-        $calcSignal   = $this->getCalculatorSignal($userId);
-        $filterSignal = $this->getFilterSignal($userId);
-        $searchSignal = $this->getLatestSearchSignal($userId);
-        $comparedData = $this->getComparedProperties($userId);
+        // ── 1. Single source of truth ─────────────────────────────────────────
+        $profile = app(\App\Services\Intelligence\UserTasteProfile::class)->build($userId);
 
-        Log::info('🎯 REC: signals loaded', [
-            'user_id'       => $userId,
-            'has_calc'      => $calcSignal   !== null,
-            'has_filter'    => $filterSignal !== null,
-            'has_search'    => $searchSignal !== null,
-            'compared_count' => $comparedData->count(),
+        Log::info('🎯 REC: profile loaded', [
+            'user_id'        => $userId,
+            'has_history'    => $profile['has_history'],
+            'is_cold_start'  => $profile['is_cold_start'],
+            'intent_score'   => $profile['intent_score'],
+            'cities'         => $profile['cities'],
+            'types'          => $profile['types'],
+            'listing_type'   => $profile['listing_type'],
+            'price'          => $profile['price'],
+            'bedrooms'       => $profile['bedrooms'],
+            'has_centroid'   => $profile['heat_centroid'] !== null,
+            'seen_count'     => count($profile['seen_ids']),
+            'signal_counts'  => $profile['signal_counts'],
         ]);
 
-        // ── 2. Load interaction history (views + favorites, 60 days) ──────────
-        $virtualIds = ['calculator_signal', 'filter_signal', 'search_signal', 'search_signal_latest'];
-
-        $interactions = DB::table('user_property_interactions')
-            ->where('user_id', $userId)
-            ->where('created_at', '>=', now()->subDays(60))
-            ->whereIn('interaction_type', ['view', 'favorite'])
-            ->whereNotIn('property_id', $virtualIds)
-            ->select('property_id', 'interaction_type')
-            ->get();
-
-        $viewedIds    = $interactions->where('interaction_type', 'view')
-            ->pluck('property_id')->toArray();
-        $favoritedIds = $interactions->where('interaction_type', 'favorite')
-            ->pluck('property_id')->toArray();
-        $comparedIds  = $comparedData->pluck('id')->toArray();
-
-        $allInteractedIds = array_unique(array_merge($viewedIds, $favoritedIds, $comparedIds));
-        $hasBrowseHistory = !empty($allInteractedIds);
-
-        // ── 3. Budget signal ──────────────────────────────────────────────────
-        $hasBudget      = $calcSignal !== null && ($calcSignal['budget_min_usd'] ?? 0) > 0;
-        $signalStrength = (int) ($calcSignal['signal_strength'] ?? 0);
-        $budgetWeight   = $hasBudget ? ($signalStrength / 100) : 0.0;
-
-        // ── 4. No history → signal-only recommendations ───────────────────────
-        if (!$hasBrowseHistory && $comparedData->isEmpty()) {
-            if ($filterSignal) {
-                Log::info('🎯 REC: no history, using filter signal');
-                return $this->getFilterMatchedRecommendations($filterSignal, $limit, []);
-            }
-            if ($hasBudget && $signalStrength >= 40) {
-                Log::info('🎯 REC: no history, using budget signal');
-                return $this->getBudgetMatchedRecommendations($calcSignal, $limit, []);
-            }
-            Log::info('🎯 REC: no history, using general fallback');
+        // ── 2. No history at all → general fallback ───────────────────────────
+        if (!$profile['has_history'] && empty($profile['cities'])) {
             return $this->getGeneralRecommendations($limit);
         }
 
-        // ── 5. Load property data for history ────────────────────────────────
-        $viewedData    = Property::whereIn('id', $viewedIds)->get();
-        $favoritedData = Property::whereIn('id', $favoritedIds)->get();
-
-        // ── 6. Build weighted type profile ───────────────────────────────────
-        // favorites×5, compared×4, viewed×1 — NO replicate(), manual merge
-        $favTypeVals  = $favoritedData->pluck('type')->map(fn($t) => $t['category'] ?? null);
-        $compTypeVals = $comparedData->pluck('type')->map(fn($t)  => $t['category'] ?? null);
-        $viewTypeVals = $viewedData->pluck('type')->map(fn($t)    => $t['category'] ?? null);
-
-        $preferredTypes = collect()
-            ->merge($viewTypeVals)                                      // ×1
-            ->merge($favTypeVals)->merge($favTypeVals)                  // ×2
-            ->merge($favTypeVals)->merge($favTypeVals)->merge($favTypeVals) // ×5 total
-            ->merge($compTypeVals)->merge($compTypeVals)               // ×2
-            ->merge($compTypeVals)->merge($compTypeVals)               // ×4 total
-            ->filter()->countBy()->sortDesc()->keys()->take(3)->toArray();
-
-        if ($filterSignal && !empty($filterSignal['property_type'])) {
-            array_unshift($preferredTypes, $filterSignal['property_type']);
-            $preferredTypes = array_unique($preferredTypes);
+        // ── 3. Cold start with seed city → filter-matched path ────────────────
+        if ($profile['is_cold_start']) {
+            return $this->getFilterMatchedRecommendations([
+                'city'         => array_key_first($profile['cities']),
+                'listing_type' => $profile['listing_type'],
+            ], $limit, []);
         }
 
-        // ── 7. Build weighted listing type vote ───────────────────────────────
-        $favListVals  = $favoritedData->pluck('listing_type');
-        $compListVals = $comparedData->pluck('listing_type');
-        $viewListVals = $viewedData->pluck('listing_type');
+        // ── 4. Build query from profile ───────────────────────────────────────
+        $types       = array_keys($profile['types']);
+        $cities      = array_keys($profile['cities']);
+        $listingType = $profile['listing_type'];
+        $priceMin    = $profile['price']['min'] ?? null;
+        $priceMax    = $profile['price']['max'] ?? null;
+        $bedrooms    = $profile['bedrooms'];
+        $heat        = $profile['heat_centroid'];
+        $seenIds     = $profile['seen_ids'];
 
-        $listingTypeVotes = collect()
-            ->merge($viewListVals)
-            ->merge($favListVals)->merge($favListVals)
-            ->merge($favListVals)->merge($favListVals)->merge($favListVals) // ×5
-            ->merge($compListVals)->merge($compListVals)
-            ->merge($compListVals)->merge($compListVals)                    // ×4
-            ->filter();
-
-        $preferredListingType = $listingTypeVotes->mode()[0] ?? null;
-
-        // Signal overrides
-        if ($filterSignal && !empty($filterSignal['listing_type']))
-            $preferredListingType = $filterSignal['listing_type'];
-        if ($searchSignal && !empty($searchSignal['active_filters']['listing_type']))
-            $preferredListingType = $searchSignal['active_filters']['listing_type'];
-
-        // ── 8. Build price range (behavior + compare + calculator blend) ──────
-        $priceSource  = $favoritedData->isNotEmpty() ? $favoritedData : $viewedData;
-        $behaviorAvg  = $priceSource->avg(fn($p) => $p->price['usd'] ?? 0) ?? 0;
-        $compareAvg   = $comparedData->avg(fn($p) => $p->price['usd'] ?? 0) ?? 0;
-
-        // Compare is ×4 weight so blend it in
-        if ($compareAvg > 0 && $behaviorAvg > 0)
-            $behaviorBlended = (($behaviorAvg * 1) + ($compareAvg * 4)) / 5;
-        elseif ($compareAvg > 0)
-            $behaviorBlended = $compareAvg;
-        else
-            $behaviorBlended = $behaviorAvg;
-
-        // Blend with calculator signal
-        if ($hasBudget && $behaviorBlended > 0) {
-            $calcMid    = ($calcSignal['budget_min_usd'] + $calcSignal['budget_max_usd']) / 2;
-            $blendedAvg = ($behaviorBlended * (1 - $budgetWeight)) + ($calcMid * $budgetWeight);
-        } elseif ($hasBudget) {
-            $blendedAvg = ($calcSignal['budget_min_usd'] + $calcSignal['budget_max_usd']) / 2;
-        } else {
-            $blendedAvg = $behaviorBlended;
-        }
-
-        $hardCeilingUsd       = null;
-        $hasExplicitFilter    = $filterSignal && !empty($filterSignal['max_price_usd']);
-        if ($hasExplicitFilter)
-            $hardCeilingUsd   = (float) $filterSignal['max_price_usd'];
-
-        $priceTolerance = $hasBudget
-            ? max(0.25, 0.45 - ($budgetWeight * 0.20))
-            : ($hasExplicitFilter ? 0.20 : 0.35);
-
-        // Bedrooms from filter signal
-        $preferredBedrooms = null;
-        if ($filterSignal && !empty($filterSignal['bedrooms']))
-            $preferredBedrooms = (int) $filterSignal['bedrooms'];
-
-        // ── 9. Build weighted city profile ────────────────────────────────────
-        $favCityVals  = $favoritedData->map(fn($p) => $p->address_details['city']['en'] ?? null);
-        $compCityVals = $comparedData->map(fn($p)  => $p->address_details['city']['en'] ?? null);
-        $viewCityVals = $viewedData->map(fn($p)    => $p->address_details['city']['en'] ?? null);
-
-        $preferredCities = collect()
-            ->merge($favCityVals)->merge($favCityVals)
-            ->merge($favCityVals)->merge($favCityVals)->merge($favCityVals) // favorites ×5
-            ->merge($compCityVals)->merge($compCityVals)
-            ->merge($compCityVals)->merge($compCityVals)                    // compared ×4
-            ->merge($viewCityVals)                                          // viewed ×1
-            ->filter()->countBy()->sortDesc()->keys()->take(3)->toArray();
-
-        if ($filterSignal && !empty($filterSignal['city'])) {
-            array_unshift($preferredCities, $filterSignal['city']);
-            $preferredCities = array_unique($preferredCities);
-        }
-
-        Log::info('🎯 REC: profile built', [
-            'user_id'              => $userId,
-            'preferred_types'      => $preferredTypes,
-            'preferred_listing'    => $preferredListingType,
-            'preferred_cities'     => $preferredCities,
-            'blended_avg_price'    => round($blendedAvg),
-            'price_tolerance_pct'  => round($priceTolerance * 100) . '%',
-            'hard_ceiling_usd'     => $hardCeilingUsd,
-            'preferred_bedrooms'   => $preferredBedrooms,
-            'budget_weight'        => round($budgetWeight, 2),
-            'all_interacted_count' => count($allInteractedIds),
-        ]);
-
-        // ── 10. Build recommendation query ────────────────────────────────────
         $query = Property::query()
             ->where('is_active', true)
             ->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-            ->whereNotIn('id', $allInteractedIds);
+            ->whereNotIn('id', $seenIds);
 
-        if (!empty($preferredTypes)) {
-            $query->where(function ($q) use ($preferredTypes) {
-                foreach ($preferredTypes as $type) {
+        if (!empty($types)) {
+            $query->where(function ($q) use ($types) {
+                foreach ($types as $type) {
                     $q->orWhereRaw(
                         "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
                         [strtolower($type)]
@@ -859,30 +720,24 @@ class PropertyInteractionService
                 }
             });
         }
-
-        if ($preferredListingType)
-            $query->where('listing_type', $preferredListingType);
-
-        if ($blendedAvg > 0) {
-            $priceMin = $blendedAvg * (1 - $priceTolerance);
-            $priceMax = $blendedAvg * (1 + $priceTolerance);
-            if ($hardCeilingUsd !== null) $priceMax = min($priceMax, $hardCeilingUsd);
+        if ($listingType) {
+            $query->where('listing_type', $listingType);
+        }
+        if ($priceMin && $priceMax) {
             $query->whereBetween(
                 DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"),
                 [$priceMin, $priceMax]
             );
         }
-
-        if ($preferredBedrooms !== null) {
+        if ($bedrooms !== null) {
             $query->whereRaw(
                 "JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) = ?",
-                [$preferredBedrooms]
+                [$bedrooms]
             );
         }
-
-        if (!empty($preferredCities)) {
-            $query->where(function ($q) use ($preferredCities) {
-                foreach ($preferredCities as $city) {
+        if (!empty($cities)) {
+            $query->where(function ($q) use ($cities) {
+                foreach ($cities as $city) {
                     $q->orWhereRaw(
                         "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
                         [strtolower($city)]
@@ -891,62 +746,55 @@ class PropertyInteractionService
             });
         }
 
-        // ── 11. Score with budget bonus ───────────────────────────────────────
-        $budgetBonusExpr = '0';
-        if ($hasBudget) {
-            $bMin  = (float) $calcSignal['budget_min_usd'];
-            $bMax  = (float) $calcSignal['budget_max_usd'];
-            $bonus = round(35 * $budgetWeight);
-            $budgetBonusExpr = "
-                (CASE
-                    WHEN CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))
-                         BETWEEN {$bMin} AND {$bMax}
-                    THEN {$bonus}
-                    ELSE 0
-                END)
-            ";
+        // Heat-centroid bonus: +25 for properties inside the user's interaction radius
+        $heatBonus = '0';
+        if ($heat) {
+            $cLat = $heat['lat'];
+            $cLng = $heat['lng'];
+            $r = $heat['radius_km'];
+            $heatBonus = "(CASE WHEN (6371 * acos(LEAST(1,
+            cos(radians({$cLat})) *
+            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6)))) *
+            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lng')) AS DECIMAL(10,6))) - radians({$cLng})) +
+            sin(radians({$cLat})) *
+            sin(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6))))
+        )) <= {$r} THEN 25 ELSE 0 END)";
         }
 
-        $results = $query->selectRaw("
-            *,
-            (
-                (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
-                (LEAST(views, 100) * 0.15) +
-                (LEAST(favorites_count, 50) * 0.8) +
-                (rating * 5) +
-                (CASE
-                    WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
-                    WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10
-                    ELSE 0
-                END) +
-                {$budgetBonusExpr}
-            ) as recommendation_score
-        ")
+        $results = $query->selectRaw("*, (
+        (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
+        (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
+        (LEAST(views, 100) * 0.15) +
+        (LEAST(favorites_count, 50) * 0.8) +
+        (rating * 5) +
+        (CASE WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
+              WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END) +
+        {$heatBonus}
+    ) as recommendation_score")
             ->orderByDesc('recommendation_score')
-            ->limit($limit)
+            ->limit($limit * 2)
             ->get();
 
-        Log::info('🎯 REC: primary query results', [
+        Log::info('🎯 REC: query results', [
             'user_id' => $userId,
             'found'   => $results->count(),
             'needed'  => $limit,
         ]);
 
-        // ── 12. Fallback if not enough results ────────────────────────────────
+        // ── 5. Fallback to relaxed query, then to general, if short ───────────
         if ($results->count() < $limit) {
             $needed      = $limit - $results->count();
-            $existingIds = array_merge($allInteractedIds, $results->pluck('id')->toArray());
+            $existingIds = array_merge($seenIds, $results->pluck('id')->toArray());
 
-            // Fallback 1: relax city constraint, keep type + listing
-            $fallback1 = Property::query()
+            // Relax: keep types + listing_type, drop city + price
+            $relaxed = Property::query()
                 ->where('is_active', true)->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
                 ->whereNotIn('id', $existingIds)
-                ->when($preferredListingType, fn($q) => $q->where('listing_type', $preferredListingType))
-                ->when(!empty($preferredTypes), function ($q) use ($preferredTypes) {
-                    $q->where(function ($q2) use ($preferredTypes) {
-                        foreach ($preferredTypes as $type) {
+                ->when($listingType, fn($q) => $q->where('listing_type', $listingType))
+                ->when(!empty($types), function ($q) use ($types) {
+                    $q->where(function ($q2) use ($types) {
+                        foreach ($types as $type) {
                             $q2->orWhereRaw(
                                 "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
                                 [strtolower($type)]
@@ -954,36 +802,28 @@ class PropertyInteractionService
                         }
                     });
                 })
-                ->selectRaw("*, (
-                    (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
-                    (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
-                    (LEAST(favorites_count, 50) * 0.8) +
-                    (rating * 5) +
-                    {$budgetBonusExpr}
-                ) as recommendation_score")
-                ->orderByDesc('recommendation_score')
+                ->orderByDesc('created_at')
                 ->limit($needed)
                 ->get();
 
-            $results     = $results->merge($fallback1);
-            $existingIds = array_merge($existingIds, $fallback1->pluck('id')->toArray());
+            $results     = $results->merge($relaxed);
+            $existingIds = array_merge($existingIds, $relaxed->pluck('id')->toArray());
 
-            // Fallback 2: fully general if still short
             if ($results->count() < $limit) {
                 $needed2  = $limit - $results->count();
-                $fallback2 = $this->getGeneralRecommendations($needed2 + 5)
+                $general  = $this->getGeneralRecommendations($needed2 + 5)
                     ->filter(fn($p) => !in_array($p->id, $existingIds))
                     ->take($needed2);
-                $results = $results->merge($fallback2);
+                $results  = $results->merge($general);
             }
         }
 
         Log::info('🎯 REC: final result', [
-            'user_id'       => $userId,
+            'user_id'        => $userId,
             'total_returned' => $results->count(),
         ]);
 
-        return $results->values();
+        return $results->values()->take($limit);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
