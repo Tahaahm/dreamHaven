@@ -113,6 +113,8 @@ class UserTasteProfile
         $filterSignal = $this->virtualSignal($rows, 'filter_applied',    'filter_signal');
         $calcSignal   = $this->virtualSignal($rows, 'calculator_search', 'calculator_signal');
 
+        $filterSignal = $this->sanitizeFilterSignal($filterSignal);
+
         // Split real property interactions from virtual signal rows.
         $realRows = $rows->whereNotIn('property_id', self::VIRTUAL_IDS)
             ->whereIn('interaction_type', array_keys(self::SIGNAL_WEIGHTS));
@@ -267,7 +269,13 @@ class UserTasteProfile
             $max = (float) ($filter['max_price_usd'] ?? 0);
             if ($max > 0) {
                 $target = $min > 0 ? ($min + $max) / 2 : $max * 0.85;
-                return ['target' => $target, 'min' => $min ?: $max * 0.6, 'max' => $max, 'source' => 'filter'];
+                $ageDays = $filter['_age_days'] ?? 0;
+                return [
+                    'target' => $target,
+                    'min'    => $min ?: $max * 0.6,
+                    'max'    => $max,
+                    'source' => $ageDays > 3 ? 'filter_aging' : 'filter',
+                ];
             }
         }
 
@@ -392,10 +400,14 @@ class UserTasteProfile
         if (!$when instanceof \DateTimeInterface) {
             $when = \Illuminate\Support\Carbon::parse($when);
         }
-        $ageDays = max(0, now()->diffInDays($when));
+        $ageDays = abs(now()->diffInDays($when));
         return pow(0.5, $ageDays / self::HALF_LIFE_DAYS);
     }
 
+    /**
+     * Pull a virtual signal row. Returns metadata plus age in days so callers
+     * can demote stale signals.
+     */
     private function virtualSignal($rows, string $type, string $propId): ?array
     {
         $row = $rows->where('interaction_type', $type)
@@ -403,7 +415,11 @@ class UserTasteProfile
             ->first();
         if (!$row || !$row->metadata) return null;
         $meta = is_array($row->metadata) ? $row->metadata : json_decode($row->metadata, true);
-        return $meta ?: null;
+        if (!$meta) return null;
+
+        // Inject signal age so derivePriceBand / sanitizeFilterSignal can use it
+        $meta['_age_days'] = abs(now()->diffInDays($row->created_at));
+        return $meta;
     }
 
     private function normalise(array $map, int $topN): array
@@ -440,5 +456,48 @@ class UserTasteProfile
             'signal_counts'  => [],
             'strip_feedback' => [],
         ];
+    }
+    /**
+     * Strip junk values from the filter signal before it influences taste.
+     * Flutter sends "All" / "all" / 0 / "" as defaults when the user hasn't
+     * actually chosen anything — these are NOT intent and must not override
+     * behavioural inference.
+     *
+     * Also expires filter signals older than 7 days from "hard" to "soft":
+     * we keep them around for the price band hint but drop max/min hard
+     * ceilings so stale numbers don't strangle current results.
+     */
+    private function sanitizeFilterSignal(?array $signal): ?array
+    {
+        if (!$signal) return null;
+
+        $junk = ['all', '', '0', 'any', 'none', null];
+        foreach (['listing_type', 'property_type', 'city', 'bedrooms'] as $k) {
+            if (!isset($signal[$k])) continue;
+            if (in_array(strtolower((string) $signal[$k]), $junk, true)) {
+                unset($signal[$k]);
+            }
+        }
+
+        // Stale-signal demotion: drop hard price ceilings older than 7 days.
+        // We can't see the row timestamp here, but we can detect "0" placeholders.
+        foreach (['min_price_usd', 'max_price_usd'] as $k) {
+            if (isset($signal[$k]) && (float) $signal[$k] <= 0) {
+                unset($signal[$k]);
+            }
+        }
+        if (($signal['_age_days'] ?? 0) > 7) {
+            unset($signal['min_price_usd'], $signal['max_price_usd']);
+        }
+        // If nothing useful left, return null so callers treat it as "no signal"
+        $meaningfulKeys = ['listing_type', 'property_type', 'city', 'bedrooms', 'min_price_usd', 'max_price_usd'];
+        $hasAnything = false;
+        foreach ($meaningfulKeys as $k) {
+            if (!empty($signal[$k])) {
+                $hasAnything = true;
+                break;
+            }
+        }
+        return $hasAnything ? $signal : null;
     }
 }
