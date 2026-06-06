@@ -753,23 +753,26 @@ class PropertyInteractionService
         (CASE WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
               WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)";
 
-        $scoreBindings = [];
-
         if ($heat) {
-            $scoreSelectSql .= " + (CASE WHEN (6371 * acos(LEAST(1,
-            cos(radians(?)) *
-            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6)))) *
-            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lng')) AS DECIMAL(10,6))) - radians(?)) +
-            sin(radians(?)) *
-            sin(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6))))
-        )) <= ? THEN 25 ELSE 0 END)";
-            $scoreBindings = [$heat['lat'], $heat['lng'], $heat['lat'], $heat['radius_km']];
+            // Floats are sanitized to ensure no SQL injection (they're computed from
+            // our own DB values, but we cast explicitly to be defensive).
+            $cLat = (float) $heat['lat'];
+            $cLng = (float) $heat['lng'];
+            $r    = (float) $heat['radius_km'];
+
+            $scoreSelectSql .= " + (CASE WHEN (6371 * acos(LEAST(1, "
+                . "cos(radians({$cLat})) * "
+                . "cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6)))) * "
+                . "cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lng')) AS DECIMAL(10,6))) - radians({$cLng})) + "
+                . "sin(radians({$cLat})) * "
+                . "sin(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6)))) "
+                . "))) <= {$r} THEN 25 ELSE 0 END)";
         }
 
         $scoreSelectSql .= ") as recommendation_score";
 
         $results = $query
-            ->selectRaw($scoreSelectSql, $scoreBindings)
+            ->selectRaw($scoreSelectSql)
             ->orderByDesc('recommendation_score')
             ->limit($limit * 2)
             ->get();
