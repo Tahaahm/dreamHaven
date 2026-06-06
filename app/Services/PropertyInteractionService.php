@@ -663,7 +663,6 @@ class PropertyInteractionService
         $user = User::find($userId);
         if (!$user) return $this->getGeneralRecommendations($limit);
 
-        // ── 1. Single source of truth ─────────────────────────────────────────
         $profile = app(\App\Services\Intelligence\UserTasteProfile::class)->build($userId);
 
         Log::info('🎯 REC: profile loaded', [
@@ -681,12 +680,10 @@ class PropertyInteractionService
             'signal_counts'  => $profile['signal_counts'],
         ]);
 
-        // ── 2. No history at all → general fallback ───────────────────────────
         if (!$profile['has_history'] && empty($profile['cities'])) {
             return $this->getGeneralRecommendations($limit);
         }
 
-        // ── 3. Cold start with seed city → filter-matched path ────────────────
         if ($profile['is_cold_start']) {
             return $this->getFilterMatchedRecommendations([
                 'city'         => array_key_first($profile['cities']),
@@ -694,7 +691,6 @@ class PropertyInteractionService
             ], $limit, []);
         }
 
-        // ── 4. Build query from profile ───────────────────────────────────────
         $types       = array_keys($profile['types']);
         $cities      = array_keys($profile['cities']);
         $listingType = $profile['listing_type'];
@@ -710,6 +706,7 @@ class PropertyInteractionService
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->whereNotIn('id', $seenIds);
 
+        // Types — FIXED: use bindings, not string interpolation
         if (!empty($types)) {
             $query->where(function ($q) use ($types) {
                 foreach ($types as $type) {
@@ -724,14 +721,14 @@ class PropertyInteractionService
             $query->where('listing_type', $listingType);
         }
         if ($priceMin && $priceMax) {
-            $query->whereBetween(
-                DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"),
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) BETWEEN ? AND ?",
                 [$priceMin, $priceMax]
             );
         }
         if ($bedrooms !== null) {
             $query->whereRaw(
-                "JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) = ?",
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) AS UNSIGNED) = ?",
                 [$bedrooms]
             );
         }
@@ -746,31 +743,33 @@ class PropertyInteractionService
             });
         }
 
-        // Heat-centroid bonus: +25 for properties inside the user's interaction radius
-        $heatBonus = '0';
-        if ($heat) {
-            $cLat = $heat['lat'];
-            $cLng = $heat['lng'];
-            $r = $heat['radius_km'];
-            $heatBonus = "(CASE WHEN (6371 * acos(LEAST(1,
-            cos(radians({$cLat})) *
-            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6)))) *
-            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lng')) AS DECIMAL(10,6))) - radians({$cLng})) +
-            sin(radians({$cLat})) *
-            sin(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6))))
-        )) <= {$r} THEN 25 ELSE 0 END)";
-        }
-
-        $results = $query->selectRaw("*, (
+        // Heat-centroid bonus — FIXED: use bindings instead of inlining floats
+        $scoreSelectSql = "*, (
         (CASE WHEN is_boosted = 1 THEN 40 ELSE 0 END) +
         (CASE WHEN verified   = 1 THEN 20 ELSE 0 END) +
         (LEAST(views, 100) * 0.15) +
         (LEAST(favorites_count, 50) * 0.8) +
         (rating * 5) +
         (CASE WHEN DATEDIFF(NOW(), created_at) <= 7  THEN 15
-              WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END) +
-        {$heatBonus}
-    ) as recommendation_score")
+              WHEN DATEDIFF(NOW(), created_at) <= 30 THEN 10 ELSE 0 END)";
+
+        $scoreBindings = [];
+
+        if ($heat) {
+            $scoreSelectSql .= " + (CASE WHEN (6371 * acos(LEAST(1,
+            cos(radians(?)) *
+            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6)))) *
+            cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lng')) AS DECIMAL(10,6))) - radians(?)) +
+            sin(radians(?)) *
+            sin(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6))))
+        )) <= ? THEN 25 ELSE 0 END)";
+            $scoreBindings = [$heat['lat'], $heat['lng'], $heat['lat'], $heat['radius_km']];
+        }
+
+        $scoreSelectSql .= ") as recommendation_score";
+
+        $results = $query
+            ->selectRaw($scoreSelectSql, $scoreBindings)
             ->orderByDesc('recommendation_score')
             ->limit($limit * 2)
             ->get();
@@ -781,12 +780,11 @@ class PropertyInteractionService
             'needed'  => $limit,
         ]);
 
-        // ── 5. Fallback to relaxed query, then to general, if short ───────────
+        // Fallback to relaxed + general if too few
         if ($results->count() < $limit) {
             $needed      = $limit - $results->count();
             $existingIds = array_merge($seenIds, $results->pluck('id')->toArray());
 
-            // Relax: keep types + listing_type, drop city + price
             $relaxed = Property::query()
                 ->where('is_active', true)->where('published', true)
                 ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
@@ -810,11 +808,11 @@ class PropertyInteractionService
             $existingIds = array_merge($existingIds, $relaxed->pluck('id')->toArray());
 
             if ($results->count() < $limit) {
-                $needed2  = $limit - $results->count();
-                $general  = $this->getGeneralRecommendations($needed2 + 5)
+                $needed2 = $limit - $results->count();
+                $general = $this->getGeneralRecommendations($needed2 + 5)
                     ->filter(fn($p) => !in_array($p->id, $existingIds))
                     ->take($needed2);
-                $results  = $results->merge($general);
+                $results = $results->merge($general);
             }
         }
 

@@ -1700,9 +1700,12 @@ class PropertyController extends Controller
                     ->limit($trendingLimit)
                     ->get();
 
-                $properties = $personalized->merge($trending);
-                $properties->load('owner'); // ← ADD HERE
-
+                $mergedIds  = $personalized->merge($trending)->pluck('id')->unique();
+                $properties = Property::whereIn('id', $mergedIds)
+                    ->with('owner')
+                    ->get()
+                    ->sortBy(fn($p) => $mergedIds->search($p->id))
+                    ->values();
             } else {
                 $cacheKey = "guest_recommended_{$limit}";
 
