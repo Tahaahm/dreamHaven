@@ -1656,60 +1656,71 @@ class PropertyController extends Controller
     {
         try {
             $limit = $request->get('limit', 20);
-            $user = auth('sanctum')->user();
+            $user  = auth('sanctum')->user();
 
             Log::info('🎯 RECOMMENDED: Request started', [
-                'endpoint' => 'getRecommended',
+                'endpoint'           => 'getRecommended',
                 'user_authenticated' => $user ? 'YES' : 'NO',
-                'user_id' => $user?->id,
-                'limit' => $limit,
+                'user_id'            => $user?->id,
+                'limit'              => $limit,
             ]);
 
+            // ── Cache TTL constants ───────────────────────────────────────────────
+            $authTtl  = 600;  // 10 min for authenticated users
+            $guestTtl = 600;  // 10 min for guests
+
             if ($user) {
-                $personalizedLimit = intval($limit * 0.7);
+                $cacheKey = "recommended_user_{$user->id}_{$limit}";
 
-                try {
-                    $personalized = $this->interactionService->getPersonalizedRecommendations(
-                        $user->id,
-                        $personalizedLimit
-                    );
-                } catch (\Exception $e) {
-                    Log::warning('Personalized recommendations failed, using fallback', [
-                        'error' => $e->getMessage()
-                    ]);
-                    $personalized = collect();
-                }
+                $properties = Cache::remember($cacheKey, $authTtl, function () use ($user, $limit) {
+                    $personalizedLimit = intval($limit * 0.7);
 
-                $trendingLimit = $limit - $personalized->count();
+                    try {
+                        $personalized = $this->interactionService->getPersonalizedRecommendations(
+                            $user->id,
+                            $personalizedLimit
+                        );
+                    } catch (\Exception $e) {
+                        Log::warning('Personalized recommendations failed, using fallback', [
+                            'error' => $e->getMessage(),
+                        ]);
+                        $personalized = collect();
+                    }
 
-                $trending = Property::query()
-                    ->where('is_active', true)
-                    ->where('published', true)
-                    ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
-                    ->whereNotIn('id', $personalized->pluck('id'))
-                    ->selectRaw('properties.*,
-                    (
-                        (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 50 ELSE 0 END) +
-                        (views * 0.3) +
-                        (favorites_count * 2) +
-                        (CASE WHEN is_boosted = 1 THEN 30 ELSE 0 END) +
-                        (CASE WHEN verified = 1 THEN 20 ELSE 0 END)
-                    ) as trending_score
-                ')
-                    ->orderByDesc('trending_score')
-                    ->limit($trendingLimit)
-                    ->get();
+                    $trendingLimit = $limit - $personalized->count();
 
-                $mergedIds  = $personalized->merge($trending)->pluck('id')->unique();
-                $properties = Property::whereIn('id', $mergedIds)
-                    ->with('owner')
-                    ->get()
-                    ->sortBy(fn($p) => $mergedIds->search($p->id))
-                    ->values();
+                    // ── Single query: trending fill ───────────────────────────────
+                    $trending = Property::query()
+                        ->where('is_active', true)
+                        ->where('published', true)
+                        ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+                        ->whereNotIn('id', $personalized->pluck('id')->toArray())
+                        ->with('owner')   // ← eager-load here, not in a second query
+                        ->selectRaw('properties.*,
+                        (
+                            (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 50 ELSE 0 END) +
+                            (views * 0.3) +
+                            (favorites_count * 2) +
+                            (CASE WHEN is_boosted = 1 THEN 30 ELSE 0 END) +
+                            (CASE WHEN verified  = 1 THEN 20 ELSE 0 END)
+                        ) as trending_score
+                    ')
+                        ->orderByDesc('trending_score')
+                        ->limit($trendingLimit)
+                        ->get();
+
+                    // ── Load owner for personalized (they didn't have it yet) ─────
+                    $personalized->load('owner');
+
+                    return $personalized->merge($trending)->values();
+                });
+
+                $personalized = collect(); // for log below — real counts are inside cache
+                $trending     = collect();
             } else {
-                $cacheKey = "guest_recommended_{$limit}";
+                $cacheKey = "recommended_guest_{$limit}";
 
-                $properties = Cache::remember($cacheKey, 600, function () use ($limit) {
+                $properties = Cache::remember($cacheKey, $guestTtl, function () use ($limit) {
                     return Property::query()
                         ->where('is_active', true)
                         ->where('published', true)
@@ -1720,6 +1731,7 @@ class PropertyController extends Controller
                                 ->orWhere('views', '>', 50)
                                 ->orWhere('favorites_count', '>', 5);
                         })
+                        ->with('owner')
                         ->orderByDesc('is_boosted')
                         ->orderByDesc('verified')
                         ->orderByDesc('created_at')
@@ -1730,38 +1742,38 @@ class PropertyController extends Controller
 
             Log::info('✅ RECOMMENDED: Success', [
                 'properties_found' => $properties->count(),
-                'personalized_count' => $user ? $personalized->count() : 0,
-                'trending_count' => $user ? $trending->count() : 0,
+                'personalized'     => $user ? true : false,
             ]);
 
+            // ── Impression tracking: fire-and-forget, don't block response ────────
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
-                $this->interactionService->trackImpressions(
-                    $userId,
-                    $properties,
-                    'recommended'
-                );
+                dispatch(function () use ($userId, $properties) {
+                    $this->interactionService->trackImpressions(
+                        $userId,
+                        $properties,
+                        'recommended'
+                    );
+                })->afterResponse();
             }
 
-            $transformedData = $properties->map(function ($property) {
-                return $this->transformPropertyData($property);
-            });
+            $transformedData = $properties->map(fn($p) => $this->transformPropertyData($p));
 
             return ApiResponse::success(
                 'Recommended properties retrieved',
                 [
-                    'data' => $transformedData,
-                    'total' => $transformedData->count(),
+                    'data'        => $transformedData,
+                    'total'       => $transformedData->count(),
                     'personalized' => $user ? true : false,
-                    'algorithm' => $user ? 'hybrid' : 'curated',
+                    'algorithm'   => $user ? 'hybrid' : 'curated',
                 ],
                 200
             );
         } catch (\Exception $e) {
             Log::error('❌ RECOMMENDED: Error', [
                 'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
             ]);
             return ApiResponse::error('Failed to get recommended properties', $e->getMessage(), 500);
         }
