@@ -52,6 +52,7 @@ class UserTasteProfile
         'filter_signal',
         'search_signal',
         'search_signal_latest',
+        'strip_signal',
     ];
 
     /**
@@ -60,15 +61,18 @@ class UserTasteProfile
      * Returns a normalised array:
      * [
      *   'has_history'    => bool,
-     *   'intent_score'   => 0..100,   how close to buying (drives explore/exploit)
-     *   'cities'         => ['Erbil' => 0.8, ...]  weight 0..1
+     *   'is_cold_start'  => bool,           true if seeded from user.place only
+     *   'intent_score'   => 0..100,         how close to buying
+     *   'cities'         => ['Erbil' => 0.8, ...]
      *   'types'          => ['villa' => 0.7, ...]
      *   'listing_type'   => 'sell'|'rent'|null
-     *   'price'          => ['target' => 72000, 'min' => 57000, 'max' => 86000] (USD) | null
+     *   'price'          => ['target', 'min', 'max', 'source'] (USD) | null
      *   'bedrooms'       => int|null
-     *   'seen_ids'       => [...]  things to NOT show again
+     *   'heat_centroid'  => ['lat', 'lng', 'radius_km'] | null
+     *   'seen_ids'       => [...]
      *   'budget'         => raw calculator signal | null
-     *   'signal_counts'  => ['favorite' => 3, ...]  for debugging / labels
+     *   'signal_counts'  => ['favorite' => 3, ...]
+     *   'strip_feedback' => ['budget_match' => 1.2, ...]  multipliers 0.3..1.5
      * ]
      */
     public function build(string $userId): array
@@ -83,7 +87,7 @@ class UserTasteProfile
             } catch (\Throwable $e) {
                 Log::warning('UserTasteProfile build failed', [
                     'user_id' => $userId,
-                    'error' => $e->getMessage(),
+                    'error'   => $e->getMessage(),
                 ]);
                 return $this->emptyProfile();
             }
@@ -104,28 +108,38 @@ class UserTasteProfile
             ->orderByDesc('created_at')
             ->get(['property_id', 'interaction_type', 'metadata', 'created_at']);
 
-        if ($rows->isEmpty()) {
-            return $this->emptyProfile();
-        }
+        // Explicit signals — pulled even if no real-property interactions yet.
+        // A brand new user who just used the calculator deserves a real profile.
+        $filterSignal = $this->virtualSignal($rows, 'filter_applied',    'filter_signal');
+        $calcSignal   = $this->virtualSignal($rows, 'calculator_search', 'calculator_signal');
 
-        // Split real property interactions from virtual "signal" rows.
+        // Split real property interactions from virtual signal rows.
         $realRows = $rows->whereNotIn('property_id', self::VIRTUAL_IDS)
             ->whereIn('interaction_type', array_keys(self::SIGNAL_WEIGHTS));
 
-        // Pull the property data we'll attribute taste to, in one query.
+        // ── Cold-start: no real interactions yet ──────────────────────────────
+        // Seed from user.place so the first session feels intentional instead of
+        // dumping the global trending list on them.
+        if ($realRows->isEmpty() && !$filterSignal && !$calcSignal) {
+            return $this->coldStartProfile($userId);
+        }
+
+        // Pull property data we'll attribute taste to, in one query.
+        // ⚠ 'locations' is required for heat centroid.
         $propIds = $realRows->pluck('property_id')->unique()->values();
         $props   = Property::whereIn('id', $propIds)
-            ->get(['id', 'type', 'address_details', 'price', 'rooms', 'listing_type'])
+            ->get(['id', 'type', 'address_details', 'price', 'rooms', 'listing_type', 'locations'])
             ->keyBy('id');
 
         // Accumulators
-        $cityW    = [];   // city  => decayed weight
-        $typeW    = [];   // type  => decayed weight
-        $listW    = [];   // sell/rent => decayed weight
-        $bedW     = [];   // bedroom count => decayed weight
-        $priceW   = [];   // [price => weight] pairs for weighted target
-        $counts   = [];   // raw signal counts (for labels)
-        $seenIds  = [];
+        $cityW   = [];
+        $typeW   = [];
+        $listW   = [];
+        $bedW    = [];
+        $priceW  = [];
+        $geoPts  = [];   // for heat centroid
+        $counts  = [];
+        $seenIds = [];
 
         foreach ($realRows as $row) {
             $seenIds[] = $row->property_id;
@@ -139,34 +153,34 @@ class UserTasteProfile
             $w     = $base * $decay;
             if ($w <= 0) continue;
 
-            // City
             $city = $prop->address_details['city']['en'] ?? null;
             if ($city) $cityW[$city] = ($cityW[$city] ?? 0) + $w;
 
-            // Type
             $type = $prop->type['category'] ?? null;
             if ($type) {
                 $type = strtolower($type);
                 $typeW[$type] = ($typeW[$type] ?? 0) + $w;
             }
 
-            // Listing type (sell/rent)
             if ($prop->listing_type) {
                 $listW[$prop->listing_type] = ($listW[$prop->listing_type] ?? 0) + $w;
             }
 
-            // Bedrooms
             $beds = (int) ($prop->rooms['bedroom']['count'] ?? 0);
             if ($beds > 0) $bedW[$beds] = ($bedW[$beds] ?? 0) + $w;
 
-            // Price (USD only)
             $usd = (float) ($prop->price['usd'] ?? 0);
             if ($usd > 0) $priceW[] = ['p' => $usd, 'w' => $w];
-        }
 
-        // Explicit signals override / sharpen behavioural ones.
-        $filterSignal = $this->virtualSignal($rows, 'filter_applied', 'filter_signal');
-        $calcSignal   = $this->virtualSignal($rows, 'calculator_search', 'calculator_signal');
+            $locs = is_array($prop->locations) ? $prop->locations : [];
+            if (!empty($locs[0]['lat']) && !empty($locs[0]['lng'])) {
+                $geoPts[] = [
+                    'lat' => (float) $locs[0]['lat'],
+                    'lng' => (float) $locs[0]['lng'],
+                    'w'   => $w,
+                ];
+            }
+        }
 
         // ── Derive final profile ──────────────────────────────────────────
         $listingType = $this->topKey($listW);
@@ -180,7 +194,8 @@ class UserTasteProfile
         $types = $this->normalise($typeW, 3);
         if ($filterSignal['property_type'] ?? null) {
             $ft = strtolower($filterSignal['property_type']);
-            $types = [$ft => 1.0] + $types; // explicit choice goes to front at full weight
+            // Array union (+) keeps the LEFT side on key collision — so 1.0 wins.
+            $types = [$ft => 1.0] + $types;
         }
 
         $cities = $this->normalise($cityW, 3);
@@ -189,29 +204,53 @@ class UserTasteProfile
         }
 
         return [
-            'has_history'   => true,
-            'intent_score'  => $this->intentScore($counts, $calcSignal, $filterSignal),
-            'cities'        => $cities,
-            'types'         => $types,
-            'listing_type'  => $listingType,
-            'price'         => $price,
-            'bedrooms'      => $bedrooms ? (int) $bedrooms : null,
-            'seen_ids'      => array_values(array_unique($seenIds)),
-            'budget'        => $calcSignal ?: null,
-            'signal_counts' => $counts,
+            'has_history'    => true,
+            'is_cold_start'  => false,
+            'intent_score'   => $this->intentScore($counts, $calcSignal, $filterSignal),
+            'cities'         => $cities,
+            'types'          => $types,
+            'listing_type'   => $listingType,
+            'price'          => $price,
+            'bedrooms'       => $bedrooms ? (int) $bedrooms : null,
+            'heat_centroid'  => $this->heatCentroid($geoPts),
+            'seen_ids'       => array_values(array_unique($seenIds)),
+            'budget'         => $calcSignal ?: null,
+            'signal_counts'  => $counts,
+            'strip_feedback' => $this->loadStripFeedback($userId),
         ];
     }
 
-    /**
-     * Intent score 0..100: how close is this person to buying?
-     * Drives the explore/exploit balance downstream — high intent means
-     * "show them the closest matches", low intent means "let them discover".
-     */
+    // ──────────────────────────────────────────────────────────────────────
+    //  Cold-start: no real interactions yet — seed from user.place.
+    // ──────────────────────────────────────────────────────────────────────
+    private function coldStartProfile(string $userId): array
+    {
+        $user   = User::find($userId);
+        $seed   = $user?->place;
+        $cities = $seed ? [$seed => 1.0] : [];
+
+        return [
+            'has_history'    => false,
+            'is_cold_start'  => true,
+            'intent_score'   => 0,
+            'cities'         => $cities,
+            'types'          => [],
+            'listing_type'   => null,
+            'price'          => null,
+            'bedrooms'       => null,
+            'heat_centroid'  => null,
+            'seen_ids'       => [],
+            'budget'         => null,
+            'signal_counts'  => [],
+            'strip_feedback' => $this->loadStripFeedback($userId),
+        ];
+    }
+
     private function intentScore(array $counts, ?array $calc, ?array $filter): int
     {
         $score = 0;
         $score += min(($counts['favorite']     ?? 0) * 12, 30);
-        $score += min(($counts['compare']      ?? 0) * 15, 30); // comparing = near decision
+        $score += min(($counts['compare']      ?? 0) * 15, 30);
         $score += min(($counts['search_click'] ?? 0) * 4,  15);
         if ($filter) $score += 10;
         if ($calc) {
@@ -223,7 +262,6 @@ class UserTasteProfile
 
     private function derivePriceBand(array $priceW, ?array $filter, ?array $calc): ?array
     {
-        // 1. Explicit filter ceiling/floor wins.
         if ($filter && (!empty($filter['max_price_usd']) || !empty($filter['min_price_usd']))) {
             $min = (float) ($filter['min_price_usd'] ?? 0);
             $max = (float) ($filter['max_price_usd'] ?? 0);
@@ -233,7 +271,6 @@ class UserTasteProfile
             }
         }
 
-        // 2. Behavioural weighted average price.
         $behaviourTarget = null;
         if (!empty($priceW)) {
             $sumWP = array_sum(array_map(fn($x) => $x['p'] * $x['w'], $priceW));
@@ -241,13 +278,11 @@ class UserTasteProfile
             if ($sumW > 0) $behaviourTarget = $sumWP / $sumW;
         }
 
-        // 3. Calculator budget.
         $calcMid = null;
         if ($calc && !empty($calc['budget_min_usd']) && !empty($calc['budget_max_usd'])) {
             $calcMid = ((float) $calc['budget_min_usd'] + (float) $calc['budget_max_usd']) / 2;
         }
 
-        // Blend behaviour + calculator weighted by calculator signal strength.
         if ($behaviourTarget && $calcMid) {
             $cw     = ($calc['signal_strength'] ?? 50) / 100;
             $target = $behaviourTarget * (1 - $cw) + $calcMid * $cw;
@@ -257,7 +292,6 @@ class UserTasteProfile
 
         if (!$target || $target <= 0) return null;
 
-        // Tighter band for high-intent calculator users, wider for browsers.
         $tol = $calc ? 0.30 : 0.40;
         return [
             'target' => $target,
@@ -267,8 +301,97 @@ class UserTasteProfile
         ];
     }
 
-    private function decay(\Illuminate\Support\Carbon $when): float
+    /**
+     * Weighted geographic center of interactions. Needs ≥ 3 geo points to be
+     * meaningful — otherwise we'd just be returning one pin's coordinates.
+     *
+     * Returns lat/lng/radius_km where radius is avg weighted distance from
+     * centroid, padded 1.5× and clamped to [1, 15] km so downstream haversine
+     * filters don't exclude edge properties.
+     */
+    private function heatCentroid(array $points): ?array
     {
+        if (count($points) < 3) return null;
+
+        $sumLat = 0;
+        $sumLng = 0;
+        $sumW = 0;
+        foreach ($points as $p) {
+            $sumLat += $p['lat'] * $p['w'];
+            $sumLng += $p['lng'] * $p['w'];
+            $sumW   += $p['w'];
+        }
+        if ($sumW <= 0) return null;
+
+        $cLat = $sumLat / $sumW;
+        $cLng = $sumLng / $sumW;
+
+        $sumDist = 0;
+        foreach ($points as $p) {
+            $sumDist += $this->haversineKm($cLat, $cLng, $p['lat'], $p['lng']) * $p['w'];
+        }
+        $avgDist = $sumDist / $sumW;
+        $radius  = max(1.0, min(15.0, $avgDist * 1.5));
+
+        return [
+            'lat'       => round($cLat, 6),
+            'lng'       => round($cLng, 6),
+            'radius_km' => round($radius, 2),
+        ];
+    }
+
+    private function haversineKm(float $la1, float $lo1, float $la2, float $lo2): float
+    {
+        $R   = 6371.0;
+        $dLa = deg2rad($la2 - $la1);
+        $dLo = deg2rad($lo2 - $lo1);
+        $a   = sin($dLa / 2) ** 2 + cos(deg2rad($la1)) * cos(deg2rad($la2)) * sin($dLo / 2) ** 2;
+        return 2 * $R * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
+    /**
+     * Per-strip-type confidence multipliers from click/dismiss feedback (30d).
+     * Formula: 1 + (clicks - dismisses) * 0.15, clamped to [0.3, 1.5].
+     * Missing keys → caller treats as 1.0 (neutral).
+     */
+    private function loadStripFeedback(string $userId): array
+    {
+        try {
+            $rows = DB::table('user_property_interactions')
+                ->select('interaction_type', 'metadata')
+                ->where('user_id', $userId)
+                ->whereIn('interaction_type', ['strip_clicked', 'strip_dismissed'])
+                ->where('created_at', '>=', now()->subDays(30))
+                ->get();
+
+            $tally = [];
+            foreach ($rows as $r) {
+                $meta = is_string($r->metadata) ? json_decode($r->metadata, true) : (array) $r->metadata;
+                $type = $meta['strip_type'] ?? null;
+                if (!$type) continue;
+
+                $tally[$type]['clicks']    = $tally[$type]['clicks']    ?? 0;
+                $tally[$type]['dismisses'] = $tally[$type]['dismisses'] ?? 0;
+                if ($r->interaction_type === 'strip_clicked')   $tally[$type]['clicks']++;
+                if ($r->interaction_type === 'strip_dismissed') $tally[$type]['dismisses']++;
+            }
+
+            $out = [];
+            foreach ($tally as $type => $c) {
+                $delta = $c['clicks'] - $c['dismisses'];
+                $out[$type] = round(max(0.3, min(1.5, 1.0 + $delta * 0.15)), 2);
+            }
+            return $out;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    private function decay($when): float
+    {
+        if (!$when instanceof \DateTimeInterface) {
+            $when = \Illuminate\Support\Carbon::parse($when);
+        }
         $ageDays = max(0, now()->diffInDays($when));
         return pow(0.5, $ageDays / self::HALF_LIFE_DAYS);
     }
@@ -283,7 +406,6 @@ class UserTasteProfile
         return $meta ?: null;
     }
 
-    /** Normalise a weight map to 0..1 against its own max, keep top N. */
     private function normalise(array $map, int $topN): array
     {
         if (empty($map)) return [];
@@ -304,16 +426,19 @@ class UserTasteProfile
     private function emptyProfile(): array
     {
         return [
-            'has_history'   => false,
-            'intent_score'  => 0,
-            'cities'        => [],
-            'types'         => [],
-            'listing_type'  => null,
-            'price'         => null,
-            'bedrooms'      => null,
-            'seen_ids'      => [],
-            'budget'        => null,
-            'signal_counts' => [],
+            'has_history'    => false,
+            'is_cold_start'  => false,
+            'intent_score'   => 0,
+            'cities'         => [],
+            'types'          => [],
+            'listing_type'   => null,
+            'price'          => null,
+            'bedrooms'       => null,
+            'heat_centroid'  => null,
+            'seen_ids'       => [],
+            'budget'         => null,
+            'signal_counts'  => [],
+            'strip_feedback' => [],
         ];
     }
 }
