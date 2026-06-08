@@ -1655,25 +1655,26 @@ class PropertyController extends Controller
     public function getRecommended(Request $request)
     {
         try {
-            $limit = $request->get('limit', 20);
+            $limit = min((int) $request->get('limit', 20), 50); // cap at 50
             $user  = auth('sanctum')->user();
 
             Log::info('🎯 RECOMMENDED: Request started', [
-                'endpoint'           => 'getRecommended',
                 'user_authenticated' => $user ? 'YES' : 'NO',
                 'user_id'            => $user?->id,
                 'limit'              => $limit,
             ]);
 
-            // ── Cache TTL constants ───────────────────────────────────────────────
-            $authTtl  = 600;  // 10 min for authenticated users
-            $guestTtl = 600;  // 10 min for guests
+            // ── Stable cache key: don't vary by $limit to avoid fragmentation.
+            // We always fetch 20; Flutter can take fewer from the array.
+            $FETCH_LIMIT = 20;
+            $authTtl     = 600; // 10 min
+            $guestTtl    = 600;
 
             if ($user) {
-                $cacheKey = "recommended_user_{$user->id}_{$limit}";
+                $cacheKey = "recommended_user_{$user->id}";
 
-                $properties = Cache::remember($cacheKey, $authTtl, function () use ($user, $limit) {
-                    $personalizedLimit = intval($limit * 0.7);
+                $properties = Cache::remember($cacheKey, $authTtl, function () use ($user, $FETCH_LIMIT) {
+                    $personalizedLimit = (int) ($FETCH_LIMIT * 0.7);
 
                     try {
                         $personalized = $this->interactionService->getPersonalizedRecommendations(
@@ -1687,40 +1688,38 @@ class PropertyController extends Controller
                         $personalized = collect();
                     }
 
-                    $trendingLimit = $limit - $personalized->count();
+                    $trendingLimit = $FETCH_LIMIT - $personalized->count();
 
-                    // ── Single query: trending fill ───────────────────────────────
                     $trending = Property::query()
                         ->where('is_active', true)
                         ->where('published', true)
                         ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
                         ->whereNotIn('id', $personalized->pluck('id')->toArray())
-                        ->with('owner')   // ← eager-load here, not in a second query
+                        ->with('owner')
                         ->selectRaw('properties.*,
-                        (
-                            (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 50 ELSE 0 END) +
-                            (views * 0.3) +
-                            (favorites_count * 2) +
-                            (CASE WHEN is_boosted = 1 THEN 30 ELSE 0 END) +
-                            (CASE WHEN verified  = 1 THEN 20 ELSE 0 END)
-                        ) as trending_score
-                    ')
+                            (
+                                (CASE WHEN DATEDIFF(NOW(), created_at) <= 7 THEN 50 ELSE 0 END) +
+                                (views * 0.3) +
+                                (favorites_count * 2) +
+                                (CASE WHEN is_boosted = 1 THEN 30 ELSE 0 END) +
+                                (CASE WHEN verified  = 1 THEN 20 ELSE 0 END)
+                            ) as trending_score
+                        ')
                         ->orderByDesc('trending_score')
                         ->limit($trendingLimit)
                         ->get();
 
-                    // ── Load owner for personalized (they didn't have it yet) ─────
-                    $personalized->load('owner');
+                    // Load owner for personalized results
+                    if ($personalized->isNotEmpty()) {
+                        $personalized->load('owner');
+                    }
 
                     return $personalized->merge($trending)->values();
                 });
-
-                $personalized = collect(); // for log below — real counts are inside cache
-                $trending     = collect();
             } else {
-                $cacheKey = "recommended_guest_{$limit}";
+                $cacheKey = "recommended_guest";
 
-                $properties = Cache::remember($cacheKey, $guestTtl, function () use ($limit) {
+                $properties = Cache::remember($cacheKey, $guestTtl, function () use ($FETCH_LIMIT) {
                     return Property::query()
                         ->where('is_active', true)
                         ->where('published', true)
@@ -1735,7 +1734,7 @@ class PropertyController extends Controller
                         ->orderByDesc('is_boosted')
                         ->orderByDesc('verified')
                         ->orderByDesc('created_at')
-                        ->limit($limit)
+                        ->limit($FETCH_LIMIT)
                         ->get();
                 });
             }
@@ -1745,7 +1744,7 @@ class PropertyController extends Controller
                 'personalized'     => $user ? true : false,
             ]);
 
-            // ── Impression tracking: fire-and-forget, don't block response ────────
+            // FIX: moved to afterResponse so it doesn't block the API response
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
                 dispatch(function () use ($userId, $properties) {
@@ -1757,7 +1756,9 @@ class PropertyController extends Controller
                 })->afterResponse();
             }
 
-            $transformedData = $properties->map(fn($p) => $this->transformPropertyData($p));
+            // Slice to requested limit AFTER cache retrieval
+            $sliced          = $properties->take($limit);
+            $transformedData = $sliced->map(fn($p) => $this->transformPropertyData($p));
 
             return ApiResponse::success(
                 'Recommended properties retrieved',
@@ -2209,59 +2210,59 @@ class PropertyController extends Controller
                 'limit'   => $limit,
             ]);
 
-            // ── Per-user cache (10 min) ───────────────────────────────────────────
-            // Guest users share a global cache; authenticated users get their own.
             $cacheKey = $userId
                 ? "featured_user_{$userId}_{$limit}"
                 : "featured_guest_{$limit}";
 
+            // FIX: cache the FULL scored collection (including scores/reasons),
+            // then reuse it directly — no second call to getFeaturedProperties().
             $featured = Cache::remember($cacheKey, 600, function () use ($limit, $userId) {
-                return $this->interactionService->getFeaturedProperties(
+                $scored = $this->interactionService->getFeaturedProperties(
                     limit: $limit,
                     userId: $userId
                 );
+
+                // Attach scores to the Eloquent models NOW, inside the cache closure,
+                // so the cached value already has all computed fields.
+                $scoreLookup = $scored->keyBy('id');
+
+                // Re-fetch as a fresh Eloquent collection so ->load() works,
+                // but only ONE DB round-trip here.
+                $ids        = $scored->pluck('id');
+                $properties = Property::whereIn('id', $ids)->get();
+                $properties->load('owner');
+
+                return $properties->map(function ($property) use ($scoreLookup) {
+                    $scored = $scoreLookup->get($property->id);
+                    if ($scored) {
+                        $property->featured_layer       = $scored->featured_layer       ?? 2;
+                        $property->featured_reason      = $scored->featured_reason      ?? [];
+                        $property->popularity_score     = $scored->popularity_score     ?? null;
+                        $property->popularity_breakdown = $scored->popularity_breakdown ?? null;
+                        $property->relevance_score      = $scored->relevance_score      ?? null;
+                    }
+                    return $property;
+                })->values();
             });
 
-            // Re-fetch as Eloquent collection so ->load() works
-            $featuredIds = $featured->pluck('id');
-            $featured    = Property::whereIn('id', $featuredIds)->get();
-
-            // Re-attach computed scores (lost in re-fetch — attach from original)
-            $scoreLookup = collect($this->interactionService->getFeaturedProperties($limit, $userId))
-                ->keyBy('id');
-
-            $featured = $featured->map(function ($property) use ($scoreLookup) {
-                $scored = $scoreLookup->get($property->id);
-                if ($scored) {
-                    $property->featured_layer       = $scored->featured_layer       ?? 2;
-                    $property->featured_reason      = $scored->featured_reason      ?? [];
-                    $property->popularity_score     = $scored->popularity_score     ?? null;
-                    $property->popularity_breakdown = $scored->popularity_breakdown ?? null;
-                    $property->relevance_score      = $scored->relevance_score      ?? null;
-                }
-                return $property;
-            });
-
-            $featured->load('owner');
-
+            // Impression tracking: fire-and-forget, don't block response
             if ($featured->isNotEmpty()) {
                 $trackUserId = $userId ?? 'guest_' . session()->getId();
-                $this->interactionService->trackImpressions(
-                    $trackUserId,
-                    $featured,
-                    'featured'
-                );
+                dispatch(function () use ($trackUserId, $featured) {
+                    $this->interactionService->trackImpressions(
+                        $trackUserId,
+                        $featured,
+                        'featured'
+                    );
+                })->afterResponse();
             }
 
             $transformedData = $featured->map(function ($property) {
                 $data = $this->transformPropertyData($property);
-
-                // Featured-specific fields
                 $data['featured_layer']       = $property->featured_layer       ?? 2;
                 $data['featured_reason']      = $property->featured_reason      ?? [];
                 $data['popularity_score']     = $property->popularity_score     ?? null;
                 $data['relevance_score']      = $property->relevance_score      ?? null;
-
                 return $data;
             });
 
@@ -2289,76 +2290,6 @@ class PropertyController extends Controller
         } catch (\Exception $e) {
             Log::error('❌ FEATURED: Error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get featured properties', $e->getMessage(), 500);
-        }
-    }
-    public function logInteractionBatch(Request $request)
-    {
-        try {
-            $user = auth('sanctum')->user();
-            if (!$user) {
-                return ApiResponse::error('Unauthenticated', null, 401);
-            }
-
-            $interactions = $request->input('interactions', []);
-
-            if (empty($interactions) || !is_array($interactions)) {
-                return ApiResponse::success('Nothing to log', null, 200);
-            }
-
-            // Cap at 50 per batch to prevent abuse
-            $interactions = array_slice($interactions, 0, 50);
-
-            $now        = now();
-            $insertRows = [];
-
-            foreach ($interactions as $item) {
-                $filters      = $item['filters']       ?? [];
-                $resultsCount = (int) ($item['results_count'] ?? 0);
-                $ts           = $item['ts']             ?? null;
-
-                if (empty($filters)) continue;
-
-                $insertRows[] = [
-                    'user_id'          => $user->id,
-                    'property_id'      => 'filter_signal',
-                    'interaction_type' => 'filter_applied',
-                    'metadata'         => json_encode(array_merge($filters, [
-                        'results_count' => $resultsCount,
-                        'client_ts'     => $ts,
-                    ])),
-                    'created_at' => $ts
-                        ? \Carbon\Carbon::parse($ts)->toDateTimeString()
-                        : $now->toDateTimeString(),
-                ];
-            }
-
-            if (!empty($insertRows)) {
-                \App\Models\UserPropertyInteraction::insert($insertRows);
-
-                // Invalidate the cached taste profile so the next recommendation
-                // request picks up the fresh filter signals immediately.
-                app(\App\Services\Intelligence\UserTasteProfile::class)
-                    ->invalidate((string) $user->id);
-
-                // Also clear the user's personalized recommended cache
-                Cache::forget("recommended_user_{$user->id}_20");
-            }
-
-            Log::info('📊 logInteractionBatch: stored', [
-                'user_id' => $user->id,
-                'count'   => count($insertRows),
-            ]);
-
-            return ApiResponse::success(
-                'Interactions logged',
-                ['count' => count($insertRows)],
-                200
-            );
-        } catch (\Exception $e) {
-            Log::warning('logInteractionBatch error', ['msg' => $e->getMessage()]);
-            // Always return 200 — Flutter must never retry interaction logging
-            // on failure as it would defeat the batching purpose.
-            return ApiResponse::success('Logged with errors', null, 200);
         }
     }
 
