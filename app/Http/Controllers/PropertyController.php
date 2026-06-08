@@ -1904,9 +1904,9 @@ class PropertyController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'limit' => 'integer|min:1|max:50',
+                'limit'    => 'integer|min:1|max:50',
                 'language' => 'in:en,ar,ku',
-                'days' => 'integer|min:1|max:90',
+                'days'     => 'integer|min:1|max:90',
             ]);
 
             if ($validator->fails()) {
@@ -1914,14 +1914,14 @@ class PropertyController extends Controller
             }
 
             $limit = $request->get('limit', 20);
-            $days = $request->get('days', 30);
-            $user = auth('sanctum')->user();
+            $days  = $request->get('days', 30);
+            $user  = auth('sanctum')->user();
 
             Log::info('🆕 RECENT: Request started', [
                 'endpoint' => 'getRecent',
-                'user_id' => $user?->id,
-                'limit' => $limit,
-                'days' => $days,
+                'user_id'  => $user?->id,
+                'limit'    => $limit,
+                'days'     => $days,
             ]);
 
             $properties = Property::query()
@@ -1934,8 +1934,7 @@ class PropertyController extends Controller
                 ->limit($limit)
                 ->get();
 
-            $properties->load('owner'); // ← ADD HERE
-
+            $properties->load('owner');
 
             Log::info('✅ RECENT: Success', [
                 'properties_found' => $properties->count(),
@@ -1953,12 +1952,16 @@ class PropertyController extends Controller
             return ApiResponse::success(
                 'Recent properties retrieved',
                 [
-                    'data' => $transformedData,
+                    'data'  => $transformedData,
                     'total' => $transformedData->count(),
-                    'days' => $days
+                    'days'  => $days,
                 ],
                 200
-            );
+            )->header('Cache-Control', 'public, max-age=300');
+            // Recent listings are identical for every user.
+            // 5-min HTTP cache lets Nginx serve repeat requests without
+            // touching PHP/DB at all.
+
         } catch (\Exception $e) {
             Log::error('❌ RECENT: Error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get recent properties', $e->getMessage(), 500);
@@ -2086,11 +2089,11 @@ class PropertyController extends Controller
                 return ApiResponse::error('Invalid parameters', $validator->errors(), 400);
             }
 
-            $limit        = $request->get('limit', 20);
-            $listingType  = $request->get('listing_type');
-            $city         = $request->get('city');
-            $days         = $request->get('days', 30);
-            $user         = auth('sanctum')->user();
+            $limit       = $request->get('limit', 20);
+            $listingType = $request->get('listing_type');
+            $city        = $request->get('city');
+            $days        = $request->get('days', 30);
+            $user        = auth('sanctum')->user();
 
             Log::info('🔥 POPULAR: Request started', [
                 'endpoint'     => 'getPopular',
@@ -2101,9 +2104,7 @@ class PropertyController extends Controller
                 'days'         => $days,
             ]);
 
-            // ── Contextual city/listing_type from user signals if not provided ────
-            // If the caller doesn't pass city/listing_type, infer from the user's
-            // last filter or search signal so the "popular" list is locally relevant.
+            // ── Infer city/listing_type from user's last filter signal ────────────
             if ($user && (!$listingType || !$city)) {
                 try {
                     $filterSignal = DB::table('user_property_interactions')
@@ -2124,11 +2125,11 @@ class PropertyController extends Controller
                         }
                     }
                 } catch (\Throwable $e) {
-                    // Non-fatal — just use global popular
+                    // Non-fatal — fall back to global popular
                 }
             }
 
-            // ── Get popular properties with full scoring ──────────────────────────
+            // ── Scored popular properties ─────────────────────────────────────────
             $properties = $this->interactionService->getPopularProperties(
                 limit: $limit,
                 listingType: $listingType,
@@ -2137,7 +2138,6 @@ class PropertyController extends Controller
             );
 
             if ($properties->isEmpty()) {
-                // Fallback: return general popular if no signal-scored results
                 $properties = Property::where('is_active', true)
                     ->where('published', true)
                     ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
@@ -2164,33 +2164,36 @@ class PropertyController extends Controller
 
             $transformedData = $properties->map(function ($property) {
                 $data = $this->transformPropertyData($property);
-
-                // Attach popularity metadata so Flutter can render "why popular" labels
-                $data['popularity_score']     = $property->popularity_score ?? null;
+                $data['popularity_score']     = $property->popularity_score     ?? null;
                 $data['popularity_breakdown'] = $property->popularity_breakdown ?? null;
-
                 return $data;
             });
 
             return ApiResponse::success(
                 'Popular properties retrieved',
                 [
-                    'data'         => $transformedData,
-                    'total'        => $transformedData->count(),
-                    'context'      => [
+                    'data'      => $transformedData,
+                    'total'     => $transformedData->count(),
+                    'context'   => [
                         'listing_type' => $listingType,
                         'city'         => $city,
                         'days_window'  => $days,
                     ],
-                    'algorithm'    => 'search_ctr_weighted',
+                    'algorithm' => 'search_ctr_weighted',
                 ],
                 200
-            );
+            )->header('Cache-Control', 'public, max-age=300');
+            // Popularity scores are recalculated every 10 min inside
+            // PropertyInteractionService (Cache::remember 600s), so a 5-min
+            // HTTP cache on top is safe and avoids the scoring query entirely
+            // for repeat callers.
+
         } catch (\Exception $e) {
             Log::error('❌ POPULAR: Error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get popular properties', $e->getMessage(), 500);
         }
     }
+
     /**
      * Get human-readable reason why property is featured
      */
@@ -2286,6 +2289,76 @@ class PropertyController extends Controller
         } catch (\Exception $e) {
             Log::error('❌ FEATURED: Error', ['message' => $e->getMessage()]);
             return ApiResponse::error('Failed to get featured properties', $e->getMessage(), 500);
+        }
+    }
+    public function logInteractionBatch(Request $request)
+    {
+        try {
+            $user = auth('sanctum')->user();
+            if (!$user) {
+                return ApiResponse::error('Unauthenticated', null, 401);
+            }
+
+            $interactions = $request->input('interactions', []);
+
+            if (empty($interactions) || !is_array($interactions)) {
+                return ApiResponse::success('Nothing to log', null, 200);
+            }
+
+            // Cap at 50 per batch to prevent abuse
+            $interactions = array_slice($interactions, 0, 50);
+
+            $now        = now();
+            $insertRows = [];
+
+            foreach ($interactions as $item) {
+                $filters      = $item['filters']       ?? [];
+                $resultsCount = (int) ($item['results_count'] ?? 0);
+                $ts           = $item['ts']             ?? null;
+
+                if (empty($filters)) continue;
+
+                $insertRows[] = [
+                    'user_id'          => $user->id,
+                    'property_id'      => 'filter_signal',
+                    'interaction_type' => 'filter_applied',
+                    'metadata'         => json_encode(array_merge($filters, [
+                        'results_count' => $resultsCount,
+                        'client_ts'     => $ts,
+                    ])),
+                    'created_at' => $ts
+                        ? \Carbon\Carbon::parse($ts)->toDateTimeString()
+                        : $now->toDateTimeString(),
+                ];
+            }
+
+            if (!empty($insertRows)) {
+                \App\Models\UserPropertyInteraction::insert($insertRows);
+
+                // Invalidate the cached taste profile so the next recommendation
+                // request picks up the fresh filter signals immediately.
+                app(\App\Services\Intelligence\UserTasteProfile::class)
+                    ->invalidate((string) $user->id);
+
+                // Also clear the user's personalized recommended cache
+                Cache::forget("recommended_user_{$user->id}_20");
+            }
+
+            Log::info('📊 logInteractionBatch: stored', [
+                'user_id' => $user->id,
+                'count'   => count($insertRows),
+            ]);
+
+            return ApiResponse::success(
+                'Interactions logged',
+                ['count' => count($insertRows)],
+                200
+            );
+        } catch (\Exception $e) {
+            Log::warning('logInteractionBatch error', ['msg' => $e->getMessage()]);
+            // Always return 200 — Flutter must never retry interaction logging
+            // on failure as it would defeat the batching purpose.
+            return ApiResponse::success('Logged with errors', null, 200);
         }
     }
 
