@@ -269,7 +269,6 @@ Route::prefix('api/v1')->group(function () {
             Route::post('/google/link', [UserController::class, 'linkGoogleAccount']);
         });
 
-        // User Profile Management
         Route::prefix('user')->group(function () {
             Route::get('/profile', [UserController::class, 'getProfile']);
             Route::post('/calculator-signal', [UserBehaviorController::class, 'storeCalculatorSignal']);
@@ -277,10 +276,21 @@ Route::prefix('api/v1')->group(function () {
             Route::post('/track-filter',  [UserBehaviorController::class, 'trackFilter']);
             Route::post('/track-compare', [UserBehaviorController::class, 'trackCompare']);
 
+            // ── Intelligence signal endpoints ─────────────────────────────────
+            Route::post('/behavior/scroll-depth',       [UserBehaviorController::class, 'scrollDepth']);
+            Route::post('/behavior/time-on-listing',    [UserBehaviorController::class, 'timeOnListing']);
+            Route::post('/behavior/return-to-listing',  [UserBehaviorController::class, 'returnToListing']);
+            Route::post('/behavior/photo-gallery-open', [UserBehaviorController::class, 'photoGalleryOpen']);
+            Route::post('/behavior/contact-intent',     [UserBehaviorController::class, 'contactIntent']);
+            Route::post('/behavior/share-property',     [UserBehaviorController::class, 'shareProperty']);
+            Route::post('/behavior/map-pin-tap',        [UserBehaviorController::class, 'mapPinTap']);
+            Route::post('/behavior/search-refinement',  [UserBehaviorController::class, 'searchRefinement']);
+            // ─────────────────────────────────────────────────────────────────
 
             Route::patch('/profile', [UserController::class, 'updateLocation']);
             Route::delete('/profile', [UserController::class, 'deleteAccount']);
-            Route::post('/log-interaction', [UserController::class, 'logSearchInteraction']);
+            Route::post('/log-interaction',       [UserController::class, 'logSearchInteraction']);
+            Route::post('/log-interaction-batch', [UserBehaviorController::class, 'logInteractionBatch']);
 
             // Device Token Management
             Route::patch('/device-token', [UserController::class, 'updateDeviceToken']);

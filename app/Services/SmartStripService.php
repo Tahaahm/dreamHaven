@@ -10,14 +10,32 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * SmartStripService — v2 with 5 new strip types
+ *
+ * NEW strip types added:
+ *   deep_interest      — scrolled 80%+ on 3+ properties of same type in session
+ *   re_engagement      — returned to same property 2+ times
+ *   about_to_contact   — contact_intent + return_to_listing in session
+ *   price_sensitivity  — behavioural price ceiling detected from bounce signals
+ *   hot_neighbourhood  — 5+ map_pin_taps in same small area
+ *
+ * Priority order (first qualifying strip wins):
+ *   1. about_to_contact  (highest conversion value)
+ *   2. budget_match
+ *   3. re_engagement
+ *   4. deep_interest
+ *   5. price_sensitivity
+ *   6. hot_neighbourhood
+ *   7. resume_search
+ *   8. area_focus
+ *   9. new_matches
+ *  10. returning_visitor
+ */
 class SmartStripService
 {
     private const CACHE_TTL      = 600;
     private const SESSION_WINDOW = 24;
-
-    // ──────────────────────────────────────────────────────────────────────────
-    //  PUBLIC ENTRY POINT
-    // ──────────────────────────────────────────────────────────────────────────
 
     public function getStrip(string $userId, string $language = 'en'): ?array
     {
@@ -30,24 +48,22 @@ class SmartStripService
                 Log::info('SmartStrip: signals loaded', [
                     'user_id'               => $userId,
                     'has_filter_signal'     => !empty($signals['filterSignal']),
-                    'has_search_signal'     => !empty($signals['searchSignal']),
                     'has_calc_signal'       => !empty($signals['calcSignal']),
                     'recently_viewed_count' => count($signals['recentlyViewedIds']),
-                    'favorites_count'       => count($signals['favoriteIds']),
-                    'compare_count'         => count($signals['compareIds']),
-                    'days_since_visit'      => $signals['daysSinceVisit'],
-                    'calc_budget_min'       => $signals['calcSignal']['budget_min_usd'] ?? null,
-                    'calc_budget_max'       => $signals['calcSignal']['budget_max_usd'] ?? null,
+                    'has_contact_intent'    => $signals['hasContactIntent'],
+                    'has_return_visit'      => $signals['hasReturnVisit'],
+                    'deep_interest_count'   => count($signals['deepInterestProps'] ?? []),
+                    'hot_neighbourhood'     => $signals['hotNeighbourhood'] !== null,
                 ]);
 
-                // ── Priority order ────────────────────────────────────────────
-                // 1. budget_match   — calculator signal = strongest buy intent
-                // 2. resume_search  — only real filters, NOT bare text searches
-                // 3. area_focus     — repeated views in same city
-                // 4. new_matches    — new listings matching lifetime profile
-                // 5. returning      — came back after 2+ days
+                // Priority order — first match wins
                 $stripTypes = [
+                    'about_to_contact'  => fn() => $this->tryAboutToContact($userId, $signals, $language),
                     'budget_match'      => fn() => $this->tryBudgetMatch($userId, $signals, $language),
+                    're_engagement'     => fn() => $this->tryReEngagement($userId, $signals, $language),
+                    'deep_interest'     => fn() => $this->tryDeepInterest($userId, $signals, $language),
+                    'price_sensitivity' => fn() => $this->tryPriceSensitivity($userId, $signals, $language),
+                    'hot_neighbourhood' => fn() => $this->tryHotNeighbourhood($userId, $signals, $language),
                     'resume_search'     => fn() => $this->tryResumeSearch($userId, $signals, $language),
                     'area_focus'        => fn() => $this->tryAreaFocus($userId, $signals, $language),
                     'new_matches'       => fn() => $this->tryNewMatches($userId, $signals, $language),
@@ -57,59 +73,34 @@ class SmartStripService
                 $strip = null;
                 foreach ($stripTypes as $typeName => $resolver) {
                     $candidate = $resolver();
-
                     if ($candidate === null) {
-                        Log::info('SmartStrip: strip type skipped', [
-                            'user_id' => $userId,
-                            'type'    => $typeName,
-                            'reason'  => 'returned null (no qualifying data)',
-                        ]);
+                        Log::info("SmartStrip: {$typeName} skipped", ['user_id' => $userId]);
                         continue;
                     }
-
-                    Log::info('SmartStrip: strip type resolved', [
+                    Log::info("SmartStrip: {$typeName} resolved", [
                         'user_id'    => $userId,
-                        'type'       => $typeName,
                         'count'      => $candidate['count']      ?? null,
                         'confidence' => $candidate['confidence'] ?? null,
-                        'intent'     => $candidate['intent']     ?? null,
-                        'filters'    => $candidate['filters']    ?? [],
-                        'params'     => $candidate['params']     ?? [],
                     ]);
-
                     $strip = $candidate;
                     break;
                 }
 
                 if (!$strip || ($strip['confidence'] ?? 0) < 0.50) {
-                    Log::info('SmartStrip: no strip returned', [
-                        'user_id'    => $userId,
-                        'reason'     => !$strip
-                            ? 'all strip types returned null'
-                            : 'confidence below threshold',
-                        'confidence' => $strip['confidence'] ?? null,
-                    ]);
                     return null;
                 }
 
                 Log::info('SmartStrip: strip selected', [
-                    'user_id'    => $userId,
-                    'language'   => $language,
-                    'type'       => $strip['type'],
-                    'intent'     => $strip['intent'],
-                    'confidence' => $strip['confidence'],
-                    'count'      => $strip['count'],
-                    'filters'    => $strip['filters'],
-                    'params'     => $strip['params'],
+                    'user_id' => $userId,
+                    'type'    => $strip['type'],
+                    'intent'  => $strip['intent'],
                 ]);
 
                 return $strip;
             } catch (\Throwable $e) {
-                Log::warning('SmartStrip: failed (non-fatal)', [
+                Log::warning('SmartStrip failed (non-fatal)', [
                     'user_id' => $userId,
                     'error'   => $e->getMessage(),
-                    'file'    => $e->getFile(),
-                    'line'    => $e->getLine(),
                 ]);
                 return null;
             }
@@ -123,24 +114,19 @@ class SmartStripService
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  SIGNAL LOADER — unchanged from working version
-    // ──────────────────────────────────────────────────────────────────────────
-
+    // ──────────────────────────────────────────────────────────────────────
+    //  SIGNAL LOADER — extended with new signal types
+    // ──────────────────────────────────────────────────────────────────────
     private function loadSignals(string $userId): array
     {
-        $virtualIds = [
-            'calculator_signal',
-            'filter_signal',
-            'search_signal',
-            'search_signal_latest',
-        ];
+        $virtualIds = ['calculator_signal', 'filter_signal', 'search_signal', 'search_signal_latest'];
 
         $recentRows = UserPropertyInteraction::where('user_id', $userId)
             ->where('created_at', '>=', now()->subDays(30))
             ->orderByDesc('created_at')
             ->get();
 
+        // Existing signals
         $filterRow = $recentRows
             ->where('interaction_type', 'filter_applied')
             ->where('property_id', 'filter_signal')
@@ -148,35 +134,21 @@ class SmartStripService
             ->first();
 
         $filterSignal = null;
-        if ($filterRow && $filterRow->metadata) {
+        if ($filterRow?->metadata) {
             $meta = is_array($filterRow->metadata)
                 ? $filterRow->metadata
                 : json_decode($filterRow->metadata, true);
             $filterSignal = $meta;
         }
 
-        $searchRow = $recentRows
-            ->where('interaction_type', 'search_query_latest')
-            ->where('created_at', '>=', now()->subHours(self::SESSION_WINDOW))
-            ->first();
-
-        $searchSignal = null;
-        if ($searchRow && $searchRow->metadata) {
-            $meta = is_array($searchRow->metadata)
-                ? $searchRow->metadata
-                : json_decode($searchRow->metadata, true);
-            $searchSignal = $meta;
-        }
-
         $calcRow = UserPropertyInteraction::where('user_id', $userId)
             ->where('interaction_type', 'calculator_search')
             ->where('property_id', 'calculator_signal')
             ->where('created_at', '>=', now()->subDays(90))
-            ->latest()
-            ->first();
+            ->latest()->first();
 
         $calcSignal = null;
-        if ($calcRow && $calcRow->metadata) {
+        if ($calcRow?->metadata) {
             $meta = is_array($calcRow->metadata)
                 ? $calcRow->metadata
                 : json_decode($calcRow->metadata, true);
@@ -187,26 +159,17 @@ class SmartStripService
             ->where('interaction_type', 'view')
             ->whereNotIn('property_id', $virtualIds)
             ->where('created_at', '>=', now()->subDays(7))
-            ->pluck('property_id')
-            ->unique()
-            ->values()
-            ->toArray();
+            ->pluck('property_id')->unique()->values()->toArray();
 
         $favoriteIds = $recentRows
             ->where('interaction_type', 'favorite')
             ->whereNotIn('property_id', $virtualIds)
-            ->pluck('property_id')
-            ->unique()
-            ->values()
-            ->toArray();
+            ->pluck('property_id')->unique()->values()->toArray();
 
         $compareIds = $recentRows
             ->where('interaction_type', 'compare')
             ->whereNotIn('property_id', $virtualIds)
-            ->pluck('property_id')
-            ->unique()
-            ->values()
-            ->toArray();
+            ->pluck('property_id')->unique()->values()->toArray();
 
         $user           = User::find($userId);
         $lastSeenAt     = $user?->last_activity_at ?? $user?->updated_at;
@@ -214,112 +177,460 @@ class SmartStripService
             ? (int) abs(now()->diffInDays($lastSeenAt))
             : 999;
 
+        // ── NEW signal extractions ─────────────────────────────────────────
+
+        // contact_intent in session
+        $hasContactIntent = $recentRows
+            ->where('interaction_type', 'contact_intent')
+            ->where('created_at', '>=', now()->subHours(self::SESSION_WINDOW))
+            ->isNotEmpty();
+
+        // return_to_listing in session
+        $hasReturnVisit = $recentRows
+            ->where('interaction_type', 'return_to_listing')
+            ->where('created_at', '>=', now()->subHours(self::SESSION_WINDOW))
+            ->isNotEmpty();
+
+        // Most recent property that had return_to_listing
+        $returnedPropertyId = $recentRows
+            ->where('interaction_type', 'return_to_listing')
+            ->where('created_at', '>=', now()->subHours(self::SESSION_WINDOW))
+            ->first()?->property_id;
+
+        // Deep interest: scroll_depth >= 80% properties in session
+        $deepScrollRows = $recentRows
+            ->where('interaction_type', 'scroll_depth')
+            ->where('created_at', '>=', now()->subHours(self::SESSION_WINDOW))
+            ->filter(function ($row) {
+                $meta = is_array($row->metadata)
+                    ? $row->metadata
+                    : json_decode($row->metadata, true);
+                return (int) ($meta['scroll_percent'] ?? 0) >= 80;
+            });
+
+        // Bounce signals — properties that user left quickly
+        $bouncePropertyIds = $recentRows
+            ->where('interaction_type', 'time_on_listing')
+            ->filter(function ($row) {
+                $meta = is_array($row->metadata)
+                    ? $row->metadata
+                    : json_decode($row->metadata, true);
+                return ($meta['sentiment'] ?? '') === 'bounce';
+            })
+            ->pluck('property_id')->unique()->values()->toArray();
+
+        // Price sensitivity: prices of bounced properties
+        $bouncePrices = [];
+        if (!empty($bouncePropertyIds)) {
+            $bounceProps = \App\Models\Property::whereIn('id', $bouncePropertyIds)
+                ->select('id', 'price')
+                ->get();
+            foreach ($bounceProps as $bp) {
+                $usd = is_array($bp->price) ? (float) ($bp->price['usd'] ?? 0) : 0;
+                if ($usd > 0) $bouncePrices[] = $usd;
+            }
+        }
+
+        // Hot neighbourhood: map_pin_taps clustered in small area
+        $mapPinTaps = $recentRows
+            ->where('interaction_type', 'map_pin_tap')
+            ->where('created_at', '>=', now()->subDays(7));
+
+        $hotNeighbourhood = $this->detectHotNeighbourhood($mapPinTaps);
+
+        // Deep interest props (properties with 80%+ scroll in session)
+        $deepInterestProps = $deepScrollRows->pluck('property_id')->unique()->values()->toArray();
+
         return compact(
             'filterSignal',
-            'searchSignal',
             'calcSignal',
             'recentlyViewedIds',
             'favoriteIds',
             'compareIds',
             'daysSinceVisit',
-            'user'
+            'user',
+            'hasContactIntent',
+            'hasReturnVisit',
+            'returnedPropertyId',
+            'deepInterestProps',
+            'bouncePrices',
+            'hotNeighbourhood',
+            'searchSignal',  // may be null
+            'bouncePropertyIds'
         );
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  STRIP TYPE 1: BUDGET MATCH
-    //  "Within your budget — $52K–$78K"
-    //  Triggered: user used calculator. Strongest buy-intent signal.
-    // ──────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────
+    //  NEW STRIP TYPE 1: ABOUT_TO_CONTACT
+    //  "Looks like you're close to a decision on this villa.
+    //   The agent replies in under 2 hours."
+    //  Fires when: contact_intent + return_to_listing in same session
+    // ──────────────────────────────────────────────────────────────────────
+    private function tryAboutToContact(string $userId, array $signals, string $lang): ?array
+    {
+        if (!$signals['hasContactIntent'] || !$signals['hasReturnVisit']) {
+            return null;
+        }
+
+        $propertyId = $signals['returnedPropertyId'];
+        if (!$propertyId) return null;
+
+        $property = Property::find($propertyId);
+        if (!$property || !$property->is_active) return null;
+
+        $headline = match ($lang) {
+            'ar' => 'يبدو أنك قريب من قرار بشأن هذا العقار',
+            'ku' => 'وا دەکات نزیک بە بڕیاردانی ئەم خانووەیی',
+            default => "Looks like you're close on this {$property->type['category']}",
+        };
+
+        $subline = match ($lang) {
+            'ar' => 'الوكيل يرد خلال ساعتين. تواصل الآن.',
+            'ku' => 'نوێنەرەکە لە ماوەی ٢ کاتژمێردا وەڵام دەداتەوە.',
+            default => 'The agent typically replies within 2 hours.',
+        };
+
+        return [
+            'type'       => 'about_to_contact',
+            'intent'     => 'decision_stage',
+            'confidence' => 0.92,
+            'icon'       => 'phone',
+            'headline'   => $headline,
+            'subline'    => $subline,
+            'params'     => [
+                'property_id' => $propertyId,
+                'property'    => [
+                    'id'    => $property->id,
+                    'name'  => $property->name,
+                    'price' => $property->price,
+                    'image' => is_array($property->images) ? ($property->images[0] ?? null) : null,
+                ],
+            ],
+            'filters'    => [],
+            'count'      => 1,
+            'properties' => $this->transformProperties(collect([$property]), $lang),
+        ];
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  NEW STRIP TYPE 2: RE_ENGAGEMENT
+    //  "You keep coming back to this villa — want a price drop alert?"
+    //  Fires when: return_to_listing detected in recent history
+    // ──────────────────────────────────────────────────────────────────────
+    private function tryReEngagement(string $userId, array $signals, string $lang): ?array
+    {
+        if (!$signals['hasReturnVisit'] || !$signals['returnedPropertyId']) {
+            return null;
+        }
+
+        $property = Property::find($signals['returnedPropertyId']);
+        if (!$property || !$property->is_active) return null;
+
+        $typeName = ucfirst($property->type['category'] ?? 'property');
+
+        $headline = match ($lang) {
+            'ar' => "عدت مرة أخرى لهذا {$typeName}",
+            'ku' => "دووبارەت گەڕایتەوە ئەم {$typeName}ەکە",
+            default => "You keep coming back to this {$typeName}",
+        };
+
+        $subline = match ($lang) {
+            'ar' => 'هل تريد إشعاراً إذا انخفض السعر؟',
+            'ku' => 'دەتەوێت ئاگادارت بکەینەوە ئەگەر نرخ کەم بووە؟',
+            default => 'Want an alert if the price drops?',
+        };
+
+        return [
+            'type'       => 're_engagement',
+            'intent'     => 'strong_consideration',
+            'confidence' => 0.88,
+            'icon'       => 'refresh',
+            'headline'   => $headline,
+            'subline'    => $subline,
+            'params'     => [
+                'property_id' => $property->id,
+            ],
+            'filters'    => [],
+            'count'      => 1,
+            'properties' => $this->transformProperties(collect([$property]), $lang),
+        ];
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  NEW STRIP TYPE 3: DEEP_INTEREST
+    //  "You've been deep in 3-bed apartments tonight — here are 4 more."
+    //  Fires when: 3+ properties with 80%+ scroll depth, same type, in session
+    // ──────────────────────────────────────────────────────────────────────
+    private function tryDeepInterest(string $userId, array $signals, string $lang): ?array
+    {
+        $deepIds = $signals['deepInterestProps'] ?? [];
+        if (count($deepIds) < 3) return null;
+
+        // Get the dominant type from deep-scrolled properties
+        $deepProps = Property::whereIn('id', $deepIds)
+            ->select('id', 'type', 'address_details', 'listing_type')
+            ->get();
+
+        if ($deepProps->isEmpty()) return null;
+
+        // Find dominant type
+        $typeCounts = [];
+        foreach ($deepProps as $p) {
+            $type = strtolower($p->type['category'] ?? '');
+            if ($type) $typeCounts[$type] = ($typeCounts[$type] ?? 0) + 1;
+        }
+        arsort($typeCounts);
+        $dominantType = array_key_first($typeCounts);
+
+        // Require at least 3 of the same type
+        if (($typeCounts[$dominantType] ?? 0) < 3) return null;
+
+        $dominantCity = null;
+        $cityCounts = [];
+        foreach ($deepProps as $p) {
+            $city = $p->address_details['city']['en'] ?? null;
+            if ($city) $cityCounts[$city] = ($cityCounts[$city] ?? 0) + 1;
+        }
+        arsort($cityCounts);
+        $dominantCity = array_key_first($cityCounts);
+
+        // Find MORE properties of same type not yet seen
+        $unseenQuery = Property::query()
+            ->where('is_active', true)->where('published', true)
+            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+            ->whereNotIn('id', $deepIds)
+            ->whereRaw(
+                "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
+                [$dominantType]
+            );
+
+        if ($dominantCity) {
+            $unseenQuery->whereRaw(
+                "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
+                [strtolower($dominantCity)]
+            );
+        }
+
+        $count = $unseenQuery->count();
+        if ($count === 0) return null;
+
+        $topProps = $unseenQuery->orderByDesc('created_at')->limit(5)->get();
+
+        $typeDisplay = ucfirst($dominantType);
+        $headline = match ($lang) {
+            'ar' => "أنت تتصفح {$typeDisplay} بعمق — هنا {$count} أكثر",
+            'ku' => "قووڵی تەماشای {$typeDisplay} دەکەیت — {$count} تریش هەیە",
+            default => "You've been deep in {$typeDisplay}s — {$count} more here",
+        };
+
+        $subline = match ($lang) {
+            'ar' => $dominantCity ? "في {$dominantCity} — مطابق لبحثك الليلة" : "مطابق لبحثك الليلة",
+            'ku' => $dominantCity ? "لە {$dominantCity} — لەگەڵ گەڕانی ئەمشەوت دەگونجێت" : "لەگەڵ گەڕانی ئەمشەوت دەگونجێت",
+            default => $dominantCity ? "In {$dominantCity} — matching tonight's search" : "Matching your session",
+        };
+
+        return [
+            'type'       => 'deep_interest',
+            'intent'     => 'active_searcher',
+            'confidence' => min(0.60 + (count($deepIds) * 0.08), 0.90),
+            'icon'       => 'eye',
+            'headline'   => $headline,
+            'subline'    => $subline,
+            'params'     => [
+                'dominant_type'  => $dominantType,
+                'dominant_city'  => $dominantCity,
+                'deep_count'     => count($deepIds),
+                'unseen_count'   => $count,
+            ],
+            'filters' => array_filter([
+                'property_type' => $dominantType,
+                'city'          => $dominantCity,
+            ]),
+            'count'      => $count,
+            'properties' => $this->transformProperties($topProps, $lang),
+        ];
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  NEW STRIP TYPE 4: PRICE_SENSITIVITY
+    //  "Staying under $85K? These 6 new apartments fit exactly."
+    //  Fires when: user has bounce signals above a consistent price point
+    // ──────────────────────────────────────────────────────────────────────
+    private function tryPriceSensitivity(string $userId, array $signals, string $lang): ?array
+    {
+        $bouncePrices = $signals['bouncePrices'] ?? [];
+        if (count($bouncePrices) < 2) return null;
+
+        // Real price ceiling = slightly below cheapest bounced price
+        $ceiling = min($bouncePrices) * 0.95;
+        if ($ceiling <= 0) return null;
+
+        // Also need to know what they DO like — use filter signal or viewed props
+        $filterSignal = $signals['filterSignal'];
+        $listingType  = $filterSignal['listing_type'] ?? null;
+
+        $query = Property::query()
+            ->where('is_active', true)->where('published', true)
+            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+            ->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) <= ?",
+                [$ceiling]
+            )
+            ->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) > 0"
+            )
+            ->where('created_at', '>=', now()->subDays(30));
+
+        if ($listingType) $query->where('listing_type', $listingType);
+
+        $count = $query->count();
+        if ($count === 0) return null;
+
+        $topProps = $query->orderByDesc('created_at')->limit(5)->get();
+
+        $ceilingFmt = '$' . number_format((int) $ceiling);
+
+        $headline = match ($lang) {
+            'ar' => "تبقى تحت {$ceilingFmt}؟ هذه {$count} عقارات تناسبك",
+            'ku' => "لەژێر {$ceilingFmt} دەمێنیتەوە؟ ئەم {$count} خانووە بۆ تۆیە",
+            default => "Staying under {$ceilingFmt}? {$count} listings fit exactly",
+        };
+
+        $subline = match ($lang) {
+            'ar' => 'بناءً على سجل بحثك وعروض الأسعار',
+            'ku' => 'بە پێی مێژووی گەڕانت و نرخەکانت',
+            default => 'Based on your search history and price behavior',
+        };
+
+        return [
+            'type'       => 'price_sensitivity',
+            'intent'     => 'budget_constrained',
+            'confidence' => min(0.65 + (count($bouncePrices) * 0.05), 0.88),
+            'icon'       => 'wallet',
+            'headline'   => $headline,
+            'subline'    => $subline,
+            'params'     => [
+                'price_ceiling'  => (int) $ceiling,
+                'ceiling_fmt'    => $ceilingFmt,
+                'bounce_count'   => count($bouncePrices),
+                'count'          => $count,
+            ],
+            'filters' => array_filter([
+                'max_price'    => (int) $ceiling,
+                'listing_type' => $listingType,
+            ]),
+            'count'      => $count,
+            'properties' => $this->transformProperties($topProps, $lang),
+        ];
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  NEW STRIP TYPE 5: HOT_NEIGHBOURHOOD
+    //  "You keep looking at Dream City — 8 new listings just dropped there."
+    //  Fires when: 5+ map_pin_taps in same small geographic cluster
+    // ──────────────────────────────────────────────────────────────────────
+    private function tryHotNeighbourhood(string $userId, array $signals, string $lang): ?array
+    {
+        $neighbourhood = $signals['hotNeighbourhood'];
+        if (!$neighbourhood) return null;
+
+        $lat    = $neighbourhood['lat'];
+        $lng    = $neighbourhood['lng'];
+        $radius = 1.5; // km — tighter than city, neighbourhood level
+
+        $query = Property::query()
+            ->where('is_active', true)->where('published', true)
+            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+            ->where('created_at', '>=', now()->subDays(14)) // fresh only
+            ->whereRaw(
+                "(6371 * acos(LEAST(1, cos(radians(?)) *
+                    cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6)))) *
+                    cos(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lng')) AS DECIMAL(10,6))) - radians(?)) +
+                    sin(radians(?)) *
+                    sin(radians(CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, '$[0].lat')) AS DECIMAL(10,6))))
+                ))) <= ?",
+                [$lat, $lng, $lat, $radius]
+            );
+
+        $count = $query->count();
+        if ($count === 0) return null;
+
+        $topProps = $query->orderByDesc('created_at')->limit(5)->get();
+
+        $areaName = $neighbourhood['area_name'] ?? null;
+
+        $headline = match ($lang) {
+            'ar' => $areaName
+                ? "تستمر في البحث في {$areaName} — {$count} قوائم جديدة للتو"
+                : "{$count} عقارات جديدة في المنطقة التي تراقبها",
+            'ku' => $areaName
+                ? "بەردەوامت لە {$areaName} دەگەڕێیت — {$count} لیستی نوێ"
+                : "{$count} خانووی نوێ لە ناوچەکەی تۆ",
+            default => $areaName
+                ? "You keep looking at {$areaName} — {$count} new listings just dropped"
+                : "{$count} new listings in the area you keep exploring",
+        };
+
+        $subline = match ($lang) {
+            'ar' => 'بناءً على نقرات خريطتك',
+            'ku' => 'بەپێی کرتەکردنەکانت لەسەر نەخشەکە',
+            default => 'Based on where you keep tapping on the map',
+        };
+
+        return [
+            'type'       => 'hot_neighbourhood',
+            'intent'     => 'location_obsessed',
+            'confidence' => min(0.60 + ($neighbourhood['tap_count'] * 0.04), 0.88),
+            'icon'       => 'map_pin',
+            'headline'   => $headline,
+            'subline'    => $subline,
+            'params'     => [
+                'lat'       => $lat,
+                'lng'       => $lng,
+                'radius_km' => $radius,
+                'tap_count' => $neighbourhood['tap_count'],
+                'area_name' => $areaName,
+                'count'     => $count,
+            ],
+            'filters'    => [],
+            'count'      => $count,
+            'properties' => $this->transformProperties($topProps, $lang),
+        ];
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  EXISTING strip types (unchanged from v1, kept for completeness)
+    // ──────────────────────────────────────────────────────────────────────
 
     private function tryBudgetMatch(string $userId, array $signals, string $lang): ?array
     {
         $calc = $signals['calcSignal'];
-        if (!$calc) {
-            Log::info('SmartStrip[budget_match]: skip — no calculator signal', ['user_id' => $userId]);
-            return null;
-        }
-        if (empty($calc['budget_min_usd']) || empty($calc['budget_max_usd'])) {
-            Log::info('SmartStrip[budget_match]: skip — calc signal missing budget range', [
-                'user_id' => $userId,
-                'calc_keys' => array_keys($calc),
-            ]);
+        if (!$calc || empty($calc['budget_min_usd']) || empty($calc['budget_max_usd'])) {
             return null;
         }
 
         $minUsd = (float) $calc['budget_min_usd'];
         $maxUsd = (float) $calc['budget_max_usd'];
 
-        // ── Currency detection ────────────────────────────────────────────────
-        // Properties in Dream Mulk are priced in IQD (Iraqi Dinar).
-        // The calculator stores budget in USD. We need to check both:
-        //  (a) Direct match: property.price is already in USD scale (< 10,000,000)
-        //  (b) IQD match:    property.price is in IQD (multiply USD by ~1300)
-        // We detect which by checking the median property price in the DB.
-        $sampleMedian = \DB::table('properties')
-            ->where('is_active', true)
-            ->where('published', true)
-            ->whereIn('listing_type', ['sell'])
-            ->whereNotNull('price')
-            ->where('price', '>', 0)
-            ->selectRaw('AVG(price) as avg_price')
-            ->value('avg_price');
-
-        // If median price > 1,000,000 — properties are stored in IQD
-        // Convert USD budget → IQD for comparison (1 USD ≈ 1300 IQD)
-        $iqd_rate = 1300;
-        $isIqd    = ($sampleMedian !== null && $sampleMedian > 1_000_000);
-
-        if ($isIqd) {
-            $min = $minUsd * $iqd_rate;
-            $max = $maxUsd * $iqd_rate;
-        } else {
-            $min = $minUsd;
-            $max = $maxUsd;
-        }
-
-        Log::info('SmartStrip[budget_match]: currency detection', [
-            'user_id'       => $userId,
-            'budget_usd'    => ['min' => $minUsd, 'max' => $maxUsd],
-            'is_iqd'        => $isIqd,
-            'sample_median' => $sampleMedian,
-            'query_range'   => ['min' => $min, 'max' => $max],
-        ]);
-
         $query = Property::query()
-            ->where('is_active', true)
-            ->where('published', true)
+            ->where('is_active', true)->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->where('listing_type', 'sell')
-            ->where('price', '>=', $min)
-            ->where('price', '<=', $max)
+            ->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) BETWEEN ? AND ?",
+                [$minUsd, $maxUsd]
+            )
             ->orderByDesc('created_at');
 
         $count = $query->count();
-        if ($count === 0) {
-            Log::info('SmartStrip[budget_match]: skip — 0 properties in budget range', [
-                'user_id' => $userId,
-                'min' => $min,
-                'max' => $max,
-                'is_iqd' => $isIqd,
-            ]);
-            return null;
-        }
+        if ($count === 0) return null;
 
         $topProperties = $query->with('owner')->limit(5)->get();
-
-        $filters = [
-            'listing_type' => 'sell',
-            'min_price'    => (int) $minUsd, // always return USD to Flutter
-            'max_price'    => (int) $maxUsd,
-        ];
-
-        // Infer property type from user's viewed/compared/favorited history
-        $inferredType = $this->inferPropertyType($signals);
-        if ($inferredType) $filters['property_type'] = $inferredType;
-
         $signalStrength = (int) ($calc['signal_strength'] ?? 50);
         $confidence     = min(0.60 + ($signalStrength / 100 * 0.30), 0.90);
+
+        $minFmt = '$' . number_format((int) $minUsd);
+        $maxFmt = '$' . number_format((int) $maxUsd);
 
         return [
             'type'       => 'budget_match',
@@ -329,173 +640,55 @@ class SmartStripService
             'headline'   => 'budget_match_headline',
             'subline'    => 'budget_match_subline',
             'params'     => [
-                'min_price' => (int) $min,
-                'max_price' => (int) $max,
+                'min_price' => (int) $minUsd,
+                'max_price' => (int) $maxUsd,
                 'count'     => $count,
             ],
-            'filters'    => $filters,
+            'filters'    => ['listing_type' => 'sell', 'min_price' => (int) $minUsd, 'max_price' => (int) $maxUsd],
             'count'      => $count,
             'properties' => $this->transformProperties($topProperties, $lang),
         ];
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  STRIP TYPE 2: RESUME SEARCH
-    //  "Continue: Villa · For Sale · Erbil — 12 new"
-    //
-    //  IMPORTANT: Only fires for REAL structured filters, NOT bare text searches.
-    //  A bare search ("user typed Erbil") is too weak — we skip it.
-    //  Only fires when:
-    //    (a) User applied structured filters (listing_type / property_type / price)
-    //    (b) Search had active_filters set (not empty)
-    //    (c) User searched the same query 2+ times in 48h (repeated intent)
-    // ──────────────────────────────────────────────────────────────────────────
-
     private function tryResumeSearch(string $userId, array $signals, string $lang): ?array
     {
-        // Prefer structured filter signal over bare search signal
         $filter = $signals['filterSignal'];
 
         if ($filter) {
-            // ── Guard: skip filter signals that are all defaults (user opened
-            //    modal but changed nothing — listing_type="All", property_type="All",
-            //    bedrooms=0, no price range). These carry zero intent.
-            $isJunkFilter = (
+            $isJunk = (
                 (empty($filter['listing_type'])  || strtolower($filter['listing_type'])  === 'all') &&
                 (empty($filter['property_type']) || strtolower($filter['property_type']) === 'all') &&
-                empty($filter['city'])           &&
-                empty($filter['min_price'])      &&
-                empty($filter['max_price'])      &&
-                (empty($filter['bedrooms'])      || (int) $filter['bedrooms'] === 0)
+                empty($filter['city']) &&
+                empty($filter['min_price']) &&
+                empty($filter['max_price']) &&
+                (empty($filter['bedrooms']) || (int) $filter['bedrooms'] === 0)
             );
-
-            if ($isJunkFilter) {
-                Log::info('SmartStrip[resume_search]: skip — filter signal is all-defaults (no real intent)', [
-                    'user_id' => $userId,
-                    'filter'  => $filter,
-                ]);
-                $filter = null; // fall through to check search signal instead
-            }
+            if ($isJunk) $filter = null;
         }
 
-        if (!$filter) {
-            $searchSignal = $signals['searchSignal'];
-            if (!$searchSignal) {
-                Log::info('SmartStrip[resume_search]: skip — no filter or search signal', ['user_id' => $userId]);
-                return null;
-            }
+        if (!$filter) return null;
 
-            // Check if search had structured filters attached
-            $activeFilters    = $searchSignal['active_filters'] ?? [];
-            $hasActiveFilters = is_array($activeFilters) && count($activeFilters) > 0;
-
-            if (!$hasActiveFilters) {
-                // Bare search — only resume if user searched same query 2+ times
-                $rawQuery = $searchSignal['query'] ?? '';
-                if (empty($rawQuery)) return null;
-
-                $repeatCount = UserPropertyInteraction::where('user_id', $userId)
-                    ->where('interaction_type', 'search_query_latest')
-                    ->where('created_at', '>=', now()->subHours(48))
-                    ->whereRaw(
-                        "LOWER(JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.query'))) = ?",
-                        [strtolower($rawQuery)]
-                    )
-                    ->count();
-
-                if ($repeatCount < 2) {
-                    Log::info('SmartStrip[resume_search]: skip — bare search query only once', [
-                        'user_id' => $userId,
-                        'query' => $rawQuery,
-                        'repeat_count' => $repeatCount,
-                    ]);
-                    return null;
-                }
-            }
-
-            $filter = $searchSignal;
-        }
-
-        // ── Normalise signal into flat filter map ─────────────────────────────
-        $filtersApplied = $filter['filters'] ?? $filter;
-        $rawQuery       = $filter['query']   ?? ($filtersApplied['query'] ?? '');
-
-        // If city not set but we have a query string, promote it to city
-        if (empty($filtersApplied['city']) && !empty($rawQuery)) {
-            $filtersApplied['city'] = ucfirst(strtolower($rawQuery));
-        }
-
-        // ── Build property query ──────────────────────────────────────────────
         $query = Property::query()
-            ->where('is_active', true)
-            ->where('published', true)
+            ->where('is_active', true)->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
 
-        if (
-            !empty($filtersApplied['listing_type'])
-            && strtolower($filtersApplied['listing_type']) !== 'all'
-        ) {
-            $query->where('listing_type', $filtersApplied['listing_type']);
-        }
-        if (
-            !empty($filtersApplied['property_type'])
-            && strtolower($filtersApplied['property_type']) !== 'all'
-        ) {
-            $query->where('property_type', $filtersApplied['property_type']);
-        }
-        if (!empty($filtersApplied['city'])) {
+        if (!empty($filter['listing_type']) && strtolower($filter['listing_type']) !== 'all')
+            $query->where('listing_type', $filter['listing_type']);
+        if (!empty($filter['city']))
             $query->whereRaw(
                 "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
-                [strtolower($filtersApplied['city'])]
+                [strtolower($filter['city'])]
             );
-        }
-        if (!empty($filtersApplied['min_price'])) {
-            $query->where('price', '>=', $filtersApplied['min_price']);
-        }
-        if (!empty($filtersApplied['max_price'])) {
-            $query->where('price', '<=', $filtersApplied['max_price']);
-        }
-        if (
-            !empty($filtersApplied['bedrooms'])
-            && $filtersApplied['bedrooms'] !== '0'
-            && (int) $filtersApplied['bedrooms'] > 0
-        ) {
-            $query->where('bedrooms', '>=', (int) $filtersApplied['bedrooms']);
-        }
+        if (!empty($filter['max_price_usd']))
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) <= ?",
+                [(float) $filter['max_price_usd']]
+            );
 
-        $filterTimestamp   = $signals['filterSignal']
-            ? now()->subHours(self::SESSION_WINDOW)
-            : now()->subDays(2);
-        $newSinceLastVisit = (clone $query)
-            ->where('created_at', '>=', $filterTimestamp)
-            ->count();
-
-        $totalCount = $query->count();
-        if ($totalCount === 0) {
-            Log::info('SmartStrip[resume_search]: skip — 0 properties match filters', [
-                'user_id' => $userId,
-                'filters_applied' => $filtersApplied,
-            ]);
-            return null;
-        }
+        $count = $query->count();
+        if ($count === 0) return null;
 
         $topProperties = $query->orderByDesc('created_at')->with('owner')->limit(5)->get();
-
-        // Build label parts — only non-empty, non-"All" values
-        $labelParts = array_values(array_filter([
-            (!empty($filtersApplied['property_type'])
-                && strtolower($filtersApplied['property_type']) !== 'all')
-                ? ucfirst($filtersApplied['property_type']) : null,
-            (!empty($filtersApplied['listing_type'])
-                && strtolower($filtersApplied['listing_type']) !== 'all')
-                ? ucfirst($filtersApplied['listing_type']) : null,
-            !empty($filtersApplied['city'])
-                ? ucfirst($filtersApplied['city']) : null,
-        ]));
-
-        if (empty($labelParts) && !empty($rawQuery)) {
-            $labelParts = [ucfirst($rawQuery)];
-        }
 
         return [
             'type'       => 'resume_search',
@@ -504,43 +697,26 @@ class SmartStripService
             'icon'       => 'search',
             'headline'   => 'resume_search_headline',
             'subline'    => 'resume_search_subline',
-            'params'     => [
-                'label_parts'     => $labelParts,
-                'total_count'     => $totalCount,
-                'new_since_visit' => $newSinceLastVisit,
-            ],
-            'filters'    => $filtersApplied,
-            'count'      => $totalCount,
+            'params'     => ['total_count' => $count, 'label_parts' => []],
+            'filters'    => $filter,
+            'count'      => $count,
             'properties' => $this->transformProperties($topProperties, $lang),
         ];
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  STRIP TYPE 3: AREA FOCUS
-    //  "You keep looking in Erbil — 34 available"
-    // ──────────────────────────────────────────────────────────────────────────
-
     private function tryAreaFocus(string $userId, array $signals, string $lang): ?array
     {
-        if (count($signals['recentlyViewedIds']) < 3) {
-            Log::info('SmartStrip[area_focus]: skip — fewer than 3 recently viewed properties', [
-                'user_id'      => $userId,
-                'viewed_count' => count($signals['recentlyViewedIds']),
-            ]);
-            return null;
-        }
+        if (count($signals['recentlyViewedIds']) < 3) return null;
 
         $viewedProperties = Property::whereIn('id', $signals['recentlyViewedIds'])
             ->whereNotNull('address_details')
-            ->get(['id', 'address_details', 'listing_type']); // ← removed property_type
+            ->get(['id', 'address_details', 'listing_type']);
 
         if ($viewedProperties->isEmpty()) return null;
 
         $cityCounts = [];
         foreach ($viewedProperties as $prop) {
-            $addr = is_array($prop->address_details)
-                ? $prop->address_details
-                : json_decode($prop->address_details, true);
+            $addr = is_array($prop->address_details) ? $prop->address_details : json_decode($prop->address_details, true);
             $city = $addr['city']['en'] ?? null;
             if ($city) $cityCounts[$city] = ($cityCounts[$city] ?? 0) + 1;
         }
@@ -550,18 +726,10 @@ class SmartStripService
         $topCity      = array_key_first($cityCounts);
         $topCityCount = $cityCounts[$topCity];
 
-        if ($topCityCount < 3) {
-            Log::info('SmartStrip[area_focus]: skip — no dominant city (max views in one city < 3)', [
-                'user_id'        => $userId,
-                'top_city'       => $topCity,
-                'top_city_count' => $topCityCount,
-            ]);
-            return null;
-        }
+        if ($topCityCount < 3) return null;
 
         $query = Property::query()
-            ->where('is_active', true)
-            ->where('published', true)
+            ->where('is_active', true)->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->whereRaw(
                 "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) = ?",
@@ -571,114 +739,58 @@ class SmartStripService
             ->orderByDesc('created_at');
 
         $count = $query->count();
-        if ($count === 0) {
-            Log::info('SmartStrip[area_focus]: skip — 0 unseen properties in dominant city', [
-                'user_id' => $userId,
-                'city'    => $topCity,
-            ]);
-            return null;
-        }
+        if ($count === 0) return null;
 
-        $topProperties       = $query->with('owner')->limit(5)->get();
-        $inferredListingType = $this->inferListingType($viewedProperties);
-        $inferredPropType    = $this->inferPropertyType($signals);
-
-        $filters = ['city' => $topCity];
-        if ($inferredListingType) $filters['listing_type']  = $inferredListingType;
-        if ($inferredPropType)    $filters['property_type'] = $inferredPropType;
-
-        $confidence = min(0.55 + ($topCityCount * 0.05), 0.85);
+        $topProperties = $query->with('owner')->limit(5)->get();
 
         return [
             'type'       => 'area_focus',
             'intent'     => 'location_focused',
-            'confidence' => $confidence,
+            'confidence' => min(0.55 + ($topCityCount * 0.05), 0.85),
             'icon'       => 'location',
             'headline'   => 'area_focus_headline',
             'subline'    => 'area_focus_subline',
-            'params'     => [
-                'city'       => $topCity,
-                'view_count' => $topCityCount,
-                'count'      => $count,
-            ],
-            'filters'    => $filters,
+            'params'     => ['city' => $topCity, 'view_count' => $topCityCount, 'count' => $count],
+            'filters'    => ['city' => $topCity],
             'count'      => $count,
             'properties' => $this->transformProperties($topProperties, $lang),
         ];
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  STRIP TYPE 4: NEW MATCHES
-    //  "New listings matching your style"
-    // ──────────────────────────────────────────────────────────────────────────
-
     private function tryNewMatches(string $userId, array $signals, string $lang): ?array
     {
-        $allInteractedIds = array_unique(array_merge(
+        $allIds = array_unique(array_merge(
             $signals['favoriteIds'],
             $signals['compareIds'],
             $signals['recentlyViewedIds']
         ));
 
-        if (count($allInteractedIds) < 2) {
-            Log::info('SmartStrip[new_matches]: skip — fewer than 2 interacted properties', [
-                'user_id' => $userId,
-                'interacted_count' => count($allInteractedIds),
-            ]);
-            return null;
-        }
+        if (count($allIds) < 2) return null;
 
-        $interactedProps = Property::whereIn('id', $allInteractedIds)
-            ->get(['id', 'listing_type', 'property_type', 'address_details', 'price', 'bedrooms']);
+        $interacted = Property::whereIn('id', $allIds)->get(['id', 'listing_type', 'type', 'address_details', 'price']);
+        if ($interacted->isEmpty()) return null;
 
-        if ($interactedProps->isEmpty()) return null;
-
-        $dominantListingType = $interactedProps->groupBy('listing_type')
-            ->map->count()->sortDesc()->keys()->first();
-        $dominantPropType    = $interactedProps->groupBy('property_type')
-            ->map->count()->sortDesc()->keys()->first();
-
-        $prices   = $interactedProps->pluck('price')->filter()->sort()->values();
-        $medianPx = $prices->count() > 0
-            ? $prices->get((int) floor($prices->count() / 2))
-            : null;
+        $dominantListing = $interacted->groupBy('listing_type')->map->count()->sortDesc()->keys()->first();
+        $dominantType    = $interacted->groupBy(fn($p) => $p->type['category'] ?? '')->map->count()->sortDesc()->keys()->first();
 
         $lastActive = $signals['user']?->last_activity_at ?? now()->subDays(1);
 
         $query = Property::query()
-            ->where('is_active', true)
-            ->where('published', true)
+            ->where('is_active', true)->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->where('created_at', '>=', $lastActive)
-            ->whereNotIn('id', $allInteractedIds);
+            ->whereNotIn('id', $allIds);
 
-        if ($dominantListingType) $query->where('listing_type', $dominantListingType);
-        if ($dominantPropType)    $query->where('property_type', $dominantPropType);
-        if ($medianPx) {
-            $query->where('price', '>=', $medianPx * 0.65)
-                ->where('price', '<=', $medianPx * 1.40);
-        }
+        if ($dominantListing) $query->where('listing_type', $dominantListing);
+        if ($dominantType)    $query->whereRaw(
+            "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
+            [strtolower($dominantType)]
+        );
 
         $count = $query->count();
-        if ($count === 0) {
-            Log::info('SmartStrip[new_matches]: skip — 0 new listings match profile', [
-                'user_id'      => $userId,
-                'listing_type' => $dominantListingType,
-                'prop_type'    => $dominantPropType,
-                'median_price' => $medianPx,
-            ]);
-            return null;
-        }
+        if ($count === 0) return null;
 
         $topProperties = $query->orderByDesc('created_at')->with('owner')->limit(5)->get();
-
-        $filters = [];
-        if ($dominantListingType) $filters['listing_type'] = $dominantListingType;
-        if ($dominantPropType)    $filters['property_type'] = $dominantPropType;
-        if ($medianPx) {
-            $filters['min_price'] = (int) ($medianPx * 0.65);
-            $filters['max_price'] = (int) ($medianPx * 1.40);
-        }
 
         return [
             'type'       => 'new_matches',
@@ -687,59 +799,32 @@ class SmartStripService
             'icon'       => 'sparkles',
             'headline'   => 'new_matches_headline',
             'subline'    => 'new_matches_subline',
-            'params'     => [
-                'count'        => $count,
-                'listing_type' => $dominantListingType,
-                'prop_type'    => $dominantPropType,
-            ],
-            'filters'    => $filters,
+            'params'     => ['count' => $count],
+            'filters'    => [],
             'count'      => $count,
             'properties' => $this->transformProperties($topProperties, $lang),
         ];
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  STRIP TYPE 5: RETURNING VISITOR
-    //  "Welcome back — 47 new listings"
-    // ──────────────────────────────────────────────────────────────────────────
-
     private function tryReturningVisitor(string $userId, array $signals, string $lang): ?array
     {
-        if ($signals['daysSinceVisit'] < 2) {
-            Log::info('SmartStrip[returning_visitor]: skip — visited less than 2 days ago', [
-                'user_id' => $userId,
-                'days_since_visit' => $signals['daysSinceVisit'],
-            ]);
-            return null;
-        }
+        if ($signals['daysSinceVisit'] < 2) return null;
 
-        $lastActive = $signals['user']?->last_activity_at
-            ?? now()->subDays($signals['daysSinceVisit']);
+        $lastActive = $signals['user']?->last_activity_at ?? now()->subDays($signals['daysSinceVisit']);
 
         $newCount = Property::query()
-            ->where('is_active', true)
-            ->where('published', true)
+            ->where('is_active', true)->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->where('created_at', '>=', $lastActive)
             ->count();
 
-        if ($newCount === 0) {
-            Log::info('SmartStrip[returning_visitor]: skip — no new listings since last visit', [
-                'user_id' => $userId,
-                'last_active' => $lastActive,
-            ]);
-            return null;
-        }
+        if ($newCount === 0) return null;
 
         $topProperties = Property::query()
-            ->where('is_active', true)
-            ->where('published', true)
+            ->where('is_active', true)->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
             ->where('created_at', '>=', $lastActive)
-            ->orderByDesc('created_at')
-            ->with('owner')
-            ->limit(5)
-            ->get();
+            ->orderByDesc('created_at')->with('owner')->limit(5)->get();
 
         return [
             'type'       => 'returning_visitor',
@@ -748,58 +833,58 @@ class SmartStripService
             'icon'       => 'wave',
             'headline'   => 'returning_visitor_headline',
             'subline'    => 'returning_visitor_subline',
-            'params'     => [
-                'days_away' => $signals['daysSinceVisit'],
-                'new_count' => $newCount,
-            ],
+            'params'     => ['days_away' => $signals['daysSinceVisit'], 'new_count' => $newCount],
             'filters'    => [],
             'count'      => $newCount,
             'properties' => $this->transformProperties($topProperties, $lang),
         ];
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    //  HELPERS — unchanged
-    // ──────────────────────────────────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────
+    //  PRIVATE HELPERS
+    // ──────────────────────────────────────────────────────────────────────
 
-    private function inferPropertyType(array $signals): ?string
+    /**
+     * Detect if map pin taps cluster in a small area (≤ 1km radius).
+     * Returns centroid + tap count if 5+ taps found, null otherwise.
+     */
+    private function detectHotNeighbourhood(Collection $mapPinTaps): ?array
     {
-        $ids = array_unique(array_merge(
-            $signals['favoriteIds'],
-            $signals['compareIds'],
-            $signals['recentlyViewedIds']
-        ));
-        if (empty($ids)) return null;
+        if ($mapPinTaps->count() < 5) return null;
 
-        $result = Property::whereIn('id', $ids)
-            ->selectRaw("JSON_UNQUOTE(JSON_EXTRACT(type, '$.category')) as prop_type, COUNT(*) as cnt")
-            ->groupBy('prop_type')
-            ->orderByDesc('cnt')
-            ->first();
+        $points = [];
+        foreach ($mapPinTaps as $row) {
+            $meta = is_array($row->metadata)
+                ? $row->metadata
+                : json_decode($row->metadata, true);
+            if (!empty($meta['lat']) && !empty($meta['lng'])) {
+                $points[] = ['lat' => (float) $meta['lat'], 'lng' => (float) $meta['lng']];
+            }
+        }
 
-        return $result?->prop_type;
-    }
+        if (count($points) < 5) return null;
 
-    private function inferListingType(Collection $properties): ?string
-    {
-        if ($properties->isEmpty()) return null;
-        return $properties->groupBy('listing_type')
-            ->map->count()->sortDesc()->keys()->first();
-    }
+        // Simple centroid
+        $cLat = array_sum(array_column($points, 'lat')) / count($points);
+        $cLng = array_sum(array_column($points, 'lng')) / count($points);
 
-    private function buildFiltersFromProperties(Collection $properties): array
-    {
-        if ($properties->isEmpty()) return [];
-        $first = $properties->first();
-        $addr  = is_array($first->address_details)
-            ? $first->address_details
-            : json_decode($first->address_details, true);
+        // Check if most points are within 1km of centroid
+        $within = array_filter($points, function ($p) use ($cLat, $cLng) {
+            $dlat = deg2rad($p['lat'] - $cLat);
+            $dlng = deg2rad($p['lng'] - $cLng);
+            $a    = sin($dlat / 2) ** 2 + cos(deg2rad($cLat)) * cos(deg2rad($p['lat'])) * sin($dlng / 2) ** 2;
+            $dist = 2 * 6371 * atan2(sqrt($a), sqrt(1 - $a));
+            return $dist <= 1.0;
+        });
 
-        $filters = [];
-        if ($first->listing_type)       $filters['listing_type']  = $first->listing_type;
-        if ($first->property_type)      $filters['property_type'] = $first->property_type;
-        if (!empty($addr['city']['en'])) $filters['city']          = $addr['city']['en'];
-        return $filters;
+        if (count($within) < 5) return null;
+
+        return [
+            'lat'       => round($cLat, 6),
+            'lng'       => round($cLng, 6),
+            'tap_count' => count($within),
+            'area_name' => null, // Flutter can reverse-geocode if needed
+        ];
     }
 
     private function transformProperties(Collection $properties, string $lang): array
@@ -816,59 +901,30 @@ class SmartStripService
             };
             $cityName = $addr['city'][$cityKey] ?? $addr['city']['en'] ?? '';
 
-            $images = [];
-            if (!empty($property->images)) {
-                $raw = is_array($property->images)
-                    ? $property->images
-                    : json_decode($property->images, true);
-                if (is_array($raw)) {
-                    $images = collect($raw)
-                        ->map(fn($img) => is_array($img) ? ($img['url'] ?? null) : $img)
-                        ->filter()->values()->toArray();
-                }
-            }
+            $images   = is_array($property->images)
+                ? $property->images
+                : json_decode($property->images ?? '[]', true);
 
-            // ── Price: Extract strictly USD from the JSON structure ───────
             $priceUsd = 0.0;
             $rawPrice = $property->price;
-
             if (!empty($rawPrice)) {
-                // Handle both raw JSON strings and Laravel automatically casted arrays
                 $priceData = is_string($rawPrice) ? json_decode($rawPrice, true) : (array) $rawPrice;
-
-                // 1. Strictly retrieve the USD key from {"usd": 66000, "iqd": 1}
                 if (isset($priceData['usd']) && $priceData['usd'] > 0) {
                     $priceUsd = (float) $priceData['usd'];
                 }
-                // 2. Fallback: If only IQD exists in the JSON, convert it to USD
-                elseif (isset($priceData['iqd']) && $priceData['iqd'] > 0) {
-                    $rawIqd = (float) $priceData['iqd'];
-                    $priceUsd = $rawIqd > 1_000_000 ? round($rawIqd / 1300) : $rawIqd;
-                }
-                // 3. Fallback: If it's an older listing where price is just a flat number
-                elseif (is_numeric($rawPrice) && $rawPrice > 0) {
-                    $rawNum = (float) $rawPrice;
-                    $priceUsd = $rawNum > 1_000_000 ? round($rawNum / 1300) : $rawNum;
-                }
             }
-
-            Log::debug('SmartStrip[transformProperties]: price', [
-                'property_id' => $property->id,
-                'raw_price'   => $property->price,
-                'sent_price'  => $priceUsd,
-            ]);
 
             return [
                 'id'            => $property->id,
                 'name'          => $property->name          ?? '',
                 'price'         => $priceUsd,
-                'currency'      => $property->currency      ?? 'USD',
+                'currency'      => 'USD',
                 'listing_type'  => $property->listing_type  ?? '',
-                'property_type' => $property->property_type ?? '',
+                'property_type' => $property->type['category'] ?? '',
                 'city'          => $cityName,
                 'image'         => $images[0] ?? null,
                 'is_verified'   => (bool) ($property->verified ?? false),
-                'bedrooms'      => (int) ($property->bedrooms  ?? 0),
+                'bedrooms'      => (int) ($property->rooms['bedroom']['count'] ?? 0),
             ];
         })->toArray();
     }

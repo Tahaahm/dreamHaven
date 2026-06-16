@@ -10,42 +10,52 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * UserTasteProfile — PERF-OPTIMISED VERSION
+ * UserTasteProfile — v2 with all new signals
  *
- * Changes from original:
+ * NEW signal weights added:
+ *   scroll_depth      → 0.5–4.0× based on depth
+ *   time_on_listing   → -1.0–4.0× (negative for bounces)
+ *   return_to_listing → 8.0×
+ *   photo_gallery_open→ 2.5×
+ *   contact_intent    → 6.0×
+ *   share_property    → 3.5×
+ *   map_pin_tap       → 2.0× (also contributes to heat centroid)
+ *   search_refinement → 3.0×
  *
- * 1. compute() merged 3 separate DB queries into 2:
- *    - BEFORE: interactions query → property query → strip feedback query
- *    - AFTER:  interactions + strip feedback in ONE query using UNION,
- *              then one property lookup. Saves one round-trip per cache miss.
+ * NEGATIVE SIGNALS:
+ *   time_on_listing (<5s) → -1.0× penalises that property's type/price/city
  *
- * 2. CACHE_TTL bumped from 900s → 1200s (20 min).
- *    getRecommended() TTL is 600s, so the taste profile cache always outlives
- *    the recommendation cache. This means on a recommended cache miss the
- *    taste profile is ALWAYS already warm — no double cold start.
- *
- * 3. compute() now uses ->select() with only the columns it actually reads
- *    instead of pulling the full interactions row (metadata can be large).
- *
- * 4. Property lookup now uses ->select() with only needed columns instead
- *    of SELECT *.
+ * SESSION CONTEXT:
+ *   Last 2 hours of interactions dominate (3× amplifier)
+ *   vs 90-day history (1× base)
  */
 class UserTasteProfile
 {
-    private const HALF_LIFE_DAYS = 14;
-    private const LOOKBACK_DAYS  = 90;
-    // FIX: bumped to 20 min so it always outlives the 10-min recommendation cache.
-    // Cold-start cost is paid at most once per 20 minutes per user.
-    private const CACHE_TTL      = 1200;
+    private const HALF_LIFE_DAYS  = 14;
+    private const LOOKBACK_DAYS   = 90;
+    private const CACHE_TTL       = 1200; // 20 min
+    private const SESSION_WINDOW  = 2;    // hours — "today's session"
+    private const SESSION_BOOST   = 3.0;  // session interactions worth 3×
 
     private const SIGNAL_WEIGHTS = [
-        'favorite'          => 5.0,
-        'compare'           => 4.0,
-        'search_click'      => 3.0,
-        'filter_applied'    => 3.0,
-        'calculator_search' => 3.0,
-        'view'              => 1.0,
-        'impression'        => 0.1,
+        // Existing
+        'favorite'            => 5.0,
+        'compare'             => 4.0,
+        'search_click'        => 3.0,
+        'filter_applied'      => 3.0,
+        'calculator_search'   => 3.0,
+        'view'                => 1.0,
+        'impression'          => 0.1,
+
+        // NEW signals — weights are base; actual weight read from metadata
+        'scroll_depth'        => 1.0,  // overridden by metadata.weight (0.5–4.0)
+        'time_on_listing'     => 1.0,  // overridden by metadata.weight (-1.0–4.0)
+        'return_to_listing'   => 8.0,
+        'photo_gallery_open'  => 2.5,
+        'contact_intent'      => 6.0,
+        'share_property'      => 3.5,
+        'map_pin_tap'         => 2.0,
+        'search_refinement'   => 3.0,
     ];
 
     private const VIRTUAL_IDS = [
@@ -84,26 +94,28 @@ class UserTasteProfile
 
     private function compute(string $userId): array
     {
-        // FIX: fetch only the columns we actually use — avoids pulling large
-        // metadata blobs for impression rows we'll mostly discard.
+        $allSignalTypes = array_merge(
+            array_keys(self::SIGNAL_WEIGHTS),
+            ['strip_clicked', 'strip_dismissed']
+        );
+
         $rows = UserPropertyInteraction::where('user_id', $userId)
             ->where('created_at', '>=', now()->subDays(self::LOOKBACK_DAYS))
-            ->whereIn('interaction_type', array_merge(
-                array_keys(self::SIGNAL_WEIGHTS),
-                ['strip_clicked', 'strip_dismissed'] // needed for strip feedback
-            ))
+            ->whereIn('interaction_type', $allSignalTypes)
             ->orderByDesc('created_at')
             ->select(['property_id', 'interaction_type', 'metadata', 'created_at'])
             ->get();
-        // ONE query instead of two (interactions + strip feedback were separate before).
-        // We split strip rows from interaction rows in PHP — much cheaper than a second DB call.
 
-        $stripRows        = $rows->whereIn('interaction_type', ['strip_clicked', 'strip_dismissed']);
-        $interactionRows  = $rows->whereNotIn('interaction_type', ['strip_clicked', 'strip_dismissed']);
+        $stripRows       = $rows->whereIn('interaction_type', ['strip_clicked', 'strip_dismissed']);
+        $interactionRows = $rows->whereNotIn('interaction_type', ['strip_clicked', 'strip_dismissed']);
+
+        // Split session (last 2h) vs historical
+        $sessionCutoff   = now()->subHours(self::SESSION_WINDOW);
+        $sessionRows     = $interactionRows->filter(fn($r) => $r->created_at >= $sessionCutoff);
+        $historicalRows  = $interactionRows->filter(fn($r) => $r->created_at < $sessionCutoff);
 
         $filterSignal = $this->virtualSignal($interactionRows, 'filter_applied',    'filter_signal');
         $calcSignal   = $this->virtualSignal($interactionRows, 'calculator_search', 'calculator_signal');
-
         $filterSignal = $this->sanitizeFilterSignal($filterSignal);
 
         $realRows = $interactionRows
@@ -114,7 +126,7 @@ class UserTasteProfile
             return $this->coldStartProfile($userId);
         }
 
-        // FIX: select only the columns needed for taste inference — not SELECT *.
+        // Property lookup for all interacted properties
         $propIds = $realRows->pluck('property_id')->unique()->values();
         $props   = Property::whereIn('id', $propIds)
             ->select(['id', 'type', 'address_details', 'price', 'rooms', 'listing_type', 'locations'])
@@ -127,6 +139,8 @@ class UserTasteProfile
         $bedW    = [];
         $priceW  = [];
         $geoPts  = [];
+        $negativeTypes  = []; // track negative signals by type/city
+        $negativePrices = [];
         $counts  = [];
         $seenIds = [];
 
@@ -135,21 +149,36 @@ class UserTasteProfile
             $counts[$row->interaction_type] = ($counts[$row->interaction_type] ?? 0) + 1;
 
             $prop = $props->get($row->property_id);
-            if (!$prop) continue;
 
-            $base  = self::SIGNAL_WEIGHTS[$row->interaction_type] ?? 0;
-            $decay = $this->decay($row->created_at);
-            $w     = $base * $decay;
-            if ($w <= 0) continue;
+            // ── Derive weight ──────────────────────────────────────────────
+            $baseWeight = $this->resolveSignalWeight($row);
+            $isSession  = $row->created_at >= $sessionCutoff;
+            $decay      = $this->decay($row->created_at);
 
+            // Session interactions get 3× boost
+            $w = $baseWeight * $decay * ($isSession ? self::SESSION_BOOST : 1.0);
+
+            // ── Handle NEGATIVE signals ────────────────────────────────────
+            if ($baseWeight < 0) {
+                // This is a bounce — penalise the property's type/price
+                if ($prop) {
+                    $type = strtolower($prop->type['category'] ?? '');
+                    if ($type) $negativeTypes[$type] = ($negativeTypes[$type] ?? 0) + abs($w);
+
+                    $usd = (float) ($prop->price['usd'] ?? 0);
+                    if ($usd > 0) $negativePrices[] = $usd;
+                }
+                continue; // don't add negative to positive weights
+            }
+
+            if ($w <= 0 || !$prop) continue;
+
+            // ── Accumulate positive signals ────────────────────────────────
             $city = $prop->address_details['city']['en'] ?? null;
             if ($city) $cityW[$city] = ($cityW[$city] ?? 0) + $w;
 
-            $type = $prop->type['category'] ?? null;
-            if ($type) {
-                $type = strtolower($type);
-                $typeW[$type] = ($typeW[$type] ?? 0) + $w;
-            }
+            $type = strtolower($prop->type['category'] ?? '');
+            if ($type) $typeW[$type] = ($typeW[$type] ?? 0) + $w;
 
             if ($prop->listing_type) {
                 $listW[$prop->listing_type] = ($listW[$prop->listing_type] ?? 0) + $w;
@@ -161,20 +190,43 @@ class UserTasteProfile
             $usd = (float) ($prop->price['usd'] ?? 0);
             if ($usd > 0) $priceW[] = ['p' => $usd, 'w' => $w];
 
-            $locs = is_array($prop->locations) ? $prop->locations : [];
-            if (!empty($locs[0]['lat']) && !empty($locs[0]['lng'])) {
+            // ── Geo points — include map_pin_tap coords too ────────────────
+            $meta = is_array($row->metadata)
+                ? $row->metadata
+                : json_decode($row->metadata, true);
+
+            // If this is a map_pin_tap, use the exact tap coords (more precise)
+            if ($row->interaction_type === 'map_pin_tap' && !empty($meta['lat']) && !empty($meta['lng'])) {
                 $geoPts[] = [
-                    'lat' => (float) $locs[0]['lat'],
-                    'lng' => (float) $locs[0]['lng'],
-                    'w'   => $w,
+                    'lat' => (float) $meta['lat'],
+                    'lng' => (float) $meta['lng'],
+                    'w'   => $w * 2.0, // extra weight: user explicitly tapped here
                 ];
+            } else {
+                $locs = is_array($prop->locations) ? $prop->locations : [];
+                if (!empty($locs[0]['lat']) && !empty($locs[0]['lng'])) {
+                    $geoPts[] = [
+                        'lat' => (float) $locs[0]['lat'],
+                        'lng' => (float) $locs[0]['lng'],
+                        'w'   => $w,
+                    ];
+                }
             }
         }
 
+        // ── Apply negative type penalties ──────────────────────────────────
+        foreach ($negativeTypes as $type => $penalty) {
+            if (isset($typeW[$type])) {
+                $typeW[$type] = max(0, $typeW[$type] - $penalty);
+                if ($typeW[$type] === 0) unset($typeW[$type]);
+            }
+        }
+
+        // ── Derive final values ────────────────────────────────────────────
         $listingType = $this->topKey($listW);
         if ($filterSignal['listing_type'] ?? null) $listingType = $filterSignal['listing_type'];
 
-        $price    = $this->derivePriceBand($priceW, $filterSignal, $calcSignal);
+        $price    = $this->derivePriceBand($priceW, $filterSignal, $calcSignal, $negativePrices);
         $bedrooms = $this->topKey($bedW);
         if ($filterSignal['bedrooms'] ?? null) $bedrooms = (int) $filterSignal['bedrooms'];
 
@@ -189,66 +241,112 @@ class UserTasteProfile
             $cities = [$filterSignal['city'] => 1.0] + $cities;
         }
 
+        // ── Session context summary ────────────────────────────────────────
+        $sessionContext = $this->buildSessionContext($sessionRows, $props);
+
         return [
-            'has_history'    => true,
-            'is_cold_start'  => false,
-            'intent_score'   => $this->intentScore($counts, $calcSignal, $filterSignal),
-            'cities'         => $cities,
-            'types'          => $types,
-            'listing_type'   => $listingType,
-            'price'          => $price,
-            'bedrooms'       => $bedrooms ? (int) $bedrooms : null,
-            'heat_centroid'  => $this->heatCentroid($geoPts),
-            'seen_ids'       => array_values(array_unique($seenIds)),
-            'budget'         => $calcSignal ?: null,
-            'signal_counts'  => $counts,
-            // FIX: computed from $stripRows already fetched above — no extra DB call
-            'strip_feedback' => $this->computeStripFeedback($stripRows),
+            'has_history'      => true,
+            'is_cold_start'    => false,
+            'intent_score'     => $this->intentScore($counts, $calcSignal, $filterSignal),
+            'cities'           => $cities,
+            'types'            => $types,
+            'listing_type'     => $listingType,
+            'price'            => $price,
+            'bedrooms'         => $bedrooms ? (int) $bedrooms : null,
+            'heat_centroid'    => $this->heatCentroid($geoPts),
+            'seen_ids'         => array_values(array_unique($seenIds)),
+            'budget'           => $calcSignal ?: null,
+            'signal_counts'    => $counts,
+            'strip_feedback'   => $this->computeStripFeedback($stripRows),
+            'negative_types'   => array_keys($negativeTypes),  // NEW
+            'session_context'  => $sessionContext,               // NEW
         ];
     }
 
     // ──────────────────────────────────────────────────────────────────────
-    //  Cold-start
+    //  NEW: Resolve actual weight from signal row
+    //  (new signals store their weight in metadata)
     // ──────────────────────────────────────────────────────────────────────
-    private function coldStartProfile(string $userId): array
+    private function resolveSignalWeight($row): float
     {
-        $user   = User::find($userId);
-        $seed   = $user?->place;
-        $cities = $seed ? [$seed => 1.0] : [];
+        $baseWeight = self::SIGNAL_WEIGHTS[$row->interaction_type] ?? 0;
 
-        return [
-            'has_history'    => false,
-            'is_cold_start'  => true,
-            'intent_score'   => 0,
-            'cities'         => $cities,
-            'types'          => [],
-            'listing_type'   => null,
-            'price'          => null,
-            'bedrooms'       => null,
-            'heat_centroid'  => null,
-            'seen_ids'       => [],
-            'budget'         => null,
-            'signal_counts'  => [],
-            'strip_feedback' => [],
+        // For new signal types that store weight in metadata
+        $metaWeightTypes = [
+            'scroll_depth',
+            'time_on_listing',
+            'photo_gallery_open',
+            'contact_intent',
+            'share_property',
+            'map_pin_tap',
+            'search_refinement',
         ];
-    }
 
-    private function intentScore(array $counts, ?array $calc, ?array $filter): int
-    {
-        $score = 0;
-        $score += min(($counts['favorite']     ?? 0) * 12, 30);
-        $score += min(($counts['compare']      ?? 0) * 15, 30);
-        $score += min(($counts['search_click'] ?? 0) * 4,  15);
-        if ($filter) $score += 10;
-        if ($calc) {
-            $score += 10;
-            $score += (int) round((($calc['signal_strength'] ?? 0) / 100) * 5);
+        if (in_array($row->interaction_type, $metaWeightTypes) && $row->metadata) {
+            $meta = is_array($row->metadata)
+                ? $row->metadata
+                : json_decode($row->metadata, true);
+            if (isset($meta['weight'])) {
+                return (float) $meta['weight'];
+            }
         }
-        return min($score, 100);
+
+        return $baseWeight;
     }
 
-    private function derivePriceBand(array $priceW, ?array $filter, ?array $calc): ?array
+    // ──────────────────────────────────────────────────────────────────────
+    //  NEW: Build session context (last 2h summary)
+    // ──────────────────────────────────────────────────────────────────────
+    private function buildSessionContext($sessionRows, $propsById): array
     {
+        if ($sessionRows->isEmpty()) return [];
+
+        $realSession = $sessionRows->whereNotIn('property_id', self::VIRTUAL_IDS);
+
+        $sessionPropIds = $realSession->pluck('property_id')->unique()->values();
+        $sessionTypes   = [];
+        $sessionCities  = [];
+        $hasContactIntent = false;
+        $hasReturnVisit   = false;
+
+        foreach ($realSession as $row) {
+            if ($row->interaction_type === 'contact_intent') $hasContactIntent = true;
+            if ($row->interaction_type === 'return_to_listing') $hasReturnVisit = true;
+
+            $prop = $propsById->get($row->property_id);
+            if (!$prop) continue;
+
+            $type = strtolower($prop->type['category'] ?? '');
+            if ($type) $sessionTypes[$type] = ($sessionTypes[$type] ?? 0) + 1;
+
+            $city = $prop->address_details['city']['en'] ?? null;
+            if ($city) $sessionCities[$city] = ($sessionCities[$city] ?? 0) + 1;
+        }
+
+        arsort($sessionTypes);
+        arsort($sessionCities);
+
+        return [
+            'property_count'    => $sessionPropIds->count(),
+            'dominant_type'     => array_key_first($sessionTypes),
+            'dominant_city'     => array_key_first($sessionCities),
+            'has_contact_intent' => $hasContactIntent,
+            'has_return_visit'  => $hasReturnVisit,
+            'types_viewed'      => $sessionTypes,
+            'cities_viewed'     => $sessionCities,
+        ];
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    //  UPDATED: derivePriceBand now also avoids negative-signalled prices
+    // ──────────────────────────────────────────────────────────────────────
+    private function derivePriceBand(
+        array   $priceW,
+        ?array  $filter,
+        ?array  $calc,
+        array   $negativePrices = []
+    ): ?array {
+        // (same logic as before, plus negative price exclusion)
         if ($filter && (!empty($filter['max_price_usd']) || !empty($filter['min_price_usd']))) {
             $min = (float) ($filter['min_price_usd'] ?? 0);
             $max = (float) ($filter['max_price_usd'] ?? 0);
@@ -262,6 +360,12 @@ class UserTasteProfile
                     'source' => $ageDays > 3 ? 'filter_aging' : 'filter',
                 ];
             }
+        }
+
+        // If we have negative prices, cap the max at slightly below the cheapest bounce
+        $negativeCap = null;
+        if (!empty($negativePrices)) {
+            $negativeCap = min($negativePrices) * 0.95; // 5% below cheapest bounce
         }
 
         $behaviourTarget = null;
@@ -286,12 +390,64 @@ class UserTasteProfile
         if (!$target || $target <= 0) return null;
 
         $tol = $calc ? 0.30 : 0.40;
+        $max = $target * (1 + $tol);
+
+        // Apply negative price cap
+        if ($negativeCap && $max > $negativeCap) {
+            $max = $negativeCap;
+        }
+
         return [
-            'target' => $target,
-            'min'    => $target * (1 - $tol),
-            'max'    => $target * (1 + $tol),
-            'source' => $behaviourTarget ? 'behaviour' : 'calculator',
+            'target'       => $target,
+            'min'          => $target * (1 - $tol),
+            'max'          => $max,
+            'source'       => $behaviourTarget ? 'behaviour' : 'calculator',
+            'negative_cap' => $negativeCap,
         ];
+    }
+
+    // ── All existing helpers preserved ────────────────────────────────────
+
+    private function coldStartProfile(string $userId): array
+    {
+        $user   = User::find($userId);
+        $seed   = $user?->place;
+        $cities = $seed ? [$seed => 1.0] : [];
+
+        return [
+            'has_history'      => false,
+            'is_cold_start'    => true,
+            'intent_score'     => 0,
+            'cities'           => $cities,
+            'types'            => [],
+            'listing_type'     => null,
+            'price'            => null,
+            'bedrooms'         => null,
+            'heat_centroid'    => null,
+            'seen_ids'         => [],
+            'budget'           => null,
+            'signal_counts'    => [],
+            'strip_feedback'   => [],
+            'negative_types'   => [],
+            'session_context'  => [],
+        ];
+    }
+
+    private function intentScore(array $counts, ?array $calc, ?array $filter): int
+    {
+        $score = 0;
+        $score += min(($counts['favorite']          ?? 0) * 12, 30);
+        $score += min(($counts['compare']           ?? 0) * 15, 30);
+        $score += min(($counts['contact_intent']    ?? 0) * 20, 40); // NEW — high value
+        $score += min(($counts['return_to_listing'] ?? 0) * 15, 30); // NEW
+        $score += min(($counts['share_property']    ?? 0) * 10, 20); // NEW
+        $score += min(($counts['search_click']      ?? 0) * 4,  15);
+        if ($filter) $score += 10;
+        if ($calc) {
+            $score += 10;
+            $score += (int) round((($calc['signal_strength'] ?? 0) / 100) * 5);
+        }
+        return min($score, 100);
     }
 
     private function heatCentroid(array $points): ?array
@@ -334,11 +490,6 @@ class UserTasteProfile
         return 2 * $R * atan2(sqrt($a), sqrt(1 - $a));
     }
 
-    /**
-     * FIX: Accepts already-fetched strip rows from compute() instead of
-     * making a separate DB::table() query. Saves one DB round-trip per
-     * taste profile cache miss.
-     */
     private function computeStripFeedback($stripRows): array
     {
         try {
@@ -362,26 +513,6 @@ class UserTasteProfile
                 $out[$type] = round(max(0.3, min(1.5, 1.0 + $delta * 0.15)), 2);
             }
             return $out;
-        } catch (\Throwable $e) {
-            return [];
-        }
-    }
-
-    /**
-     * Kept for backward compatibility — loadStripFeedback() is called from
-     * nowhere else but leaving it avoids breaking anything that might reference it.
-     * Now delegates to computeStripFeedback with a fresh fetch.
-     */
-    private function loadStripFeedback(string $userId): array
-    {
-        try {
-            $rows = DB::table('user_property_interactions')
-                ->select('interaction_type', 'metadata')
-                ->where('user_id', $userId)
-                ->whereIn('interaction_type', ['strip_clicked', 'strip_dismissed'])
-                ->where('created_at', '>=', now()->subDays(30))
-                ->get();
-            return $this->computeStripFeedback($rows);
         } catch (\Throwable $e) {
             return [];
         }
@@ -428,19 +559,21 @@ class UserTasteProfile
     private function emptyProfile(): array
     {
         return [
-            'has_history'    => false,
-            'is_cold_start'  => false,
-            'intent_score'   => 0,
-            'cities'         => [],
-            'types'          => [],
-            'listing_type'   => null,
-            'price'          => null,
-            'bedrooms'       => null,
-            'heat_centroid'  => null,
-            'seen_ids'       => [],
-            'budget'         => null,
-            'signal_counts'  => [],
-            'strip_feedback' => [],
+            'has_history'      => false,
+            'is_cold_start'    => false,
+            'intent_score'     => 0,
+            'cities'           => [],
+            'types'            => [],
+            'listing_type'     => null,
+            'price'            => null,
+            'bedrooms'         => null,
+            'heat_centroid'    => null,
+            'seen_ids'         => [],
+            'budget'           => null,
+            'signal_counts'    => [],
+            'strip_feedback'   => [],
+            'negative_types'   => [],
+            'session_context'  => [],
         ];
     }
 
@@ -476,41 +609,3 @@ class UserTasteProfile
         return $hasAnything ? $signal : null;
     }
 }
-
-
-// ============================================================
-// DATABASE INDEX MIGRATION
-// Run: php artisan make:migration add_perf_indexes_to_interactions
-// Then paste the up() method below.
-// ============================================================
-
-/*
-public function up(): void
-{
-    // This is the single most impactful index for UserTasteProfile::compute().
-    // Without it, every taste profile build does a full table scan on
-    // user_property_interactions filtered by user_id + created_at.
-    // With this composite index, MySQL reads only the relevant user's rows.
-    Schema::table('user_property_interactions', function (Blueprint $table) {
-        // Composite index: user_id first (equality), then created_at (range).
-        // Covers the WHERE user_id = ? AND created_at >= ? pattern exactly.
-        $table->index(['user_id', 'created_at'], 'idx_interactions_user_date');
-
-        // Separate index for the virtual signal lookups:
-        // WHERE user_id = ? AND interaction_type = ? AND property_id = ?
-        $table->index(['user_id', 'interaction_type', 'property_id'], 'idx_interactions_user_type_prop');
-    });
-
-    // Index for getPopular()'s contextual signal lookup:
-    // WHERE user_id = ? AND interaction_type = 'filter_applied' AND property_id = 'filter_signal'
-    // Covered by idx_interactions_user_type_prop above — no extra index needed.
-}
-
-public function down(): void
-{
-    Schema::table('user_property_interactions', function (Blueprint $table) {
-        $table->dropIndex('idx_interactions_user_date');
-        $table->dropIndex('idx_interactions_user_type_prop');
-    });
-}
-*/
