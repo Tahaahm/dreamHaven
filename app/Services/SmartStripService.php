@@ -240,6 +240,7 @@ class SmartStripService
 
         // Deep interest props (properties with 80%+ scroll in session)
         $deepInterestProps = $deepScrollRows->pluck('property_id')->unique()->values()->toArray();
+        $searchSignal = null; // not used in v2 — kept for compact() compatibility
 
         return compact(
             'filterSignal',
