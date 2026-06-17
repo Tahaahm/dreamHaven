@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\PropertyInteractionService; // <--- ADD THIS
 use Illuminate\Support\Facades\Cache;
 use App\Models\Support\UserFavoriteProperty;
+use Illuminate\Database\Eloquent\Builder;
+use App\Services\SmartSearchEngine;
 
 
 class PropertyController extends Controller
@@ -90,52 +92,245 @@ class PropertyController extends Controller
 
 
 
+
     public function search(Request $request)
     {
         try {
-            $searchTerm = $request->get('search');
-            $user = auth('sanctum')->user();
+            $searchTerm = $request->get('search', '');
+            $user       = auth('sanctum')->user();
 
-            $query = Property::query()->active()->published();
+            // ── Detect language from query script ────────────────────────────────
+            // Arabic/Kurdish Unicode block: U+0600–U+06FF
+            $locale = 'en';
+            if (preg_match('/[\x{0600}-\x{06FF}]/u', $searchTerm)) {
+                // Differentiate Kurdish (Sorani) from Arabic by checking for
+                // common Sorani-specific characters (ە، ێ، ۆ، ڵ، ڕ، ك→ک pattern)
+                $locale = preg_match('/[ەێۆڵڕگکچژ]/u', $searchTerm) ? 'ku' : 'ar';
+            }
 
-            $this->applyMultilingualSearchFilters($query, $request);
-            $this->applySorting($query, $request->get('sort', 'newest'), $request->get('currency', 'usd'));
+            // ── Base query ────────────────────────────────────────────────────────
+            $query = Property::query()
+                ->active()
+                ->published()
+                ->whereNotIn('status', ['cancelled', 'pending']);
 
-            $perPage = $request->get('per_page', 20);
+            // ── Smart engine ─────────────────────────────────────────────────────
+            if (!empty($searchTerm)) {
+                $engine = new SmartSearchEngine($searchTerm, $locale);
+                $engine->apply($query);
+
+                // Log structured intent for analytics (non-blocking)
+                Log::info('🔍 SMART SEARCH', [
+                    'term'   => $searchTerm,
+                    'locale' => $locale,
+                    'intent' => $engine->getIntent(),
+                    'user'   => $user?->id ?? 'guest',
+                ]);
+            }
+
+            // ── Additional explicit filters from request params ──────────────────
+            // (These supplement the natural-language engine for the filter modal)
+            $this->applyExplicitFilters($query, $request);
+
+            // ── Sorting (only if engine hasn't ordered by relevance) ─────────────
+            $sort = $request->get('sort', empty($searchTerm) ? 'newest' : 'relevance');
+            if ($sort !== 'relevance' || empty($searchTerm)) {
+                $this->applySorting($query, $sort, $request->get('currency', 'usd'));
+            }
+
+            // ── Pagination ────────────────────────────────────────────────────────
+            $perPage    = (int) $request->get('per_page', 20);
             $properties = $query->paginate($perPage);
+            $properties->load('owner');
 
-            $properties->load('owner'); // ← ADD HERE
-
-
+            // ── Impression tracking ───────────────────────────────────────────────
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
                 $this->interactionService->trackImpressions(
                     $userId,
                     collect($properties->items()),
                     'search',
-                    ['search_term' => $searchTerm]
+                    [
+                        'search_term' => $searchTerm,
+                        'locale'      => $locale,
+                        'intent'      => isset($engine) ? $engine->getIntent() : [],
+                    ]
                 );
             }
 
-            $transformedData = collect($properties->items())->map(function ($property) {
-                return $this->transformPropertyData($property);
-            });
-
-            return ApiResponse::success(
-                'Properties found',
-                [
-                    'data' => $transformedData,
-                    'total' => $properties->total(),
-                    'search_term' => $searchTerm,
-                ],
-                200
+            // ── Transform ─────────────────────────────────────────────────────────
+            $transformedData = collect($properties->items())->map(
+                fn($property) => $this->transformPropertyData($property)
             );
+
+            // ── Build response meta ───────────────────────────────────────────────
+            $meta = [
+                'search_term'     => $searchTerm,
+                'locale_detected' => $locale,
+                'total'           => $properties->total(),
+                'current_page'    => $properties->currentPage(),
+                'per_page'        => $perPage,
+            ];
+
+            if (isset($engine)) {
+                $intent = $engine->getIntent();
+                $meta['parsed_intent'] = [
+                    'listing_type'   => $intent['listing_type'],
+                    'property_types' => $intent['property_types'],
+                    'cities'         => $intent['cities'],
+                    'areas'          => $intent['areas'],
+                    'bedrooms'       => $intent['bedrooms'],
+                    'price_range'    => [
+                        'min'      => $intent['min_price'],
+                        'max'      => $intent['max_price'],
+                        'currency' => $intent['currency'],
+                    ],
+                    'features'       => $intent['features'],
+                ];
+            }
+
+            return ApiResponse::success('Properties found', [
+                'data' => $transformedData,
+                'meta' => $meta,
+            ], 200);
         } catch (\Exception $e) {
-            Log::error('Search error', ['message' => $e->getMessage()]);
+            Log::error('Search error', [
+                'message' => $e->getMessage(),
+                'trace'   => array_slice(
+                    array_map(fn($f) => ($f['file'] ?? '?') . ':' . ($f['line'] ?? '?'), $e->getTrace()),
+                    0,
+                    6
+                ),
+            ]);
             return ApiResponse::error('Search failed', $e->getMessage(), 500);
         }
     }
 
+    /**
+     * Applies explicit request parameters from the filter modal on top of
+     * what the SmartSearchEngine already resolved from the natural-language query.
+     * These are the structured params Flutter sends (listing_type=rent, city=Erbil, etc.)
+     */
+    private function applyExplicitFilters(Builder $query, Request $request): void
+    {
+        // listing_type — only apply if engine didn't already lock it in
+        if ($request->filled('listing_type')) {
+            $query->where('listing_type', $request->listing_type);
+        }
+
+        // city — supplement/override engine-detected city
+        if ($request->filled('city')) {
+            $city = $request->city;
+            $query->where(function ($q) use ($city) {
+                $q->whereRaw(
+                    "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en'))) LIKE LOWER(?)",
+                    ["%{$city}%"]
+                )->orWhereRaw(
+                    "JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ar')) LIKE ?",
+                    ["%{$city}%"]
+                )->orWhereRaw(
+                    "JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.ku')) LIKE ?",
+                    ["%{$city}%"]
+                );
+            });
+        }
+
+        // neighborhood / area
+        if ($request->filled('area') || $request->filled('neighborhood')) {
+            $area = $request->get('area') ?? $request->get('neighborhood');
+            $query->where(function ($q) use ($area) {
+                $q->whereRaw(
+                    "LOWER(JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.en'))) LIKE LOWER(?)",
+                    ["%{$area}%"]
+                )->orWhereRaw(
+                    "JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.ar')) LIKE ?",
+                    ["%{$area}%"]
+                )->orWhereRaw(
+                    "JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.neighborhood.ku')) LIKE ?",
+                    ["%{$area}%"]
+                )->orWhere('address', 'LIKE', "%{$area}%");
+            });
+        }
+
+        // property_type
+        if ($request->filled('property_type')) {
+            $type = strtolower($request->property_type);
+            $query->whereRaw(
+                "LOWER(JSON_UNQUOTE(JSON_EXTRACT(type, '$.category'))) = ?",
+                [$type]
+            );
+        }
+
+        // price (explicit params take precedence over engine-parsed ones)
+        $currency = strtolower($request->get('currency', 'usd'));
+        if ($request->filled('min_price') && (float)$request->min_price > 0) {
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) >= ?",
+                [$request->min_price]
+            )->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) > 0"
+            );
+        }
+        if ($request->filled('max_price') && (float)$request->max_price > 0) {
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) <= ?",
+                [$request->max_price]
+            )->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.{$currency}')) AS DECIMAL(20,2)) > 0"
+            );
+        }
+
+        // bedrooms
+        if ($request->filled('bedrooms')) {
+            $count = (int) $request->bedrooms;
+            if ($request->boolean('bedrooms_plus')) {
+                $query->whereRaw(
+                    "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) AS UNSIGNED) >= ?",
+                    [$count]
+                );
+            } else {
+                $query->whereRaw(
+                    "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bedroom.count')) AS UNSIGNED) = ?",
+                    [$count]
+                );
+            }
+        }
+
+        // bathrooms
+        if ($request->filled('bathrooms')) {
+            $query->whereRaw(
+                "CAST(JSON_UNQUOTE(JSON_EXTRACT(rooms, '$.bathroom.count')) AS UNSIGNED) = ?",
+                [(int)$request->bathrooms]
+            );
+        }
+
+        // area m²
+        if ($request->filled('min_area')) {
+            $query->where('area', '>=', (float)$request->min_area);
+        }
+        if ($request->filled('max_area')) {
+            $query->where('area', '<=', (float)$request->max_area);
+        }
+
+        // features
+        $featureKeys = ['has_pool', 'has_gym', 'has_garden', 'has_parking', 'has_balcony', 'has_elevator', 'has_security'];
+        foreach ($featureKeys as $key) {
+            if ($request->boolean($key)) {
+                $feature = str_replace('has_', '', $key);
+                $query->whereRaw("JSON_CONTAINS(LOWER(features), '\"" . $feature . "\"')");
+            }
+        }
+
+        // furnished
+        if ($request->has('furnished')) {
+            $query->where('furnished', $request->boolean('furnished'));
+        }
+
+        // verified
+        if ($request->boolean('verified')) {
+            $query->where('verified', true);
+        }
+    }
     private function getDefaultSearchPreferences($user = null)
     {
         if ($user) {
