@@ -260,14 +260,19 @@ class PropertyInteractionService
     // ══════════════════════════════════════════════════════════════════════════
     //  POPULARITY ENGINE
     // ══════════════════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════════════════
+    //  POPULARITY ENGINE
+    // ══════════════════════════════════════════════════════════════════════════
     public function computePopularityScores(
         ?string $listingType = null,
         ?string $city        = null,
         int     $days        = 30,
         int     $limit       = 50
     ): Collection {
-        $cacheKey = "popularity_scores_{$listingType}_{$city}_{$days}_{$limit}";
-        return Cache::remember($cacheKey, 600, function () use ($listingType, $city, $days, $limit) {
+        // ── KEY FIX: $limit excluded from cache key so featured + popular share one entry
+        $cacheKey = "popularity_scores_{$listingType}_{$city}_{$days}";
+
+        $all = Cache::remember($cacheKey, 3600, function () use ($listingType, $city, $days) {
 
             $virtualIds = ['calculator_signal', 'filter_signal', 'search_signal', 'search_signal_latest'];
 
@@ -330,13 +335,13 @@ class PropertyInteractionService
                 $compares    = (int) ($compareCounts[$pid]     ?? 0);
                 $velocity    = (int) ($velocityData[$pid]      ?? 0);
 
-                $ctr      = $impressions > 0 ? ($clicks / $impressions) : 0;
-                $ctrScore = min($ctr * 100, 20);
-                $clickScore   = $clicks   > 0 ? min(log($clicks + 1, 2) * 5, 35)   : 0;
-                $compareScore = $compares > 0 ? min(log($compares + 1, 2) * 4, 20)  : 0;
-                $favScore     = min($property->favorites_count * 0.5, 15);
-                $viewScore    = min(log(($property->views ?? 0) + 1, 10) * 2, 5);
-                $ratingScore  = ($property->rating ?? 0) * 1;
+                $ctr           = $impressions > 0 ? ($clicks / $impressions) : 0;
+                $ctrScore      = min($ctr * 100, 20);
+                $clickScore    = $clicks   > 0 ? min(log($clicks + 1, 2) * 5, 35)  : 0;
+                $compareScore  = $compares > 0 ? min(log($compares + 1, 2) * 4, 20) : 0;
+                $favScore      = min($property->favorites_count * 0.5, 15);
+                $viewScore     = min(log(($property->views ?? 0) + 1, 10) * 2, 5);
+                $ratingScore   = ($property->rating ?? 0) * 1;
                 $velocityScore = $velocity > 0 ? min(log($velocity + 1, 2) * 3, 15) : 0;
 
                 $daysSince    = $property->created_at->diffInDays(now());
@@ -376,6 +381,10 @@ class PropertyInteractionService
                 ->sortByDesc('popularity_score')
                 ->values();
         });
+
+        // Apply limit AFTER cache — so featured(limit=50) and popular(limit=20)
+        // both hit the same Redis entry instead of running separate DB queries
+        return $all->take($limit);
     }
 
     public function getPopularProperties(

@@ -33,7 +33,7 @@ class UserTasteProfile
 {
     private const HALF_LIFE_DAYS  = 14;
     private const LOOKBACK_DAYS   = 90;
-    private const CACHE_TTL       = 1200; // 20 min
+    private const CACHE_TTL       = 3600; // 20 min
     private const SESSION_WINDOW  = 2;    // hours — "today's session"
     private const SESSION_BOOST   = 3.0;  // session interactions worth 3×
 

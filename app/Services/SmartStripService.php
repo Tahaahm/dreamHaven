@@ -34,7 +34,7 @@ use Illuminate\Support\Facades\Log;
  */
 class SmartStripService
 {
-    private const CACHE_TTL      = 600;
+    private const CACHE_TTL      = 3600;
     private const SESSION_WINDOW = 24;
 
     public function getStrip(string $userId, string $language = 'en'): ?array
