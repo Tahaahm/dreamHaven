@@ -277,6 +277,7 @@ Route::prefix('api/v1')->group(function () {
             Route::post('/track-compare', [UserBehaviorController::class, 'trackCompare']);
 
             Route::post('/{id}/contact-whatsapp', [PropertyController::class, 'trackWhatsAppContact']);
+            Route::post('/{id}/track-share', [PropertyController::class, 'trackShareIntent']); // ← ADD THIS
             Route::post('/track-profile-view', [UserBehaviorController::class, 'trackProfileView']);
 
 

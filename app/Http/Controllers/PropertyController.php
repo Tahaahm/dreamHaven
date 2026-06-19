@@ -4696,4 +4696,46 @@ class PropertyController extends Controller
             return ApiResponse::error('Failed to track contact', $e->getMessage(), 500);
         }
     }
+
+    public function trackShareIntent(Request $request, $id)
+    {
+        try {
+            $property = Property::find($id);
+            if (!$property) {
+                return ApiResponse::error('Property not found', null, 404);
+            }
+
+            $user   = auth('sanctum')->user();
+            $userId = $user ? $user->id : null;
+
+            $shareMethod = $request->input('share_method', 'other'); // 'whatsapp' | 'copy_link' | 'other'
+
+            $meta = [
+                'property_id'   => $id,
+                'share_method'  => $shareMethod,
+                'property_type' => $property->type['category'] ?? null,
+                'listing_type'  => $property->listing_type,
+                'price_usd'     => $property->price['usd'] ?? null,
+                'city'          => $property->address_details['city']['en'] ?? null,
+                'owner_id'      => $property->owner_id,
+                'owner_type'    => $property->owner_type,
+                'timestamp'     => now()->toISOString(),
+                'source'        => $request->header('X-Source', 'app'),
+            ];
+
+            UserPropertyInteraction::create([
+                'user_id'          => $userId,
+                'session_id'       => $userId ? null : session()->getId(),
+                'property_id'      => $id,
+                'interaction_type' => 'share',
+                'metadata'         => $meta,
+                'created_at'       => now(),
+            ]);
+
+            return ApiResponse::success('Share tracked', null, 200);
+        } catch (\Exception $e) {
+            Log::error('trackShareIntent error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to track share', $e->getMessage(), 500);
+        }
+    }
 }
