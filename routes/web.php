@@ -1284,17 +1284,3 @@ Route::get('/robots.txt', function () {
     $content = "User-agent: *\nAllow: /\nSitemap: https://dreammulk.com/sitemap.xml";
     return response($content, 200)->header('Content-Type', 'text/plain');
 });
-
-
-Route::get('/debug/api-calls', function () {
-    $hour      = now()->format('Y-m-d H:00');
-    $total     = \Cache::get("api_total_{$hour}", 0);
-    $breakdown = \Cache::get("api_breakdown_{$hour}", []);
-    arsort($breakdown);
-
-    return response()->json([
-        'hour'      => $hour,
-        'total'     => $total,
-        'breakdown' => $breakdown,
-    ], 200, [], JSON_PRETTY_PRINT);
-});
