@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Services\PropertyInteractionService; // <--- ADD THIS
 use Illuminate\Support\Facades\Cache;
 use App\Models\Support\UserFavoriteProperty;
+use App\Models\UserPropertyInteraction;
 use Illuminate\Database\Eloquent\Builder;
 use App\Services\SmartSearchEngine;
 
@@ -4642,6 +4643,57 @@ class PropertyController extends Controller
                     'type_context' => null,
                 ],
             ], 200);
+        }
+    }
+
+    public function trackWhatsAppContact(Request $request, $id)
+    {
+        try {
+            $property = Property::find($id);
+            if (!$property) {
+                return ApiResponse::error('Property not found', null, 404);
+            }
+
+            $user   = auth('sanctum')->user();
+            $userId = $user ? $user->id : null;
+
+            $meta = [
+                'property_id'   => $id,
+                'property_type' => $property->type['category'] ?? null,
+                'listing_type'  => $property->listing_type,
+                'price_usd'     => $property->price['usd'] ?? null,
+                'city'          => $property->address_details['city']['en'] ?? null,
+                'owner_id'      => $property->owner_id,
+                'owner_type'    => $property->owner_type,
+                'timestamp'     => now()->toISOString(),
+                'source'        => $request->header('X-Source', 'app'),
+            ];
+
+            UserPropertyInteraction::create([
+                'user_id'          => $userId,
+                'session_id'       => $userId ? null : session()->getId(),
+                'property_id'      => $id,
+                'interaction_type' => 'contact_whatsapp',
+                'metadata'         => $meta,
+                'created_at'       => now(),
+            ]);
+
+            // Also fire the existing contact_intent signal for the taste profile
+            if ($userId) {
+                $this->interactionService->trackContactIntent(
+                    userId: $userId,
+                    propertyId: $id,
+                    method: 'whatsapp',
+                    propertyType: $property->type['category'] ?? null,
+                    city: $property->address_details['city']['en'] ?? null,
+                    priceUsd: isset($property->price['usd']) ? (float) $property->price['usd'] : null,
+                );
+            }
+
+            return ApiResponse::success('WhatsApp contact tracked', null, 200);
+        } catch (\Exception $e) {
+            Log::error('trackWhatsAppContact error', ['message' => $e->getMessage()]);
+            return ApiResponse::error('Failed to track contact', $e->getMessage(), 500);
         }
     }
 }

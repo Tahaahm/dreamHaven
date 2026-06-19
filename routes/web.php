@@ -276,6 +276,10 @@ Route::prefix('api/v1')->group(function () {
             Route::post('/track-filter',  [UserBehaviorController::class, 'trackFilter']);
             Route::post('/track-compare', [UserBehaviorController::class, 'trackCompare']);
 
+            Route::post('/{id}/contact-whatsapp', [PropertyController::class, 'trackWhatsAppContact']);
+            Route::post('/track-profile-view', [UserBehaviorController::class, 'trackProfileView']);
+
+
             // ── Intelligence signal endpoints ─────────────────────────────────
             Route::post('/behavior/scroll-depth',       [UserBehaviorController::class, 'scrollDepth']);
             Route::post('/behavior/time-on-listing',    [UserBehaviorController::class, 'timeOnListing']);

@@ -1022,4 +1022,33 @@ class PropertyInteractionService
             }
         }
     }
+    public function trackContactIntent(
+        string  $userId,
+        string  $propertyId,
+        string  $method      = 'whatsapp',
+        ?string $propertyType = null,
+        ?string $city         = null,
+        ?float  $priceUsd     = null,
+    ): void {
+        try {
+            UserPropertyInteraction::create([
+                'user_id'          => $userId,
+                'property_id'      => $propertyId,
+                'interaction_type' => 'contact_intent',
+                'metadata'         => [
+                    'contact_method' => $method,
+                    'property_type'  => $propertyType,
+                    'city'           => $city,
+                    'price_usd'      => $priceUsd,
+                    'weight'         => 6.0, // matches SIGNAL_WEIGHTS in UserTasteProfile
+                    'timestamp'      => now()->toISOString(),
+                ],
+                'created_at' => now(),
+            ]);
+            // Bust taste profile cache so next recommendation reflects this signal
+            Cache::forget("taste_profile_{$userId}");
+        } catch (\Throwable $e) {
+            Log::warning('trackContactIntent failed', ['error' => $e->getMessage()]);
+        }
+    }
 }

@@ -1154,4 +1154,98 @@ class UserBehaviorController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    // ────────────────────────────────────────────────────────────────────────
+// 10. PROFILE VIEW (Agent / Office / User)
+// ────────────────────────────────────────────────────────────────────────
+    /**
+     * POST /api/v1/user/track-profile-view
+     *
+     * Flutter calls when user navigates to an agent/office/user profile.
+     * Stored as a virtual interaction so we can:
+     *   - Surface "agents you've viewed" in SmartStrip
+     *   - Boost that agent's listings in recommendations
+     *   - Give analytics to agents on profile views
+     *
+     * Weight: 3.0× (similar to share — clear interest signal)
+     * Dedup:  once per user+profile per hour
+     *
+     * Body: { profile_id, profile_type (agent|office|user), source? }
+     */
+    public function trackProfileView(Request $request): JsonResponse
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'profile_id'   => 'required|string',
+                'profile_type' => 'required|in:agent,office,user',
+                'source'       => 'nullable|string|max:50', // property_card|search|feed|map
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['success' => true]); // silent — never crash Flutter
+            }
+
+            $user   = auth('sanctum')->user();
+            $userId = $user?->id;
+
+            if (!$userId) {
+                return response()->json(['success' => true]); // guests: acknowledge, skip
+            }
+
+            $profileId   = $request->input('profile_id');
+            $profileType = $request->input('profile_type');
+            $source      = $request->input('source', 'unknown');
+
+            // ── Dedup: once per user+profile per hour ────────────────────────────
+            $cacheKey = "profile_view_{$userId}_{$profileType}_{$profileId}";
+            if (Cache::has($cacheKey)) {
+                return response()->json(['success' => true, 'deduped' => true]);
+            }
+            Cache::put($cacheKey, true, now()->addHour());
+
+            // ── Virtual property_id keeps it in the same table, zero schema change
+            $virtualId = "profile_{$profileType}_{$profileId}";
+
+            // ── Write after response — same pattern as trackSearch/trackCompare ──
+            app()->terminating(function () use (
+                $userId,
+                $profileId,
+                $profileType,
+                $source,
+                $virtualId
+            ) {
+                try {
+                    UserPropertyInteraction::create([
+                        'user_id'          => $userId,
+                        'property_id'      => $virtualId,
+                        'interaction_type' => 'profile_view',
+                        'metadata'         => json_encode([
+                            'weight'       => 3.0,
+                            'profile_id'   => $profileId,
+                            'profile_type' => $profileType,
+                            'source'       => $source,
+                            'timestamp'    => now()->toISOString(),
+                        ]),
+                        'created_at' => now(),
+                    ]);
+
+                    // Invalidate taste profile — profile views indicate
+                    // interest in a specific agent/office's listing style
+                    app(\App\Services\Intelligence\UserTasteProfile::class)
+                        ->invalidate((string) $userId);
+
+                    Log::info("profile_view: user={$userId} {$profileType}={$profileId} source={$source}");
+                } catch (\Throwable $e) {
+                    Log::warning('trackProfileView terminating failed', [
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            });
+
+            return response()->json(['success' => true]);
+        } catch (\Throwable $e) {
+            Log::warning('trackProfileView failed (non-fatal): ' . $e->getMessage());
+            return response()->json(['success' => true]); // never crash Flutter
+        }
+    }
 }
