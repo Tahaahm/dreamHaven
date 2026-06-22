@@ -510,7 +510,8 @@ class SendPropertyMatchDigestJob implements ShouldQueue
     /**
      * Check if this user already received a digest in the cooldown window.
      */
-    private function gotRecentDigest(int $userId): bool
+    private function gotRecentDigest(string|int $userId): bool
+
     {
         return DB::table('notifications')
             ->where('user_id', $userId)
