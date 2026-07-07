@@ -237,7 +237,7 @@ Route::prefix('api/v1')->group(function () {
     Route::prefix('auth')->group(function () {
         Route::post('/login', [UserController::class, 'login']);
         Route::post('/google/mobile', [GoogleAuthController::class, 'mobileLogin']); // ← ADD
-
+        Route::post('/apple/mobile', [GoogleAuthController::class, 'mobileLoginApple']); // ← ADD THIS
         Route::post('/register', [UserController::class, 'register']);
         Route::post('/forgot-password', [UserController::class, 'forgotPassword']);
         Route::post('/confirm-password-reset', [UserController::class, 'confirmPasswordReset']);
