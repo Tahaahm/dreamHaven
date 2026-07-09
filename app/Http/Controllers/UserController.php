@@ -9,7 +9,6 @@ use App\Models\Appointment;
 use App\Services\FirebaseAuthService;
 use App\Services\FirebaseService;
 use App\Services\FirebaseFirestoreService;
-use App\Services\GoogleOAuthService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
@@ -2826,34 +2825,58 @@ class UserController extends Controller
         try {
             $user = Auth::user();
 
-            $validator = Validator::make($request->all(), [
-                'device' => 'required|string|max:255',
-            ]);
+            // Laravel doesn't auto-parse JSON body on DELETE requests
+            $body       = json_decode($request->getContent(), true) ?? [];
+            $fcmToken   = $request->fcm_token ?? $body['fcm_token'] ?? null;
 
-            if ($validator->fails()) {
-                return ApiResponse::error('Validation failed', $validator->errors(), 400);
+            if (!$fcmToken) {
+                return ApiResponse::error('Validation failed', [
+                    'fcm_token' => ['The fcm_token field is required.'],
+                ], 400);
             }
 
             $deviceTokens = $user->device_tokens ?? [];
-            $deviceName = $request->device;
 
-            // Remove token for this device
-            $deviceTokens = array_filter($deviceTokens, function ($token) use ($deviceName) {
-                return $token['device'] !== $deviceName;
-            });
+            if (is_string($deviceTokens)) {
+                $deviceTokens = json_decode($deviceTokens, true) ?? [];
+            }
 
-            $user->update(['device_tokens' => array_values($deviceTokens)]);
+            $countBefore = count($deviceTokens);
 
-            return ApiResponse::success('Device token removed successfully', [
-                'device_count' => count($deviceTokens)
+            // Remove the matching token (support both old and new schema keys)
+            $deviceTokens = array_values(array_filter($deviceTokens, function ($token) use ($fcmToken) {
+                $storedToken = $token['fcm_token'] ?? $token['tokenId'] ?? null;
+                return $storedToken !== $fcmToken;
+            }));
+
+            $countAfter = count($deviceTokens);
+
+            if ($countBefore === $countAfter) {
+                // Token not found — still return success (idempotent)
+                Log::info('removeDeviceToken: token not found (already removed)', [
+                    'user_id'   => $user->id,
+                    'fcm_token' => substr($fcmToken, 0, 20) . '...',
+                ]);
+            }
+
+            $user->update(['device_tokens' => $deviceTokens]);
+
+            Log::info('Device token removed', [
+                'user_id'   => $user->id,
+                'fcm_token' => substr($fcmToken, 0, 20) . '...',
+                'before'    => $countBefore,
+                'after'     => $countAfter,
+            ]);
+
+            return ApiResponse::success('Device logged out successfully', [
+                'device_count' => $countAfter,
             ], 200);
         } catch (\Exception $e) {
             Log::error('Device token removal error', [
                 'message' => $e->getMessage(),
-                'user_id' => Auth::id()
+                'user_id' => Auth::id(),
             ]);
-
-            return ApiResponse::error('Failed to remove device token', $e->getMessage(), 500);
+            return ApiResponse::error('Failed to logout device', $e->getMessage(), 500);
         }
     }
 
