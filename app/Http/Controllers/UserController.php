@@ -2864,18 +2864,33 @@ class UserController extends Controller
 
             $deviceTokens = $user->device_tokens ?? [];
 
-            // Remove sensitive token data, only return device info
+            // Guard against stored JSON string
+            if (is_string($deviceTokens)) {
+                $deviceTokens = json_decode($deviceTokens, true) ?? [];
+            }
+
+            // Support both old schema {device, tokenId} and new schema {device_name, fcm_token}
             $safeTokens = array_map(function ($token) {
+                $deviceName = $token['device_name'] ?? $token['device']  ?? 'Unknown Device';
+                $fcmToken   = $token['fcm_token']   ?? $token['tokenId'] ?? null;
+                $wasUpdated = isset($token['updated_at']) || isset($token['last_updated']);
+                $timestamp  = $token['updated_at']  ??
+                    $token['last_updated'] ??
+                    $token['last_used']    ??
+                    $token['added_at']     ??
+                    $token['created_at']   ?? null;
+
                 return [
-                    'device' => $token['device'],
-                    'created_at' => $token['created_at'] ?? null,
-                    'last_used' => $token['last_used'] ?? null
+                    'device_name' => $deviceName,
+                    'fcm_token'   => $fcmToken,
+                    'added_at'    => $wasUpdated ? null : ($token['added_at'] ?? $token['created_at'] ?? $timestamp),
+                    'updated_at'  => $wasUpdated ? $timestamp : null,
                 ];
-            }, $deviceTokens);
+            }, array_values($deviceTokens));
 
             return ApiResponse::success('Device tokens retrieved successfully', [
-                'devices' => $safeTokens,
-                'total_devices' => count($safeTokens)
+                'devices'       => $safeTokens,
+                'total_devices' => count($safeTokens),
             ], 200);
         } catch (\Exception $e) {
             Log::error('Get device tokens error', [
