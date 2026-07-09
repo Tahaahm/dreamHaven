@@ -725,7 +725,7 @@ class UserController extends Controller
                     $fileName  = 'profile_' . $user->id . '_' . time() . '.jpg';
                     $filePath  = 'profile_images/' . $fileName;
                     Storage::disk('public')->put($filePath, $decoded);
-                    $updateData['photo_image'] = Storage::url($filePath);
+                    $updateData['photo_image'] = url('storage/' . $filePath);
                     Log::info('Profile image uploaded', ['user_id' => $user->id, 'path' => $filePath]);
                 } catch (\Exception $e) {
                     Log::warning('Base64 image upload failed', ['error' => $e->getMessage()]);
