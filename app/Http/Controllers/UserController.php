@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules\Password as PasswordRule;
+use Kreait\Firebase\Storage;
 
 class UserController extends Controller
 {
@@ -682,7 +683,7 @@ class UserController extends Controller
                 'username' => 'sometimes|string|min:3|max:50|unique:users,username,' . $user->id,
                 'phone' => 'sometimes|nullable|string|min:10|max:15',
                 'about_me' => 'sometimes|nullable|string|max:1000',
-                'photo_image' => 'sometimes|nullable|url',
+                'photo_image' => 'sometimes|nullable|string|max:5000000',
                 'language' => 'sometimes|in:en,ar,ku',
                 'email' => 'sometimes|email|unique:users,email,' . $user->id,
                 'search_preferences' => 'sometimes|array',
@@ -710,11 +711,29 @@ class UserController extends Controller
             ];
 
             foreach ($allowedFields as $field) {
-                // Only update fields that are present in the request
                 if ($request->has($field)) {
                     $updateData[$field] = $request->input($field);
                 }
             }
+
+            // Handle base64 image upload
+            if (!empty($updateData['photo_image']) && str_starts_with($updateData['photo_image'], 'data:image')) {
+                try {
+                    $imageData = preg_replace('/^data:image\/\w+;base64,/', '', $updateData['photo_image']);
+                    $imageData = str_replace(' ', '+', $imageData);
+                    $decoded   = base64_decode($imageData);
+                    $fileName  = 'profile_' . $user->id . '_' . time() . '.jpg';
+                    $filePath  = 'profile_images/' . $fileName;
+                    Storage::disk('public')->put($filePath, $decoded);
+                    $updateData['photo_image'] = Storage::url($filePath);
+                    Log::info('Profile image uploaded', ['user_id' => $user->id, 'path' => $filePath]);
+                } catch (\Exception $e) {
+                    Log::warning('Base64 image upload failed', ['error' => $e->getMessage()]);
+                    unset($updateData['photo_image']);
+                }
+            }
+
+
 
             Log::info('Update data prepared', [
                 'user_id' => $user->id,
