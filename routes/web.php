@@ -1110,8 +1110,10 @@ Route::get('/api/video/health', [VideoProcessingController::class, 'checkService
 // ============================================
 
 Route::prefix('api/v1')->group(function () {
-    Route::post('/search/voice-intent', [VoiceSearchController::class, 'parseIntent']); // ← ADD THIS
 
+
+    Route::post('/search/voice',        [VoiceSearchController::class, 'transcribeAndParse']); // audio file → Whisper → Claude
+    Route::post('/search/voice-intent', [VoiceSearchController::class, 'parseIntent']);        // text fallback
     // Map
     Route::get('/map/zones',   [MapController::class, 'zones']);
     Route::get('/map/heatmap', [MapController::class, 'heatmap']);
