@@ -3,126 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Helper\ApiResponse;
+use App\Models\Area;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * VoiceSearchController
- *
- * Pipeline:
- *   1. Flutter records audio → sends as multipart file to POST /api/v1/search/voice
- *   2. Laravel sends audio to OpenAI Whisper (language: Kurdish)
- *   3. Whisper returns accurate Kurdish transcript
- *   4. Laravel sends transcript to Claude Haiku for intent extraction
- *   5. Returns structured JSON intent to Flutter
- *
- * Routes needed:
- *   POST /api/v1/search/voice         ← main endpoint (audio file)
- *   POST /api/v1/search/voice-intent  ← text-only fallback (transcript string)
+ * VoiceSearchController — Claude only, generic area/type data from DB
  */
 class VoiceSearchController extends Controller
 {
-    // ── Config ────────────────────────────────────────────────────────────────
-    private const WHISPER_MODEL   = 'whisper-1';
-    private const CLAUDE_MODEL    = 'claude-haiku-4-5-20251001';
-    private const CLAUDE_TOKENS   = 180;
-    private const CACHE_TTL       = 300; // 5 min
-
-    // ── Kurdish number words → digits ─────────────────────────────────────────
-    private const KU_NUMBERS = [
-        'یەک' => 1,
-        'دوو' => 2,
-        'سێ' => 3,
-        'چوار' => 4,
-        'پێنج' => 5,
-        'شەش' => 6,
-        'حەوت' => 7,
-        'هەشت' => 8,
-        'نۆ' => 9,
-        'دە' => 10,
-        'واحد' => 1,
-        'اثنين' => 2,
-        'ثلاثة' => 3,
-        'أربعة' => 4,
-        'خمسة' => 5,
-        'ستة' => 6,
-    ];
-
-    private const DAFTAR_WORDS = [
-        'دەفتەر',
-        'دفتر',
-        'دافتار',
-        'دەفتار',
-        'دافتر',
-        'daftar',
-        'defter',
-        'daftr',
-    ];
-
-    private const RENT_KW  = ['کرێ', 'کرایە', 'ئایجار', 'إيجار', 'rent', 'kirê'];
-    private const SELL_KW  = ['فرۆشتن', 'بفرۆشێت', 'للبيع', 'فروش', 'sell', 'sale'];
-
-    private const AREA_MAP = [
-        'ژیان' => 'Zhyan',
-        'مامۆستایان' => 'Mamostayan',
-        'ئەنکاوە' => 'Ankawa',
-        'گوڵان' => 'Gulan',
-        'ئەسکان' => 'Iskan',
-        'براياتی' => 'Brayati',
-        'زانکۆ' => 'Zanko',
-        'ڕۆناکی' => 'Ronaki',
-        'باداوە' => 'Badawa',
-        'شاری خەون' => 'Dream City',
-        'ئیمپایر' => 'Empire',
-        'ناز سیتی' => 'Naz City',
-        'تایراوا' => 'Tairawa',
-        'فەرمانبەران' => 'Farmanbaran',
-        'روانگە' => 'Rwanga',
-        'بنەسڵاوە' => 'Bna Slawa',
-        'خانزاد' => 'Xanzad',
-        'کوردستان' => 'Kurdistan',
-        'گوندی ئیتاڵی' => 'Italian Village',
-        'تانجارۆ' => 'Tanjaro',
-        'سەرچنار' => 'Sarchnar',
-        'سارای' => 'Saray',
-        'سەلیم' => 'Salim',
-        'ڕەپەڕین' => 'Raparin',
-        'ئازادی' => 'Azadi',
-        'کاسنەزان' => 'Kasnazan',
-        'شار' => 'Shar',
-        'بازاڕ' => 'Bazar',
-        'رووکن' => 'Rukn',
-        // Arabic variants
-        'زيان' => 'Zhyan',
-        'ماموستايان' => 'Mamostayan',
-        'عنكاوا' => 'Ankawa',
-        'اسكان' => 'Iskan',
-        // English
-        'zhyan' => 'Zhyan',
-        'ankawa' => 'Ankawa',
-        'mamostayan' => 'Mamostayan',
-        'gulan' => 'Gulan',
-        'iskan' => 'Iskan',
-        'zanko' => 'Zanko',
-        'rukn' => 'Rukn',
-    ];
-
-    private const TYPE_MAP = [
-        'apartment' => ['شوقە', 'شووقە', 'شقة', 'شقق', 'apartment', 'ئاپارتمێنت'],
-        'villa'     => ['ڤیلا', 'فيلا', 'villa'],
-        'house'     => ['خانوو', 'خانووبار', 'منزل', 'بيت', 'دار', 'house', 'خانو'],
-        'land'      => ['زەوی', 'ئەرازی', 'أرض', 'land'],
-        'office'    => ['ئۆفیس', 'بنکە', 'مكتب', 'office'],
-        'shop'      => ['دوکان', 'محل', 'shop'],
-    ];
+    private const CLAUDE_MODEL  = 'claude-opus-4-6';
+    private const CLAUDE_TOKENS = 300;
+    private const CACHE_TTL     = 300;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // MAIN ENDPOINT — receives audio file from Flutter
+    // MAIN ENDPOINT — audio → Claude → intent
     // POST /api/v1/search/voice
-    // Content-Type: multipart/form-data
-    // Field: audio (file) — WAV, M4A, MP4, WEBM, OGG
     // ─────────────────────────────────────────────────────────────────────────
     public function transcribeAndParse(Request $request)
     {
@@ -133,14 +31,10 @@ class VoiceSearchController extends Controller
         $audio = $request->file('audio');
 
         Log::info('🎤 VOICE: Audio received', [
-            'size_kb'       => round($audio->getSize() / 1024, 1),
-            'mime'          => $audio->getMimeType(),
-            'client_mime'   => $audio->getClientMimeType(),
-            'ext'           => $audio->getClientOriginalExtension(),
+            'size_kb' => round($audio->getSize() / 1024, 1),
+            'mime'    => $audio->getMimeType(),
         ]);
 
-        // Only reject if file is too large or too small
-        // Do NOT check mime type — Android sends different types for same container
         if ($audio->getSize() > 25 * 1024 * 1024) {
             return ApiResponse::error('Audio too large', null, 422);
         }
@@ -148,23 +42,24 @@ class VoiceSearchController extends Controller
             return ApiResponse::error('No audio detected', null, 422);
         }
 
-        // Step 1: Whisper transcription
-        $transcript = $this->whisperTranscribe($audio);
+        $result = $this->claudeTranscribeAndParse($audio);
 
-        if (empty($transcript)) {
-            return ApiResponse::error('Could not transcribe audio', null, 422);
+        if (!$result) {
+            return ApiResponse::error('Could not process audio', null, 422);
         }
 
-        Log::info('🎤 VOICE: Whisper transcript', ['text' => $transcript]);
+        Log::info('🎯 VOICE INTENT', [
+            'transcript' => $result['raw_transcript'] ?? '',
+            'source'     => $result['source'] ?? '?',
+            'area'       => $result['area'] ?? null,
+        ]);
 
-        // Step 2: Parse intent
-        return $this->parseTranscript($transcript);
+        return ApiResponse::success('Intent parsed', $result, 200);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // TEXT-ONLY FALLBACK — for when Flutter already has a transcript
+    // TEXT FALLBACK — transcript → Claude → intent
     // POST /api/v1/search/voice-intent
-    // Body: { "transcript": "شەش دەفتەر لە ژیان" }
     // ─────────────────────────────────────────────────────────────────────────
     public function parseIntent(Request $request)
     {
@@ -175,216 +70,140 @@ class VoiceSearchController extends Controller
         if (mb_strlen($transcript) > 300) {
             $transcript = mb_substr($transcript, 0, 300);
         }
-        return $this->parseTranscript($transcript);
-    }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // WHISPER — sends audio to OpenAI, gets Kurdish transcript back
-    // ─────────────────────────────────────────────────────────────────────────
-    private function whisperTranscribe($audioFile): string
-    {
-        $apiKey = config('services.openai.api_key');
-        if (!$apiKey) {
-            Log::warning('VoiceSearch: No OpenAI key configured');
-            return '';
+        $intent = $this->claudeTextParse($transcript);
+
+        if (!$intent) {
+            return ApiResponse::error('Could not parse intent', null, 422);
         }
-
-        try {
-            // We explicitly tell Whisper the language is Kurdish
-            // This prevents it from auto-detecting as Arabic/Persian
-            // and ensures Kurdish script output
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-            ])->timeout(30)->attach(
-                'file',
-                file_get_contents($audioFile->getRealPath()),
-                'audio.mp4' // Force mp4 extension — Whisper accepts AAC-in-MP4
-            )->post('https://api.openai.com/v1/audio/transcriptions', [
-                'model'           => self::WHISPER_MODEL,
-                'language'        => 'ku',
-                'response_format' => 'json',
-                'prompt'          => 'خانوو شوقە ڤیلا دەفتەر کرێ فرۆشتن ئەنکاوە ژیان مامۆستایان ئۆتاق',
-            ]);
-
-            if (!$response->successful()) {
-                Log::error('Whisper API error', [
-                    'status' => $response->status(),
-                    'body'   => $response->body(),
-                ]);
-                return '';
-            }
-
-            $text = trim($response->json('text', ''));
-            Log::info('Whisper returned', ['text' => $text, 'lang' => 'ku']);
-            return $text;
-        } catch (\Throwable $e) {
-            Log::error('Whisper exception', ['msg' => $e->getMessage()]);
-            return '';
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PARSE — local parser first, Claude for complex/ambiguous phrases
-    // ─────────────────────────────────────────────────────────────────────────
-    private function parseTranscript(string $transcript)
-    {
-        $cacheKey = 'voice_intent_' . md5($transcript);
-
-        $intent = Cache::remember($cacheKey, self::CACHE_TTL, function () use ($transcript) {
-            // 1. Fast local parse (free, ~1ms)
-            $local = $this->localParse($transcript);
-
-            // 2. If confident, skip Claude
-            if ($this->isConfident($local)) {
-                $local['source'] = 'local';
-                return $local;
-            }
-
-            // 3. Claude for complex/ambiguous phrases
-            $claude = $this->claudeParse($transcript);
-            if ($claude) {
-                return array_merge($claude, array_filter($local, fn($v) => $v !== null && $v !== [] && $v !== ''));
-            }
-
-            $local['source'] = 'local_fallback';
-            return $local;
-        });
-
-        Log::info('🎯 VOICE INTENT', [
-            'transcript' => $transcript,
-            'source'     => $intent['source'] ?? '?',
-            'area'       => $intent['area'] ?? null,
-            'price'      => $intent['min_price_daftar'] ?? null,
-        ]);
 
         return ApiResponse::success('Intent parsed', $intent, 200);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // LOCAL PARSER — regex + keyword matching, zero cost
+    // CLAUDE AUDIO — base64 audio → transcript + intent in one call
     // ─────────────────────────────────────────────────────────────────────────
-    private function localParse(string $text): array
+    private function claudeTranscribeAndParse($audioFile): ?array
     {
-        $lower = mb_strtolower($text);
-
-        $intent = [
-            'listing_type'     => null,
-            'property_type'    => null,
-            'area'             => null,
-            'city'             => null,
-            'bedrooms'         => null,
-            'min_price_daftar' => null,
-            'max_price_daftar' => null,
-            'min_price_usd'    => null,
-            'max_price_usd'    => null,
-            'currency'         => null,
-            'raw_transcript'   => $text,
-            'source'           => 'local',
-        ];
-
-        // Listing type
-        foreach (self::RENT_KW as $kw) {
-            if (mb_strpos($lower, mb_strtolower($kw)) !== false) {
-                $intent['listing_type'] = 'rent';
-                break;
-            }
-        }
-        if (!$intent['listing_type']) {
-            foreach (self::SELL_KW as $kw) {
-                if (mb_strpos($lower, mb_strtolower($kw)) !== false) {
-                    $intent['listing_type'] = 'sell';
-                    break;
-                }
-            }
+        $apiKey = config('services.anthropic.api_key');
+        if (!$apiKey) {
+            Log::warning('VoiceSearch: No Anthropic key configured');
+            return null;
         }
 
-        // Area
-        foreach (self::AREA_MAP as $ku => $en) {
-            if (mb_strpos($lower, mb_strtolower($ku)) !== false) {
-                $intent['area'] = $en;
-                break;
+        try {
+            $base64Audio = base64_encode(file_get_contents($audioFile->getRealPath()));
+
+            // Load area names from DB (cached 1 hour)
+            $areaContext = $this->buildAreaContext();
+
+            $system = <<<SYS
+You are a voice search assistant for Dream Mulk, a real estate platform in Kurdistan Region of Iraq.
+
+The user is speaking in Kurdish Sorani, Arabic, or English.
+
+Your job:
+1. TRANSCRIBE the audio accurately in the original language
+2. EXTRACT the search intent as JSON
+
+Known areas in the platform:
+{$areaContext}
+
+Property types: apartment, villa, house, land, office, shop, building, duplex, studio, chalet, farm
+
+Kurdish vocabulary:
+- کرێ/کرایە = rent | فرۆشتن/بفرۆشێت = sell
+- دەفتەر/دافتار = daftar (price unit, 1 daftar = \$10,000 USD)
+- ئۆتاق/ئۆتاقی = bedroom | خانوو/خانو = house | شوقە = apartment
+- ڤیلا = villa | دوکان = shop | زەوی/ئەرازی = land | ئۆفیس = office
+- شەش=6 پێنج=5 چوار=4 سێ=3 دوو=2 یەک=1 حەوت=7 هەشت=8 نۆ=9 دە=10
+
+Return ONLY valid JSON, no prose, no markdown:
+{
+  "transcript": "exact words spoken",
+  "listing_type": "rent"|"sell"|null,
+  "property_type": "apartment"|"villa"|"house"|"land"|"office"|"shop"|"building"|"duplex"|"studio"|"chalet"|"farm"|null,
+  "area": "area name in English from the platform"|null,
+  "city": "city name"|null,
+  "bedrooms": number|null,
+  "min_price_daftar": number|null,
+  "max_price_daftar": number|null,
+  "min_price_usd": number|null,
+  "currency": "daftar"|"usd"|"iqd"|null
+}
+SYS;
+
+            $response = Http::withHeaders([
+                'x-api-key'         => $apiKey,
+                'anthropic-version' => '2023-06-01',
+                'content-type'      => 'application/json',
+            ])->timeout(20)->post('https://api.anthropic.com/v1/messages', [
+                'model'      => self::CLAUDE_MODEL,
+                'max_tokens' => self::CLAUDE_TOKENS,
+                'system'     => $system,
+                'messages'   => [[
+                    'role'    => 'user',
+                    'content' => [
+                        [
+                            'type'   => 'document',
+                            'source' => [
+                                'type'       => 'base64',
+                                'media_type' => 'audio/mp4',
+                                'data'       => $base64Audio,
+                            ],
+                        ],
+                        [
+                            'type' => 'text',
+                            'text' => 'Transcribe and extract real estate search intent from this audio.',
+                        ],
+                    ],
+                ]],
+            ]);
+
+            if (!$response->successful()) {
+                Log::error('Claude audio error', [
+                    'status' => $response->status(),
+                    'body'   => substr($response->body(), 0, 500),
+                ]);
+                return $this->emptyIntent('claude_error');
             }
-        }
 
-        // Property type
-        foreach (self::TYPE_MAP as $type => $keywords) {
-            foreach ($keywords as $kw) {
-                if (mb_strpos($lower, mb_strtolower($kw)) !== false) {
-                    $intent['property_type'] = $type;
-                    break 2;
-                }
+            $text    = $response->json('content.0.text', '{}');
+            $text    = preg_replace('/```json|```/', '', trim($text));
+            $decoded = json_decode($text, true);
+
+            if (!is_array($decoded)) {
+                Log::warning('Claude invalid JSON', ['raw' => $text]);
+                return $this->emptyIntent('invalid_json');
             }
+
+            Log::info('✅ Claude voice result', ['transcript' => $decoded['transcript'] ?? '']);
+
+            return $this->normalizeIntent($decoded, $decoded['transcript'] ?? '');
+        } catch (\Throwable $e) {
+            Log::error('Claude audio exception', ['msg' => $e->getMessage()]);
+            return null;
         }
-
-        // Bedrooms — "٣ ئۆتاق" / "3 room" / "سێ ئۆتاق"
-        if (preg_match('/([٠-٩0-9]+)\s*(ئۆتاق|ئۆتاقی|room|rooms?|bed|beds?|bedroom|غرفة)/u', $text, $m)) {
-            $intent['bedrooms'] = (int) $this->arabicToAscii($m[1]);
-        } else {
-            foreach (self::KU_NUMBERS as $word => $digit) {
-                if (preg_match('/' . preg_quote($word, '/') . '\s*(ئۆتاق|room|bed)/u', $text)) {
-                    $intent['bedrooms'] = $digit;
-                    break;
-                }
-            }
-        }
-
-        // Daftar price — "شەش دەفتەر" / "6 daftar" / "٦ دەفتار"
-        $daftarPat = implode('|', array_map('preg_quote', self::DAFTAR_WORDS));
-        $numPat    = '([٠-٩0-9]+|' . implode('|', array_map('preg_quote', array_keys(self::KU_NUMBERS))) . ')';
-
-        if (preg_match('/' . $numPat . '\s*(?:' . $daftarPat . ')/u', $text, $m)) {
-            $val = $this->resolveNumber($m[1]);
-            if ($val !== null) {
-                $intent['min_price_daftar'] = $val;
-                $intent['max_price_daftar'] = $val;
-                $intent['currency']         = 'daftar';
-            }
-        }
-
-        // USD price
-        if (preg_match('/\$?\s*([٠-٩0-9][٠-٩0-9,]*)\s*(k|هەزار|ألف|m|ملیۆن|مليون)?/u', $lower, $m)) {
-            $num = (float) str_replace(',', '', $this->arabicToAscii($m[1]));
-            $suffix = mb_strtolower($m[2] ?? '');
-            if ($suffix === 'k' || str_contains($suffix, 'هەزار') || str_contains($suffix, 'ألف')) $num *= 1000;
-            if ($suffix === 'm' || str_contains($suffix, 'ملیۆن') || str_contains($suffix, 'مليون')) $num *= 1_000_000;
-            if ($num >= 10_000) {
-                $intent['min_price_usd'] = $num;
-                $intent['currency']      = 'usd';
-            }
-        }
-
-        return $intent;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // CONFIDENCE CHECK
+    // CLAUDE TEXT — text transcript → intent
     // ─────────────────────────────────────────────────────────────────────────
-    private function isConfident(array $intent): bool
-    {
-        $found = 0;
-        if ($intent['listing_type'])               $found++;
-        if ($intent['area'])                       $found++;
-        if ($intent['property_type'])              $found++;
-        if ($intent['bedrooms'])                   $found++;
-        if ($intent['min_price_daftar'] || $intent['min_price_usd']) $found++;
-        return $found >= 2;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // CLAUDE PARSER — only called for ambiguous phrases
-    // Ultra-compact prompt: ~120 input tokens, ~80 output tokens
-    // ─────────────────────────────────────────────────────────────────────────
-    private function claudeParse(string $transcript): ?array
+    private function claudeTextParse(string $transcript): ?array
     {
         $apiKey = config('services.anthropic.api_key');
         if (!$apiKey) return null;
 
-        $system = <<<'SYS'
-Kurdistan real estate voice search. Extract JSON only. No prose.
-Fields: listing_type("rent"|"sell"|null), property_type("apartment"|"villa"|"house"|"land"|"office"|"shop"|null), area(string|null), city(string|null), bedrooms(int|null), min_price_daftar(int|null), max_price_daftar(int|null), min_price_usd(int|null), currency("daftar"|"usd"|"iqd"|null).
-Daftar=10,000 USD. Kurdish: کرێ=rent فرۆشتن=sell دەفتەر=daftar ئۆتاق=bedroom خانوو=house شوقە=apartment.
-Sorani dialect: رووکن=Rukn ژیان=Zhyan مامۆستایان=Mamostayan ئەنکاوە=Ankawa.
-Return {} if truly unclear.
+        $areaContext = $this->buildAreaContext();
+
+        $system = <<<SYS
+Kurdistan real estate search parser. Return JSON only. No prose.
+
+Known areas: {$areaContext}
+
+Fields: listing_type("rent"|"sell"|null), property_type("apartment"|"villa"|"house"|"land"|"office"|"shop"|null), area(English name from list|null), city(string|null), bedrooms(int|null), min_price_daftar(int|null), min_price_usd(int|null), currency("daftar"|"usd"|"iqd"|null).
+
+Kurdish: کرێ=rent فرۆشتن=sell دەفتەر=daftar ئۆتاق=bedroom خانوو=house شوقە=apartment.
 SYS;
 
         try {
@@ -392,66 +211,103 @@ SYS;
                 'x-api-key'         => $apiKey,
                 'anthropic-version' => '2023-06-01',
                 'content-type'      => 'application/json',
-            ])->timeout(6)->post('https://api.anthropic.com/v1/messages', [
-                'model'      => self::CLAUDE_MODEL,
-                'max_tokens' => self::CLAUDE_TOKENS,
+            ])->timeout(8)->post('https://api.anthropic.com/v1/messages', [
+                'model'      => 'claude-haiku-4-5-20251001',
+                'max_tokens' => 200,
                 'system'     => $system,
                 'messages'   => [['role' => 'user', 'content' => $transcript]],
             ]);
 
             if (!$response->successful()) return null;
 
-            $text    = $response->json('content.0.text', '{}');
-            $text    = preg_replace('/```json|```/', '', trim($text));
+            $text    = preg_replace('/```json|```/', '', trim($response->json('content.0.text', '{}')));
             $decoded = json_decode($text, true);
+
             if (!is_array($decoded)) return null;
 
-            return [
-                'listing_type'     => $decoded['listing_type']     ?? null,
-                'property_type'    => $decoded['property_type']    ?? null,
-                'area'             => $decoded['area']             ?? null,
-                'city'             => $decoded['city']             ?? null,
-                'bedrooms'         => isset($decoded['bedrooms'])  ? (int)$decoded['bedrooms'] : null,
-                'min_price_daftar' => isset($decoded['min_price_daftar']) ? (int)$decoded['min_price_daftar'] : null,
-                'max_price_daftar' => isset($decoded['max_price_daftar']) ? (int)$decoded['max_price_daftar'] : null,
-                'min_price_usd'    => isset($decoded['min_price_usd'])    ? (int)$decoded['min_price_usd']    : null,
-                'max_price_usd'    => isset($decoded['max_price_usd'])    ? (int)$decoded['max_price_usd']    : null,
-                'currency'         => $decoded['currency']         ?? null,
-                'raw_transcript'   => $transcript,
-                'source'           => 'claude',
-            ];
+            return $this->normalizeIntent($decoded, $transcript);
         } catch (\Throwable $e) {
-            Log::error('Claude voice parse exception', ['msg' => $e->getMessage()]);
+            Log::error('Claude text parse exception', ['msg' => $e->getMessage()]);
             return null;
         }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // HELPERS
+    // BUILD AREA CONTEXT — load from DB, cache 1 hour
+    // Gives Claude the real area names from your 568 areas table
     // ─────────────────────────────────────────────────────────────────────────
-    private function resolveNumber(string $token): ?int
+    private function buildAreaContext(): string
     {
-        $ascii = $this->arabicToAscii($token);
-        if (is_numeric($ascii)) return (int) $ascii;
-        foreach (self::KU_NUMBERS as $word => $digit) {
-            if (mb_strtolower(trim($token)) === mb_strtolower($word)) return $digit;
-        }
-        return null;
+        return Cache::remember('voice_area_context', 3600, function () {
+            try {
+                // Load all active areas with their trilingual names
+                $areas = \DB::table('areas')
+                    ->where('is_active', 1)
+                    ->select('area_name_en', 'area_name_ar', 'area_name_ku')
+                    ->get();
+
+                if ($areas->isEmpty()) {
+                    return 'Erbil areas: Ankawa, Mamostayan, Gulan, Iskan, Zanko, Zhyan, Ronaki, Badawa, Dream City, Empire, Naz City';
+                }
+
+                // Build compact context: "EN (AR, KU)" per area, grouped
+                $lines = $areas->map(function ($a) {
+                    $parts = array_filter([
+                        $a->area_name_en,
+                        $a->area_name_ku ?: null,
+                        $a->area_name_ar ?: null,
+                    ]);
+                    return implode('/', array_unique($parts));
+                })->filter()->values()->toArray();
+
+                // Keep it compact — Claude doesn't need all 568 on every call
+                // Just give EN names in a comma list (Claude knows the Kurdish)
+                $enNames = $areas->pluck('area_name_en')->filter()->unique()->values()->toArray();
+
+                return implode(', ', $enNames);
+            } catch (\Throwable $e) {
+                Log::warning('buildAreaContext failed', ['msg' => $e->getMessage()]);
+                return 'Ankawa, Mamostayan, Gulan, Iskan, Zanko, Zhyan, Ronaki';
+            }
+        });
     }
 
-    private function arabicToAscii(string $s): string
+    // ─────────────────────────────────────────────────────────────────────────
+    // NORMALIZE INTENT — clean and type-cast Claude's response
+    // ─────────────────────────────────────────────────────────────────────────
+    private function normalizeIntent(array $decoded, string $transcript): array
     {
-        return strtr($s, [
-            '٠' => '0',
-            '١' => '1',
-            '٢' => '2',
-            '٣' => '3',
-            '٤' => '4',
-            '٥' => '5',
-            '٦' => '6',
-            '٧' => '7',
-            '٨' => '8',
-            '٩' => '9',
-        ]);
+        return [
+            'listing_type'     => $decoded['listing_type']     ?? null,
+            'property_type'    => $decoded['property_type']    ?? null,
+            'area'             => $decoded['area']             ?? null,
+            'city'             => $decoded['city']             ?? null,
+            'bedrooms'         => isset($decoded['bedrooms'])         ? (int)$decoded['bedrooms']         : null,
+            'min_price_daftar' => isset($decoded['min_price_daftar']) ? (int)$decoded['min_price_daftar'] : null,
+            'max_price_daftar' => isset($decoded['max_price_daftar']) ? (int)$decoded['max_price_daftar'] : null,
+            'min_price_usd'    => isset($decoded['min_price_usd'])    ? (int)$decoded['min_price_usd']    : null,
+            'max_price_usd'    => isset($decoded['max_price_usd'])    ? (int)$decoded['max_price_usd']    : null,
+            'currency'         => $decoded['currency']         ?? null,
+            'raw_transcript'   => $transcript,
+            'source'           => 'claude',
+        ];
+    }
+
+    private function emptyIntent(string $source): array
+    {
+        return [
+            'listing_type' => null,
+            'property_type' => null,
+            'area' => null,
+            'city' => null,
+            'bedrooms' => null,
+            'min_price_daftar' => null,
+            'max_price_daftar' => null,
+            'min_price_usd' => null,
+            'max_price_usd' => null,
+            'currency' => null,
+            'raw_transcript' => '',
+            'source' => $source,
+        ];
     }
 }
