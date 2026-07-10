@@ -132,30 +132,21 @@ class VoiceSearchController extends Controller
 
         $audio = $request->file('audio');
 
-        // Validate file
-        $maxSizeMb = 10;
-        if ($audio->getSize() > $maxSizeMb * 1024 * 1024) {
-            return ApiResponse::error('Audio too large (max 10MB)', null, 422);
-        }
-
-        $allowedMimes = [
-            'audio/wav',
-            'audio/x-wav',
-            'audio/mp4',
-            'audio/m4a',
-            'audio/mpeg',
-            'audio/webm',
-            'audio/ogg',
-            'video/mp4',
-            'audio/mp3',
-            'application/octet-stream'
-        ];
-
         Log::info('🎤 VOICE: Audio received', [
-            'size_kb' => round($audio->getSize() / 1024, 1),
-            'mime'    => $audio->getMimeType(),
-            'ext'     => $audio->getClientOriginalExtension(),
+            'size_kb'       => round($audio->getSize() / 1024, 1),
+            'mime'          => $audio->getMimeType(),
+            'client_mime'   => $audio->getClientMimeType(),
+            'ext'           => $audio->getClientOriginalExtension(),
         ]);
+
+        // Only reject if file is too large or too small
+        // Do NOT check mime type — Android sends different types for same container
+        if ($audio->getSize() > 25 * 1024 * 1024) {
+            return ApiResponse::error('Audio too large', null, 422);
+        }
+        if ($audio->getSize() < 500) {
+            return ApiResponse::error('No audio detected', null, 422);
+        }
 
         // Step 1: Whisper transcription
         $transcript = $this->whisperTranscribe($audio);
@@ -207,13 +198,12 @@ class VoiceSearchController extends Controller
             ])->timeout(30)->attach(
                 'file',
                 file_get_contents($audioFile->getRealPath()),
-                'audio.' . ($audioFile->getClientOriginalExtension() ?: 'wav')
+                'audio.mp4' // Force mp4 extension — Whisper accepts AAC-in-MP4
             )->post('https://api.openai.com/v1/audio/transcriptions', [
-                'model'    => self::WHISPER_MODEL,
-                'language' => 'ku',         // Kurdish — critical!
+                'model'           => self::WHISPER_MODEL,
+                'language'        => 'ku',
                 'response_format' => 'json',
-                'prompt'   => 'خانوو، شوقە، ڤیلا، دەفتەر، کرێ، فرۆشتن، ئەنکاوە، ژیان، مامۆستایان',
-                // ↑ Kurdish real estate prompt helps Whisper stay in Kurdish mode
+                'prompt'          => 'خانوو شوقە ڤیلا دەفتەر کرێ فرۆشتن ئەنکاوە ژیان مامۆستایان ئۆتاق',
             ]);
 
             if (!$response->successful()) {
