@@ -32,6 +32,7 @@ use App\Http\Controllers\LocationController;
 use App\Http\Controllers\OfficeAuthController;
 use App\Http\Controllers\SubscriptionPlanController;
 use App\Http\Controllers\VideoProcessingController;
+use App\Http\Controllers\VoiceSearchController;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Middleware\AgentOrAdmin;
 use Illuminate\Http\Request;
@@ -1109,6 +1110,7 @@ Route::get('/api/video/health', [VideoProcessingController::class, 'checkService
 // ============================================
 
 Route::prefix('api/v1')->group(function () {
+    Route::post('/search/voice-intent', [VoiceSearchController::class, 'parseIntent']); // ← ADD THIS
 
     // Map
     Route::get('/map/zones',   [MapController::class, 'zones']);
