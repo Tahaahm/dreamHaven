@@ -64,6 +64,7 @@ class VoiceSearchController extends Controller
     public function parseIntent(Request $request)
     {
         $transcript = trim($request->input('transcript', ''));
+        $sttLocale  = $request->input('stt_locale', 'unknown');
 
         if (empty($transcript)) {
             return ApiResponse::error('Empty transcript', null, 422);
@@ -72,18 +73,18 @@ class VoiceSearchController extends Controller
             $transcript = mb_substr($transcript, 0, 400);
         }
 
-        return $this->parseAndRespond($transcript);
+        return $this->parseAndRespond($transcript, $sttLocale);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // PARSE + RESPOND
     // ─────────────────────────────────────────────────────────────────────────
-    private function parseAndRespond(string $transcript)
+    private function parseAndRespond(string $transcript, string $sttLocale = 'unknown')
     {
-        $cacheKey = 'voice_intent_v2_' . md5($transcript);
+        $cacheKey = 'voice_intent_v2_' . md5($transcript . $sttLocale);
 
-        $intent = Cache::remember($cacheKey, self::CACHE_TTL, function () use ($transcript) {
-            return $this->claudeParse($transcript);
+        $intent = Cache::remember($cacheKey, self::CACHE_TTL, function () use ($transcript, $sttLocale) {
+            return $this->claudeParse($transcript, $sttLocale);
         });
 
         Log::info('🎯 VOICE INTENT', [
@@ -101,7 +102,7 @@ class VoiceSearchController extends Controller
     // CLAUDE TEXT PARSE
     // Loads real area names from DB so Claude knows all 568 areas
     // ─────────────────────────────────────────────────────────────────────────
-    private function claudeParse(string $transcript): array
+    private function claudeParse(string $transcript, string $sttLocale = 'unknown'): array
     {
         $apiKey = config('services.anthropic.api_key');
         if (!$apiKey) {
@@ -124,17 +125,27 @@ Property types: apartment, villa, house, land, office, shop, building, duplex, s
 
 Kurdish vocabulary:
 کرێ/کرایە=rent | فرۆشتن/بفرۆشێت=sell
-دەفتەر/دافتار/دافتر=daftar (1 daftar = \$10,000 USD)
-ئۆتاق=bedroom | خانوو/خانو=house | شوقە=apartment | ڤیلا=villa
+دەفتەر/دافتار/دافتر/دفتر=daftar (1 daftar = \$10,000 USD)
+ئۆتاق/ئۆتاقی=bedroom | خانوو/خانو=house | شوقە/شووقە=apartment | ڤیلا=villa
 دوکان=shop | زەوی/ئەرازی=land | ئۆفیس=office
 شەش=6 | پێنج=5 | چوار=4 | سێ=3 | دوو=2 | یەک=1 | حەوت=7 | هەشت=8 | نۆ=9 | دە=10
 
-Arabic: کرئ/للإيجار=rent | للبيع=sell | غرفة=bedroom | شقة=apartment | فيلا=villa
+Arabic (also used for Kurdish written in Arabic script via ar-IQ STT):
+للإيجار/ايجار=rent | للبيع=sell | غرفة/غرف=bedroom | شقة/شقق=apartment | فيلا=villa
+ست/ستة=6 | خمس/خمسة=5 | أربع/أربعة=4 | ثلاث/ثلاثة=3 | اثنين=2 | واحد=1
+
+IMPORTANT: STT locale was {$sttLocale}. If ar-IQ was used, the user spoke Kurdish
+but it may be written in Arabic script. For example:
+- "شش دفتر" in Arabic script = "شەش دەفتەر" in Kurdish = 6 daftar
+- "ژيان" in Arabic script = "ژیان" in Kurdish = Zhyan area
+- "ماموستايان" = "مامۆستایان" = Mamostayan area
+- "انكاوا" = "ئەنکاوە" = Ankawa area
 
 Return ONLY valid JSON, no markdown, no explanation:
 {
   "listing_type": "rent"|"sell"|null,
   "property_type": "apartment"|"villa"|"house"|"land"|"office"|"shop"|"building"|"duplex"|"studio"|"chalet"|"farm"|null,
+  "clean_transcript": "what user said corrected to proper Kurdish Sorani script",
   "area": "English area name from list above"|null,
   "city": "city name"|null,
   "bedrooms": number|null,
@@ -185,7 +196,9 @@ SYS;
                 'max_price_usd'    => isset($decoded['max_price_usd'])    ? (int)$decoded['max_price_usd']    : null,
                 'currency'         => $decoded['currency']         ?? null,
                 'raw_transcript'   => $transcript,
+                'clean_transcript' => $decoded['clean_transcript'] ?? null,
                 'source'           => 'claude',
+                'stt_locale'       => $sttLocale,
             ];
         } catch (\Throwable $e) {
             Log::error('Claude parse exception', ['msg' => $e->getMessage()]);
