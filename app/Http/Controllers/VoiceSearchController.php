@@ -29,7 +29,7 @@ use Illuminate\Support\Str;
 class VoiceSearchController extends Controller
 {
     private const CLAUDE_MODEL    = 'claude-haiku-4-5-20251001';
-    private const CLAUDE_TOKENS   = 280;
+    private const CLAUDE_TOKENS   = 500; // bumped — 280 was truncating JSON mid-response
     private const CACHE_TTL       = 300;
     private const WHISPER_BIN     = '/usr/local/bin/dm-transcribe';
     private const WHISPER_TIMEOUT = 45; // increased — small model can be slow on CPU-only VPS
@@ -64,6 +64,11 @@ class VoiceSearchController extends Controller
             Log::warning('Whisper returned empty transcript');
             return ApiResponse::error('Could not transcribe — speak clearly and try again', null, 422);
         }
+
+        // Whisper sometimes hallucinates repeated phrases on unsupported
+        // languages (a known failure mode). Detect and collapse duplicates
+        // before sending to Claude — saves tokens and avoids confusion.
+        $transcript = $this->collapseRepeatedPhrase($transcript);
 
         Log::info('🎙️ Whisper transcript', ['text' => $transcript]);
 
@@ -360,6 +365,39 @@ SYS;
             Log::error('Claude exception', ['msg' => $e->getMessage()]);
             return $this->emptyIntent('exception');
         }
+    }
+
+    // Detects "X, X" or "X X" exact-duplicate hallucination pattern
+    // that Whisper produces on out-of-vocabulary languages, and keeps
+    // only the first occurrence.
+    private function collapseRepeatedPhrase(string $text): string
+    {
+        $trimmed = trim($text);
+
+        // Split on common separators and check if the phrase repeats
+        $parts = preg_split('/[,،]\s*/u', $trimmed);
+        if (
+            count($parts) === 2 && trim($parts[0]) !== '' &&
+            mb_strtolower(trim($parts[0])) === mb_strtolower(trim($parts[1]))
+        ) {
+            return trim($parts[0]);
+        }
+
+        // Check for exact duplicate when phrase is split in half
+        $len = mb_strlen($trimmed);
+        $half = intdiv($len, 2);
+        if ($half > 3) {
+            $firstHalf  = mb_substr($trimmed, 0, $half);
+            $secondHalf = mb_substr($trimmed, $half);
+            if (
+                trim($firstHalf) !== '' &&
+                mb_strtolower(trim($firstHalf)) === mb_strtolower(trim($secondHalf))
+            ) {
+                return trim($firstHalf);
+            }
+        }
+
+        return $trimmed;
     }
 
     private function getAreaList(): string
