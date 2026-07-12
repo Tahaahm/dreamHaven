@@ -92,10 +92,22 @@ class VoiceSearchController extends Controller
     // ─────────────────────────────────────────────────────────────────────────
     // WHISPER LOCAL — shell out to whisper.cpp on this server
     // ─────────────────────────────────────────────────────────────────────────
+    // Max simultaneous transcriptions server-wide. Beyond this, requests wait
+    // briefly rather than all fighting for every CPU core at once.
+    private const MAX_CONCURRENT_WHISPER = 2;
+    private const CONCURRENCY_WAIT_MS    = 300;
+    private const CONCURRENCY_MAX_WAIT_S = 20;
+
     private function whisperLocal($audioFile): string
     {
         if (!file_exists(self::WHISPER_BIN)) {
             Log::error('Whisper not installed — run setup_whisper.sh on the server');
+            return '';
+        }
+
+        $lockAcquired = $this->acquireWhisperSlot();
+        if (!$lockAcquired) {
+            Log::warning('Whisper: server busy, all slots taken after max wait');
             return '';
         }
 
@@ -128,7 +140,52 @@ class VoiceSearchController extends Controller
         } catch (\Throwable $e) {
             Log::error('Whisper exception', ['msg' => $e->getMessage()]);
             return '';
+        } finally {
+            $this->releaseWhisperSlot();
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CONCURRENCY LIMITER — simple file-based semaphore
+    // Counts active whisper processes in /tmp/dm_whisper_slots/
+    // Prevents 10 simultaneous voice searches from each grabbing all CPU cores
+    // ─────────────────────────────────────────────────────────────────────────
+    private ?string $slotFile = null;
+
+    private function acquireWhisperSlot(): bool
+    {
+        $slotDir = '/tmp/dm_whisper_slots';
+        if (!is_dir($slotDir)) {
+            @mkdir($slotDir, 0777, true);
+        }
+
+        $waited = 0;
+        while ($waited < self::CONCURRENCY_MAX_WAIT_S * 1000) {
+            // Clean stale slot files older than 60s (crashed processes)
+            foreach (glob($slotDir . '/*.lock') as $f) {
+                if (time() - filemtime($f) > 60) @unlink($f);
+            }
+
+            $active = count(glob($slotDir . '/*.lock'));
+            if ($active < self::MAX_CONCURRENT_WHISPER) {
+                $this->slotFile = $slotDir . '/' . Str::random(8) . '.lock';
+                touch($this->slotFile);
+                return true;
+            }
+
+            usleep(self::CONCURRENCY_WAIT_MS * 1000);
+            $waited += self::CONCURRENCY_WAIT_MS;
+        }
+
+        return false; // gave up after max wait
+    }
+
+    private function releaseWhisperSlot(): void
+    {
+        if ($this->slotFile && file_exists($this->slotFile)) {
+            @unlink($this->slotFile);
+        }
+        $this->slotFile = null;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
