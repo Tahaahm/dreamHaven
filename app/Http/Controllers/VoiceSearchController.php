@@ -32,7 +32,7 @@ class VoiceSearchController extends Controller
     private const CLAUDE_TOKENS   = 280;
     private const CACHE_TTL       = 300;
     private const WHISPER_BIN     = '/usr/local/bin/dm-transcribe';
-    private const WHISPER_TIMEOUT = 25;
+    private const WHISPER_TIMEOUT = 45; // increased — small model can be slow on CPU-only VPS
 
     // ─────────────────────────────────────────────────────────────────────────
     // MAIN — audio file → Whisper (local, auto-detect) → Claude → intent
