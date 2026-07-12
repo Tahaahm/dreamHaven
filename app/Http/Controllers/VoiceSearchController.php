@@ -7,27 +7,78 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
- * VoiceSearchController
+ * VoiceSearchController v4 — Self-hosted Whisper + Claude Haiku
  *
- * Cost: claude-haiku = ~$0.003 per call (not $0.30)
- * Cached: same query never calls Claude twice (5 min cache)
+ * Pipeline:
+ *   1. Flutter records audio → POST /api/v1/search/voice (multipart)
+ *   2. whisper.cpp on THIS server transcribes Kurdish (FREE, local, no API)
+ *   3. Kurdish transcript → Claude Haiku → rich structured intent
+ *   4. JSON intent returned to Flutter
  *
- * POST /api/v1/search/voice-intent
- * Body: { "transcript": "...", "stt_locale": "en-US" }
+ * Costs:
+ *   Whisper: $0 (runs on your VPS)
+ *   Claude Haiku: ~$0.003/call, cached 5 min
+ *
+ * Setup required on server (one time):
+ *   bash setup_whisper.sh   (installs whisper.cpp + Kurdish model)
  */
 class VoiceSearchController extends Controller
 {
-    // haiku is 40x cheaper than opus — use it here
     private const CLAUDE_MODEL  = 'claude-haiku-4-5-20251001';
     private const CLAUDE_TOKENS = 250;
     private const CACHE_TTL     = 300;
+    private const WHISPER_BIN   = '/usr/local/bin/dm-transcribe';
+    private const WHISPER_TIMEOUT = 25; // seconds
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // MAIN — audio file → Whisper (local) → Claude → intent
+    // POST /api/v1/search/voice
+    // ─────────────────────────────────────────────────────────────────────────
+    public function transcribeAndParse(Request $request)
+    {
+        if (!$request->hasFile('audio')) {
+            return ApiResponse::error('No audio file provided', null, 422);
+        }
+
+        $audio = $request->file('audio');
+
+        Log::info('🎤 VOICE: Audio received', [
+            'size_kb' => round($audio->getSize() / 1024, 1),
+            'mime'    => $audio->getMimeType(),
+        ]);
+
+        if ($audio->getSize() > 25 * 1024 * 1024) {
+            return ApiResponse::error('Audio too large', null, 422);
+        }
+        if ($audio->getSize() < 500) {
+            return ApiResponse::error('No audio detected', null, 422);
+        }
+
+        // Step 1: Local Whisper transcription (FREE)
+        $transcript = $this->whisperLocal($audio);
+
+        if (empty($transcript)) {
+            Log::warning('Whisper returned empty transcript');
+            return ApiResponse::error('Could not transcribe — speak clearly and try again', null, 422);
+        }
+
+        Log::info('🎙️ Whisper transcript', ['text' => $transcript]);
+
+        // Step 2: Claude intent extraction
+        return $this->parseAndRespond($transcript, 'whisper-local');
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // TEXT FALLBACK — typed text → Claude → intent
+    // POST /api/v1/search/voice-intent
+    // ─────────────────────────────────────────────────────────────────────────
     public function parseIntent(Request $request)
     {
         $transcript = trim($request->input('transcript', ''));
-        $sttLocale  = $request->input('stt_locale', 'unknown');
+        $sttLocale  = $request->input('stt_locale', 'text-input');
 
         if (empty($transcript)) {
             return ApiResponse::error('Empty transcript', null, 422);
@@ -36,24 +87,78 @@ class VoiceSearchController extends Controller
             $transcript = mb_substr($transcript, 0, 500);
         }
 
-        $cacheKey = 'voice_v3_' . md5($transcript);
+        return $this->parseAndRespond($transcript, $sttLocale);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // WHISPER LOCAL — shell out to whisper.cpp on this server
+    // ─────────────────────────────────────────────────────────────────────────
+    private function whisperLocal($audioFile): string
+    {
+        if (!file_exists(self::WHISPER_BIN)) {
+            Log::error('Whisper not installed — run setup_whisper.sh on the server');
+            return '';
+        }
+
+        try {
+            // Move to a temp location whisper can read
+            $tmpPath = '/tmp/dm_voice_' . Str::random(12) . '.' .
+                ($audioFile->getClientOriginalExtension() ?: 'mp4');
+            $audioFile->move('/tmp', basename($tmpPath));
+
+            // Run whisper with timeout
+            $cmd = sprintf(
+                'timeout %d %s %s 2>/dev/null',
+                self::WHISPER_TIMEOUT,
+                self::WHISPER_BIN,
+                escapeshellarg($tmpPath)
+            );
+
+            $start      = microtime(true);
+            $transcript = trim(shell_exec($cmd) ?? '');
+            $elapsed    = round(microtime(true) - $start, 1);
+
+            @unlink($tmpPath);
+
+            Log::info('Whisper done', ['seconds' => $elapsed, 'chars' => mb_strlen($transcript)]);
+
+            // Whisper outputs "[BLANK_AUDIO]" or similar for silence
+            if (str_contains($transcript, 'BLANK_AUDIO') || mb_strlen($transcript) < 2) {
+                return '';
+            }
+
+            return $transcript;
+        } catch (\Throwable $e) {
+            Log::error('Whisper exception', ['msg' => $e->getMessage()]);
+            return '';
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PARSE + RESPOND
+    // ─────────────────────────────────────────────────────────────────────────
+    private function parseAndRespond(string $transcript, string $sttLocale)
+    {
+        $cacheKey = 'voice_v4_' . md5($transcript);
 
         $intent = Cache::remember($cacheKey, self::CACHE_TTL, function () use ($transcript, $sttLocale) {
             return $this->claudeParse($transcript, $sttLocale);
         });
 
-        Log::info('🎯 VOICE', [
+        Log::info('🎯 VOICE INTENT', [
             'transcript' => $transcript,
-            'locale'     => $sttLocale,
             'area'       => $intent['area'] ?? null,
+            'type'       => $intent['property_type'] ?? null,
             'price'      => $intent['min_price_daftar'] ?? null,
             'source'     => $intent['source'] ?? '?',
-            'cached'     => isset($intent['_cached']),
         ]);
 
         return ApiResponse::success('Intent parsed', $intent, 200);
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // CLAUDE PARSE — Haiku, rich intent extraction, all filters
+    // ─────────────────────────────────────────────────────────────────────────
     private function claudeParse(string $transcript, string $sttLocale): array
     {
         $apiKey = config('services.anthropic.api_key');
@@ -62,62 +167,49 @@ class VoiceSearchController extends Controller
             return $this->emptyIntent('no_api_key');
         }
 
-        // Load areas from DB (1 hour cache)
         $areaList = $this->getAreaList();
 
-        // Tell Claude if the STT was English (meaning Kurdish words
-        // may have been transliterated/translated to English)
-        $localeNote = str_starts_with(strtolower($sttLocale), 'en')
-            ? 'IMPORTANT: STT used English locale so Kurdish words may appear in English transliteration. Examples: "daftar"=دەفتەر, "zhyan"=ژیان, "ankawa"=ئەنکاوە, "house"=خانوو, "rent"=کرێ, "sell/sale"=فرۆشتن, "bedroom/room"=ئۆتاق, "corner"=رووکن/گۆشە, "meter/m2"=متر, "garden"=باخچە'
-            : 'STT locale: ' . $sttLocale;
+        $localeNote = match (true) {
+            str_starts_with($sttLocale, 'whisper') =>
+            'Transcript from Whisper (Kurdish language mode) — text is in Kurdish Sorani/Arabic script.',
+            str_starts_with(strtolower($sttLocale), 'en') =>
+            'CAUTION: Transcript from English STT — Kurdish speech may be mangled into random English words. Try to guess the real Kurdish meaning phonetically. E.g. "step 30" might be "sê sed" (300), "La Jolla" might be "la zhyan" (in Zhyan).',
+            $sttLocale === 'text-input' =>
+            'User typed this text manually — could be Kurdish, Arabic, or English.',
+            default => "STT locale: {$sttLocale}",
+        };
 
         $system = <<<SYS
 You are a real estate search parser for Dream Mulk, Kurdistan Region of Iraq.
 
 {$localeNote}
 
-Platform areas (match spoken words to these):
+Platform areas (match to these English names):
 {$areaList}
 
-Cities: Erbil (Hewlêr), Sulaymaniyah (Slemani), Duhok, Soran, Rawanduz, Shaqlawa, Zakho, Halabja, Ranya, Koya, Makhmur, Kirkuk, Kalar, Kifri
+Cities: Erbil (Hewlêr/هەولێر), Sulaymaniyah (Slemani/سلێمانی), Duhok (دهۆک), Soran, Rawanduz, Shaqlawa, Zakho, Halabja, Ranya, Koya, Makhmur, Kirkuk, Kalar, Kifri
 
 Property types: apartment, villa, house, land, office, shop, building, duplex, studio, chalet, farm
 
-Price units:
-- daftar/defter = 10,000 USD (Kurdish price unit)
-- If user says "8 daftar" → min_price_daftar=8, max_price_daftar=8
-- If range "5 to 8 daftar" → min=5, max=8
-- USD prices: "$150,000" or "150k" → min_price_usd=150000
-- IQD prices: "150 million" → min_price_iqd=150000000
+Prices:
+- daftar (دەفتەر) = 10,000 USD. "شەش دەفتەر"=6 daftar. "6 daftar"→min=6,max=6. Range "5 بۆ 8 دەفتەر"→min=5,max=8
+- USD: "\$150k"→150000. IQD: "١٥٠ ملیۆن"→150000000
 
-Size: "100 meter/m2/sqm" → min_area_m2=100
+Sizes: "100 متر/meter/m2"→min_area_m2=100
 
-Features to extract:
-- corner=has_corner (corner plot/unit)
-- garden/yard=has_garden
-- parking=has_parking
-- furnished=is_furnished
-- new/newly built=is_new
-- floor number: "3rd floor" → floor=3
-- view: "city view" → has_view
+Features: رووکن/corner→has_corner | باخچە/garden→has_garden | پارکینگ/parking→has_parking | مۆبیلیا/furnished→is_furnished | نوێ/new→is_new | دیمەن/view→has_view
 
-Kurdish/English word mapping (STT may produce either):
-- کرێ/kirê/rent/for rent → listing_type=rent
-- فرۆشتن/froshtn/sell/sale/for sale → listing_type=sell
-- دەفتەر/daftar/defter → price unit
-- ئۆتاق/otaq/room/bedroom/bed → bedrooms
-- خانوو/xanuu/house → property_type=house
-- شوقە/shuqa/apartment/flat → property_type=apartment
-- زەوی/zawî/land/plot → property_type=land
-- رووکن/rukon/corner → has_corner=true
+Kurdish core vocab:
+کرێ=rent فرۆشتن=sell ئۆتاق=bedroom حەمام=bathroom خانوو=house شوقە=apartment ڤیلا=villa زەوی=land دوکان=shop نهۆم=floor
+Numbers: یەک=1 دوو=2 سێ=3 چوار=4 پێنج=5 شەش=6 حەوت=7 هەشت=8 نۆ=9 دە=10 سەد=100
 
 Return ONLY valid JSON:
 {
-  "clean_transcript": "what they said, corrected to proper Kurdish or clear English",
+  "clean_transcript": "corrected Kurdish Sorani or clear English of what they meant",
   "listing_type": "rent"|"sell"|null,
-  "property_type": "apartment"|"villa"|"house"|"land"|"office"|"shop"|"building"|"duplex"|"studio"|"chalet"|"farm"|null,
+  "property_type": string|null,
   "area": "English area name from list"|null,
-  "city": "city name"|null,
+  "city": string|null,
   "bedrooms": number|null,
   "bathrooms": number|null,
   "min_price_daftar": number|null,
@@ -129,13 +221,13 @@ Return ONLY valid JSON:
   "min_area_m2": number|null,
   "max_area_m2": number|null,
   "floor": number|null,
-  "has_corner": true|false|null,
-  "has_garden": true|false|null,
-  "has_parking": true|false|null,
-  "is_furnished": true|false|null,
-  "is_new": true|false|null,
-  "has_view": true|false|null,
-  "keywords": ["any remaining descriptive words for full-text search"]
+  "has_corner": boolean|null,
+  "has_garden": boolean|null,
+  "has_parking": boolean|null,
+  "is_furnished": boolean|null,
+  "is_new": boolean|null,
+  "has_view": boolean|null,
+  "keywords": ["remaining descriptive words for full-text search on title/description"]
 }
 SYS;
 
@@ -152,7 +244,7 @@ SYS;
             ]);
 
             if (!$response->successful()) {
-                Log::error('Claude error', ['status' => $response->status(), 'body' => substr($response->body(), 0, 200)]);
+                Log::error('Claude error', ['status' => $response->status()]);
                 return $this->emptyIntent('claude_error');
             }
 
@@ -160,7 +252,6 @@ SYS;
             $decoded = json_decode($text, true);
 
             if (!is_array($decoded)) {
-                Log::warning('Claude invalid JSON', ['raw' => $text]);
                 return $this->emptyIntent('invalid_json');
             }
 
@@ -189,7 +280,7 @@ SYS;
                 'has_view'         => $decoded['has_view']          ?? null,
                 'keywords'         => (array)($decoded['keywords']  ?? []),
                 'raw_transcript'   => $transcript,
-                'source'           => 'claude_haiku',
+                'source'           => 'whisper+claude',
             ];
         } catch (\Throwable $e) {
             Log::error('Claude exception', ['msg' => $e->getMessage()]);
@@ -211,9 +302,7 @@ SYS;
 
                 return $areas->map(function ($a) {
                     $en = $a->area_name_en ?? '';
-                    $ku = $a->area_name_ku ?? '';
-                    $ar = $a->area_name_ar ?? '';
-                    $alts = array_filter([$ku, $ar]);
+                    $alts = array_filter([$a->area_name_ku ?? '', $a->area_name_ar ?? '']);
                     return $en . ($alts ? ' (' . implode('/', $alts) . ')' : '');
                 })->filter()->implode(', ');
             } catch (\Throwable $e) {
