@@ -34,12 +34,14 @@ class PropertyController extends Controller
     public function index(Request $request)
     {
         try {
+            DB::enableQueryLog(); // ← remove after profiling
+
             $perPage = $request->get('per_page', 20);
-            $user = auth('sanctum')->user();
+            $user    = auth('sanctum')->user();
 
             $query = Property::active()
                 ->published()
-                ->whereNotIn('status', ['cancelled', 'pending']);
+                ->whereIn('status', ['available', 'approved', 'sold', 'rented']); // FIX-4: flip to whereIn
 
             if ($user) {
                 $todayViewed = $this->getRecentlyViewedIds($user, 24);
@@ -49,26 +51,38 @@ class PropertyController extends Controller
             }
 
             $properties = $query->orderByDesc('created_at')->paginate($perPage);
-            $properties->load('owner'); // ← ADD HERE
+            $properties->load('owner'); // eager-load stays here
 
+            // FIX-2: move trackImpressions off the critical path
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
-                $this->interactionService->trackImpressions(
-                    $userId,
-                    collect($properties->items()),
-                    'index'
-                );
+                dispatch(function () use ($userId, $properties) {
+                    app(PropertyInteractionService::class)->trackImpressions(
+                        $userId,
+                        collect($properties->items()),
+                        'index'
+                    );
+                })->afterResponse();
             }
 
-            $transformedData = collect($properties->items())->map(function ($property) {
-                return $this->transformPropertyData($property);
-            });
+            $transformedData = collect($properties->items())->map(
+                fn($property) => $this->transformPropertyData($property)
+            );
+
+            // ← remove after profiling
+            Log::info('index() perf', [
+                'query_count' => count(DB::getQueryLog()),
+                'queries'     => collect(DB::getQueryLog())->map(fn($q) => [
+                    'sql'  => $q['query'],
+                    'time' => $q['time'] . 'ms',
+                ])->toArray(),
+            ]);
 
             return ApiResponse::success(
                 'Properties retrieved successfully',
                 [
-                    'data' => $transformedData,
-                    'total' => $properties->total(),
+                    'data'         => $transformedData,
+                    'total'        => $properties->total(),
                     'current_page' => $properties->currentPage(),
                 ],
                 200
@@ -1455,7 +1469,10 @@ class PropertyController extends Controller
         try {
             $ownerClass = $property->owner_type;
             if ($ownerClass && class_exists($ownerClass)) {
-                $owner = $ownerClass::find($property->owner_id);
+                // $owner = $ownerClass::find($property->owner_id);
+
+                $owner = $property->relationLoaded('owner') ? $property->owner : $ownerClass::find($property->owner_id);
+
 
                 if ($owner) {
                     switch ($ownerClass) {
