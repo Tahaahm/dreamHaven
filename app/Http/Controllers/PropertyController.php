@@ -34,14 +34,13 @@ class PropertyController extends Controller
     public function index(Request $request)
     {
         try {
-            DB::enableQueryLog(); // ← remove after profiling
-
             $perPage = $request->get('per_page', 20);
             $user    = auth('sanctum')->user();
 
             $query = Property::active()
                 ->published()
-                ->whereIn('status', ['available', 'approved', 'sold', 'rented']); // FIX-4: flip to whereIn
+                ->whereIn('status', ['available', 'approved'])
+                ->orderByDesc('created_at');
 
             if ($user) {
                 $todayViewed = $this->getRecentlyViewedIds($user, 24);
@@ -50,10 +49,9 @@ class PropertyController extends Controller
                 }
             }
 
-            $properties = $query->orderByDesc('created_at')->paginate($perPage);
-            $properties->load('owner'); // eager-load stays here
+            $properties = $query->paginate($perPage);
+            $properties->load('owner');
 
-            // FIX-2: move trackImpressions off the critical path
             if ($properties->isNotEmpty()) {
                 $userId = $user ? $user->id : 'guest_' . session()->getId();
                 dispatch(function () use ($userId, $properties) {
@@ -68,15 +66,6 @@ class PropertyController extends Controller
             $transformedData = collect($properties->items())->map(
                 fn($property) => $this->transformPropertyData($property)
             );
-
-            // ← remove after profiling
-            Log::info('index() perf', [
-                'query_count' => count(DB::getQueryLog()),
-                'queries'     => collect(DB::getQueryLog())->map(fn($q) => [
-                    'sql'  => $q['query'],
-                    'time' => $q['time'] . 'ms',
-                ])->toArray(),
-            ]);
 
             return ApiResponse::success(
                 'Properties retrieved successfully',
