@@ -391,15 +391,22 @@ class UserTasteProfile
 
         $tol = $calc ? 0.30 : 0.40;
         $max = $target * (1 + $tol);
+        $min = $target * (1 - $tol);
 
         // Apply negative price cap
         if ($negativeCap && $max > $negativeCap) {
             $max = $negativeCap;
+            // FIX: the cap can pull $max below the originally-computed $min,
+            // producing an impossible min > max range that made every
+            // personalized recommendation query match 0 rows (BETWEEN min
+            // AND max where min > max never matches). Re-derive $min from
+            // the capped $max so the range always stays valid.
+            $min = min($min, $max * 0.7);
         }
 
         return [
             'target'       => $target,
-            'min'          => $target * (1 - $tol),
+            'min'          => $min,
             'max'          => $max,
             'source'       => $behaviourTarget ? 'behaviour' : 'calculator',
             'negative_cap' => $negativeCap,
