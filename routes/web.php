@@ -173,7 +173,7 @@ Route::middleware(['auth:web,agent', EnsureUserIsVerified::class])->group(functi
     });
 
     // Route::post('/upload-images', [PropertyController::class, 'uploadImages'])->name('property.uploadImages');
-    Route::get('/properties/{property_id}/edit', [PropertyController::class, 'editProperty'])->name('property.edit');
+    Route::get('/properties/{property_id}/edit', [PropertyController::class, 'edit'])->name('property.edit.mobile');
 
     // Projects
     Route::post('/projects/store', [ProjectController::class, 'store'])->name('projects.store');
