@@ -115,6 +115,7 @@ class PropertyController extends Controller
 
     public function search(Request $request)
     {
+        $__t0 = microtime(true);
         try {
             $searchTerm = $request->get('search', '');
             $user       = auth('sanctum')->user();
@@ -208,6 +209,13 @@ class PropertyController extends Controller
                     'features'       => $intent['features'],
                 ];
             }
+
+            Log::debug('✅ SEARCH: Success', [
+                'search_term'      => $searchTerm,
+                'properties_found' => $transformedData->count(),
+                'duration_ms'      => round((microtime(true) - $__t0) * 1000, 1),
+                'peak_memory_mb'   => round(memory_get_peak_usage(true) / 1048576, 1),
+            ]);
 
             return ApiResponse::success('Properties found', [
                 'data' => $transformedData,
@@ -875,6 +883,7 @@ class PropertyController extends Controller
 
     public function getRecommended(Request $request)
     {
+        $__t0 = microtime(true);
         try {
             $limit = min((int) $request->get('limit', 20), 50); // cap at 50
             $user  = auth('sanctum')->user();
@@ -966,6 +975,8 @@ class PropertyController extends Controller
             Log::debug('✅ RECOMMENDED: Success', [
                 'properties_found' => $properties->count(),
                 'personalized'     => $user ? true : false,
+                'duration_ms'      => round((microtime(true) - $__t0) * 1000, 1),
+                'peak_memory_mb'   => round(memory_get_peak_usage(true) / 1048576, 1),
             ]);
 
             // FIX: moved to afterResponse so it doesn't block the API response
@@ -1005,6 +1016,7 @@ class PropertyController extends Controller
     }
     public function getRecent(Request $request)
     {
+        $__t0 = microtime(true);
         try {
             $validator = Validator::make($request->all(), [
                 'limit'    => 'integer|min:1|max:50',
@@ -1041,6 +1053,8 @@ class PropertyController extends Controller
 
             Log::debug('✅ RECENT: Success', [
                 'properties_found' => $properties->count(),
+                'duration_ms'      => round((microtime(true) - $__t0) * 1000, 1),
+                'peak_memory_mb'   => round(memory_get_peak_usage(true) / 1048576, 1),
             ]);
 
             if ($properties->isNotEmpty()) {
@@ -1133,6 +1147,7 @@ class PropertyController extends Controller
     }
     public function getPopular(Request $request)
     {
+        $__t0 = microtime(true);
         try {
             $validator = Validator::make($request->all(), [
                 'limit'        => 'integer|min:1|max:50',
@@ -1211,6 +1226,8 @@ class PropertyController extends Controller
                 'properties_found' => $properties->count(),
                 'listing_type'     => $listingType,
                 'city'             => $city,
+                'duration_ms'      => round((microtime(true) - $__t0) * 1000, 1),
+                'peak_memory_mb'   => round(memory_get_peak_usage(true) / 1048576, 1),
             ]);
 
             if ($properties->isNotEmpty()) {
@@ -1255,6 +1272,7 @@ class PropertyController extends Controller
      */
     public function getFeatured(Request $request)
     {
+        $__t0 = microtime(true);
         try {
             $limit  = $request->get('limit', 10);
             $user   = auth('sanctum')->user();
@@ -1326,6 +1344,8 @@ class PropertyController extends Controller
                 'personalized'     => (bool) $userId,
                 'layer1_count'     => $transformedData->where('featured_layer', 1)->count(),
                 'layer2_count'     => $transformedData->where('featured_layer', 2)->count(),
+                'duration_ms'      => round((microtime(true) - $__t0) * 1000, 1),
+                'peak_memory_mb'   => round(memory_get_peak_usage(true) / 1048576, 1),
             ]);
 
             return ApiResponse::success(
