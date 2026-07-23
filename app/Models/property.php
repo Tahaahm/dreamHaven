@@ -97,6 +97,14 @@ class Property extends Model
         'views' => 'integer',
         'favorites_count' => 'integer',
         'rating' => 'decimal:2',
+
+        // Read-only, DB-generated mirrors of values already inside price/rooms/type
+        // (see migration add_indexed_generated_columns_to_properties_table).
+        // Not listed in $fillable — MySQL computes these, the app never writes them.
+        'price_usd' => 'decimal:2',
+        'price_iqd' => 'decimal:2',
+        'bedrooms_count' => 'integer',
+        'bathrooms_count' => 'integer',
     ];
 
     public function owner()
@@ -114,6 +122,77 @@ class Property extends Model
         return $query->where('published', true);
     }
 
+    /**
+     * is_active + published together — the "visible to end users" gate
+     * repeated across nearly every read endpoint in PropertyController.
+     */
+    public function scopeVisible($query)
+    {
+        return $query->where('is_active', true)->where('published', true);
+    }
+
+    /**
+     * Exclude a caller-supplied set of statuses. Kept generic (rather than
+     * hard-coded) because different endpoints exclude slightly different
+     * status lists (e.g. index() excludes only cancelled/pending, while
+     * getRecommended()/getRecent()/getPopular() also exclude sold/rented).
+     * Passing the exact same list each caller already used preserves
+     * each endpoint's existing behavior exactly.
+     */
+    public function scopeExcludingStatuses($query, array $statuses)
+    {
+        return $query->whereNotIn('status', $statuses);
+    }
+
+    /**
+     * Price filter on the indexed, DB-generated price_usd/price_iqd column
+     * instead of a raw JSON_EXTRACT scan. Mirrors the exact semantics the
+     * controller previously implemented by hand: a currency's price only
+     * counts when it is present and greater than zero, so a $0/missing
+     * price in the requested currency never matches a min/max filter.
+     */
+    public function scopePriceBetween($query, string $currency, $min = null, $max = null)
+    {
+        $column = strtolower($currency) === 'iqd' ? 'price_iqd' : 'price_usd';
+
+        if ($min !== null && (float) $min > 0) {
+            $query->where($column, '>=', $min)->where($column, '>', 0);
+        }
+
+        if ($max !== null && (float) $max > 0) {
+            $query->where($column, '<=', $max)->where($column, '>', 0);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Bedroom/bathroom count filter on the indexed generated columns.
+     * $orMore mirrors the app's "5+" bedrooms_plus / bathrooms_plus option.
+     */
+    public function scopeBedroomCount($query, int $count, bool $orMore = false)
+    {
+        return $orMore
+            ? $query->where('bedrooms_count', '>=', $count)
+            : $query->where('bedrooms_count', $count);
+    }
+
+    public function scopeBathroomCount($query, int $count, bool $orMore = false)
+    {
+        return $orMore
+            ? $query->where('bathrooms_count', '>=', $count)
+            : $query->where('bathrooms_count', $count);
+    }
+
+    /**
+     * Exact property-type-category match on the indexed generated column
+     * (already lower-cased at write time, matching the controller's
+     * previous LOWER(JSON_UNQUOTE(...)) = ? comparison).
+     */
+    public function scopeOfCategory($query, string $category)
+    {
+        return $query->where('property_type_category', strtolower($category));
+    }
 
     public function isBoosted()
     {
