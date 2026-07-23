@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -14,6 +15,9 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // ── Pulse dashboard access — only you can view /pulse ─────────────
+        Gate::define('viewPulse', fn ($user) => $user->email === 'tahaahmad837@gmail.com');
+
         // ── API endpoint call counter ─────────────────────────────────────
         if (app()->runningInConsole()) return;
 
