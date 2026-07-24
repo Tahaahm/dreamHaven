@@ -10,9 +10,15 @@
     <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
             <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Offices Directory</h1>
-            <p class="text-slate-500 mt-2 text-sm font-medium">Manage real estate agencies, verify status, and monitor listings.</p>
+            <p class="text-slate-500 mt-2 text-sm font-medium">Manage agencies, subscriptions, and renewal deadlines in one view.</p>
         </div>
         <div class="flex items-center gap-3">
+            @if(($expiringCount ?? 0) > 0)
+            <a href="{{ route('admin.offices.index', ['expiry' => 'expiring']) }}" class="flex items-center gap-2 px-4 py-2.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-sm font-bold hover:bg-rose-100 transition shadow-sm">
+                <i class="fas fa-hourglass-end"></i>
+                {{ $expiringCount }} Expiring Soon
+            </a>
+            @endif
             @if(($pendingCount ?? 0) > 0)
             <a href="{{ route('admin.offices.index', ['status' => 'pending']) }}" class="flex items-center gap-2 px-4 py-2.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-bold hover:bg-amber-100 transition shadow-sm">
                 <span class="relative flex h-2.5 w-2.5">
@@ -26,7 +32,7 @@
     </div>
 
     {{-- Stats Grid --}}
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-white rounded-xl border border-slate-200 shadow-sm mb-8 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 overflow-hidden">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 bg-white rounded-xl border border-slate-200 shadow-sm mb-8 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 overflow-hidden">
 
         <div class="p-6 hover:bg-slate-50/50 transition-colors group relative">
             <div class="flex justify-between items-start">
@@ -73,14 +79,29 @@
         <div class="p-6 hover:bg-slate-50/50 transition-colors group relative">
             <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Office Listings</p>
-                    <p class="text-3xl font-black text-slate-900">{{ number_format($stats['total_properties'] ?? 0) }}</p>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Active Plans</p>
+                    <p class="text-3xl font-black text-slate-900">{{ number_format($stats['active_subs'] ?? 0) }}</p>
                 </div>
                 <div class="p-2 bg-indigo-50 rounded-lg text-indigo-600 group-hover:text-indigo-700 transition">
-                    <i class="fas fa-home text-lg"></i>
+                    <i class="fas fa-crown text-lg"></i>
                 </div>
             </div>
-            <p class="mt-4 text-xs text-slate-400 font-medium">Total active listings</p>
+            <p class="mt-4 text-xs text-slate-400 font-medium">Paying agencies</p>
+        </div>
+
+        <div class="p-6 hover:bg-slate-50/50 transition-colors group relative">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Expiring ≤ 7d</p>
+                    <p class="text-3xl font-black {{ ($stats['expiring_soon'] ?? 0) > 0 ? 'text-rose-600' : 'text-slate-900' }}">{{ number_format($stats['expiring_soon'] ?? 0) }}</p>
+                </div>
+                <div class="p-2 bg-rose-50 rounded-lg text-rose-600 group-hover:text-rose-700 transition">
+                    <i class="fas fa-hourglass-end text-lg"></i>
+                </div>
+            </div>
+            <p class="mt-4 text-xs {{ ($stats['expiring_soon'] ?? 0) > 0 ? 'text-rose-600 font-bold' : 'text-slate-400 font-medium' }}">
+                {{ ($stats['expiring_soon'] ?? 0) > 0 ? 'Renewals needed' : 'All healthy' }}
+            </p>
         </div>
     </div>
 
@@ -104,7 +125,14 @@
                 <option value="{{ route('admin.offices.index', array_merge(request()->except('status'), ['status' => 'pending'])) }}" {{ request('status') == 'pending' ? 'selected' : '' }}>Pending</option>
             </select>
 
-            @if(request()->hasAny(['search', 'status', 'city']))
+            <select onchange="window.location.href=this.value" class="appearance-none bg-white border border-slate-200 text-slate-700 text-xs font-bold py-2.5 pl-4 pr-10 rounded-lg hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200 cursor-pointer transition shadow-sm">
+                <option value="{{ route('admin.offices.index') }}">Plan: All</option>
+                <option value="{{ route('admin.offices.index', array_merge(request()->except('expiry'), ['expiry' => 'expiring'])) }}" {{ request('expiry') == 'expiring' ? 'selected' : '' }}>Expiring ≤ 7 days</option>
+                <option value="{{ route('admin.offices.index', array_merge(request()->except('expiry'), ['expiry' => 'expired'])) }}" {{ request('expiry') == 'expired' ? 'selected' : '' }}>Expired</option>
+                <option value="{{ route('admin.offices.index', array_merge(request()->except('expiry'), ['expiry' => 'active'])) }}" {{ request('expiry') == 'active' ? 'selected' : '' }}>Active plan</option>
+            </select>
+
+            @if(request()->hasAny(['search', 'status', 'city', 'expiry']))
                 <a href="{{ route('admin.offices.index') }}" class="px-4 py-2.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition flex items-center gap-2 whitespace-nowrap">
                     <i class="fas fa-times"></i> Reset
                 </a>
@@ -122,12 +150,30 @@
                         <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Contact Info</th>
                         <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Listings</th>
                         <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Status</th>
+                        <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Subscription</th>
                         <th class="px-6 py-4 w-10"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
                     @forelse($offices as $office)
-                    <tr class="hover:bg-slate-50 transition-colors group">
+                    @php
+                        // ── Subscription expiry computation ──────────────────
+                        $sub = $office->subscription;
+                        $endDate = $sub?->end_date ? \Carbon\Carbon::parse($sub->end_date) : null;
+                        $startDate = $sub?->start_date ? \Carbon\Carbon::parse($sub->start_date) : null;
+                        $daysLeft = $endDate ? now()->startOfDay()->diffInDays($endDate->startOfDay(), false) : null;
+                        $isActiveSub = $sub && $sub->status === 'active' && $daysLeft !== null && $daysLeft >= 0;
+                        $isExpired  = $sub && $daysLeft !== null && $daysLeft < 0;
+                        $isExpiring = $isActiveSub && $daysLeft <= 7;
+
+                        $progress = 0;
+                        if ($startDate && $endDate && $endDate->gt($startDate)) {
+                            $total = $startDate->diffInDays($endDate);
+                            $used  = $startDate->diffInDays(now());
+                            $progress = $total > 0 ? min(100, max(0, ($used / $total) * 100)) : 100;
+                        }
+                    @endphp
+                    <tr class="hover:bg-slate-50 transition-colors group {{ $isExpiring ? 'bg-rose-50/30' : '' }}">
 
                         {{-- Office Identity --}}
                         <td class="px-6 py-4">
@@ -184,6 +230,48 @@
                             @endif
                         </td>
 
+                        {{-- Subscription + Expiration --}}
+                        <td class="px-6 py-4">
+                            <div class="min-w-[170px]">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider
+                                        {{ $isActiveSub ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-slate-100 text-slate-500 border border-slate-200' }}">
+                                        {{ $office->current_plan ?? 'FREE' }}
+                                    </span>
+
+                                    @if($isExpired)
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-black text-rose-600 uppercase">
+                                            <i class="fas fa-circle-xmark"></i> Expired
+                                        </span>
+                                    @elseif($isExpiring)
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-black text-rose-600 uppercase animate-pulse">
+                                            <i class="fas fa-hourglass-end"></i> {{ $daysLeft }}d left
+                                        </span>
+                                    @elseif($isActiveSub)
+                                        <span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase">
+                                            <i class="fas fa-circle-check"></i> {{ $daysLeft }}d left
+                                        </span>
+                                    @else
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase">No plan</span>
+                                    @endif
+                                </div>
+
+                                @if($endDate)
+                                    <div class="w-full bg-slate-100 rounded-full h-1 overflow-hidden mb-1">
+                                        <div class="h-1 rounded-full transition-all
+                                            {{ $isExpired ? 'bg-rose-500' : ($isExpiring ? 'bg-rose-400' : ($progress > 75 ? 'bg-amber-400' : 'bg-emerald-500')) }}"
+                                            style="width: {{ $isExpired ? 100 : $progress }}%"></div>
+                                    </div>
+                                    <p class="text-[10px] font-semibold {{ $isExpired || $isExpiring ? 'text-rose-500' : 'text-slate-400' }}">
+                                        <i class="far fa-calendar-alt mr-0.5"></i>
+                                        {{ $isExpired ? 'Ended' : 'Ends' }} {{ $endDate->format('d M Y') }}
+                                    </p>
+                                @else
+                                    <p class="text-[10px] font-semibold text-slate-300">No active subscription</p>
+                                @endif
+                            </div>
+                        </td>
+
                         {{-- Actions --}}
                         <td class="px-6 py-4 text-right">
                             <div class="relative group/menu">
@@ -201,7 +289,7 @@
                                             <i class="fas fa-eye w-4 text-center"></i> View Profile
                                         </a>
                                         <a href="{{ route('admin.offices.edit', $office->id) }}" class="flex items-center gap-3 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-indigo-600 rounded-md transition">
-                                            <i class="fas fa-pen-to-square w-4 text-center"></i> Edit Office
+                                            <i class="fas fa-pen-to-square w-4 text-center"></i> Edit / Renew Plan
                                         </a>
 
                                         @if(!$office->is_verified)
@@ -228,7 +316,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="5" class="px-6 py-12 text-center text-slate-500">
+                        <td colspan="6" class="px-6 py-12 text-center text-slate-500">
                             <p class="font-medium">No real estate offices found.</p>
                         </td>
                     </tr>

@@ -484,7 +484,8 @@ class AdminController extends Controller
 
     public function agentsIndex(Request $request)
     {
-        $query = Agent::query();
+        // ✅ Eager load subscription so the view can show expiration
+        $query = Agent::with('subscription');
 
         if ($request->has('search')) {
             $search = $request->search;
@@ -511,18 +512,50 @@ class AdminController extends Controller
             $query->where('type', $request->type);
         }
 
+        // ✅ NEW: Expiry filter (expiring ≤7 days / expired / active)
+        if ($request->has('expiry')) {
+            if ($request->expiry == 'expiring') {
+                $query->whereHas('subscription', function ($q) {
+                    $q->where('status', 'active')
+                        ->whereBetween('end_date', [now(), now()->addDays(7)]);
+                });
+            } elseif ($request->expiry == 'expired') {
+                $query->whereHas('subscription', function ($q) {
+                    $q->where('end_date', '<', now());
+                });
+            } elseif ($request->expiry == 'active') {
+                $query->whereHas('subscription', function ($q) {
+                    $q->where('status', 'active')
+                        ->where('end_date', '>=', now());
+                });
+            }
+        }
+
+        // ✅ Expiring-soon agents sorted first when filtering by expiry
         $agents = $query->withCount('properties')->paginate(15)->withQueryString();
+
+        // ✅ NEW STATS: active subs + expiring soon count
+        $agentIds = Agent::pluck('subscription_id')->filter();
 
         $stats = [
             'total' => Agent::count(),
             'verified' => Agent::where('is_verified', true)->count(),
             'pending' => Agent::where('is_verified', false)->count(),
             'total_properties' => Property::where('owner_type', 'App\Models\Agent')->count(),
+            'active_subs' => Subscription::whereIn('id', $agentIds)
+                ->where('status', 'active')
+                ->where('end_date', '>=', now())
+                ->count(),
+            'expiring_soon' => Subscription::whereIn('id', $agentIds)
+                ->where('status', 'active')
+                ->whereBetween('end_date', [now(), now()->addDays(7)])
+                ->count(),
         ];
 
         $pendingCount = Agent::where('is_verified', false)->count();
+        $expiringCount = $stats['expiring_soon'];
 
-        return view('admin.agents.index', compact('agents', 'stats', 'pendingCount'));
+        return view('admin.agents.index', compact('agents', 'stats', 'pendingCount', 'expiringCount'));
     }
 
     public function agentsPending()
@@ -677,7 +710,8 @@ class AdminController extends Controller
 
     public function officesIndex(Request $request)
     {
-        $query = RealEstateOffice::query();
+        // ✅ Eager load subscription so the view can show expiration
+        $query = RealEstateOffice::with('subscription');
 
         if ($request->has('search')) {
             $search = $request->search;
@@ -699,18 +733,49 @@ class AdminController extends Controller
             $query->where('city', 'like', "%{$request->city}%");
         }
 
+        // ✅ NEW: Expiry filter
+        if ($request->has('expiry')) {
+            if ($request->expiry == 'expiring') {
+                $query->whereHas('subscription', function ($q) {
+                    $q->where('status', 'active')
+                        ->whereBetween('end_date', [now(), now()->addDays(7)]);
+                });
+            } elseif ($request->expiry == 'expired') {
+                $query->whereHas('subscription', function ($q) {
+                    $q->where('end_date', '<', now());
+                });
+            } elseif ($request->expiry == 'active') {
+                $query->whereHas('subscription', function ($q) {
+                    $q->where('status', 'active')
+                        ->where('end_date', '>=', now());
+                });
+            }
+        }
+
         $offices = $query->withCount('ownedProperties')->paginate(15)->withQueryString();
+
+        // ✅ NEW STATS
+        $officeIds = RealEstateOffice::pluck('subscription_id')->filter();
 
         $stats = [
             'total' => RealEstateOffice::count(),
             'verified' => RealEstateOffice::where('is_verified', true)->count(),
             'pending' => RealEstateOffice::where('is_verified', false)->count(),
             'total_properties' => Property::where('owner_type', 'App\Models\RealEstateOffice')->count(),
+            'active_subs' => Subscription::whereIn('id', $officeIds)
+                ->where('status', 'active')
+                ->where('end_date', '>=', now())
+                ->count(),
+            'expiring_soon' => Subscription::whereIn('id', $officeIds)
+                ->where('status', 'active')
+                ->whereBetween('end_date', [now(), now()->addDays(7)])
+                ->count(),
         ];
 
         $pendingCount = RealEstateOffice::where('is_verified', false)->count();
+        $expiringCount = $stats['expiring_soon'];
 
-        return view('admin.offices.index', compact('offices', 'stats', 'pendingCount'));
+        return view('admin.offices.index', compact('offices', 'stats', 'pendingCount', 'expiringCount'));
     }
 
     public function officesPending()
