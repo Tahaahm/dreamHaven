@@ -24,7 +24,7 @@ use App\Http\Controllers\Concerns\ManagesPropertyEngagement;
 use App\Http\Controllers\Concerns\ManagesPropertyAnalytics;
 use App\Http\Controllers\Concerns\ManagesPropertyOwnerViews;
 use App\Http\Controllers\Concerns\ManagesPropertyMutations;
-
+use App\Services\VisitorTracker;
 
 /**
  * Every public method here is bound to a route exactly as before this
@@ -43,10 +43,18 @@ class PropertyController extends Controller
 
     protected $interactionService;
 
-    public function __construct(PropertyInteractionService $interactionService)
-    {
+    public function __construct(
+        PropertyInteractionService $interactionService,
+        VisitorTracker $visitors
+    ) {
         $this->interactionService = $interactionService;
+        $this->visitors = $visitors;
+        $this->visitors->touch();   // ← records guest or logged-in, automatically
     }
+
+
+    protected $visitors;
+
     public function index(Request $request)
     {
         try {
@@ -69,7 +77,7 @@ class PropertyController extends Controller
             $properties->load('owner');
 
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 dispatch(function () use ($userId, $properties) {
                     app(PropertyInteractionService::class)->trackImpressions(
                         $userId,
@@ -1830,9 +1838,4 @@ class PropertyController extends Controller
             return ['lat' => null, 'lng' => null];
         }
     }
-
-
-
-
-
 }
