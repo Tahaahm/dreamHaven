@@ -484,7 +484,10 @@ class AdminController extends Controller
 
     public function agentsIndex(Request $request)
     {
-        // ✅ Eager load subscription so the view can show expiration
+        $weekStart = now()->startOfWeek();   // Monday 00:00
+        $weekEnd   = now()->endOfWeek();     // Sunday 23:59
+
+        // ── Main query (unchanged filters + subscription eager load) ──
         $query = Agent::with('subscription');
 
         if ($request->has('search')) {
@@ -497,66 +500,114 @@ class AdminController extends Controller
         }
 
         if ($request->has('status')) {
-            if ($request->status == 'verified') {
-                $query->where('is_verified', true);
-            } elseif ($request->status == 'pending') {
-                $query->where('is_verified', false);
-            }
+            if ($request->status == 'verified') $query->where('is_verified', true);
+            elseif ($request->status == 'pending') $query->where('is_verified', false);
         }
 
-        if ($request->has('city')) {
-            $query->where('city', 'like', "%{$request->city}%");
-        }
+        if ($request->has('city')) $query->where('city', 'like', "%{$request->city}%");
+        if ($request->has('type')) $query->where('type', $request->type);
 
-        if ($request->has('type')) {
-            $query->where('type', $request->type);
-        }
-
-        // ✅ NEW: Expiry filter (expiring ≤7 days / expired / active)
         if ($request->has('expiry')) {
             if ($request->expiry == 'expiring') {
-                $query->whereHas('subscription', function ($q) {
-                    $q->where('status', 'active')
-                        ->whereBetween('end_date', [now(), now()->addDays(7)]);
-                });
+                $query->whereHas('subscription', fn($q) => $q
+                    ->where('status', 'active')
+                    ->whereBetween('end_date', [now(), now()->addDays(7)]));
             } elseif ($request->expiry == 'expired') {
-                $query->whereHas('subscription', function ($q) {
-                    $q->where('end_date', '<', now());
-                });
+                $query->whereHas('subscription', fn($q) => $q->where('end_date', '<', now()));
             } elseif ($request->expiry == 'active') {
-                $query->whereHas('subscription', function ($q) {
-                    $q->where('status', 'active')
-                        ->where('end_date', '>=', now());
-                });
+                $query->whereHas('subscription', fn($q) => $q
+                    ->where('status', 'active')->where('end_date', '>=', now()));
             }
         }
 
-        // ✅ Expiring-soon agents sorted first when filtering by expiry
         $agents = $query->withCount('properties')->paginate(15)->withQueryString();
 
-        // ✅ NEW STATS: active subs + expiring soon count
-        $agentIds = Agent::pluck('subscription_id')->filter();
+        // ── Stats ─────────────────────────────────────────────────────
+        $agentSubIds = Agent::pluck('subscription_id')->filter();
 
         $stats = [
             'total' => Agent::count(),
             'verified' => Agent::where('is_verified', true)->count(),
             'pending' => Agent::where('is_verified', false)->count(),
             'total_properties' => Property::where('owner_type', 'App\Models\Agent')->count(),
-            'active_subs' => Subscription::whereIn('id', $agentIds)
+            'active_subs' => Subscription::whereIn('id', $agentSubIds)
+                ->where('status', 'active')->where('end_date', '>=', now())->count(),
+            'expiring_soon' => Subscription::whereIn('id', $agentSubIds)
                 ->where('status', 'active')
-                ->where('end_date', '>=', now())
-                ->count(),
-            'expiring_soon' => Subscription::whereIn('id', $agentIds)
-                ->where('status', 'active')
-                ->whereBetween('end_date', [now(), now()->addDays(7)])
-                ->count(),
+                ->whereBetween('end_date', [now(), now()->addDays(7)])->count(),
         ];
 
-        $pendingCount = Agent::where('is_verified', false)->count();
+        $pendingCount = $stats['pending'];
+
+        // ══════════════════════════════════════════════════════════════
+        // WEEKLY BRIEFING DATA
+        // ══════════════════════════════════════════════════════════════
+
+        // 1. TOP POSTERS — agents who posted the most properties this week
+        $topPosters = Agent::withCount(['properties as weekly_posts' => function ($q) use ($weekStart) {
+            $q->where('created_at', '>=', $weekStart);
+        }])
+            ->having('weekly_posts', '>', 0)
+            ->orderByDesc('weekly_posts')
+            ->take(5)
+            ->get()
+            ->map(fn($a) => [
+                'id'    => $a->id,
+                'name'  => $a->agent_name,
+                'image' => $a->profile_image,
+                'count' => $a->weekly_posts,
+            ])->toArray();
+
+        // 2. EXPIRING THIS WEEK — active subs that end between now and Sunday
+        $expiringThisWeek = Agent::with('subscription')
+            ->whereHas('subscription', fn($q) => $q
+                ->where('status', 'active')
+                ->whereBetween('end_date', [now(), $weekEnd]))
+            ->take(8)->get()
+            ->map(function ($a) {
+                $end = \Carbon\Carbon::parse($a->subscription->end_date);
+                return [
+                    'id'    => $a->id,
+                    'name'  => $a->agent_name,
+                    'image' => $a->profile_image,
+                    'plan'  => $a->current_plan ?? 'plan',
+                    'days'  => now()->startOfDay()->diffInDays($end->startOfDay(), false),
+                    'ends'  => $end->format('D d M'),
+                ];
+            })
+            ->sortBy('days')->values()->toArray();
+
+        // 3. EXPIRED THIS WEEK — subs that ended between Monday and now
+        $expiredThisWeek = Agent::with('subscription')
+            ->whereHas('subscription', fn($q) => $q
+                ->whereBetween('end_date', [$weekStart, now()]))
+            ->take(8)->get()
+            ->map(fn($a) => [
+                'id'    => $a->id,
+                'name'  => $a->agent_name,
+                'image' => $a->profile_image,
+                'plan'  => $a->current_plan ?? 'plan',
+                'ended' => \Carbon\Carbon::parse($a->subscription->end_date)->format('D d M'),
+            ])->toArray();
+
+        $briefing = [
+            'week_label'  => $weekStart->format('M d') . ' – ' . $weekEnd->format('M d'),
+            'top_posters' => $topPosters,
+            'expiring'    => $expiringThisWeek,
+            'expired'     => $expiredThisWeek,
+        ];
+
         $expiringCount = $stats['expiring_soon'];
 
-        return view('admin.agents.index', compact('agents', 'stats', 'pendingCount', 'expiringCount'));
+        return view('admin.agents.index', compact(
+            'agents',
+            'stats',
+            'pendingCount',
+            'expiringCount',
+            'briefing'
+        ));
     }
+
 
     public function agentsPending()
     {
@@ -708,9 +759,13 @@ class AdminController extends Controller
     // OFFICES MANAGEMENT
     // ==========================================
 
+
     public function officesIndex(Request $request)
     {
-        // ✅ Eager load subscription so the view can show expiration
+        $weekStart = now()->startOfWeek();
+        $weekEnd   = now()->endOfWeek();
+
+        // ── Main query ────────────────────────────────────────────────
         $query = RealEstateOffice::with('subscription');
 
         if ($request->has('search')) {
@@ -722,60 +777,111 @@ class AdminController extends Controller
         }
 
         if ($request->has('status')) {
-            if ($request->status == 'verified') {
-                $query->where('is_verified', true);
-            } elseif ($request->status == 'pending') {
-                $query->where('is_verified', false);
-            }
+            if ($request->status == 'verified') $query->where('is_verified', true);
+            elseif ($request->status == 'pending') $query->where('is_verified', false);
         }
 
-        if ($request->has('city')) {
-            $query->where('city', 'like', "%{$request->city}%");
-        }
+        if ($request->has('city')) $query->where('city', 'like', "%{$request->city}%");
 
-        // ✅ NEW: Expiry filter
         if ($request->has('expiry')) {
             if ($request->expiry == 'expiring') {
-                $query->whereHas('subscription', function ($q) {
-                    $q->where('status', 'active')
-                        ->whereBetween('end_date', [now(), now()->addDays(7)]);
-                });
+                $query->whereHas('subscription', fn($q) => $q
+                    ->where('status', 'active')
+                    ->whereBetween('end_date', [now(), now()->addDays(7)]));
             } elseif ($request->expiry == 'expired') {
-                $query->whereHas('subscription', function ($q) {
-                    $q->where('end_date', '<', now());
-                });
+                $query->whereHas('subscription', fn($q) => $q->where('end_date', '<', now()));
             } elseif ($request->expiry == 'active') {
-                $query->whereHas('subscription', function ($q) {
-                    $q->where('status', 'active')
-                        ->where('end_date', '>=', now());
-                });
+                $query->whereHas('subscription', fn($q) => $q
+                    ->where('status', 'active')->where('end_date', '>=', now()));
             }
         }
 
         $offices = $query->withCount('ownedProperties')->paginate(15)->withQueryString();
 
-        // ✅ NEW STATS
-        $officeIds = RealEstateOffice::pluck('subscription_id')->filter();
+        // ── Stats ─────────────────────────────────────────────────────
+        $officeSubIds = RealEstateOffice::pluck('subscription_id')->filter();
 
         $stats = [
             'total' => RealEstateOffice::count(),
             'verified' => RealEstateOffice::where('is_verified', true)->count(),
             'pending' => RealEstateOffice::where('is_verified', false)->count(),
             'total_properties' => Property::where('owner_type', 'App\Models\RealEstateOffice')->count(),
-            'active_subs' => Subscription::whereIn('id', $officeIds)
+            'active_subs' => Subscription::whereIn('id', $officeSubIds)
+                ->where('status', 'active')->where('end_date', '>=', now())->count(),
+            'expiring_soon' => Subscription::whereIn('id', $officeSubIds)
                 ->where('status', 'active')
-                ->where('end_date', '>=', now())
-                ->count(),
-            'expiring_soon' => Subscription::whereIn('id', $officeIds)
-                ->where('status', 'active')
-                ->whereBetween('end_date', [now(), now()->addDays(7)])
-                ->count(),
+                ->whereBetween('end_date', [now(), now()->addDays(7)])->count(),
         ];
 
-        $pendingCount = RealEstateOffice::where('is_verified', false)->count();
+        $pendingCount = $stats['pending'];
+
+        // ══════════════════════════════════════════════════════════════
+        // WEEKLY BRIEFING DATA
+        // ══════════════════════════════════════════════════════════════
+
+        // 1. TOP POSTERS — offices with most listings this week
+        $topPosters = RealEstateOffice::withCount(['ownedProperties as weekly_posts' => function ($q) use ($weekStart) {
+            $q->where('created_at', '>=', $weekStart);
+        }])
+            ->having('weekly_posts', '>', 0)
+            ->orderByDesc('weekly_posts')
+            ->take(5)
+            ->get()
+            ->map(fn($o) => [
+                'id'    => $o->id,
+                'name'  => $o->company_name,
+                'image' => $o->logo,
+                'count' => $o->weekly_posts,
+            ])->toArray();
+
+        // 2. EXPIRING THIS WEEK
+        $expiringThisWeek = RealEstateOffice::with('subscription')
+            ->whereHas('subscription', fn($q) => $q
+                ->where('status', 'active')
+                ->whereBetween('end_date', [now(), $weekEnd]))
+            ->take(8)->get()
+            ->map(function ($o) {
+                $end = \Carbon\Carbon::parse($o->subscription->end_date);
+                return [
+                    'id'    => $o->id,
+                    'name'  => $o->company_name,
+                    'image' => $o->logo,
+                    'plan'  => $o->current_plan ?? 'plan',
+                    'days'  => now()->startOfDay()->diffInDays($end->startOfDay(), false),
+                    'ends'  => $end->format('D d M'),
+                ];
+            })
+            ->sortBy('days')->values()->toArray();
+
+        // 3. EXPIRED THIS WEEK
+        $expiredThisWeek = RealEstateOffice::with('subscription')
+            ->whereHas('subscription', fn($q) => $q
+                ->whereBetween('end_date', [$weekStart, now()]))
+            ->take(8)->get()
+            ->map(fn($o) => [
+                'id'    => $o->id,
+                'name'  => $o->company_name,
+                'image' => $o->logo,
+                'plan'  => $o->current_plan ?? 'plan',
+                'ended' => \Carbon\Carbon::parse($o->subscription->end_date)->format('D d M'),
+            ])->toArray();
+
+        $briefing = [
+            'week_label'  => $weekStart->format('M d') . ' – ' . $weekEnd->format('M d'),
+            'top_posters' => $topPosters,
+            'expiring'    => $expiringThisWeek,
+            'expired'     => $expiredThisWeek,
+        ];
+
         $expiringCount = $stats['expiring_soon'];
 
-        return view('admin.offices.index', compact('offices', 'stats', 'pendingCount', 'expiringCount'));
+        return view('admin.offices.index', compact(
+            'offices',
+            'stats',
+            'pendingCount',
+            'expiringCount',
+            'briefing'
+        ));
     }
 
     public function officesPending()
