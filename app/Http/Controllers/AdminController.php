@@ -482,6 +482,7 @@ class AdminController extends Controller
     // AGENTS MANAGEMENT
     // ==========================================
 
+
     public function agentsIndex(Request $request)
     {
         $weekStart = now()->startOfWeek();   // Monday 00:00
@@ -758,6 +759,7 @@ class AdminController extends Controller
     // ==========================================
     // OFFICES MANAGEMENT
     // ==========================================
+
 
 
     public function officesIndex(Request $request)
@@ -1057,7 +1059,7 @@ class AdminController extends Controller
         $query = Property::with('owner')->withCount([
             'interactions as unique_viewers_count' => function ($q) {
                 $q->where('interaction_type', 'impression')
-                    ->select(\DB::raw('COUNT(DISTINCT user_id)'));
+                    ->select(DB::raw('COUNT(DISTINCT user_id)'));
             }
         ]);
 
