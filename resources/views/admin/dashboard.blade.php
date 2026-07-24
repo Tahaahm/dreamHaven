@@ -481,50 +481,66 @@
     </div>
 
     {{-- ══════════════════════════════════════════════════════════════
-         5. RETENTION — how many people come back
+         5. RETENTION — who comes back: members AND guests
     ═══════════════════════════════════════════════════════════════ --}}
     <div id="sec-retention" class="card mb-4 md:mb-6 overflow-hidden scroll-mt-24">
         <div class="card-hd">
             <div>
-                <p class="eyebrow mb-1">Engagement</p>
+                <p class="eyebrow mb-1">Loyalty</p>
                 <h3 class="card-ttl">Who comes back</h3>
             </div>
-            <span class="text-[10.5px] font-bold text-slate-400">Last 30 days</span>
+            @if($retention['available'] ?? false)
+                <div class="seg" id="retSeg">
+                    <button class="on" data-group="everyone">Everyone</button>
+                    <button data-group="members">Members</button>
+                    <button data-group="guests" {{ ($retention['covers_guests'] ?? false) ? '' : 'disabled style=opacity:.4' }}>Guests</button>
+                </div>
+            @endif
         </div>
 
-        @if(!$retention['available'])
+        @if(!($retention['available'] ?? false))
             <div class="empty">
                 <i class="fas fa-chart-simple"></i>
-                No activity table found yet, so return visits can't be measured.<br>
-                <span class="text-[11.5px]">Once listing views are being recorded, this fills in automatically.</span>
+                Nothing to measure yet.<br>
+                <span class="text-[11.5px]">Switch on visitor tracking and return visits will appear here.</span>
             </div>
         @else
+            @if(!($retention['covers_guests'] ?? false))
+                <div class="px-4 md:px-6 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center gap-2.5">
+                    <i class="fas fa-circle-info text-amber-500 text-[12px]"></i>
+                    <p class="text-[11.5px] font-bold text-amber-800">
+                        Signed-in people only. Install the visits migration to include guests.
+                    </p>
+                </div>
+            @endif
+
             <div class="p-4 md:p-6">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-7">
 
                     {{-- Gauge --}}
                     <div class="flex flex-col items-center justify-center">
                         @php
-                            $rate = max(0, min(100, $retention['retention_rate']));
+                            $g    = $retention['groups']['everyone'];
                             $circ = 2 * M_PI * 54;
-                            $dash = round(($rate / 100) * $circ, 2);
+                            $dash = round((max(0, min(100, $g['rate'])) / 100) * $circ, 2);
                         @endphp
                         <div class="gauge">
                             <svg width="128" height="128" viewBox="0 0 128 128">
                                 <circle cx="64" cy="64" r="54" fill="none" stroke="#eef0f7" stroke-width="13"></circle>
-                                <circle cx="64" cy="64" r="54" fill="none" stroke="#303b97" stroke-width="13" stroke-linecap="round"
+                                <circle id="retGauge" cx="64" cy="64" r="54" fill="none" stroke="#303b97" stroke-width="13" stroke-linecap="round"
                                         stroke-dasharray="{{ $dash }} {{ $circ }}"></circle>
                             </svg>
                             <div class="gauge-mid">
                                 <div>
-                                    <p class="text-[30px] font-black text-slate-900 num leading-none">{{ $rate }}%</p>
-                                    <p class="eyebrow mt-1">Returning</p>
+                                    <p id="retRate" class="text-[30px] font-black text-slate-900 num leading-none">{{ $g['rate'] }}%</p>
+                                    <p class="eyebrow mt-1">Come back</p>
                                 </div>
                             </div>
                         </div>
-                        <p class="text-[12px] text-slate-500 font-semibold text-center mt-4 max-w-[230px] leading-snug">
-                            <b class="text-slate-900 num">{{ number_format($retention['returning']) }}</b> of this month's active people
-                            had already signed up before it started.
+                        <p class="text-[12px] text-slate-500 font-semibold text-center mt-4 max-w-[240px] leading-snug">
+                            <b id="retReturning" class="text-slate-900 num">{{ number_format($g['returning']) }}</b>
+                            of <b id="retMonth" class="text-slate-900 num">{{ number_format($g['month']) }}</b>
+                            <span id="retScopeWord">people</span> active this month visited on more than one day.
                         </p>
                     </div>
 
@@ -532,17 +548,17 @@
                     <div class="lg:col-span-2 grid grid-cols-2 md:grid-cols-3 gap-3">
                         @php
                             $tiles = [
-                                ['Came back', number_format($retention['repeat_visitors']), 'visited on 2+ days'],
-                                ['Active today', number_format($retention['dau']), 'people'],
-                                ['Active this week', number_format($retention['wau']), 'people'],
-                                ['Active this month', number_format($retention['mau']), 'people'],
-                                ['Daily stickiness', $retention['stickiness'] . '%', 'of monthly actives'],
-                                ['Visits per person', $retention['avg_sessions'], 'in 30 days'],
+                                ['retToday',     number_format($g['today']),     'Here today',        'people'],
+                                ['retWeek',      number_format($g['week']),      'This week',         'people'],
+                                ['retMonthTile', number_format($g['month']),     'This month',        'people'],
+                                ['retBack',      number_format($g['returning']), 'Came back',         'visited 2+ days'],
+                                ['retLoyal',     number_format($g['loyal']),     'Regulars',          'visited 4+ days'],
+                                ['retAvg',       $g['avg_days'],                 'Visits each',       'days per person'],
                             ];
                         @endphp
-                        @foreach($tiles as [$label, $value, $sub])
+                        @foreach($tiles as [$id, $value, $label, $sub])
                             <div class="ret-tile">
-                                <b class="num">{{ $value }}</b>
+                                <b id="{{ $id }}" class="num">{{ $value }}</b>
                                 <p class="text-[11.5px] font-extrabold text-slate-700 leading-tight">{{ $label }}</p>
                                 <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-1">{{ $sub }}</p>
                             </div>
@@ -550,7 +566,7 @@
                     </div>
                 </div>
 
-                {{-- Weekly returning vs new --}}
+                {{-- Weekly returning vs first-time --}}
                 <div class="mt-6 pt-5 border-t border-slate-100">
                     <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
                         <h4 class="text-[13px] font-extrabold text-slate-900">Returning vs first-time, by week</h4>
@@ -591,7 +607,7 @@
     </div>
 
     {{-- ══════════════════════════════════════════════════════════════
-         5. COHORTS + WIN-BACK
+         6. COHORTS + WIN-BACK
     ═══════════════════════════════════════════════════════════════ --}}
     @if(count($cohorts) || count($winBack))
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 md:gap-6 mb-4 md:mb-6">
@@ -1209,14 +1225,14 @@
         }).render();
     }
 
-    /* ---------- Returning vs first-time ---------- */
+    /* ---------- Retention: weekly returning vs first-time ---------- */
     const returnEl = document.querySelector('#returnChart');
     if (returnEl && retention.available) {
         const weeks = mobile ? 6 : 12;
         new ApexCharts(returnEl, {
             series: [
-                { name: 'Returning',  data: retention.weekly_return.slice(-weeks) },
-                { name: 'First time', data: retention.weekly_new.slice(-weeks) }
+                { name: 'Returning',  data: (retention.weekly_return || []).slice(-weeks) },
+                { name: 'First time', data: (retention.weekly_new || []).slice(-weeks) }
             ],
             chart: { type: 'bar', stacked: true, height: mobile ? 195 : 245, fontFamily: 'inherit', toolbar: { show: false } },
             colors: [BRAND, '#c7cbe8'],
@@ -1224,15 +1240,59 @@
             dataLabels: { enabled: false },
             legend: { show: false },
             xaxis: {
-                categories: retention.weeks.slice(-weeks),
+                categories: (retention.weeks || []).slice(-weeks),
                 axisBorder: { show: false }, axisTicks: { show: false },
                 labels: { rotate: 0, hideOverlappingLabels: true, style: { colors: '#94a3b8', fontSize: '10px', fontWeight: 700 } }
             },
             yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '10.5px', fontWeight: 700 } } },
             grid: { borderColor: '#f1f2f7', strokeDashArray: 5 },
-            tooltip: { shared: true, intersect: false }
+            tooltip: { shared: true, intersect: false, y: { formatter: v => v + ' people' } }
         }).render();
     }
+
+    /* ---------- Retention: Everyone / Members / Guests ---------- */
+    const GROUPS = retention.groups || {};
+    const CIRC   = 2 * Math.PI * 54;
+    const fmt    = v => new Intl.NumberFormat('en-US').format(v);
+
+    const WORD = { everyone: 'people', members: 'members', guests: 'guests' };
+
+    function showGroup(name) {
+        const g = GROUPS[name];
+        if (!g) return;
+
+        const set = (id, value) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = value;
+        };
+
+        set('retRate', g.rate + '%');
+        set('retReturning', fmt(g.returning));
+        set('retMonth', fmt(g.month));
+        set('retScopeWord', WORD[name] || 'people');
+        set('retToday', fmt(g.today));
+        set('retWeek', fmt(g.week));
+        set('retMonthTile', fmt(g.month));
+        set('retBack', fmt(g.returning));
+        set('retLoyal', fmt(g.loyal));
+        set('retAvg', g.avg_days);
+
+        const gauge = document.getElementById('retGauge');
+        if (gauge) {
+            const pct = Math.max(0, Math.min(100, g.rate));
+            gauge.setAttribute('stroke-dasharray', ((pct / 100) * CIRC).toFixed(2) + ' ' + CIRC.toFixed(2));
+            gauge.setAttribute('stroke', name === 'guests' ? '#8b5cf6' : BRAND);
+        }
+    }
+
+    document.querySelectorAll('#retSeg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+            if (b.hasAttribute('disabled')) return;
+            document.querySelectorAll('#retSeg button').forEach(x => x.classList.remove('on'));
+            b.classList.add('on');
+            showGroup(b.dataset.group);
+        });
+    });
 
     /* ---------- Listing status ---------- */
     const statusEl = document.querySelector('#statusChart');
