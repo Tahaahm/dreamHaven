@@ -1,6 +1,7 @@
 @extends('layouts.admin-layout')
 @section('title', 'Agents Directory')
 @section('content')
+@verbatim
 <style>
 *{box-sizing:border-box}
 .dm-page{padding:32px 24px 80px;max-width:1100px;margin:0 auto}
@@ -179,6 +180,7 @@
 .dm-card-act.success{background:#f0fdf4;color:#15803d;border-color:#86efac}
 .dm-card-act.danger-soft{background:#fff5f5;color:#b91c1c;border-color:#fca5a5}
 </style>
+@endverbatim
 
 <div class="dm-page">
 
@@ -409,7 +411,7 @@
               <div>
                 <div class="dm-sub-plan">{{ $agent->current_plan ?? 'Free' }}</div>
                 <div class="dm-sub-date {{ $agent->dm_date_class }}">
-                  @if($agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
+                  @if($agent->dm_end_date){{ \$agent->dm_expired ? 'Ended' : 'Ends' }} {{ \$agent->dm_end_date }}@else No subscription@endif
                 </div>
               </div>
             </div>
@@ -523,7 +525,7 @@
           <div>
             <div class="dm-sub-plan">{{ $agent->current_plan ?? 'Free' }}</div>
             <div class="dm-sub-date {{ $agent->dm_date_class }}" style="font-size:12px">
-              @if($agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
+              @if($agent->dm_end_date){{ \$agent->dm_expired ? 'Ended' : 'Ends' }} {{ \$agent->dm_end_date }}@else No subscription@endif
             </div>
           </div>
         </div>
