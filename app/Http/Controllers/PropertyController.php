@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
-use App\Services\PropertyInteractionService;
+use App\Services\PropertyInteractionService; // <--- ADD THIS
 use Illuminate\Support\Facades\Cache;
 use App\Models\Support\UserFavoriteProperty;
 use App\Models\UserPropertyInteraction;
@@ -24,7 +24,7 @@ use App\Http\Controllers\Concerns\ManagesPropertyEngagement;
 use App\Http\Controllers\Concerns\ManagesPropertyAnalytics;
 use App\Http\Controllers\Concerns\ManagesPropertyOwnerViews;
 use App\Http\Controllers\Concerns\ManagesPropertyMutations;
-use App\Http\Middleware\VisitorTracker;
+
 
 /**
  * Every public method here is bound to a route exactly as before this
@@ -43,13 +43,9 @@ class PropertyController extends Controller
 
     protected $interactionService;
 
-    public function __construct(
-        PropertyInteractionService $interactionService,
-        VisitorTracker $visitors
-    ) {
+    public function __construct(PropertyInteractionService $interactionService)
+    {
         $this->interactionService = $interactionService;
-        $this->visitors = $visitors;
-        $this->visitors->touch();   // ← records guest or logged-in, automatically
     }
 
 
@@ -77,7 +73,7 @@ class PropertyController extends Controller
             $properties->load('owner');
 
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
+                $userId = $user ? $user->id : 'guest_' . session()->getId();
                 dispatch(function () use ($userId, $properties) {
                     app(PropertyInteractionService::class)->trackImpressions(
                         $userId,
