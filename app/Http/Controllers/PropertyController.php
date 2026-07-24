@@ -24,7 +24,7 @@ use App\Http\Controllers\Concerns\ManagesPropertyEngagement;
 use App\Http\Controllers\Concerns\ManagesPropertyAnalytics;
 use App\Http\Controllers\Concerns\ManagesPropertyOwnerViews;
 use App\Http\Controllers\Concerns\ManagesPropertyMutations;
-use App\Services\VisitorTracker;
+use App\Http\Middleware\VisitorTracker;
 
 /**
  * Every public method here is bound to a route exactly as before this

@@ -1,18 +1,13 @@
 <?php
 
 /*
-| Save as: app/Services/VisitorTracker.php
+| SAVE AS: app/Services/VisitorTracker.php
+| (NOT in app/Console/Commands/ — that's where the WarmDashboardCache goes)
 |
-| Same logic as the middleware, but callable from anywhere. Use this if you
-| would rather wire tracking into your controllers than register middleware.
-|
-| It is safe to call on every request:
-|   • writes to the database at most once per visitor per 15 minutes
-|   • never throws — a tracking failure can't break an endpoint
-|   • skips bots, admin paths and error responses
+| Fixed: the "A void function must not return a value" fatal.
 */
 
-namespace App\Services;
+namespace App\Http\Middleware;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,12 +31,8 @@ class VisitorTracker
     ];
 
     /**
-     * Record this visitor. Call it once per request.
-     *
-     * Returns the stable visitor id so you can use it for guest tracking:
-     *
-     *     $visitorId = app(VisitorTracker::class)->touch();
-     *     $userId = $user ? $user->id : 'guest_' . $visitorId;
+     * Record this visitor. Call once per request.
+     * Returns the stable visitor id (works for guests and signed-in users).
      */
     public function touch(?Request $request = null): ?string
     {
@@ -56,7 +47,6 @@ class VisitorTracker
 
             $visitorId = substr($hash, 0, 32);
 
-            // Make it available to anything else in this request
             $request->attributes->set('visitor_id', $visitorId);
 
             $this->store($request, $hash);
@@ -69,7 +59,7 @@ class VisitorTracker
     }
 
     /**
-     * Just the id, with no database write. Useful in hot paths.
+     * Just the id, with no database write.
      */
     public function id(?Request $request = null): ?string
     {
@@ -93,13 +83,14 @@ class VisitorTracker
         }
 
         if (!Schema::hasTable('visits')) {
-            return $this->debug('skip: visits table missing');
+            $this->debug('skip: visits table missing');
+            return;
         }
 
         $today = now()->toDateString();
         $key   = 'visit:' . substr($hash, 0, 24) . ':' . $today;
 
-        // One write per visitor per 15 minutes
+        // One database write per visitor per 15 minutes
         if (!Cache::add($key, 1, 900)) {
             return;
         }
