@@ -70,7 +70,7 @@
                 <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl group-hover:bg-blue-50 transition-colors">
                     <i class="fas fa-users text-xl text-slate-900 dark:text-white group-hover:text-blue-600"></i>
                 </div>
-                @include('admin.partials.delta-badge', ['pct' => $stats['users_delta_pct'] ?? null])
+                {{-- @include('admin.partials.delta-badge', ['pct' => $stats['users_delta_pct'] ?? null]) --}}
             </div>
             <h3 class="text-3xl font-black text-slate-900 dark:text-white mb-1">{{ number_format($stats['total_users']) }}</h3>
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Registered Users</p>
@@ -85,7 +85,7 @@
                 <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl group-hover:bg-indigo-50 transition-colors">
                     <i class="fas fa-city text-xl text-slate-900 dark:text-white group-hover:text-indigo-600"></i>
                 </div>
-                @include('admin.partials.delta-badge', ['pct' => $stats['properties_delta_pct'] ?? null])
+                {{-- @include('admin.partials.delta-badge', ['pct' => $stats['properties_delta_pct'] ?? null]) --}}
             </div>
             <h3 class="text-3xl font-black text-slate-900 dark:text-white mb-1">{{ number_format($stats['total_properties']) }}</h3>
             <div class="flex gap-3 text-xs font-medium text-slate-500 dark:text-slate-400 mt-1">
