@@ -141,25 +141,33 @@ class AdminController extends Controller
     /**
      * Display admin dashboard
      */
-
     public function dashboard()
     {
         $today = Carbon::today();
-        $now = Carbon::now();
-        $weekEnd = now()->endOfWeek();
-        $lastMonth = now()->subMonthNoOverflow();
 
-        // ── 1. SUBSCRIPTION REVENUE (unchanged core logic) ─────────────────────
-        $totalSubscriptionRevenue = Subscription::where('status', 'active')->sum('monthly_amount');
+        // ✅ 1. SUBSCRIPTION REVENUE CALCULATIONS (IQD)
 
-        $agentSubscriptions = Subscription::where('status', 'active')->whereHas('agents')->get();
+        // Total Subscription Revenue from ALL active subscriptions
+        $totalSubscriptionRevenue = Subscription::where('status', 'active')
+            ->sum('monthly_amount'); // This is in IQD as per your subscription table
+
+        // Agent Subscriptions Revenue
+        $agentSubscriptions = Subscription::where('status', 'active')
+            ->whereHas('agents') // Has relationship to agents
+            ->get();
+
         $agentSubRevenue = $agentSubscriptions->sum('monthly_amount');
         $agentSubCount = $agentSubscriptions->count();
 
-        $officeSubscriptions = Subscription::where('status', 'active')->whereHas('offices')->get();
+        // Office Subscriptions Revenue
+        $officeSubscriptions = Subscription::where('status', 'active')
+            ->whereHas('offices') // Has relationship to offices
+            ->get();
+
         $officeSubRevenue = $officeSubscriptions->sum('monthly_amount');
         $officeSubCount = $officeSubscriptions->count();
 
+        // This Month's New Subscriptions
         $thisMonthRevenue = Subscription::where('status', 'active')
             ->whereMonth('start_date', now()->month)
             ->whereYear('start_date', now()->year)
@@ -170,21 +178,9 @@ class AdminController extends Controller
             ->whereYear('start_date', now()->year)
             ->count();
 
-        $lastMonthRevenue = Subscription::where('status', 'active')
-            ->whereMonth('start_date', $lastMonth->month)
-            ->whereYear('start_date', $lastMonth->year)
-            ->sum('monthly_amount');
-
-        // ── 2. MONTH-OVER-MONTH DELTAS ───────────────────────────────────────────
-        $thisMonthUsers = User::whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count();
-        $lastMonthUsers = User::whereMonth('created_at', $lastMonth->month)->whereYear('created_at', $lastMonth->year)->count();
-
-        $thisMonthProperties = Property::whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->count();
-        $lastMonthProperties = Property::whereMonth('created_at', $lastMonth->month)->whereYear('created_at', $lastMonth->year)->count();
-
-        // ── 3. CORE STATS ────────────────────────────────────────────────────────
+        // 2. Core Stats
         $stats = [
-            // Subscriptions
+            // ✅ SUBSCRIPTION STATS (Primary Revenue Source)
             'subscription_revenue_iqd' => $totalSubscriptionRevenue,
             'active_subscriptions' => Subscription::where('status', 'active')->count(),
             'agent_subscription_revenue' => $agentSubRevenue,
@@ -193,31 +189,26 @@ class AdminController extends Controller
             'office_subscriptions_count' => $officeSubCount,
             'this_month_revenue' => $thisMonthRevenue,
             'new_subscriptions_this_month' => $newSubsThisMonth,
-            'revenue_delta_pct' => $this->percentChange($thisMonthRevenue, $lastMonthRevenue),
 
-            // Users / Properties
+            // Other Stats
             'total_users' => User::count(),
             'new_users_today' => User::whereDate('created_at', $today)->count(),
-            'users_delta_pct' => $this->percentChange($thisMonthUsers, $lastMonthUsers),
-
             'total_properties' => Property::count(),
             'active_properties' => Property::where('status', 'available')->where('is_active', true)->count(),
             'properties_for_sale' => Property::whereIn('listing_type', ['sale', 'sell'])->count(),
             'properties_for_rent' => Property::where('listing_type', 'rent')->count(),
-            'properties_delta_pct' => $this->percentChange($thisMonthProperties, $lastMonthProperties),
-
             'total_agents' => Agent::count(),
             'total_offices' => RealEstateOffice::count(),
         ];
 
-        // ── 4. PENDING ACTIONS ───────────────────────────────────────────────────
+        // 3. Pending Actions (Action Center)
         $pendingApprovals = [
             'properties' => Property::where('status', 'pending')->count(),
             'agents' => Agent::where('is_verified', false)->count(),
             'offices' => RealEstateOffice::where('is_verified', false)->count(),
         ];
 
-        // ── 5. USER GROWTH (12 MONTHS) ───────────────────────────────────────────
+        // 4. Charts Data (User Growth)
         $user_registrations = User::select(DB::raw('MONTH(created_at) as month'), DB::raw('COUNT(*) as count'))
             ->where('created_at', '>=', now()->subYear())
             ->groupBy('month')
@@ -225,155 +216,32 @@ class AdminController extends Controller
             ->pluck('count', 'month')
             ->toArray();
 
+        // Fill missing months
         $monthlyData = [];
         for ($i = 1; $i <= 12; $i++) {
             $monthlyData[] = $user_registrations[$i] ?? 0;
         }
 
-        // ── 6. REVENUE TREND — 6 MONTHS, AGENT VS OFFICE ────────────────────────
-        $revenueTrend = [];
-        for ($i = 5; $i >= 0; $i--) {
-            $month = now()->subMonths($i);
-
-            $agentRev = Subscription::where('status', 'active')
-                ->whereHas('agents')
-                ->whereMonth('start_date', $month->month)
-                ->whereYear('start_date', $month->year)
-                ->sum('monthly_amount');
-
-            $officeRev = Subscription::where('status', 'active')
-                ->whereHas('offices')
-                ->whereMonth('start_date', $month->month)
-                ->whereYear('start_date', $month->year)
-                ->sum('monthly_amount');
-
-            $revenueTrend[] = [
-                'label' => $month->format('M'),
-                'agent' => (float) $agentRev,
-                'office' => (float) $officeRev,
-            ];
-        }
-
-        // ── 7. CITY DISTRIBUTION (TOP 6) ─────────────────────────────────────────
-        $cityDistribution = Property::select('city', DB::raw('COUNT(*) as total'))
-            ->whereNotNull('city')
-            ->where('city', '!=', '')
-            ->groupBy('city')
-            ->orderByDesc('total')
+        // 5. Recent Data Fetching
+        // Fetch Properties with Owner to avoid N+1 queries
+        $recent_properties = Property::with('owner')
+            ->orderBy('created_at', 'desc')
             ->take(6)
             ->get();
 
-        // ── 8. CONVERSION FUNNEL ─────────────────────────────────────────────────
-        // Resolves whatever model `Property::interactions()` points to, so this
-        // keeps working even if you rename the interactions table/model.
-        $funnel = ['views' => 0, 'whatsapp' => 0, 'appointments' => 0, 'transactions' => 0];
-        try {
-            $interactionModel = (new Property())->interactions()->getRelated();
-            $counts = $interactionModel::select('interaction_type', DB::raw('COUNT(*) as total'))
-                ->groupBy('interaction_type')
-                ->pluck('total', 'interaction_type');
+        $top_agents = Agent::withCount('properties')
+            ->orderBy('properties_count', 'desc')
+            ->take(5)
+            ->get();
 
-            $funnel['views'] = (int) ($counts['impression'] ?? $counts['view'] ?? 0);
-            $funnel['whatsapp'] = (int) ($counts['whatsapp_contact'] ?? $counts['whatsapp'] ?? 0);
-            $funnel['appointments'] = Appointment::count();
-            $funnel['transactions'] = Transaction::count();
-        } catch (\Throwable $e) {
-            Log::warning('Dashboard funnel query skipped: ' . $e->getMessage());
-        }
-
-        // ── 9. EXPIRING SOON — AGENTS + OFFICES MERGED ──────────────────────────
-        $expiringSubscriptions = collect();
-
-        Agent::with('subscription')
-            ->whereHas('subscription', fn($q) => $q->where('status', 'active')->whereBetween('end_date', [now(), now()->addDays(7)]))
-            ->take(10)->get()
-            ->each(function ($a) use ($expiringSubscriptions) {
-                $end = Carbon::parse($a->subscription->end_date);
-                $days = now()->startOfDay()->diffInDays($end->startOfDay(), false);
-                $expiringSubscriptions->push([
-                    'type' => 'Agent',
-                    'route' => route('admin.agents.show', $a->id),
-                    'name' => $a->agent_name,
-                    'image' => $a->profile_image,
-                    'days' => $days,
-                    'ends' => $end->format('D d M'),
-                    'urgent' => $days <= 3,
-                ]);
-            });
-
-        RealEstateOffice::with('subscription')
-            ->whereHas('subscription', fn($q) => $q->where('status', 'active')->whereBetween('end_date', [now(), now()->addDays(7)]))
-            ->take(10)->get()
-            ->each(function ($o) use ($expiringSubscriptions) {
-                $end = Carbon::parse($o->subscription->end_date);
-                $days = now()->startOfDay()->diffInDays($end->startOfDay(), false);
-                $expiringSubscriptions->push([
-                    'type' => 'Office',
-                    'route' => route('admin.offices.show', $o->id),
-                    'name' => $o->company_name,
-                    'image' => $o->logo,
-                    'days' => $days,
-                    'ends' => $end->format('D d M'),
-                    'urgent' => $days <= 3,
-                ]);
-            });
-
-        $expiringSubscriptions = $expiringSubscriptions->sortBy('days')->take(6)->values();
-
-        // ── 10. LIVE ACTIVITY FEED ───────────────────────────────────────────────
-        $activity = collect();
-
-        foreach (Property::latest()->take(5)->get() as $p) {
-            $rawName = $p->name;
-            $pName = is_array($rawName) ? ($rawName['en'] ?? 'Property') : (json_decode($rawName)->en ?? 'Property');
-            $activity->push([
-                'icon' => 'fa-home',
-                'color' => 'indigo',
-                'title' => 'New property listed',
-                'subtitle' => $pName,
-                'time' => $p->created_at,
-                'route' => route('admin.properties.show', $p->id),
-            ]);
-        }
-
-        foreach (User::latest()->take(5)->get() as $u) {
-            $activity->push([
-                'icon' => 'fa-user-plus',
-                'color' => 'blue',
-                'title' => 'New user registered',
-                'subtitle' => $u->username,
-                'time' => $u->created_at,
-                'route' => route('admin.users.show', $u->id),
-            ]);
-        }
-
-        foreach (Subscription::latest('start_date')->take(5)->get() as $s) {
-            $activity->push([
-                'icon' => 'fa-credit-card',
-                'color' => 'emerald',
-                'title' => 'New subscription started',
-                'subtitle' => number_format($s->monthly_amount) . ' IQD / month',
-                'time' => $s->start_date,
-                'route' => route('admin.subscriptions.show', $s->id),
-            ]);
-        }
-
-        $activity = $activity->sortByDesc('time')->take(8)->values();
-
-        // ── 11. RECENT LISTS (unchanged) ─────────────────────────────────────────
-        $recent_properties = Property::with('owner')->orderBy('created_at', 'desc')->take(6)->get();
-        $top_agents = Agent::withCount('properties')->orderBy('properties_count', 'desc')->take(5)->get();
-        $recent_users = User::orderBy('created_at', 'desc')->take(6)->get();
+        $recent_users = User::orderBy('created_at', 'desc')
+            ->take(6)
+            ->get();
 
         return view('admin.dashboard', compact(
             'stats',
             'pendingApprovals',
             'monthlyData',
-            'revenueTrend',
-            'cityDistribution',
-            'funnel',
-            'expiringSubscriptions',
-            'activity',
             'recent_properties',
             'top_agents',
             'recent_users'
@@ -3422,16 +3290,10 @@ class AdminController extends Controller
         return back()->with('success', 'Project ' . $status . '!');
     }
 
-    // ==========================================
-    // PRIVATE HELPER
-    // ==========================================
-    private function percentChange($current, $previous)
-    {
-        if ($previous == 0) {
-            return $current > 0 ? null : 0;
-        }
-        return round((($current - $previous) / $previous) * 100, 1);
-    }
+// ==========================================
+// PRIVATE HELPER
+// ==========================================
+
     /**
      * Parse a newline-separated textarea string into a clean array.
      */
