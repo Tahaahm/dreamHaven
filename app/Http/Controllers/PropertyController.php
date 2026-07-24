@@ -24,7 +24,7 @@ use App\Http\Controllers\Concerns\ManagesPropertyEngagement;
 use App\Http\Controllers\Concerns\ManagesPropertyAnalytics;
 use App\Http\Controllers\Concerns\ManagesPropertyOwnerViews;
 use App\Http\Controllers\Concerns\ManagesPropertyMutations;
-
+use App\Http\Middleware\VisitorTracker;
 
 /**
  * Every public method here is bound to a route exactly as before this
@@ -42,14 +42,18 @@ class PropertyController extends Controller
     use ManagesPropertyMutations;
 
     protected $interactionService;
+    protected $visitors;
 
-    public function __construct(PropertyInteractionService $interactionService)
-    {
+    public function __construct(
+        PropertyInteractionService $interactionService,
+        VisitorTracker $visitors
+    ) {
         $this->interactionService = $interactionService;
+        $this->visitors = $visitors;
+        $this->visitors->touch();
     }
 
 
-    protected $visitors;
 
     public function index(Request $request)
     {
@@ -73,7 +77,7 @@ class PropertyController extends Controller
             $properties->load('owner');
 
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 dispatch(function () use ($userId, $properties) {
                     app(PropertyInteractionService::class)->trackImpressions(
                         $userId,
@@ -170,7 +174,7 @@ class PropertyController extends Controller
 
             // ── Impression tracking ───────────────────────────────────────────────
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 $this->interactionService->trackImpressions(
                     $userId,
                     collect($properties->items()),
@@ -562,7 +566,7 @@ class PropertyController extends Controller
 
 
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 $this->interactionService->trackImpressions(
                     $userId,
                     $properties,
@@ -985,7 +989,7 @@ class PropertyController extends Controller
 
             // FIX: moved to afterResponse so it doesn't block the API response
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 dispatch(function () use ($userId, $properties) {
                     $this->interactionService->trackImpressions(
                         $userId,
@@ -1062,7 +1066,7 @@ class PropertyController extends Controller
             ]);
 
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 $this->interactionService->trackImpressions($userId, $properties, 'recent');
             }
 
@@ -1235,7 +1239,7 @@ class PropertyController extends Controller
             ]);
 
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 $this->interactionService->trackImpressions($userId, $properties, 'popular');
             }
 
@@ -1324,7 +1328,7 @@ class PropertyController extends Controller
 
             // Impression tracking: fire-and-forget, don't block response
             if ($featured->isNotEmpty()) {
-                $trackUserId = $userId ?? 'guest_' . session()->getId();
+                $trackUserId = $userId ?? 'guest_' . $this->visitors->id();
                 dispatch(function () use ($trackUserId, $featured) {
                     $this->interactionService->trackImpressions(
                         $trackUserId,
@@ -1511,7 +1515,7 @@ class PropertyController extends Controller
                 ->get();
 
             if ($boosted->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 $this->interactionService->trackImpressions($userId, $boosted, 'boosted');
             }
 
@@ -1564,7 +1568,7 @@ class PropertyController extends Controller
                 ->paginate($perPage);
 
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 $this->interactionService->trackImpressions(
                     $userId,
                     collect($properties->items()),
@@ -1680,7 +1684,7 @@ class PropertyController extends Controller
 
             // ── Track impressions ─────────────────────────────────────────────────
             if ($properties->isNotEmpty()) {
-                $userId = $user ? $user->id : 'guest_' . session()->getId();
+                $userId = $user ? $user->id : 'guest_' . $this->visitors->id();
                 $this->interactionService->trackImpressions($userId, $properties, 'map', ['bounds' => $bounds]);
             }
 
