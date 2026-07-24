@@ -361,29 +361,7 @@
       </thead>
       <tbody>
         @forelse($agents as $agent)
-        @php
-          $__sub = $agent->subscription;
-          $__end = $__sub && $__sub->end_date ? \Carbon\Carbon::parse($__sub->end_date) : null;
-          $__start = $__sub && $__sub->start_date ? \Carbon\Carbon::parse($__sub->start_date) : null;
-          $__days = $__end ? now()->startOfDay()->diffInDays($__end->startOfDay(), false) : null;
-          $active = $__sub && $__sub->status === 'active' && $__days !== null && $__days >= 0;
-          $expired = $__sub && $__days !== null && $__days < 0;
-          $expiring = $active && $__days <= 7;
-          $pct = 0;
-          if ($__start && $__end && $__end->gt($__start)) {
-            $__total = $__start->diffInDays($__end);
-            $__left = max(0, $__days ?? 0);
-            $pct = $__total > 0 ? (int)round(($__left / $__total) * 100) : 0;
-          }
-          $days = $__days;
-          $end = $__end;
-          $circumference = 94.25;
-          $dash = round(($pct / 100) * $circumference, 2);
-          $ringColor = $expired ? '#ef4444' : ($expiring ? '#ef4444' : ($pct < 25 ? '#f59e0b' : '#22c55e'));
-          $labelColor = $expired ? '#b91c1c' : ($expiring ? '#b91c1c' : ($pct < 25 ? '#92400e' : '#15803d'));
-          $dateClass = ($expired || $expiring) ? 'urgent' : ($pct < 25 ? 'warn' : '');
-        @endphp
-        <tr class="{{ $expiring ? 'exp-row' : '' }}">
+        <tr class="{{ $agent->dm_expiring ? 'exp-row' : '' }}">
 
           <td>
             <div class="dm-agent-cell">
@@ -425,18 +403,18 @@
                   <circle class="dm-ring-track" cx="18" cy="18" r="15"/>
                   @if($days !== null)
                   <circle class="dm-ring-fill" cx="18" cy="18" r="15"
-                    stroke="{{ $ringColor }}"
-                    stroke-dasharray="{{ $expired ? 0 : $dash }} {{ $circumference }}"/>
+                    stroke="{{ $agent->dm_ring_color }}"
+                    stroke-dasharray="{{ $agent->dm_expired ? 0 : $agent->dm_dash }} {{ $agent->dm_circumference }}"/>
                   @endif
                 </svg>
-                <div class="dm-ring-label" style="color:{{ $labelColor ?? 'var(--text-muted)' }}">
-                  @if($expired)✕@elseif($days !== null){{ $days }}d@else—@endif
+                <div class="dm-ring-label" style="color:{{ $agent->dm_label_color }}">
+                  @if($agent->dm_expired)✕@elseif($agent->dm_days !== null){{ $agent->dm_days }}d@else—@endif
                 </div>
               </div>
               <div>
                 <div class="dm-sub-plan">{{ $agent->current_plan ?? 'Free' }}</div>
-                <div class="dm-sub-date {{ $dateClass ?? 'muted' }}">
-                  @if($end){{ $expired ? 'Ended' : 'Ends' }} {{ $end->format('d M Y') }}@else No subscription@endif
+                <div class="dm-sub-date {{ $agent->dm_date_class }}">
+                  @if($agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
                 </div>
               </div>
             </div>
@@ -444,7 +422,7 @@
 
           <td class="r">
             <div class="dm-actions">
-              @if($expiring || $expired)
+              @if($agent->dm_expiring || $agent->dm_expired)
                 <a href="{{ route('admin.agents.edit', $agent->id) }}" class="dm-act renew" title="Renew plan" aria-label="Renew plan"><i class="ti ti-refresh" aria-hidden="true"></i></a>
               @endif
               <a href="{{ route('admin.agents.show', $agent->id) }}" class="dm-act" title="View" aria-label="View agent"><i class="ti ti-eye" aria-hidden="true"></i></a>
@@ -500,37 +478,15 @@
   {{-- ── MOBILE CARDS ─────────────────────────────────────────── --}}
   <div class="dm-mobile-cards" aria-label="Agents list">
     @forelse($agents as $agent)
-    @php
-          $__sub = $agent->subscription;
-          $__end = $__sub && $__sub->end_date ? \Carbon\Carbon::parse($__sub->end_date) : null;
-          $__start = $__sub && $__sub->start_date ? \Carbon\Carbon::parse($__sub->start_date) : null;
-          $__days = $__end ? now()->startOfDay()->diffInDays($__end->startOfDay(), false) : null;
-          $active = $__sub && $__sub->status === 'active' && $__days !== null && $__days >= 0;
-          $expired = $__sub && $__days !== null && $__days < 0;
-          $expiring = $active && $__days <= 7;
-          $pct = 0;
-          if ($__start && $__end && $__end->gt($__start)) {
-            $__total = $__start->diffInDays($__end);
-            $__left = max(0, $__days ?? 0);
-            $pct = $__total > 0 ? (int)round(($__left / $__total) * 100) : 0;
-          }
-          $days = $__days;
-          $end = $__end;
-          $circumference = 94.25;
-          $dash = round(($pct / 100) * $circumference, 2);
-          $ringColor = $expired ? '#ef4444' : ($expiring ? '#ef4444' : ($pct < 25 ? '#f59e0b' : '#22c55e'));
-          $labelColor = $expired ? '#b91c1c' : ($expiring ? '#b91c1c' : ($pct < 25 ? '#92400e' : '#15803d'));
-          $dateClass = ($expired || $expiring) ? 'urgent' : ($pct < 25 ? 'warn' : '');
-        @endphp
-    <div class="dm-card {{ $expiring ? 'exp-card' : '' }}">
-      @if($expiring)
+    <div class="dm-card {{ $agent->dm_expiring ? 'exp-card' : '' }}">
+      @if($agent->dm_expiring)
         <div class="dm-card-banner red">
-          <span><i class="ti ti-hourglass-empty" style="margin-right:5px" aria-hidden="true"></i>{{ $days == 0 ? 'Expires today' : 'Expires in '.$days.' days' }}</span>
+          <span><i class="ti ti-hourglass-empty" style="margin-right:5px" aria-hidden="true"></i>{{ $agent->dm_days == 0 ? 'Expires today' : 'Expires in '.$agent->dm_days.' days' }}</span>
           <a href="{{ route('admin.agents.edit', $agent->id) }}" style="text-decoration:underline;color:#b91c1c;font-weight:500">Renew now</a>
         </div>
-      @elseif($expired)
+      @elseif($agent->dm_expired)
         <div class="dm-card-banner gray">
-          <span>Subscription ended {{ $end?->format('d M Y') }}</span>
+          <span>Subscription ended {{ $agent->dm_end_date }}</span>
           <a href="{{ route('admin.agents.edit', $agent->id) }}" style="text-decoration:underline;color:var(--text-secondary)">Reactivate</a>
         </div>
       @endif
@@ -562,17 +518,17 @@
             <svg class="dm-ring-svg" viewBox="0 0 36 36">
               <circle class="dm-ring-track" cx="18" cy="18" r="15"/>
               @if($days !== null)
-              <circle class="dm-ring-fill" cx="18" cy="18" r="15" stroke="{{ $ringColor }}" stroke-dasharray="{{ $expired ? 0 : $dash }} {{ $circumference }}"/>
+              <circle class="dm-ring-fill" cx="18" cy="18" r="15" stroke="{{ $agent->dm_ring_color }}" stroke-dasharray="{{ $agent->dm_expired ? 0 : $agent->dm_dash }} {{ $agent->dm_circumference }}"/>
               @endif
             </svg>
-            <div class="dm-ring-label" style="color:{{ $labelColor ?? 'var(--text-muted)' }}">
-              @if($expired)✕@elseif($days !== null){{ $days }}d@else—@endif
+            <div class="dm-ring-label" style="color:{{ $agent->dm_label_color }}">
+              @if($agent->dm_expired)✕@elseif($agent->dm_days !== null){{ $agent->dm_days }}d@else—@endif
             </div>
           </div>
           <div>
             <div class="dm-sub-plan">{{ $agent->current_plan ?? 'Free' }}</div>
-            <div class="dm-sub-date {{ $dateClass ?? 'muted' }}" style="font-size:12px">
-              @if($end){{ $expired ? 'Ended' : 'Ends' }} {{ $end->format('d M Y') }}@else No subscription@endif
+            <div class="dm-sub-date {{ $agent->dm_date_class }}" style="font-size:12px">
+              @if($agent->agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
             </div>
           </div>
         </div>

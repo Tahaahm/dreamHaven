@@ -912,6 +912,40 @@ class AdminController extends Controller
         return view('admin.offices.edit', compact('office', 'plans'));
     }
 
+
+    private function addExpiryMeta($collection): void
+    {
+        foreach ($collection as $item) {
+            $sub   = $item->subscription;
+            $end   = $sub?->end_date   ? \Carbon\Carbon::parse($sub->end_date)   : null;
+            $start = $sub?->start_date ? \Carbon\Carbon::parse($sub->start_date) : null;
+
+            $days    = $end ? (int) now()->startOfDay()->diffInDays($end->startOfDay(), false) : null;
+            $active  = $sub && $sub->status === 'active' && $days !== null && $days >= 0;
+            $expired = $sub && $days !== null && $days < 0;
+            $expiring = $active && $days <= 7;
+
+            $pct = 0;
+            if ($start && $end && $end->gt($start)) {
+                $total = $start->diffInDays($end);
+                $left  = max(0, $days ?? 0);
+                $pct   = $total > 0 ? (int) round(($left / $total) * 100) : 0;
+            }
+
+            $circumference = 94.25;
+
+            $item->dm_expiring     = $expiring;
+            $item->dm_expired      = $expired;
+            $item->dm_days         = $days;
+            $item->dm_end_date     = $end ? $end->format('d M Y') : null;
+            $item->dm_dash         = round(($pct / 100) * $circumference, 2);
+            $item->dm_circumference = $circumference;
+            $item->dm_ring_color   = $expired || $expiring ? '#ef4444' : ($pct < 25 ? '#f59e0b' : '#22c55e');
+            $item->dm_label_color  = $expired || $expiring ? '#b91c1c' : ($pct < 25 ? '#92400e' : '#15803d');
+            $item->dm_date_class   = ($expired || $expiring) ? 'urgent' : ($pct < 25 ? 'warn' : '');
+        }
+    }
+
     public function officesUpdate(Request $request, $id)
     {
         $office = RealEstateOffice::findOrFail($id);
