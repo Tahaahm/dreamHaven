@@ -411,7 +411,7 @@
               <div>
                 <div class="dm-sub-plan">{{ $agent->current_plan ?? 'Free' }}</div>
                 <div class="dm-sub-date {{ $agent->dm_date_class }}">
-                  @if($agent->dm_end_date){{ \$agent->dm_expired ? 'Ended' : 'Ends' }} {{ \$agent->dm_end_date }}@else No subscription@endif
+                  @if($agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
                 </div>
               </div>
             </div>
@@ -525,7 +525,7 @@
           <div>
             <div class="dm-sub-plan">{{ $agent->current_plan ?? 'Free' }}</div>
             <div class="dm-sub-date {{ $agent->dm_date_class }}" style="font-size:12px">
-              @if($agent->dm_end_date){{ \$agent->dm_expired ? 'Ended' : 'Ends' }} {{ \$agent->dm_end_date }}@else No subscription@endif
+              @if($agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
             </div>
           </div>
         </div>

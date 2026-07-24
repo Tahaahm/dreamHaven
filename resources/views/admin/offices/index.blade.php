@@ -357,7 +357,7 @@
               <div>
                 <div class="dm-sub-plan">{{ $office->current_plan ?? 'Free' }}</div>
                 <div class="dm-sub-date {{ $office->dm_date_class }}">
-                  @if($office->dm_end_date){{ \$office->dm_expired ? 'Ended' : 'Ends' }} {{ \$office->dm_end_date }}@else No subscription@endif
+                  @if($office->dm_end_date){{ $office->dm_expired ? 'Ended' : 'Ends' }} {{ $office->dm_end_date }}@else No subscription@endif
                 </div>
               </div>
             </div>
@@ -462,7 +462,7 @@
           <div>
             <div class="dm-sub-plan">{{ $office->current_plan ?? 'Free' }}</div>
             <div class="dm-sub-date {{ $office->dm_date_class }}" style="font-size:12px">
-              @if($office->dm_end_date){{ \$office->dm_expired ? 'Ended' : 'Ends' }} {{ \$office->dm_end_date }}@else No subscription@endif
+              @if($office->dm_end_date){{ $office->dm_expired ? 'Ended' : 'Ends' }} {{ $office->dm_end_date }}@else No subscription@endif
             </div>
           </div>
         </div>
