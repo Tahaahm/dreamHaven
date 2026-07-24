@@ -51,7 +51,7 @@
                 <div class="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-xl group-hover:bg-emerald-50 transition-colors">
                     <i class="fas fa-wallet text-xl text-slate-900 dark:text-white group-hover:text-emerald-600"></i>
                 </div>
-                @include('admin.partials.delta-badge', ['pct' => $stats['revenue_delta_pct'] ?? null])
+                {{-- @include('admin.partials.delta-badge', ['pct' => $stats['revenue_delta_pct'] ?? null]) --}}
             </div>
             <h3 class="text-3xl font-black text-slate-900 dark:text-white mb-1">{{ number_format($stats['subscription_revenue_iqd']) }}</h3>
             <p class="text-xs font-bold text-slate-400 uppercase tracking-wide">Total Revenue (IQD)</p>
