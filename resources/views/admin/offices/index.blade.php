@@ -399,7 +399,7 @@
               @endif
               <form action="{{ route('admin.offices.delete', $office->id) }}" method="POST" style="display:inline">@csrf @method('DELETE')
                 <button type="submit" class="dm-act danger"
-                  onclick="return confirm('Permanently delete {{ addslashes($office->company_name) }}?')"
+                  onclick="return confirm('Permanently delete this office?')"
                   title="Delete" aria-label="Delete office"><i class="ti ti-trash" aria-hidden="true"></i></button>
               </form>
             </div>
@@ -520,7 +520,7 @@
             </form>
           @endif
           <form action="{{ route('admin.offices.delete', $office->id) }}" method="POST">@csrf @method('DELETE')
-            <button type="submit" class="dm-card-act danger-soft" style="width:100%" onclick="return confirm('Delete {{ addslashes($office->company_name) }}?')">
+            <button type="submit" class="dm-card-act danger-soft" style="width:100%" onclick="return confirm('Delete this office?')">
               <i class="ti ti-trash" aria-hidden="true"></i><span>Delete</span>
             </button>
           </form>

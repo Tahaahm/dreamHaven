@@ -456,7 +456,7 @@
               @endif
               <form action="{{ route('admin.agents.delete', $agent->id) }}" method="POST" style="display:inline">@csrf @method('DELETE')
                 <button type="submit" class="dm-act danger"
-                  onclick="return confirm('Permanently delete {{ addslashes($agent->agent_name) }} and all their listings?')"
+                  onclick="return confirm('Permanently delete this agent and all their listings?')"
                   title="Delete" aria-label="Delete agent"><i class="ti ti-trash" aria-hidden="true"></i></button>
               </form>
             </div>
@@ -587,7 +587,7 @@
           @endif
           <form action="{{ route('admin.agents.delete', $agent->id) }}" method="POST">@csrf @method('DELETE')
             <button type="submit" class="dm-card-act danger-soft" style="width:100%"
-              onclick="return confirm('Delete {{ addslashes($agent->agent_name) }}?')">
+              onclick="return confirm('Delete this agent?')">
               <i class="ti ti-trash" aria-hidden="true"></i><span>Delete</span>
             </button>
           </form>
