@@ -560,20 +560,24 @@ class AdminController extends Controller
             ])->toArray();
 
         // 2. EXPIRING THIS WEEK — active subs that end between now and Sunday
-        $expiringThisWeek = Agent::with('subscription')
+        $expiringThisWeek = Agent::with('subscription')  // or RealEstateOffice::
             ->whereHas('subscription', fn($q) => $q
                 ->where('status', 'active')
                 ->whereBetween('end_date', [now(), $weekEnd]))
             ->take(8)->get()
-            ->map(function ($a) {
-                $end = \Carbon\Carbon::parse($a->subscription->end_date);
+            ->map(function ($a) {   // or ($o) for offices
+                $end  = \Carbon\Carbon::parse($a->subscription->end_date);  // $o->subscription
+                $days = now()->startOfDay()->diffInDays($end->startOfDay(), false);
                 return [
-                    'id'    => $a->id,
-                    'name'  => $a->agent_name,
-                    'image' => $a->profile_image,
-                    'plan'  => $a->current_plan ?? 'plan',
-                    'days'  => now()->startOfDay()->diffInDays($end->startOfDay(), false),
-                    'ends'  => $end->format('D d M'),
+                    'id'        => $a->id,                          // $o->id
+                    'name'      => $a->agent_name,                  // $o->company_name
+                    'image'     => $a->profile_image,               // $o->logo
+                    'plan'      => $a->current_plan ?? 'plan',      // $o->current_plan
+                    'days'      => $days,
+                    'ends'      => $end->format('D d M'),
+                    // Pre-computed display values (avoids @php in Blade):
+                    'urg_class' => $days <= 3 ? 'urgent' : 'warn',
+                    'day_label' => $days == 0 ? 'Today' : ($days == 1 ? 'Tomorrow' : $days . 'd left'),
                 ];
             })
             ->sortBy('days')->values()->toArray();
@@ -911,6 +915,7 @@ class AdminController extends Controller
 
         return view('admin.offices.edit', compact('office', 'plans'));
     }
+
 
 
     private function addExpiryMeta($collection): void

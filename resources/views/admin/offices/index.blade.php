@@ -214,9 +214,8 @@
       <div class="dm-bcol">
         <div class="dm-col-label"><span class="dm-col-dot red"></span>Expiring this week</div>
         @forelse($briefing['expiring'] ?? [] as $e)
-        @php $urgClass = $e['days'] == 0 ? 'urgent' : ($e['days'] <= 3 ? 'urgent' : 'warn'); $dayLabel = $e['days'] == 0 ? 'Today' : ($e['days'] == 1 ? 'Tomorrow' : $e['days'].'d'); @endphp
         <div class="dm-expiry-row">
-          <span class="dm-exp-days {{ $urgClass }}">{{ $dayLabel }}</span>
+          <span class="dm-exp-days {{ $e['urg_class'] }}">{{ $e['day_label'] }}</span>
           <div class="dm-av-sm">
             @if($e['image'])<img src="{{ asset($e['image']) }}" alt="">@else<i class="ti ti-building" style="font-size:11px;color:#233264" aria-hidden="true"></i>@endif
           </div>
@@ -254,8 +253,6 @@
     </div>
   </div>
   @endif
-
-  @php $verPct = ($stats['total'] ?? 0) > 0 ? round(($stats['verified'] / $stats['total']) * 100) : 0; @endphp
   <div class="dm-stats">
     <div class="dm-stat">
       <div class="dm-stat-label">Total offices</div>
@@ -265,7 +262,7 @@
     <div class="dm-stat">
       <div class="dm-stat-label">Verified</div>
       <div class="dm-stat-value">{{ number_format($stats['verified'] ?? 0) }}</div>
-      <div class="dm-stat-bar"><div class="dm-stat-bar-fill" style="width:{{ $verPct }}%"></div></div>
+      <div class="dm-stat-bar"><div class="dm-stat-bar-fill" style="width:{{ ($stats['total'] ?? 0) > 0 ? round(($stats['verified'] / $stats['total']) * 100) : 0 }}%"></div></div>
     </div>
     <div class="dm-stat">
       <div class="dm-stat-label">Pending</div>
