@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Models\ServiceProviderPlan;
 use App\Models\Category;
-
+use Illuminate\Support\Facades\Cache;
 
 class AdminController extends Controller
 {
@@ -134,122 +134,443 @@ class AdminController extends Controller
             ->with('success', 'Admin account created successfully! You can now login.');
     }
 
-    // ==========================================
-    // DASHBOARD
-    // ==========================================
-
-    /**
-     * Display admin dashboard
-     */
-    public function dashboard()
+    public function dashboard(Request $request)
     {
-        $today = Carbon::today();
+        $now        = Carbon::now();
+        $today      = $now->copy()->startOfDay();
+        $weekStart  = $now->copy()->startOfWeek();
+        $monthStart = $now->copy()->startOfMonth();
+        $lastMonthS = $now->copy()->subMonthNoOverflow()->startOfMonth();
+        $lastMonthE = $now->copy()->subMonthNoOverflow()->endOfMonth();
 
-        // ✅ 1. SUBSCRIPTION REVENUE CALCULATIONS (IQD)
-
-        // Total Subscription Revenue from ALL active subscriptions
-        $totalSubscriptionRevenue = Subscription::where('status', 'active')
-            ->sum('monthly_amount'); // This is in IQD as per your subscription table
-
-        // Agent Subscriptions Revenue
-        $agentSubscriptions = Subscription::where('status', 'active')
-            ->whereHas('agents') // Has relationship to agents
-            ->get();
-
-        $agentSubRevenue = $agentSubscriptions->sum('monthly_amount');
-        $agentSubCount = $agentSubscriptions->count();
-
-        // Office Subscriptions Revenue
-        $officeSubscriptions = Subscription::where('status', 'active')
-            ->whereHas('offices') // Has relationship to offices
-            ->get();
-
-        $officeSubRevenue = $officeSubscriptions->sum('monthly_amount');
-        $officeSubCount = $officeSubscriptions->count();
-
-        // This Month's New Subscriptions
-        $thisMonthRevenue = Subscription::where('status', 'active')
-            ->whereMonth('start_date', now()->month)
-            ->whereYear('start_date', now()->year)
-            ->sum('monthly_amount');
-
-        $newSubsThisMonth = Subscription::where('status', 'active')
-            ->whereMonth('start_date', now()->month)
-            ->whereYear('start_date', now()->year)
-            ->count();
-
-        // 2. Core Stats
-        $stats = [
-            // ✅ SUBSCRIPTION STATS (Primary Revenue Source)
-            'subscription_revenue_iqd' => $totalSubscriptionRevenue,
-            'active_subscriptions' => Subscription::where('status', 'active')->count(),
-            'agent_subscription_revenue' => $agentSubRevenue,
-            'agent_subscriptions_count' => $agentSubCount,
-            'office_subscription_revenue' => $officeSubRevenue,
-            'office_subscriptions_count' => $officeSubCount,
-            'this_month_revenue' => $thisMonthRevenue,
-            'new_subscriptions_this_month' => $newSubsThisMonth,
-
-            // Other Stats
-            'total_users' => User::count(),
-            'new_users_today' => User::whereDate('created_at', $today)->count(),
-            'total_properties' => Property::count(),
-            'active_properties' => Property::where('status', 'available')->where('is_active', true)->count(),
-            'properties_for_sale' => Property::whereIn('listing_type', ['sale', 'sell'])->count(),
-            'properties_for_rent' => Property::where('listing_type', 'rent')->count(),
-            'total_agents' => Agent::count(),
-            'total_offices' => RealEstateOffice::count(),
-        ];
-
-        // 3. Pending Actions (Action Center)
-        $pendingApprovals = [
-            'properties' => Property::where('status', 'pending')->count(),
-            'agents' => Agent::where('is_verified', false)->count(),
-            'offices' => RealEstateOffice::where('is_verified', false)->count(),
-        ];
-
-        // 4. Charts Data (User Growth)
-        $user_registrations = User::select(DB::raw('MONTH(created_at) as month'), DB::raw('COUNT(*) as count'))
-            ->where('created_at', '>=', now()->subYear())
-            ->groupBy('month')
-            ->orderBy('month')
-            ->pluck('count', 'month')
-            ->toArray();
-
-        // Fill missing months
-        $monthlyData = [];
-        for ($i = 1; $i <= 12; $i++) {
-            $monthlyData[] = $user_registrations[$i] ?? 0;
+        // Manual refresh: /admin/dashboard?refresh=1
+        if ($request->boolean('refresh')) {
+            Cache::forget('admin.dashboard.charts');
+            Cache::forget('admin.sidebar.badges');
         }
 
-        // 5. Recent Data Fetching
-        // Fetch Properties with Owner to avoid N+1 queries
-        $recent_properties = Property::with('owner')
-            ->orderBy('created_at', 'desc')
-            ->take(6)
-            ->get();
+        // ---------------------------------------------------------------
+        // 1. SUBSCRIPTION REVENUE  (IQD)
+        // ---------------------------------------------------------------
+        $agentSubIds  = $this->safely(fn() => Agent::pluck('subscription_id')->filter()->all(), []);
+        $officeSubIds = $this->safely(fn() => RealEstateOffice::pluck('subscription_id')->filter()->all(), []);
 
-        $top_agents = Agent::withCount('properties')
-            ->orderBy('properties_count', 'desc')
-            ->take(5)
-            ->get();
+        $totalRevenue = $this->safely(fn() => (float) Subscription::where('status', 'active')->sum('monthly_amount'));
 
-        $recent_users = User::orderBy('created_at', 'desc')
-            ->take(6)
-            ->get();
+        $agentRevenue = $this->safely(fn() => (float) Subscription::whereIn('id', $agentSubIds)
+            ->where('status', 'active')->sum('monthly_amount'));
+        $agentSubCount = $this->safely(fn() => Subscription::whereIn('id', $agentSubIds)
+            ->where('status', 'active')->count());
+
+        $officeRevenue = $this->safely(fn() => (float) Subscription::whereIn('id', $officeSubIds)
+            ->where('status', 'active')->sum('monthly_amount'));
+        $officeSubCount = $this->safely(fn() => Subscription::whereIn('id', $officeSubIds)
+            ->where('status', 'active')->count());
+
+        $thisMonthRevenue = $this->safely(fn() => (float) Subscription::where('start_date', '>=', $monthStart)
+            ->sum('monthly_amount'));
+        $lastMonthRevenue = $this->safely(fn() => (float) Subscription::whereBetween('start_date', [$lastMonthS, $lastMonthE])
+            ->sum('monthly_amount'));
+
+        $newSubsThisMonth = $this->safely(fn() => Subscription::where('start_date', '>=', $monthStart)->count());
+
+        // ---------------------------------------------------------------
+        // 2. CORE COUNTS + MONTH-OVER-MONTH DELTAS
+        // ---------------------------------------------------------------
+        $usersThisMonth  = $this->safely(fn() => User::where('created_at', '>=', $monthStart)->count());
+        $usersLastMonth  = $this->safely(fn() => User::whereBetween('created_at', [$lastMonthS, $lastMonthE])->count());
+        $propsThisMonth  = $this->safely(fn() => Property::where('created_at', '>=', $monthStart)->count());
+        $propsLastMonth  = $this->safely(fn() => Property::whereBetween('created_at', [$lastMonthS, $lastMonthE])->count());
+
+        $stats = [
+            // Money
+            'subscription_revenue_iqd'     => $totalRevenue,
+            'active_subscriptions'         => $this->safely(fn() => Subscription::where('status', 'active')->count()),
+            'agent_subscription_revenue'   => $agentRevenue,
+            'agent_subscriptions_count'    => $agentSubCount,
+            'office_subscription_revenue'  => $officeRevenue,
+            'office_subscriptions_count'   => $officeSubCount,
+            'this_month_revenue'           => $thisMonthRevenue,
+            'new_subscriptions_this_month' => $newSubsThisMonth,
+
+            // People
+            'total_users'      => $this->safely(fn() => User::count()),
+            'new_users_today'  => $this->safely(fn() => User::whereDate('created_at', $today)->count()),
+            'new_users_week'   => $this->safely(fn() => User::where('created_at', '>=', $weekStart)->count()),
+            'total_agents'     => $this->safely(fn() => Agent::count()),
+            'total_offices'    => $this->safely(fn() => RealEstateOffice::count()),
+            'verified_agents'  => $this->safely(fn() => Agent::where('is_verified', true)->count()),
+
+            // Inventory
+            'total_properties'    => $this->safely(fn() => Property::count()),
+            'active_properties'   => $this->safely(fn() => Property::where('is_active', true)->count()),
+            'properties_for_sale' => $this->safely(fn() => Property::whereIn('listing_type', ['sale', 'sell'])->count()),
+            'properties_for_rent' => $this->safely(fn() => Property::where('listing_type', 'rent')->count()),
+            'new_properties_today' => $this->safely(fn() => Property::whereDate('created_at', $today)->count()),
+            'total_projects'      => $this->safely(fn() => Project::count()),
+        ];
+
+        $deltas = [
+            'revenue'    => $this->pctChange($thisMonthRevenue, $lastMonthRevenue),
+            'users'      => $this->pctChange($usersThisMonth, $usersLastMonth),
+            'properties' => $this->pctChange($propsThisMonth, $propsLastMonth),
+        ];
+
+        // ---------------------------------------------------------------
+        // 3. ACTION CENTER — everything waiting on the admin
+        // ---------------------------------------------------------------
+        $pendingApprovals = [
+            'properties'   => $this->safely(fn() => Property::where('status', 'pending')->count()),
+            'agents'       => $this->safely(fn() => Agent::where('is_verified', false)->count()),
+            'offices'      => $this->safely(fn() => RealEstateOffice::where('is_verified', false)->count()),
+            'banners'      => $this->safely(fn() => BannerAd::where('status', 'pending')->count()),
+            'reports'      => $this->safely(fn() => Report::where('status', '!=', 'resolved')->count()),
+            'appointments' => $this->safely(fn() => Appointment::where('status', 'pending')->count()),
+            'providers'    => $this->safely(fn() => ServiceProvider::where('is_verified', false)->count()),
+        ];
+
+        // ---------------------------------------------------------------
+        // 4. CHART SERIES (12 months) — cached 5 minutes
+        // ---------------------------------------------------------------
+        $charts = Cache::remember('admin.dashboard.charts', 300, function () use ($now) {
+            $labels = $users = $properties = $revenue = [];
+
+            for ($i = 11; $i >= 0; $i--) {
+                $m        = $now->copy()->subMonthsNoOverflow($i);
+                $labels[] = $m->format('M');
+
+                $users[] = $this->safely(fn() => User::whereYear('created_at', $m->year)
+                    ->whereMonth('created_at', $m->month)->count());
+
+                $properties[] = $this->safely(fn() => Property::whereYear('created_at', $m->year)
+                    ->whereMonth('created_at', $m->month)->count());
+
+                $revenue[] = $this->safely(fn() => (float) Subscription::whereYear('start_date', $m->year)
+                    ->whereMonth('start_date', $m->month)->sum('monthly_amount'));
+            }
+
+            return [
+                'labels'     => $labels,
+                'users'      => $users,
+                'properties' => $properties,
+                'revenue'    => $revenue,
+            ];
+        });
+
+        // Keep the old variable alive for backwards compatibility
+        $monthlyData = $charts['users'];
+
+        // ---------------------------------------------------------------
+        // 5. INVENTORY BREAKDOWNS
+        // ---------------------------------------------------------------
+        $statusCounts = $this->safely(fn() => Property::select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')->pluck('total', 'status')->toArray(), []);
+
+        $topCities = $this->safely(function () {
+            return Property::select(
+                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(address_details, '$.city.en')) as city_name"),
+                DB::raw('COUNT(*) as total')
+            )
+                ->whereNotNull('address_details')
+                ->groupBy('city_name')
+                ->orderByDesc('total')
+                ->limit(6)
+                ->get()
+                ->filter(fn($r) => !empty($r->city_name) && $r->city_name !== 'null')
+                ->map(fn($r) => ['city' => $r->city_name, 'total' => (int) $r->total])
+                ->values()
+                ->toArray();
+        }, []);
+
+        // ---------------------------------------------------------------
+        // 6. RENEWAL RADAR — expiring + already expired subscriptions
+        // ---------------------------------------------------------------
+        $radarFrom = $now->copy()->subDays(30);
+        $radarTo   = $now->copy()->addDays(14);
+
+        $renewals = collect();
+
+        $this->safely(function () use (&$renewals, $radarFrom, $radarTo) {
+            Agent::with('subscription')
+                ->whereHas('subscription', fn($q) => $q->whereBetween('end_date', [$radarFrom, $radarTo]))
+                ->limit(25)->get()
+                ->each(fn($a) => $renewals->push($this->renewalRow($a, 'agent')));
+        });
+
+        $this->safely(function () use (&$renewals, $radarFrom, $radarTo) {
+            RealEstateOffice::with('subscription')
+                ->whereHas('subscription', fn($q) => $q->whereBetween('end_date', [$radarFrom, $radarTo]))
+                ->limit(25)->get()
+                ->each(fn($o) => $renewals->push($this->renewalRow($o, 'office')));
+        });
+
+        $renewals    = $renewals->sortBy('days')->values();
+        $expiringNow = $renewals->where('days', '>=', 0)->take(8)->values()->toArray();
+        $expiredNow  = $renewals->where('days', '<', 0)->sortByDesc('days')->take(8)->values()->toArray();
+
+        $revenueAtRisk = $renewals->where('days', '>=', 0)->where('days', '<=', 7)->sum('amount');
+
+        // ---------------------------------------------------------------
+        // 7. APPROVAL QUEUE — pending properties, ready to action
+        // ---------------------------------------------------------------
+        $pendingProperties = $this->safely(function () {
+            return Property::with('owner')
+                ->where('status', 'pending')
+                ->orderBy('created_at', 'asc') // oldest first — fairest queue
+                ->take(6)->get()
+                ->map(fn($p) => [
+                    'id'       => $p->id,
+                    'name'     => $this->readJsonValue($p->name, 'Untitled property'),
+                    'price'    => $this->readPrice($p->price),
+                    'image'    => $this->readFirstImage($p->images),
+                    'type'     => $p->listing_type,
+                    'city'     => $this->readJsonValue(data_get($p->address_details, 'city'), '—'),
+                    'owner'    => $this->ownerLabel($p),
+                    'waiting'  => $p->created_at ? $p->created_at->diffForHumans(null, true) : '—',
+                    'stale'    => $p->created_at ? $p->created_at->lt(now()->subDays(2)) : false,
+                ])->toArray();
+        }, []);
+
+        // ---------------------------------------------------------------
+        // 8. LEADERBOARDS — this week's most active listers
+        // ---------------------------------------------------------------
+        $topAgents = $this->safely(function () use ($weekStart) {
+            return Agent::withCount('properties')
+                ->withCount(['properties as weekly_posts' => fn($q) => $q->where('created_at', '>=', $weekStart)])
+                ->orderByDesc('properties_count')
+                ->take(6)->get()
+                ->map(fn($a) => [
+                    'id'     => $a->id,
+                    'name'   => $a->agent_name ?? 'Agent',
+                    'sub'    => $a->company_name ?: 'Independent',
+                    'image'  => $a->profile_image,
+                    'total'  => (int) $a->properties_count,
+                    'weekly' => (int) $a->weekly_posts,
+                ])->toArray();
+        }, []);
+
+        $topOffices = $this->safely(function () use ($weekStart) {
+            return RealEstateOffice::withCount('ownedProperties')
+                ->withCount(['ownedProperties as weekly_posts' => fn($q) => $q->where('created_at', '>=', $weekStart)])
+                ->orderByDesc('owned_properties_count')
+                ->take(6)->get()
+                ->map(fn($o) => [
+                    'id'     => $o->id,
+                    'name'   => $o->company_name ?? 'Office',
+                    'sub'    => $o->city ?: 'Kurdistan',
+                    'image'  => $o->logo ?? $o->profile_image,
+                    'total'  => (int) $o->owned_properties_count,
+                    'weekly' => (int) $o->weekly_posts,
+                ])->toArray();
+        }, []);
+
+        // ---------------------------------------------------------------
+        // 9. TODAY'S APPOINTMENTS
+        // ---------------------------------------------------------------
+        $todayAppointments = $this->safely(function () use ($today) {
+            return Appointment::with(['user', 'property'])
+                ->whereDate('appointment_date', $today)
+                ->orderBy('appointment_time', 'asc')
+                ->take(6)->get()
+                ->map(fn($a) => [
+                    'id'       => $a->id,
+                    'time'     => $a->appointment_time ? substr((string) $a->appointment_time, 0, 5) : '--:--',
+                    'user'     => optional($a->user)->username ?? 'Guest',
+                    'property' => $a->property ? $this->readJsonValue($a->property->name, 'Property') : 'Property',
+                    'status'   => $a->status ?? 'pending',
+                ])->toArray();
+        }, []);
+
+        // ---------------------------------------------------------------
+        // 10. LIVE ACTIVITY FEED
+        // ---------------------------------------------------------------
+        $activity = collect();
+
+        $this->safely(function () use (&$activity) {
+            User::latest()->take(6)->get()->each(fn($u) => $activity->push([
+                'icon'  => 'fa-user-plus',
+                'tone'  => 'blue',
+                'title' => $u->username ?? 'New user',
+                'text'  => 'joined the platform',
+                'at'    => $u->created_at,
+            ]));
+        });
+
+        $this->safely(function () use (&$activity) {
+            Property::latest()->take(6)->get()->each(fn($p) => $activity->push([
+                'icon'  => 'fa-house-circle-check',
+                'tone'  => 'indigo',
+                'title' => $this->readJsonValue($p->name, 'New listing'),
+                'text'  => 'was listed (' . ($p->status ?? 'pending') . ')',
+                'at'    => $p->created_at,
+            ]));
+        });
+
+        $this->safely(function () use (&$activity) {
+            Agent::latest()->take(4)->get()->each(fn($a) => $activity->push([
+                'icon'  => 'fa-user-tie',
+                'tone'  => 'amber',
+                'title' => $a->agent_name ?? 'Agent',
+                'text'  => $a->is_verified ? 'registered and is verified' : 'registered — needs review',
+                'at'    => $a->created_at,
+            ]));
+        });
+
+        $this->safely(function () use (&$activity) {
+            RealEstateOffice::latest()->take(4)->get()->each(fn($o) => $activity->push([
+                'icon'  => 'fa-building',
+                'tone'  => 'violet',
+                'title' => $o->company_name ?? 'Office',
+                'text'  => $o->is_verified ? 'joined as a verified office' : 'joined — needs review',
+                'at'    => $o->created_at,
+            ]));
+        });
+
+        $activity = $activity->filter(fn($a) => $a['at'] !== null)
+            ->sortByDesc('at')
+            ->take(12)
+            ->map(function ($a) {
+                $a['ago'] = Carbon::parse($a['at'])->diffForHumans(null, true) . ' ago';
+                return $a;
+            })
+            ->values()
+            ->toArray();
+
+        // ---------------------------------------------------------------
+        // 11. PLATFORM PULSE
+        // ---------------------------------------------------------------
+        $pulse = [
+            'listings_week'   => $this->safely(fn() => Property::where('created_at', '>=', $weekStart)->count()),
+            'boosted'         => $this->safely(fn() => Property::where('is_boosted', true)->count()),
+            'sold_month'      => $this->safely(fn() => Property::where('status', 'sold')
+                ->where('updated_at', '>=', $monthStart)->count()),
+            'verify_rate'     => $stats['total_agents'] > 0
+                ? (int) round(($stats['verified_agents'] / max($stats['total_agents'], 1)) * 100)
+                : 0,
+            'avg_price'       => $this->safely(fn() => (float) Property::whereNotNull('price')
+                ->avg(DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"))),
+            'revenue_at_risk' => (float) $revenueAtRisk,
+        ];
+
+        // ---------------------------------------------------------------
+        // 12. LEGACY VARIABLES (kept so nothing else breaks)
+        // ---------------------------------------------------------------
+        $recent_properties = $this->safely(fn() => Property::with('owner')
+            ->orderBy('created_at', 'desc')->take(6)->get(), collect());
+
+        $recent_users = $this->safely(fn() => User::orderBy('created_at', 'desc')->take(6)->get(), collect());
+
+        $top_agents = $this->safely(fn() => Agent::withCount('properties')
+            ->orderBy('properties_count', 'desc')->take(5)->get(), collect());
 
         return view('admin.dashboard', compact(
             'stats',
+            'deltas',
             'pendingApprovals',
+            'charts',
             'monthlyData',
+            'statusCounts',
+            'topCities',
+            'expiringNow',
+            'expiredNow',
+            'pendingProperties',
+            'topAgents',
+            'topOffices',
+            'todayAppointments',
+            'activity',
+            'pulse',
             'recent_properties',
-            'top_agents',
-            'recent_users'
+            'recent_users',
+            'top_agents'
         ));
     }
+
+
+    private function pctChange($current, $previous): float
+    {
+        $current  = (float) $current;
+        $previous = (float) $previous;
+
+        if ($previous <= 0) {
+            return $current > 0 ? 100.0 : 0.0;
+        }
+
+        return round((($current - $previous) / $previous) * 100, 1);
+    }
+
     /**
-     * Get dashboard stats as JSON
+     * Read a value out of a multilingual JSON field (array or raw string).
      */
+    private function readJsonValue($value, string $fallback = '—'): string
+    {
+        if (is_array($value)) {
+            return (string) ($value['en'] ?? $value['ar'] ?? $value['ku'] ?? $fallback);
+        }
+
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded)) {
+                return (string) ($decoded['en'] ?? $decoded['ar'] ?? $decoded['ku'] ?? $fallback);
+            }
+            return $value;
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * Pull a USD figure out of the dual-currency price JSON.
+     */
+    private function readPrice($value): float
+    {
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+        }
+
+        if (is_array($value)) {
+            return (float) ($value['usd'] ?? $value['amount'] ?? 0);
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * First usable image URL from the images JSON column.
+     */
+    private function readFirstImage($value): ?string
+    {
+        if (is_string($value)) {
+            $value = json_decode($value, true);
+        }
+
+        if (is_array($value) && !empty($value)) {
+            $first = reset($value);
+            return is_string($first) ? $first : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Human label for whoever owns a property.
+     */
+    private function ownerLabel($property): string
+    {
+        $owner = $property->owner ?? null;
+
+        if (!$owner) {
+            return 'Unassigned';
+        }
+
+        return $owner->agent_name
+            ?? $owner->company_name
+            ?? $owner->username
+            ?? 'Owner';
+    }
     public function getStats()
     {
         $today = Carbon::today();
@@ -3017,6 +3338,45 @@ class AdminController extends Controller
         return view('admin.projects.show', compact('project'));
     }
 
+
+    private function renewalRow($model, string $type): array
+    {
+        $sub  = $model->subscription;
+        $end  = ($sub && $sub->end_date) ? Carbon::parse($sub->end_date) : null;
+        $days = $end ? (int) now()->startOfDay()->diffInDays($end->startOfDay(), false) : 0;
+
+        if ($days < 0) {
+            $state = 'expired';
+            $label = abs($days) . 'd overdue';
+        } elseif ($days <= 3) {
+            $state = 'critical';
+            $label = $days === 0 ? 'Ends today' : ($days === 1 ? 'Ends tomorrow' : $days . 'd left');
+        } elseif ($days <= 7) {
+            $state = 'soon';
+            $label = $days . 'd left';
+        } else {
+            $state = 'ok';
+            $label = $days . 'd left';
+        }
+
+        return [
+            'type'   => $type,
+            'id'     => $model->id,
+            'name'   => $type === 'agent'
+                ? ($model->agent_name ?? 'Agent')
+                : ($model->company_name ?? 'Office'),
+            'image'  => $type === 'agent'
+                ? $model->profile_image
+                : ($model->logo ?? $model->profile_image),
+            'plan'   => $model->current_plan ?? 'plan',
+            'days'   => $days,
+            'label'  => $label,
+            'state'  => $state,
+            'end'    => $end ? $end->format('d M Y') : '—',
+            'amount' => (float) ($sub->monthly_amount ?? 0),
+        ];
+    }
+
     // ==========================================
 
     public function projectsEdit($id)
@@ -3215,7 +3575,16 @@ class AdminController extends Controller
             return back()->withInput()->with('error', 'Error updating project: ' . $e->getMessage());
         }
     }
-
+    private function safely(callable $callback, $fallback = 0)
+    {
+        try {
+            $result = $callback();
+            return $result === null ? $fallback : $result;
+        } catch (\Throwable $e) {
+            Log::warning('Dashboard widget skipped: ' . $e->getMessage());
+            return $fallback;
+        }
+    }
     // ==========================================
 
     public function projectsDelete($id)
