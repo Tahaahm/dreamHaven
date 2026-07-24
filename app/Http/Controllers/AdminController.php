@@ -30,6 +30,7 @@ use Illuminate\Support\Str;
 use App\Models\ServiceProviderPlan;
 use App\Models\Category;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 class AdminController extends Controller
 {
@@ -146,6 +147,8 @@ class AdminController extends Controller
         // Manual refresh: /admin/dashboard?refresh=1
         if ($request->boolean('refresh')) {
             Cache::forget('admin.dashboard.charts');
+            Cache::forget('admin.dashboard.retention');
+            Cache::forget('admin.dashboard.cohorts');
             Cache::forget('admin.sidebar.badges');
         }
 
@@ -167,23 +170,19 @@ class AdminController extends Controller
         $officeSubCount = $this->safely(fn() => Subscription::whereIn('id', $officeSubIds)
             ->where('status', 'active')->count());
 
-        $thisMonthRevenue = $this->safely(fn() => (float) Subscription::where('start_date', '>=', $monthStart)
-            ->sum('monthly_amount'));
-        $lastMonthRevenue = $this->safely(fn() => (float) Subscription::whereBetween('start_date', [$lastMonthS, $lastMonthE])
-            ->sum('monthly_amount'));
-
+        $thisMonthRevenue = $this->safely(fn() => (float) Subscription::where('start_date', '>=', $monthStart)->sum('monthly_amount'));
+        $lastMonthRevenue = $this->safely(fn() => (float) Subscription::whereBetween('start_date', [$lastMonthS, $lastMonthE])->sum('monthly_amount'));
         $newSubsThisMonth = $this->safely(fn() => Subscription::where('start_date', '>=', $monthStart)->count());
 
         // ---------------------------------------------------------------
         // 2. CORE COUNTS + MONTH-OVER-MONTH DELTAS
         // ---------------------------------------------------------------
-        $usersThisMonth  = $this->safely(fn() => User::where('created_at', '>=', $monthStart)->count());
-        $usersLastMonth  = $this->safely(fn() => User::whereBetween('created_at', [$lastMonthS, $lastMonthE])->count());
-        $propsThisMonth  = $this->safely(fn() => Property::where('created_at', '>=', $monthStart)->count());
-        $propsLastMonth  = $this->safely(fn() => Property::whereBetween('created_at', [$lastMonthS, $lastMonthE])->count());
+        $usersThisMonth = $this->safely(fn() => User::where('created_at', '>=', $monthStart)->count());
+        $usersLastMonth = $this->safely(fn() => User::whereBetween('created_at', [$lastMonthS, $lastMonthE])->count());
+        $propsThisMonth = $this->safely(fn() => Property::where('created_at', '>=', $monthStart)->count());
+        $propsLastMonth = $this->safely(fn() => Property::whereBetween('created_at', [$lastMonthS, $lastMonthE])->count());
 
         $stats = [
-            // Money
             'subscription_revenue_iqd'     => $totalRevenue,
             'active_subscriptions'         => $this->safely(fn() => Subscription::where('status', 'active')->count()),
             'agent_subscription_revenue'   => $agentRevenue,
@@ -193,21 +192,19 @@ class AdminController extends Controller
             'this_month_revenue'           => $thisMonthRevenue,
             'new_subscriptions_this_month' => $newSubsThisMonth,
 
-            // People
-            'total_users'      => $this->safely(fn() => User::count()),
-            'new_users_today'  => $this->safely(fn() => User::whereDate('created_at', $today)->count()),
-            'new_users_week'   => $this->safely(fn() => User::where('created_at', '>=', $weekStart)->count()),
-            'total_agents'     => $this->safely(fn() => Agent::count()),
-            'total_offices'    => $this->safely(fn() => RealEstateOffice::count()),
-            'verified_agents'  => $this->safely(fn() => Agent::where('is_verified', true)->count()),
+            'total_users'          => $this->safely(fn() => User::count()),
+            'new_users_today'      => $this->safely(fn() => User::whereDate('created_at', $today)->count()),
+            'new_users_week'       => $this->safely(fn() => User::where('created_at', '>=', $weekStart)->count()),
+            'total_agents'         => $this->safely(fn() => Agent::count()),
+            'total_offices'        => $this->safely(fn() => RealEstateOffice::count()),
+            'verified_agents'      => $this->safely(fn() => Agent::where('is_verified', true)->count()),
 
-            // Inventory
-            'total_properties'    => $this->safely(fn() => Property::count()),
-            'active_properties'   => $this->safely(fn() => Property::where('is_active', true)->count()),
-            'properties_for_sale' => $this->safely(fn() => Property::whereIn('listing_type', ['sale', 'sell'])->count()),
-            'properties_for_rent' => $this->safely(fn() => Property::where('listing_type', 'rent')->count()),
+            'total_properties'     => $this->safely(fn() => Property::count()),
+            'active_properties'    => $this->safely(fn() => Property::where('is_active', true)->count()),
+            'properties_for_sale'  => $this->safely(fn() => Property::whereIn('listing_type', ['sale', 'sell'])->count()),
+            'properties_for_rent'  => $this->safely(fn() => Property::where('listing_type', 'rent')->count()),
             'new_properties_today' => $this->safely(fn() => Property::whereDate('created_at', $today)->count()),
-            'total_projects'      => $this->safely(fn() => Project::count()),
+            'total_projects'       => $this->safely(fn() => Project::count()),
         ];
 
         $deltas = [
@@ -217,7 +214,7 @@ class AdminController extends Controller
         ];
 
         // ---------------------------------------------------------------
-        // 3. ACTION CENTER — everything waiting on the admin
+        // 3. ACTION CENTER
         // ---------------------------------------------------------------
         $pendingApprovals = [
             'properties'   => $this->safely(fn() => Property::where('status', 'pending')->count()),
@@ -230,7 +227,7 @@ class AdminController extends Controller
         ];
 
         // ---------------------------------------------------------------
-        // 4. CHART SERIES (12 months) — cached 5 minutes
+        // 4. GROWTH SERIES (12 months) — cached 5 min
         // ---------------------------------------------------------------
         $charts = Cache::remember('admin.dashboard.charts', 300, function () use ($now) {
             $labels = $users = $properties = $revenue = [];
@@ -239,29 +236,233 @@ class AdminController extends Controller
                 $m        = $now->copy()->subMonthsNoOverflow($i);
                 $labels[] = $m->format('M');
 
-                $users[] = $this->safely(fn() => User::whereYear('created_at', $m->year)
-                    ->whereMonth('created_at', $m->month)->count());
-
-                $properties[] = $this->safely(fn() => Property::whereYear('created_at', $m->year)
-                    ->whereMonth('created_at', $m->month)->count());
-
-                $revenue[] = $this->safely(fn() => (float) Subscription::whereYear('start_date', $m->year)
-                    ->whereMonth('start_date', $m->month)->sum('monthly_amount'));
+                $users[]      = $this->safely(fn() => User::whereYear('created_at', $m->year)->whereMonth('created_at', $m->month)->count());
+                $properties[] = $this->safely(fn() => Property::whereYear('created_at', $m->year)->whereMonth('created_at', $m->month)->count());
+                $revenue[]    = $this->safely(fn() => (float) Subscription::whereYear('start_date', $m->year)->whereMonth('start_date', $m->month)->sum('monthly_amount'));
             }
 
+            return compact('labels', 'users', 'properties', 'revenue');
+        });
+
+        $monthlyData = $charts['users'];
+
+        // ═══════════════════════════════════════════════════════════════
+        // 5. RETENTION — HOW MANY PEOPLE COME BACK
+        // ═══════════════════════════════════════════════════════════════
+        $retention = Cache::remember('admin.dashboard.retention', 900, function () use ($now, $today, $monthStart) {
+            $table = $this->activityTable();
+
+            $empty = [
+                'available'      => false,
+                'source'         => null,
+                'dau'            => 0,
+                'wau'            => 0,
+                'mau'            => 0,
+                'returning'      => 0,
+                'new_active'     => 0,
+                'retention_rate' => 0,
+                'stickiness'     => 0,
+                'repeat_visitors' => 0,
+                'avg_sessions'   => 0,
+                'weeks'          => [],
+                'weekly_return'  => [],
+                'weekly_new'     => [],
+                'hourly'         => array_fill(0, 24, 0),
+                'peak_hour'      => null,
+            ];
+
+            if (!$table) {
+                return $empty;
+            }
+
+            $q = fn() => DB::table($table)->whereNotNull('user_id');
+
+            $dau = $this->safely(fn() => $q()->whereDate('created_at', $today)->distinct()->count('user_id'));
+            $wau = $this->safely(fn() => $q()->where('created_at', '>=', $now->copy()->subDays(7))->distinct()->count('user_id'));
+            $mau = $this->safely(fn() => $q()->where('created_at', '>=', $now->copy()->subDays(30))->distinct()->count('user_id'));
+
+            // People who came back on 2+ separate days in the last 30 days
+            $repeat = $this->safely(function () use ($q, $now) {
+                return DB::query()->fromSub(
+                    $q()->where('created_at', '>=', $now->copy()->subDays(30))
+                        ->select('user_id')
+                        ->groupBy('user_id')
+                        ->havingRaw('COUNT(DISTINCT DATE(created_at)) >= 2'),
+                    'r'
+                )->count();
+            });
+
+            // New vs returning among users active this month
+            $activeIds  = $this->safely(fn() => $q()->where('created_at', '>=', $monthStart)->distinct()->pluck('user_id'), collect());
+            $activeIds  = collect($activeIds)->filter()->values();
+            $newActive  = $this->safely(fn() => User::whereIn('id', $activeIds)->where('created_at', '>=', $monthStart)->count());
+            $returning  = max($activeIds->count() - $newActive, 0);
+
+            // Average visits per active user (last 30 days)
+            $totalHits  = $this->safely(fn() => $q()->where('created_at', '>=', $now->copy()->subDays(30))->count());
+            $avgSessions = $mau > 0 ? round($totalHits / $mau, 1) : 0;
+
+            // 12-week returning vs new trend
+            $weeks = $weeklyReturn = $weeklyNew = [];
+
+            for ($i = 11; $i >= 0; $i--) {
+                $ws = $now->copy()->subWeeks($i)->startOfWeek();
+                $we = $now->copy()->subWeeks($i)->endOfWeek();
+
+                $ids = $this->safely(fn() => $q()->whereBetween('created_at', [$ws, $we])->distinct()->pluck('user_id'), collect());
+                $ids = collect($ids)->filter()->values();
+
+                $ret = $ids->isEmpty() ? 0 : $this->safely(fn() => User::whereIn('id', $ids)->where('created_at', '<', $ws)->count());
+
+                $weeks[]        = $ws->format('d M');
+                $weeklyReturn[] = (int) $ret;
+                $weeklyNew[]    = max($ids->count() - (int) $ret, 0);
+            }
+
+            // Peak activity hours (last 30 days)
+            $hourly = array_fill(0, 24, 0);
+            $rows   = $this->safely(function () use ($table, $now) {
+                return DB::table($table)
+                    ->where('created_at', '>=', $now->copy()->subDays(30))
+                    ->select(DB::raw('HOUR(created_at) as h'), DB::raw('COUNT(*) as c'))
+                    ->groupBy('h')->pluck('c', 'h')->toArray();
+            }, []);
+
+            foreach ($rows as $h => $c) {
+                if ($h >= 0 && $h <= 23) {
+                    $hourly[(int) $h] = (int) $c;
+                }
+            }
+
+            $peakHour = array_sum($hourly) > 0 ? array_search(max($hourly), $hourly) : null;
+
             return [
-                'labels'     => $labels,
-                'users'      => $users,
-                'properties' => $properties,
-                'revenue'    => $revenue,
+                'available'       => true,
+                'source'          => $table,
+                'dau'             => (int) $dau,
+                'wau'             => (int) $wau,
+                'mau'             => (int) $mau,
+                'returning'       => (int) $returning,
+                'new_active'      => (int) $newActive,
+                'retention_rate'  => $activeIds->count() > 0 ? (int) round(($returning / $activeIds->count()) * 100) : 0,
+                'stickiness'      => $mau > 0 ? (int) round(($dau / $mau) * 100) : 0,
+                'repeat_visitors' => (int) $repeat,
+                'avg_sessions'    => $avgSessions,
+                'weeks'           => $weeks,
+                'weekly_return'   => $weeklyReturn,
+                'weekly_new'      => $weeklyNew,
+                'hourly'          => $hourly,
+                'peak_hour'       => $peakHour,
             ];
         });
 
-        // Keep the old variable alive for backwards compatibility
-        $monthlyData = $charts['users'];
+        // ---------------------------------------------------------------
+        // 6. COHORT GRID — do new signups stick around? (cached 30 min)
+        // ---------------------------------------------------------------
+        $cohorts = Cache::remember('admin.dashboard.cohorts', 1800, function () use ($now) {
+            $table = $this->activityTable();
+            if (!$table) {
+                return [];
+            }
+
+            $grid = [];
+
+            for ($c = 5; $c >= 0; $c--) {
+                $cs = $now->copy()->subWeeks($c)->startOfWeek();
+                $ce = $now->copy()->subWeeks($c)->endOfWeek();
+
+                $ids  = $this->safely(fn() => User::whereBetween('created_at', [$cs, $ce])->pluck('id'), collect());
+                $ids  = collect($ids)->filter()->values();
+                $size = $ids->count();
+
+                $row = ['label' => $cs->format('d M'), 'size' => $size, 'cells' => []];
+
+                for ($w = 0; $w <= $c; $w++) {
+                    if ($size === 0) {
+                        $row['cells'][] = null;
+                        continue;
+                    }
+
+                    $ws = $cs->copy()->addWeeks($w);
+                    $we = $ws->copy()->endOfWeek();
+
+                    $active = $this->safely(fn() => DB::table($table)
+                        ->whereIn('user_id', $ids)
+                        ->whereBetween('created_at', [$ws, $we])
+                        ->distinct()->count('user_id'));
+
+                    $row['cells'][] = (int) round(($active / $size) * 100);
+                }
+
+                $grid[] = $row;
+            }
+
+            return $grid;
+        });
 
         // ---------------------------------------------------------------
-        // 5. INVENTORY BREAKDOWNS
+        // 7. MOST VIEWED LISTINGS + WIN-BACK LIST
+        // ---------------------------------------------------------------
+        $table = $this->activityTable();
+
+        $topViewed = $this->safely(function () use ($table, $now) {
+            if (!$table || !Schema::hasColumn($table, 'property_id')) {
+                return [];
+            }
+
+            $rows = DB::table($table)
+                ->where('created_at', '>=', $now->copy()->subDays(30))
+                ->whereNotNull('property_id')
+                ->select('property_id', DB::raw('COUNT(*) as hits'), DB::raw('COUNT(DISTINCT user_id) as people'))
+                ->groupBy('property_id')
+                ->orderByDesc('hits')
+                ->limit(6)->get();
+
+            $props = Property::whereIn('id', $rows->pluck('property_id'))->get()->keyBy('id');
+
+            return $rows->map(function ($r) use ($props) {
+                $p = $props->get($r->property_id);
+                return [
+                    'id'     => $r->property_id,
+                    'name'   => $p ? $this->readJsonValue($p->name, 'Listing') : 'Removed listing',
+                    'image'  => $p ? $this->readFirstImage($p->images) : null,
+                    'price'  => $p ? $this->readPrice($p->price) : 0,
+                    'hits'   => (int) $r->hits,
+                    'people' => (int) $r->people,
+                ];
+            })->toArray();
+        }, []);
+
+        $winBack = $this->safely(function () use ($table, $now) {
+            if (!$table) {
+                return [];
+            }
+
+            $rows = DB::table($table)
+                ->whereNotNull('user_id')
+                ->select('user_id', DB::raw('MAX(created_at) as last_at'), DB::raw('COUNT(*) as hits'))
+                ->groupBy('user_id')
+                ->havingRaw('MAX(created_at) < ?', [$now->copy()->subDays(30)])
+                ->orderByDesc('last_at')
+                ->limit(6)->get();
+
+            $users = User::whereIn('id', $rows->pluck('user_id'))->get()->keyBy('id');
+
+            return $rows->map(function ($r) use ($users) {
+                $u = $users->get($r->user_id);
+                return [
+                    'id'     => $r->user_id,
+                    'name'   => $u->username ?? 'Former user',
+                    'email'  => $u->email ?? '',
+                    'image'  => $u->photo_image ?? null,
+                    'hits'   => (int) $r->hits,
+                    'gone'   => Carbon::parse($r->last_at)->diffForHumans(null, true),
+                ];
+            })->filter(fn($r) => $r['name'] !== 'Former user')->values()->toArray();
+        }, []);
+
+        // ---------------------------------------------------------------
+        // 8. INVENTORY BREAKDOWNS
         // ---------------------------------------------------------------
         $statusCounts = $this->safely(fn() => Property::select('status', DB::raw('COUNT(*) as total'))
             ->groupBy('status')->pluck('total', 'status')->toArray(), []);
@@ -272,79 +473,68 @@ class AdminController extends Controller
                 DB::raw('COUNT(*) as total')
             )
                 ->whereNotNull('address_details')
-                ->groupBy('city_name')
-                ->orderByDesc('total')
-                ->limit(6)
-                ->get()
+                ->groupBy('city_name')->orderByDesc('total')->limit(6)->get()
                 ->filter(fn($r) => !empty($r->city_name) && $r->city_name !== 'null')
                 ->map(fn($r) => ['city' => $r->city_name, 'total' => (int) $r->total])
-                ->values()
-                ->toArray();
+                ->values()->toArray();
         }, []);
 
         // ---------------------------------------------------------------
-        // 6. RENEWAL RADAR — expiring + already expired subscriptions
+        // 9. RENEWAL RADAR
         // ---------------------------------------------------------------
         $radarFrom = $now->copy()->subDays(30);
         $radarTo   = $now->copy()->addDays(14);
-
-        $renewals = collect();
+        $renewals  = collect();
 
         $this->safely(function () use (&$renewals, $radarFrom, $radarTo) {
             Agent::with('subscription')
                 ->whereHas('subscription', fn($q) => $q->whereBetween('end_date', [$radarFrom, $radarTo]))
-                ->limit(25)->get()
-                ->each(fn($a) => $renewals->push($this->renewalRow($a, 'agent')));
+                ->limit(25)->get()->each(fn($a) => $renewals->push($this->renewalRow($a, 'agent')));
         });
 
         $this->safely(function () use (&$renewals, $radarFrom, $radarTo) {
             RealEstateOffice::with('subscription')
                 ->whereHas('subscription', fn($q) => $q->whereBetween('end_date', [$radarFrom, $radarTo]))
-                ->limit(25)->get()
-                ->each(fn($o) => $renewals->push($this->renewalRow($o, 'office')));
+                ->limit(25)->get()->each(fn($o) => $renewals->push($this->renewalRow($o, 'office')));
         });
 
-        $renewals    = $renewals->sortBy('days')->values();
-        $expiringNow = $renewals->where('days', '>=', 0)->take(8)->values()->toArray();
-        $expiredNow  = $renewals->where('days', '<', 0)->sortByDesc('days')->take(8)->values()->toArray();
-
+        $renewals      = $renewals->sortBy('days')->values();
+        $expiringNow   = $renewals->where('days', '>=', 0)->take(8)->values()->toArray();
+        $expiredNow    = $renewals->where('days', '<', 0)->sortByDesc('days')->take(8)->values()->toArray();
         $revenueAtRisk = $renewals->where('days', '>=', 0)->where('days', '<=', 7)->sum('amount');
 
         // ---------------------------------------------------------------
-        // 7. APPROVAL QUEUE — pending properties, ready to action
+        // 10. APPROVAL QUEUE
         // ---------------------------------------------------------------
         $pendingProperties = $this->safely(function () {
-            return Property::with('owner')
-                ->where('status', 'pending')
-                ->orderBy('created_at', 'asc') // oldest first — fairest queue
-                ->take(6)->get()
+            return Property::with('owner')->where('status', 'pending')
+                ->orderBy('created_at', 'asc')->take(6)->get()
                 ->map(fn($p) => [
-                    'id'       => $p->id,
-                    'name'     => $this->readJsonValue($p->name, 'Untitled property'),
-                    'price'    => $this->readPrice($p->price),
-                    'image'    => $this->readFirstImage($p->images),
-                    'type'     => $p->listing_type,
-                    'city'     => $this->readJsonValue(data_get($p->address_details, 'city'), '—'),
-                    'owner'    => $this->ownerLabel($p),
-                    'waiting'  => $p->created_at ? $p->created_at->diffForHumans(null, true) : '—',
-                    'stale'    => $p->created_at ? $p->created_at->lt(now()->subDays(2)) : false,
+                    'id'      => $p->id,
+                    'name'    => $this->readJsonValue($p->name, 'Untitled property'),
+                    'price'   => $this->readPrice($p->price),
+                    'image'   => $this->readFirstImage($p->images),
+                    'type'    => $p->listing_type,
+                    'city'    => $this->readJsonValue(data_get($p->address_details, 'city'), '—'),
+                    'owner'   => $this->ownerLabel($p),
+                    'waiting' => $p->created_at ? $p->created_at->diffForHumans(null, true) : '—',
+                    'stale'   => $p->created_at ? $p->created_at->lt(now()->subDays(2)) : false,
                 ])->toArray();
         }, []);
 
         // ---------------------------------------------------------------
-        // 8. LEADERBOARDS — this week's most active listers
+        // 11. LEADERBOARDS
         // ---------------------------------------------------------------
         $topAgents = $this->safely(function () use ($weekStart) {
             return Agent::withCount('properties')
                 ->withCount(['properties as weekly_posts' => fn($q) => $q->where('created_at', '>=', $weekStart)])
-                ->orderByDesc('properties_count')
-                ->take(6)->get()
+                ->orderByDesc('properties_count')->take(6)->get()
                 ->map(fn($a) => [
-                    'id'     => $a->id,
-                    'name'   => $a->agent_name ?? 'Agent',
-                    'sub'    => $a->company_name ?: 'Independent',
-                    'image'  => $a->profile_image,
-                    'total'  => (int) $a->properties_count,
+                    'id' => $a->id,
+                    'name' => $a->agent_name ?? 'Agent',
+                    'sub' => $a->company_name ?: 'Independent',
+                    'image' => $a->profile_image,
+                    'total' => (int) $a->properties_count,
                     'weekly' => (int) $a->weekly_posts,
                 ])->toArray();
         }, []);
@@ -352,26 +542,24 @@ class AdminController extends Controller
         $topOffices = $this->safely(function () use ($weekStart) {
             return RealEstateOffice::withCount('ownedProperties')
                 ->withCount(['ownedProperties as weekly_posts' => fn($q) => $q->where('created_at', '>=', $weekStart)])
-                ->orderByDesc('owned_properties_count')
-                ->take(6)->get()
+                ->orderByDesc('owned_properties_count')->take(6)->get()
                 ->map(fn($o) => [
-                    'id'     => $o->id,
-                    'name'   => $o->company_name ?? 'Office',
-                    'sub'    => $o->city ?: 'Kurdistan',
-                    'image'  => $o->logo ?? $o->profile_image,
-                    'total'  => (int) $o->owned_properties_count,
+                    'id' => $o->id,
+                    'name' => $o->company_name ?? 'Office',
+                    'sub' => $o->city ?: 'Kurdistan',
+                    'image' => $o->logo ?? $o->profile_image,
+                    'total' => (int) $o->owned_properties_count,
                     'weekly' => (int) $o->weekly_posts,
                 ])->toArray();
         }, []);
 
         // ---------------------------------------------------------------
-        // 9. TODAY'S APPOINTMENTS
+        // 12. TODAY'S VIEWINGS
         // ---------------------------------------------------------------
         $todayAppointments = $this->safely(function () use ($today) {
             return Appointment::with(['user', 'property'])
                 ->whereDate('appointment_date', $today)
-                ->orderBy('appointment_time', 'asc')
-                ->take(6)->get()
+                ->orderBy('appointment_time', 'asc')->take(6)->get()
                 ->map(fn($a) => [
                     'id'       => $a->id,
                     'time'     => $a->appointment_time ? substr((string) $a->appointment_time, 0, 5) : '--:--',
@@ -382,86 +570,75 @@ class AdminController extends Controller
         }, []);
 
         // ---------------------------------------------------------------
-        // 10. LIVE ACTIVITY FEED
+        // 13. ACTIVITY FEED
         // ---------------------------------------------------------------
         $activity = collect();
 
         $this->safely(function () use (&$activity) {
             User::latest()->take(6)->get()->each(fn($u) => $activity->push([
-                'icon'  => 'fa-user-plus',
-                'tone'  => 'blue',
+                'icon' => 'fa-user-plus',
+                'tone' => 'blue',
                 'title' => $u->username ?? 'New user',
-                'text'  => 'joined the platform',
-                'at'    => $u->created_at,
+                'text' => 'joined the platform',
+                'at' => $u->created_at,
             ]));
         });
 
         $this->safely(function () use (&$activity) {
             Property::latest()->take(6)->get()->each(fn($p) => $activity->push([
-                'icon'  => 'fa-house-circle-check',
-                'tone'  => 'indigo',
+                'icon' => 'fa-house-circle-check',
+                'tone' => 'indigo',
                 'title' => $this->readJsonValue($p->name, 'New listing'),
-                'text'  => 'was listed (' . ($p->status ?? 'pending') . ')',
-                'at'    => $p->created_at,
+                'text' => 'was listed (' . ($p->status ?? 'pending') . ')',
+                'at' => $p->created_at,
             ]));
         });
 
         $this->safely(function () use (&$activity) {
             Agent::latest()->take(4)->get()->each(fn($a) => $activity->push([
-                'icon'  => 'fa-user-tie',
-                'tone'  => 'amber',
+                'icon' => 'fa-user-tie',
+                'tone' => 'amber',
                 'title' => $a->agent_name ?? 'Agent',
-                'text'  => $a->is_verified ? 'registered and is verified' : 'registered — needs review',
-                'at'    => $a->created_at,
+                'text' => $a->is_verified ? 'registered and is verified' : 'registered — needs review',
+                'at' => $a->created_at,
             ]));
         });
 
         $this->safely(function () use (&$activity) {
             RealEstateOffice::latest()->take(4)->get()->each(fn($o) => $activity->push([
-                'icon'  => 'fa-building',
-                'tone'  => 'violet',
+                'icon' => 'fa-building',
+                'tone' => 'violet',
                 'title' => $o->company_name ?? 'Office',
-                'text'  => $o->is_verified ? 'joined as a verified office' : 'joined — needs review',
-                'at'    => $o->created_at,
+                'text' => $o->is_verified ? 'joined as a verified office' : 'joined — needs review',
+                'at' => $o->created_at,
             ]));
         });
 
-        $activity = $activity->filter(fn($a) => $a['at'] !== null)
-            ->sortByDesc('at')
-            ->take(12)
+        $activity = $activity->filter(fn($a) => $a['at'] !== null)->sortByDesc('at')->take(12)
             ->map(function ($a) {
                 $a['ago'] = Carbon::parse($a['at'])->diffForHumans(null, true) . ' ago';
                 return $a;
-            })
-            ->values()
-            ->toArray();
+            })->values()->toArray();
 
         // ---------------------------------------------------------------
-        // 11. PLATFORM PULSE
+        // 14. PLATFORM PULSE
         // ---------------------------------------------------------------
         $pulse = [
             'listings_week'   => $this->safely(fn() => Property::where('created_at', '>=', $weekStart)->count()),
             'boosted'         => $this->safely(fn() => Property::where('is_boosted', true)->count()),
-            'sold_month'      => $this->safely(fn() => Property::where('status', 'sold')
-                ->where('updated_at', '>=', $monthStart)->count()),
-            'verify_rate'     => $stats['total_agents'] > 0
-                ? (int) round(($stats['verified_agents'] / max($stats['total_agents'], 1)) * 100)
-                : 0,
+            'sold_month'      => $this->safely(fn() => Property::where('status', 'sold')->where('updated_at', '>=', $monthStart)->count()),
+            'verify_rate'     => $stats['total_agents'] > 0 ? (int) round(($stats['verified_agents'] / max($stats['total_agents'], 1)) * 100) : 0,
             'avg_price'       => $this->safely(fn() => (float) Property::whereNotNull('price')
                 ->avg(DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"))),
             'revenue_at_risk' => (float) $revenueAtRisk,
         ];
 
         // ---------------------------------------------------------------
-        // 12. LEGACY VARIABLES (kept so nothing else breaks)
+        // 15. LEGACY VARIABLES
         // ---------------------------------------------------------------
-        $recent_properties = $this->safely(fn() => Property::with('owner')
-            ->orderBy('created_at', 'desc')->take(6)->get(), collect());
-
-        $recent_users = $this->safely(fn() => User::orderBy('created_at', 'desc')->take(6)->get(), collect());
-
-        $top_agents = $this->safely(fn() => Agent::withCount('properties')
-            ->orderBy('properties_count', 'desc')->take(5)->get(), collect());
+        $recent_properties = $this->safely(fn() => Property::with('owner')->orderBy('created_at', 'desc')->take(6)->get(), collect());
+        $recent_users      = $this->safely(fn() => User::orderBy('created_at', 'desc')->take(6)->get(), collect());
+        $top_agents        = $this->safely(fn() => Agent::withCount('properties')->orderBy('properties_count', 'desc')->take(5)->get(), collect());
 
         return view('admin.dashboard', compact(
             'stats',
@@ -469,6 +646,10 @@ class AdminController extends Controller
             'pendingApprovals',
             'charts',
             'monthlyData',
+            'retention',
+            'cohorts',
+            'topViewed',
+            'winBack',
             'statusCounts',
             'topCities',
             'expiringNow',
@@ -566,10 +747,7 @@ class AdminController extends Controller
             return 'Unassigned';
         }
 
-        return $owner->agent_name
-            ?? $owner->company_name
-            ?? $owner->username
-            ?? 'Owner';
+        return $owner->agent_name ?? $owner->company_name ?? $owner->username ?? 'Owner';
     }
     public function getStats()
     {
@@ -3362,12 +3540,8 @@ class AdminController extends Controller
         return [
             'type'   => $type,
             'id'     => $model->id,
-            'name'   => $type === 'agent'
-                ? ($model->agent_name ?? 'Agent')
-                : ($model->company_name ?? 'Office'),
-            'image'  => $type === 'agent'
-                ? $model->profile_image
-                : ($model->logo ?? $model->profile_image),
+            'name'   => $type === 'agent' ? ($model->agent_name ?? 'Agent') : ($model->company_name ?? 'Office'),
+            'image'  => $type === 'agent' ? $model->profile_image : ($model->logo ?? $model->profile_image),
             'plan'   => $model->current_plan ?? 'plan',
             'days'   => $days,
             'label'  => $label,
@@ -3393,7 +3567,43 @@ class AdminController extends Controller
 
         return view('admin.projects.edit', compact('project', 'offices', 'agents'));
     }
+    private function activityTable(): ?string
+    {
+        static $checked = false;
+        static $table   = null;
 
+        if ($checked) {
+            return $table;
+        }
+
+        $checked = true;
+
+        $candidates = [
+            'property_interactions',
+            'interactions',
+            'user_interactions',
+            'property_interaction',
+            'property_views',
+            'user_activities',
+        ];
+
+        foreach ($candidates as $candidate) {
+            try {
+                if (
+                    Schema::hasTable($candidate)
+                    && Schema::hasColumn($candidate, 'user_id')
+                    && Schema::hasColumn($candidate, 'created_at')
+                ) {
+                    $table = $candidate;
+                    break;
+                }
+            } catch (\Throwable $e) {
+                // keep looking
+            }
+        }
+
+        return $table;
+    }
     // ==========================================
 
     public function projectsUpdate(Request $request, $id)
