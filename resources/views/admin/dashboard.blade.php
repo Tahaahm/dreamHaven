@@ -170,7 +170,83 @@
         </div>
     </div>
 
+    {{-- 4. NEW: FUNNEL + CITY DISTRIBUTION + QUICK ACTIONS --}}
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-10">
 
+        {{-- Conversion Funnel --}}
+        <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+            <h3 class="text-sm font-black text-slate-900 dark:text-white mb-1">Conversion Funnel</h3>
+            <p class="text-xs text-slate-400 mb-5">View → Contact → Appointment → Deal</p>
+            @php
+                $funnelSteps = [
+                    ['label' => 'Property Views', 'value' => $funnel['views'], 'color' => 'bg-slate-900 dark:bg-white'],
+                    ['label' => 'WhatsApp Contacts', 'value' => $funnel['whatsapp'], 'color' => 'bg-indigo-500'],
+                    ['label' => 'Appointments', 'value' => $funnel['appointments'], 'color' => 'bg-amber-500'],
+                    ['label' => 'Transactions', 'value' => $funnel['transactions'], 'color' => 'bg-emerald-500'],
+                ];
+                $funnelMax = max(1, $funnel['views']);
+            @endphp
+            <div class="space-y-4">
+                @foreach($funnelSteps as $step)
+                    <div>
+                        <div class="flex justify-between text-xs font-bold mb-1">
+                            <span class="text-slate-500 dark:text-slate-400">{{ $step['label'] }}</span>
+                            <span class="text-slate-900 dark:text-white">{{ number_format($step['value']) }}</span>
+                        </div>
+                        <div class="h-2.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div class="h-full {{ $step['color'] }} rounded-full transition-all duration-700"
+                                 style="width: {{ $funnelMax > 0 ? max(3, round(($step['value'] / $funnelMax) * 100)) : 0 }}%"></div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+
+        {{-- City Distribution --}}
+        <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700 shadow-sm p-6">
+            <h3 class="text-sm font-black text-slate-900 dark:text-white mb-1">Listings by City</h3>
+            <p class="text-xs text-slate-400 mb-5">Top {{ $cityDistribution->count() }} markets</p>
+            @php $cityMax = $cityDistribution->max('total') ?: 1; @endphp
+            <div class="space-y-3">
+                @forelse($cityDistribution as $city)
+                    <div>
+                        <div class="flex justify-between text-xs font-bold mb-1">
+                            <span class="text-slate-600 dark:text-slate-300">{{ $city->city }}</span>
+                            <span class="text-slate-900 dark:text-white">{{ $city->total }}</span>
+                        </div>
+                        <div class="h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-indigo-500 rounded-full" style="width: {{ round(($city->total / $cityMax) * 100) }}%"></div>
+                        </div>
+                    </div>
+                @empty
+                    <p class="text-center text-slate-400 text-sm py-6">No city data yet.</p>
+                @endforelse
+            </div>
+        </div>
+
+        {{-- Quick Actions --}}
+        <div class="bg-slate-900 rounded-3xl border border-slate-800 shadow-sm p-6">
+            <h3 class="text-sm font-black text-white mb-4">Quick Actions</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <a href="{{ route('admin.properties.create') }}" class="flex flex-col items-center justify-center gap-2 p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl transition text-center">
+                    <i class="fas fa-plus text-indigo-400"></i>
+                    <span class="text-[11px] font-bold text-slate-300">New Property</span>
+                </a>
+                <a href="{{ route('admin.banners.create') }}" class="flex flex-col items-center justify-center gap-2 p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl transition text-center">
+                    <i class="fas fa-rectangle-ad text-amber-400"></i>
+                    <span class="text-[11px] font-bold text-slate-300">New Banner</span>
+                </a>
+                <a href="{{ url('admin/notifications/broadcast') }}" class="flex flex-col items-center justify-center gap-2 p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl transition text-center">
+                    <i class="fas fa-bullhorn text-rose-400"></i>
+                    <span class="text-[11px] font-bold text-slate-300">Broadcast</span>
+                </a>
+                <a href="{{ route('admin.subscription-plans.index') }}" class="flex flex-col items-center justify-center gap-2 p-4 bg-slate-800 hover:bg-slate-700 rounded-2xl transition text-center">
+                    <i class="fas fa-tags text-emerald-400"></i>
+                    <span class="text-[11px] font-bold text-slate-300">Manage Plans</span>
+                </a>
+            </div>
+        </div>
+    </div>
 
     {{-- 5. CHARTS: USER GROWTH + REVENUE TREND --}}
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-10">
