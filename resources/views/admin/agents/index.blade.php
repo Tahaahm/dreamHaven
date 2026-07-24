@@ -396,7 +396,7 @@
               <div class="dm-ring-wrap" aria-hidden="true">
                 <svg class="dm-ring-svg" viewBox="0 0 36 36">
                   <circle class="dm-ring-track" cx="18" cy="18" r="15"/>
-                  @if($days !== null)
+                  @if($agent->dm_days !== null)
                   <circle class="dm-ring-fill" cx="18" cy="18" r="15"
                     stroke="{{ $agent->dm_ring_color }}"
                     stroke-dasharray="{{ $agent->dm_expired ? 0 : $agent->dm_dash }} {{ $agent->dm_circumference }}"/>
@@ -512,7 +512,7 @@
           <div class="dm-ring-wrap" aria-hidden="true">
             <svg class="dm-ring-svg" viewBox="0 0 36 36">
               <circle class="dm-ring-track" cx="18" cy="18" r="15"/>
-              @if($days !== null)
+              @if($agent->dm_days !== null)
               <circle class="dm-ring-fill" cx="18" cy="18" r="15" stroke="{{ $agent->dm_ring_color }}" stroke-dasharray="{{ $agent->dm_expired ? 0 : $agent->dm_dash }} {{ $agent->dm_circumference }}"/>
               @endif
             </svg>
@@ -523,7 +523,7 @@
           <div>
             <div class="dm-sub-plan">{{ $agent->current_plan ?? 'Free' }}</div>
             <div class="dm-sub-date {{ $agent->dm_date_class }}" style="font-size:12px">
-              @if($agent->agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
+              @if($agent->dm_end_date){{ $agent->dm_expired ? 'Ended' : 'Ends' }} {{ $agent->dm_end_date }}@else No subscription@endif
             </div>
           </div>
         </div>
