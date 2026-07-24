@@ -1,277 +1,356 @@
 @extends('layouts.admin-layout')
 
-@section('title', 'Users Directory')
+@section('title', 'Users')
+
+@push('styles') @include('admin.partials.ui-kit') @endpush
 
 @section('content')
 
-<div class="max-w-7xl mx-auto animate-fade-in-up">
+@php
+    use Illuminate\Support\Facades\Cache;
+    use Illuminate\Support\Facades\Route as Rt;
+    use Illuminate\Support\Facades\Schema;
+    use Illuminate\Support\Facades\DB;
 
-    {{-- Page Header --}}
-    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+    $link = fn($n, $p = []) => Rt::has($n) ? route($n, $p) : null;
+
+    /* Real stats, cached for two minutes */
+    $s = Cache::remember('admin.users.stats', 120, function () {
+        $safe = function ($cb) { try { return (int) $cb(); } catch (\Throwable $e) { return 0; } };
+        return [
+            'total'    => $safe(fn() => \App\Models\User::count()),
+            'week'     => $safe(fn() => \App\Models\User::where('created_at', '>=', now()->subDays(7))->count()),
+            'prevWeek' => $safe(fn() => \App\Models\User::whereBetween('created_at', [now()->subDays(14), now()->subDays(7)])->count()),
+            'verified' => $safe(fn() => \App\Models\User::where('is_verified', true)->count()),
+            'admins'   => $safe(fn() => \App\Models\User::where('role', 'admin')->count()),
+            'agents'   => $safe(fn() => \App\Models\User::where('role', 'agent')->count()),
+        ];
+    });
+
+    $growth = $s['prevWeek'] > 0 ? round((($s['week'] - $s['prevWeek']) / $s['prevWeek']) * 100) : ($s['week'] > 0 ? 100 : 0);
+    $verifyRate = $s['total'] > 0 ? (int) round(($s['verified'] / $s['total']) * 100) : 0;
+
+    /* Last-seen per user on this page (one grouped query, if an activity table exists) */
+    $activityTable = Cache::remember('admin.activity.table', 3600, function () {
+        foreach (['property_interactions', 'interactions', 'user_interactions', 'property_views'] as $t) {
+            try { if (Schema::hasTable($t) && Schema::hasColumn($t, 'user_id')) return $t; } catch (\Throwable $e) {}
+        }
+        return null;
+    });
+
+    $seen = collect();
+    if ($activityTable && $users->count()) {
+        try {
+            $seen = DB::table($activityTable)
+                ->whereIn('user_id', $users->pluck('id'))
+                ->select('user_id', DB::raw('MAX(created_at) as last_at'), DB::raw('COUNT(*) as hits'))
+                ->groupBy('user_id')->get()->keyBy('user_id');
+        } catch (\Throwable $e) { $seen = collect(); }
+    }
+
+    $verifyRoute   = Rt::has('admin.users.activate') ? 'admin.users.activate' : (Rt::has('admin.users.verify') ? 'admin.users.verify' : null);
+    $suspendRoute  = Rt::has('admin.users.suspend') ? 'admin.users.suspend' : (Rt::has('admin.users.unverify') ? 'admin.users.unverify' : null);
+    $hasFilters    = request()->hasAny(['search', 'role', 'status']);
+@endphp
+
+<div class="max-w-[1500px] mx-auto">
+
+    {{-- HEADER --}}
+    <div class="page-head">
         <div>
-            <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Users Directory</h1>
-            <p class="text-slate-500 mt-2 text-sm font-medium">Manage user accounts, monitor activity, and configure access.</p>
+            <p class="eyebrow mb-1.5">Dream Mulk network</p>
+            <h1 class="page-ttl">Users</h1>
+            <p class="text-[13px] text-slate-500 font-semibold mt-1.5">
+                {{ number_format($users->total()) }} account{{ $users->total() === 1 ? '' : 's' }} matching this view
+            </p>
         </div>
-        <div class="flex items-center gap-3">
-            <button type="button" class="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg shadow-sm hover:bg-slate-50 transition">
-                <i class="fas fa-download mr-2"></i> Export
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="dmExportTable('#usersTable', 'users')" class="btn-ghost">
+                <i class="fas fa-download"></i> Export CSV
             </button>
-            <a href="{{ route('admin.users.create') }}" class="px-4 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-lg shadow-lg hover:bg-slate-800 hover:shadow-xl transition transform active:scale-95 flex items-center gap-2">
-                <i class="fas fa-plus"></i> Add New User
-            </a>
-        </div>
-    </div>
-
-    {{-- Stats Grid --}}
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 bg-white rounded-xl border border-slate-200 shadow-sm mb-8 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 overflow-hidden">
-
-        <div class="p-6 hover:bg-slate-50/50 transition-colors group relative">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Total Users</p>
-                    <p class="text-3xl font-black text-slate-900">{{ $users->total() ?? 0 }}</p>
-                </div>
-                <div class="p-2 bg-slate-100 rounded-lg text-slate-400 group-hover:text-slate-600 transition">
-                    <i class="fas fa-users text-lg"></i>
-                </div>
-            </div>
-            <div class="mt-4 flex items-center text-xs font-medium text-emerald-600">
-                <i class="fas fa-arrow-up mr-1"></i> <span>12% growth</span>
-            </div>
-        </div>
-
-        <div class="p-6 hover:bg-slate-50/50 transition-colors group relative">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">New (7 Days)</p>
-                    <p class="text-3xl font-black text-slate-900">12</p>
-                </div>
-                <div class="p-2 bg-emerald-50 rounded-lg text-emerald-600 group-hover:text-emerald-700 transition">
-                    <i class="fas fa-user-plus text-lg"></i>
-                </div>
-            </div>
-            <div class="mt-4 w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                <div class="bg-emerald-500 h-1.5 rounded-full" style="width: 45%"></div>
-            </div>
-        </div>
-
-        <div class="p-6 hover:bg-slate-50/50 transition-colors group relative">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Active Agents</p>
-                    <p class="text-3xl font-black text-slate-900">8</p>
-                </div>
-                <div class="p-2 bg-blue-50 rounded-lg text-blue-600 group-hover:text-blue-700 transition">
-                    <i class="fas fa-user-tie text-lg"></i>
-                </div>
-            </div>
-             <p class="mt-4 text-xs text-slate-400 font-medium">Verified providers</p>
-        </div>
-
-        <div class="p-6 hover:bg-slate-50/50 transition-colors group relative">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">System Admins</p>
-                    <p class="text-3xl font-black text-slate-900">3</p>
-                </div>
-                <div class="p-2 bg-slate-800 rounded-lg text-white transition">
-                    <i class="fas fa-shield-alt text-lg"></i>
-                </div>
-            </div>
-            <p class="mt-4 text-xs text-slate-400 font-medium">Full access granted</p>
-        </div>
-
-    </div>
-
-    {{-- Filters & Search --}}
-    <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row gap-3">
-        <div class="relative flex-1">
-            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <i class="fas fa-search text-slate-400"></i>
-            </div>
-            <form method="GET" action="{{ route('admin.users.index') }}">
-                <input type="text" name="search" value="{{ request('search') }}"
-                       class="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border-none rounded-lg text-sm font-semibold text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-slate-200 transition"
-                       placeholder="Search users...">
-            </form>
-        </div>
-
-        <div class="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-            <select onchange="window.location.href=this.value" class="appearance-none bg-white border border-slate-200 text-slate-700 text-xs font-bold py-2.5 pl-4 pr-10 rounded-lg hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200 cursor-pointer transition shadow-sm">
-                <option value="{{ route('admin.users.index') }}">Role: All</option>
-                <option value="{{ route('admin.users.index', array_merge(request()->all(), ['role' => 'user'])) }}" {{ request('role') == 'user' ? 'selected' : '' }}>User</option>
-                <option value="{{ route('admin.users.index', array_merge(request()->all(), ['role' => 'agent'])) }}" {{ request('role') == 'agent' ? 'selected' : '' }}>Agent</option>
-            </select>
-
-            <select onchange="window.location.href=this.value" class="appearance-none bg-white border border-slate-200 text-slate-700 text-xs font-bold py-2.5 pl-4 pr-10 rounded-lg hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200 cursor-pointer transition shadow-sm">
-                <option value="{{ route('admin.users.index') }}">Status: All</option>
-                <option value="{{ route('admin.users.index', array_merge(request()->all(), ['status' => 'verified'])) }}" {{ request('status') == 'verified' ? 'selected' : '' }}>Verified</option>
-                <option value="{{ route('admin.users.index', array_merge(request()->all(), ['status' => 'unverified'])) }}" {{ request('status') == 'unverified' ? 'selected' : '' }}>Unverified</option>
-            </select>
-
-            @if(request()->hasAny(['search', 'role', 'status']))
-                <a href="{{ route('admin.users.index') }}" class="px-4 py-2.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition flex items-center gap-2 whitespace-nowrap">
-                    <i class="fas fa-times"></i> Reset
-                </a>
+            @if($link('admin.users.create'))
+                <a href="{{ $link('admin.users.create') }}" class="btn-solid"><i class="fas fa-plus"></i> Add user</a>
             @endif
         </div>
     </div>
 
-    {{-- Data Table --}}
-    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+    {{-- STATS --}}
+    <div class="stat-row cols-4">
+        <div class="stat">
+            <div class="flex items-center justify-between mb-2">
+                <span class="eyebrow">Total users</span>
+                <i class="fas fa-users text-slate-300 text-[11px]"></i>
+            </div>
+            <b class="num">{{ number_format($s['total']) }}</b>
+            <p class="text-[10.5px] font-bold text-slate-400">all time</p>
+        </div>
+
+        <div class="stat">
+            <div class="flex items-center justify-between mb-2">
+                <span class="eyebrow">New this week</span>
+                <span class="chip {{ $growth > 0 ? 'chip-up' : ($growth < 0 ? 'chip-down' : 'chip-flat') }}">
+                    {{ $growth > 0 ? '+' : '' }}{{ $growth }}%
+                </span>
+            </div>
+            <b class="num">{{ number_format($s['week']) }}</b>
+            <p class="text-[10.5px] font-bold text-slate-400">vs {{ $s['prevWeek'] }} last week</p>
+        </div>
+
+        <div class="stat">
+            <div class="flex items-center justify-between mb-2">
+                <span class="eyebrow">Verified</span>
+                <i class="fas fa-shield-halved text-emerald-500 text-[11px]"></i>
+            </div>
+            <b class="num">{{ $verifyRate }}%</b>
+            <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden mt-2">
+                <div class="h-full rounded-full bg-emerald-500" style="width:{{ $verifyRate }}%"></div>
+            </div>
+        </div>
+
+        <div class="stat">
+            <div class="flex items-center justify-between mb-2">
+                <span class="eyebrow">By role</span>
+                <i class="fas fa-user-shield text-[11px]" style="color:var(--dm)"></i>
+            </div>
+            <b class="num">{{ number_format($s['agents']) }}</b>
+            <p class="text-[10.5px] font-bold text-slate-400">agents · {{ $s['admins'] }} admins</p>
+        </div>
+    </div>
+
+    {{-- SEARCH + FILTERS --}}
+    <form method="GET" action="{{ route('admin.users.index') }}" class="search-wrap">
+        <i class="fas fa-magnifying-glass"></i>
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by name, email or phone…">
+        @foreach(['role', 'status', 'sort_by', 'sort_order'] as $keep)
+            @if(request($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
+        @endforeach
+    </form>
+
+    <div class="pill-row mb-5">
+        <a href="{{ route('admin.users.index') }}" class="pill {{ !$hasFilters ? 'on' : '' }}">All</a>
+        <a href="{{ route('admin.users.index', array_merge(request()->except('page'), ['status' => 'verified'])) }}"
+           class="pill {{ request('status') === 'verified' ? 'on' : '' }}"><i class="fas fa-shield-halved text-[10px]"></i> Verified</a>
+        <a href="{{ route('admin.users.index', array_merge(request()->except('page'), ['status' => 'unverified'])) }}"
+           class="pill {{ request('status') === 'unverified' ? 'on-alert' : '' }}"><i class="fas fa-hourglass-half text-[10px]"></i> Pending</a>
+        <a href="{{ route('admin.users.index', array_merge(request()->except('page'), ['status' => 'email_unverified'])) }}"
+           class="pill {{ request('status') === 'email_unverified' ? 'on' : '' }}"><i class="far fa-envelope text-[10px]"></i> No email check</a>
+        <a href="{{ route('admin.users.index', array_merge(request()->except('page'), ['role' => 'agent'])) }}"
+           class="pill {{ request('role') === 'agent' ? 'on' : '' }}"><i class="fas fa-user-tie text-[10px]"></i> Agents</a>
+        <a href="{{ route('admin.users.index', array_merge(request()->except('page'), ['role' => 'admin'])) }}"
+           class="pill {{ request('role') === 'admin' ? 'on' : '' }}"><i class="fas fa-user-shield text-[10px]"></i> Admins</a>
+        <a href="{{ route('admin.users.index', array_merge(request()->except('page'), ['sort_by' => 'created_at', 'sort_order' => 'asc'])) }}"
+           class="pill {{ request('sort_order') === 'asc' ? 'on' : '' }}"><i class="fas fa-arrow-up-1-9 text-[10px]"></i> Oldest first</a>
+        @if($hasFilters)
+            <a href="{{ route('admin.users.index') }}" class="pill" style="background:#fef2f2;color:#b91c1c;border-color:#fecdd3"><i class="fas fa-xmark text-[10px]"></i> Clear</a>
+        @endif
+    </div>
+
+    {{-- ══════════ DESKTOP TABLE ══════════ --}}
+    <div class="card overflow-hidden hidden md:block">
         <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
+            <table class="tbl" id="usersTable">
                 <thead>
-                    <tr class="bg-slate-50/80 border-b border-slate-200">
-                        <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">User Profile</th>
-                        <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Contact</th>
-                        <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Role</th>
-                        <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Status</th>
-                        <th class="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Joined Date</th>
-                        <th class="px-6 py-4 w-10"></th>
+                    <tr>
+                        <th>User</th>
+                        <th>Contact</th>
+                        <th class="text-center">Role</th>
+                        <th class="text-center">Status</th>
+                        <th>Last seen</th>
+                        <th class="text-right">Joined</th>
+                        <th class="w-36" data-noexport></th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
-    @forelse($users as $user)
-    <tr class="hover:bg-slate-50 transition-colors group">
+                <tbody>
+                    @forelse($users as $user)
+                        @php
+                            $act  = $seen->get($user->id);
+                            $last = $act ? \Carbon\Carbon::parse($act->last_at) : null;
+                            $gap  = $last ? $last->diffInDays(now()) : null;
+                        @endphp
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    @if($user->photo_image)
+                                        <img src="{{ asset($user->photo_image) }}" class="avatar" alt="">
+                                    @else
+                                        <div class="avatar avatar-fb">{{ strtoupper(substr($user->username ?? 'U', 0, 1)) }}</div>
+                                    @endif
+                                    <div class="min-w-0">
+                                        <a href="{{ $link('admin.users.show', $user->id) ?? '#' }}" class="block text-[13px] font-bold text-slate-900 hover:text-[#303b97] truncate max-w-[180px]">
+                                            {{ $user->username }}
+                                        </a>
+                                        <span class="text-[10px] font-mono text-slate-400">#{{ \Illuminate\Support\Str::limit($user->id, 10, '') }}</span>
+                                    </div>
+                                </div>
+                            </td>
 
-        {{-- User Identity --}}
-        <td class="px-6 py-4">
-            <div class="flex items-center gap-4">
-                <div class="w-10 h-10 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-md">
-                    @if($user->photo_image)
-                        <img src="{{ asset($user->photo_image) }}" class="w-full h-full object-cover rounded-lg">
-                    @else
-                        {{ strtoupper(substr($user->username, 0, 1)) }}
-                    @endif
-                </div>
-                <div>
-                    <a href="{{ route('admin.users.show', $user->id) }}" class="text-sm font-bold text-slate-900 hover:text-blue-600 transition">{{ $user->username }}</a>
-                    <div class="flex items-center gap-2 mt-0.5">
-                        <span class="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">ID: {{ $user->id }}</span>
-                    </div>
-                </div>
-            </div>
-        </td>
+                            <td>
+                                <p class="text-[12.5px] font-semibold text-slate-700 truncate max-w-[190px]">{{ $user->email }}</p>
+                                @if($user->phone)
+                                    <p class="text-[11px] font-semibold text-slate-400 mt-0.5">{{ $user->phone }}</p>
+                                @endif
+                            </td>
 
-        {{-- Contact Details --}}
-        <td class="px-6 py-4">
-            <div class="space-y-1">
-                <div class="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                    <i class="far fa-envelope text-slate-300 w-4"></i> {{ $user->email }}
-                </div>
-                @if($user->phone)
-                <div class="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                    <i class="fas fa-phone text-slate-300 w-4"></i> {{ $user->phone }}
-                </div>
-                @endif
-            </div>
-        </td>
+                            <td class="text-center">
+                                <span class="badge {{ $user->role === 'admin' ? 'b-plan' : ($user->role === 'agent' ? 'b-mute' : 'b-mute') }}">
+                                    {{ strtoupper($user->role ?? 'user') }}
+                                </span>
+                            </td>
 
-        {{-- Role --}}
-        <td class="px-6 py-4 text-center">
+                            <td class="text-center">
+                                @if($user->is_verified)
+                                    <span class="badge b-ok"><span class="dotlet"></span> Verified</span>
+                                @else
+                                    <span class="badge b-warn"><span class="dotlet"></span> Pending</span>
+                                @endif
+                                @if($user->is_suspended ?? false)
+                                    <span class="badge b-bad mt-1">Suspended</span>
+                                @endif
+                            </td>
+
+                            <td>
+                                @if($last)
+                                    <p class="text-[12px] font-bold {{ $gap > 30 ? 'text-amber-600' : 'text-slate-700' }}">{{ $last->diffForHumans(null, true) }} ago</p>
+                                    <p class="text-[10.5px] font-bold text-slate-400">{{ number_format($act->hits) }} actions</p>
+                                @elseif($activityTable)
+                                    <span class="badge b-mute">Never active</span>
+                                @else
+                                    <span class="text-[11px] font-bold text-slate-300">—</span>
+                                @endif
+                            </td>
+
+                            <td class="text-right">
+                                <p class="text-[12px] font-bold text-slate-600">{{ optional($user->created_at)->format('d M Y') }}</p>
+                                <p class="text-[10.5px] font-semibold text-slate-400">{{ optional($user->created_at)->format('h:i A') }}</p>
+                            </td>
+
+                            <td data-noexport>
+                                <div class="flex items-center justify-end gap-1.5">
+                                    @if($link('admin.users.show', $user->id))
+                                        <a href="{{ $link('admin.users.show', $user->id) }}" class="iact" title="View"><i class="fas fa-eye"></i></a>
+                                    @endif
+                                    @if($link('admin.users.edit', $user->id))
+                                        <a href="{{ $link('admin.users.edit', $user->id) }}" class="iact" title="Edit"><i class="fas fa-pen"></i></a>
+                                    @endif
+
+                                    @if(!$user->is_verified && $verifyRoute)
+                                        <form method="POST" action="{{ route($verifyRoute, $user->id) }}" class="inline">
+                                            @csrf
+                                            <button class="iact good" title="Verify"><i class="fas fa-check"></i></button>
+                                        </form>
+                                    @elseif($user->is_verified && $suspendRoute)
+                                        <form method="POST" action="{{ route($suspendRoute, $user->id) }}" class="inline">
+                                            @csrf
+                                            <button class="iact danger" title="Suspend"><i class="fas fa-ban"></i></button>
+                                        </form>
+                                    @endif
+
+                                    @if($user->role !== 'admin' && $link('admin.users.delete', $user->id))
+                                        <form method="POST" action="{{ $link('admin.users.delete', $user->id) }}" class="inline"
+                                              onsubmit="return confirm('Delete {{ addslashes($user->username) }}? This cannot be undone.')">
+                                            @csrf @method('DELETE')
+                                            <button class="iact danger" title="Delete"><i class="fas fa-trash"></i></button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state">
+                                    <i class="fas fa-user-slash"></i>
+                                    <h3>No users match this view</h3>
+                                    <p>Try a different search or clear the filters.</p>
+                                    <a href="{{ route('admin.users.index') }}" class="btn-ghost inline-flex"><i class="fas fa-rotate-left"></i> Clear filters</a>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+
+        @if($users->hasPages())
+            <div class="pager">{{ $users->withQueryString()->links() }}</div>
+        @endif
+    </div>
+
+    {{-- ══════════ MOBILE CARDS ══════════ --}}
+    <div class="md:hidden">
+        @forelse($users as $user)
             @php
-                $roleStyles = match($user->role) {
-                    'admin' => 'bg-slate-100 text-slate-800 border-slate-200',
-                    'agent' => 'bg-blue-50 text-blue-700 border-blue-100',
-                    default => 'bg-slate-50 text-slate-600 border-slate-100'
-                };
+                $act  = $seen->get($user->id);
+                $last = $act ? \Carbon\Carbon::parse($act->last_at) : null;
             @endphp
-            <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold border uppercase tracking-wide {{ $roleStyles }}">
-                {{ ucfirst($user->role) }}
-            </span>
-        </td>
+            <div class="mcard">
+                @if(!$user->is_verified)
+                    <div class="mcard-strip" style="background:#fffbeb;color:#b45309">
+                        <span><i class="fas fa-hourglass-half mr-1"></i> Waiting for verification</span>
+                        @if($verifyRoute)
+                            <form method="POST" action="{{ route($verifyRoute, $user->id) }}">
+                                @csrf
+                                <button class="underline underline-offset-2">VERIFY</button>
+                            </form>
+                        @endif
+                    </div>
+                @endif
 
-        {{-- Status (UPDATED to match your DB image) --}}
-        <td class="px-6 py-4 text-center">
-            {{-- We check $user->is_verified == 1 --}}
-            @if($user->is_verified)
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Verified
-                </span>
-            @else
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Pending
-                </span>
-            @endif
-
-            {{-- Optional: Show Suspended badge if is_suspended is 1 --}}
-            @if($user->is_suspended)
-                <div class="mt-1">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-100">
-                        Suspended
-                    </span>
-                </div>
-            @endif
-        </td>
-
-        {{-- Joined Date --}}
-        <td class="px-6 py-4 text-right">
-            <span class="text-sm font-bold text-slate-500">{{ $user->created_at->format('M d, Y') }}</span>
-            <span class="block text-xs text-slate-400 mt-0.5">{{ $user->created_at->format('h:i A') }}</span>
-        </td>
-
-        {{-- Actions Menu --}}
-        <td class="px-6 py-4 text-right">
-            <div class="relative group/menu">
-                <button class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition">
-                    <i class="fas fa-ellipsis-v"></i>
-                </button>
-
-                <div class="hidden group-hover/menu:block absolute right-0 top-6 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-100">
-                    <div class="p-1">
-                        <div class="px-3 py-2 border-b border-slate-100 mb-1">
-                            <p class="text-xs font-bold text-slate-900">Manage User</p>
+                <div class="mcard-body">
+                    <div class="flex items-start gap-3 mb-3">
+                        @if($user->photo_image)
+                            <img src="{{ asset($user->photo_image) }}" class="avatar !w-12 !h-12" alt="">
+                        @else
+                            <div class="avatar avatar-fb !w-12 !h-12 text-sm">{{ strtoupper(substr($user->username ?? 'U', 0, 1)) }}</div>
+                        @endif
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2">
+                                <a href="{{ $link('admin.users.show', $user->id) ?? '#' }}" class="text-[14px] font-black text-slate-900 truncate">{{ $user->username }}</a>
+                                <span class="badge {{ $user->is_verified ? 'b-ok' : 'b-warn' }} shrink-0">{{ $user->is_verified ? 'Verified' : 'Pending' }}</span>
+                            </div>
+                            <p class="text-[11.5px] font-semibold text-slate-400 truncate mt-0.5">{{ $user->email }}</p>
+                            <p class="text-[10.5px] font-bold text-slate-400 uppercase mt-1">
+                                {{ $user->role ?? 'user' }}
+                                <span class="mx-1.5 text-slate-200">·</span>
+                                joined {{ optional($user->created_at)->format('d M Y') }}
+                            </p>
                         </div>
-                        <a href="{{ route('admin.users.show', $user->id) }}" class="flex items-center gap-3 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-md transition">
-                            <i class="fas fa-eye w-4"></i> View Details
-                        </a>
-                        <a href="{{ route('admin.users.edit', $user->id) }}" class="flex items-center gap-3 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 rounded-md transition">
-                            <i class="fas fa-pen-to-square w-4"></i> Edit Profile
-                        </a>
+                    </div>
 
-                        @if($user->role !== 'admin')
-                        <div class="my-1 border-t border-slate-100"></div>
-                        <form action="{{ route('admin.users.delete', $user->id) }}" method="POST">
-                            @csrf @method('DELETE')
-                            <button type="submit" onclick="return confirm('Are you sure? This cannot be undone.')" class="w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-md transition text-left">
-                                <i class="fas fa-trash-alt w-4"></i> Delete Account
-                            </button>
-                        </form>
+                    @if($last)
+                        <div class="flex items-center gap-2.5 bg-slate-50 rounded-xl px-3 py-2.5 mb-3">
+                            <i class="fas fa-wave-square text-[11px]" style="color:var(--dm)"></i>
+                            <p class="text-[11.5px] font-bold text-slate-600">
+                                Last seen {{ $last->diffForHumans(null, true) }} ago · {{ number_format($act->hits) }} actions
+                            </p>
+                        </div>
+                    @endif
+
+                    <div class="mgrid" style="grid-template-columns:repeat({{ $user->role !== 'admin' ? 3 : 2 }},1fr)">
+                        <a href="{{ $link('admin.users.show', $user->id) ?? '#' }}" class="mbtn mbtn-p"><i class="fas fa-eye text-[10px]"></i> View</a>
+                        <a href="{{ $link('admin.users.edit', $user->id) ?? '#' }}" class="mbtn mbtn-s"><i class="fas fa-pen text-[10px]"></i> Edit</a>
+                        @if($user->role !== 'admin' && $link('admin.users.delete', $user->id))
+                            <form method="POST" action="{{ $link('admin.users.delete', $user->id) }}" onsubmit="return confirm('Delete this user?')">
+                                @csrf @method('DELETE')
+                                <button class="mbtn mbtn-d"><i class="fas fa-trash text-[10px]"></i> Delete</button>
+                            </form>
                         @endif
                     </div>
                 </div>
             </div>
-        </td>
-    </tr>
-    @empty
-    <tr>
-        <td colspan="6" class="px-6 py-16 text-center">
-            <div class="max-w-xs mx-auto text-center">
-                <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-search text-slate-300 text-2xl"></i>
-                </div>
-                <h3 class="text-slate-900 font-bold mb-1">No users found</h3>
-                <p class="text-slate-500 text-sm mb-4">No results match your search criteria.</p>
-                <a href="{{ route('admin.users.index') }}" class="inline-flex items-center gap-2 text-sm font-bold text-slate-900 hover:underline">
-                    <i class="fas fa-sync-alt"></i> Clear Filters
-                </a>
+        @empty
+            <div class="card empty-state">
+                <i class="fas fa-user-slash"></i>
+                <h3>No users match this view</h3>
+                <p>Try a different search or clear the filters.</p>
+                <a href="{{ route('admin.users.index') }}" class="btn-ghost inline-flex"><i class="fas fa-rotate-left"></i> Clear filters</a>
             </div>
-        </td>
-    </tr>
-    @endforelse
-</tbody>
-            </table>
-        </div>
+        @endforelse
 
-        {{-- Pagination --}}
         @if($users->hasPages())
-        <div class="bg-slate-50 px-6 py-4 border-t border-slate-200">
-            {{ $users->withQueryString()->links() }}
-        </div>
+            <div class="pt-2">{{ $users->withQueryString()->links() }}</div>
         @endif
     </div>
-
 </div>
 
 @endsection

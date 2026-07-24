@@ -2074,9 +2074,36 @@ class AdminController extends Controller
     // TRANSACTIONS
     // ==========================================
 
-    public function transactionsIndex()
+    public function transactionsIndex(Request $request)
     {
-        $transactions = Transaction::with(['buyer', 'seller', 'property', 'agent'])->paginate(15);
+        $query = Transaction::with(['buyer', 'seller', 'property', 'agent']);
+
+        // Status pills
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Search by reference, id, or party name
+        if ($request->filled('search')) {
+            $search = $request->search;
+
+            $query->where(function ($q) use ($search) {
+                $q->where('id', 'like', "%{$search}%")
+                    ->orWhere('transaction_reference', 'like', "%{$search}%")
+                    ->orWhereHas('buyer', fn($b) => $b->where('username', 'like', "%{$search}%"))
+                    ->orWhereHas('seller', fn($s) => $s->where('username', 'like', "%{$search}%"));
+            });
+        }
+
+        // Optional amount floor: /admin/transactions?min=1000
+        if ($request->filled('min')) {
+            $query->where('amount_usd', '>=', (float) $request->min);
+        }
+
+        $transactions = $query->orderBy('created_at', 'desc')
+            ->paginate(15)
+            ->withQueryString();
+
         return view('admin.transactions.index', compact('transactions'));
     }
 
