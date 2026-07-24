@@ -1610,39 +1610,67 @@ class AdminController extends Controller
             }
         ]);
 
-        if ($request->has('search')) {
+        // Search across the multilingual name column
+        if ($request->filled('search')) {
             $search = $request->search;
+
             $query->where(function ($q) use ($search) {
                 $q->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.en')) LIKE ?", ["%{$search}%"])
                     ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ar')) LIKE ?", ["%{$search}%"])
-                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ku')) LIKE ?", ["%{$search}%"]);
+                    ->orWhereRaw("JSON_UNQUOTE(JSON_EXTRACT(name, '$.ku')) LIKE ?", ["%{$search}%"])
+                    ->orWhere('id', 'like', "%{$search}%");
             });
         }
 
-        if ($request->has('status') && $request->status != '') {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        if ($request->has('listing_type') && $request->listing_type != '') {
-            $query->where('listing_type', $request->listing_type);
+        // 'sale' in the UI, 'sell' in the database — accept both
+        if ($request->filled('listing_type')) {
+            $types = $request->listing_type === 'sale' ? ['sale', 'sell'] : [$request->listing_type];
+            $query->whereIn('listing_type', $types);
         }
 
-        if ($request->has('owner_type') && $request->owner_type != '') {
-            $ownerType = 'App\\Models\\' . $request->owner_type;
-            $query->where('owner_type', $ownerType);
+        if ($request->filled('owner_type')) {
+            $query->where('owner_type', 'App\\Models\\' . $request->owner_type);
         }
 
-        $properties = $query->orderBy('created_at', 'desc')->paginate(15)->withQueryString();
+        if ($request->boolean('boosted')) {
+            $query->where('is_boosted', true);
+        }
+
+        // Sorting
+        switch ($request->get('sort')) {
+            case 'oldest':
+                $query->orderBy('created_at', 'asc');
+                break;
+            case 'price_high':
+                $query->orderByRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) DESC");
+                break;
+            case 'price_low':
+                $query->orderByRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2)) ASC");
+                break;
+            case 'views':
+                $query->orderBy('views', 'desc');
+                break;
+            default:
+                $query->orderBy('created_at', 'desc');
+        }
+
+        $properties = $query->paginate(15)->withQueryString();
 
         $stats = [
             'total'    => Property::count(),
             'active'   => Property::where('is_active', true)->count(),
             'pending'  => Property::where('status', 'pending')->count(),
-            'for_sale' => Property::where('listing_type', 'sale')->count(),
+            'for_sale' => Property::whereIn('listing_type', ['sale', 'sell'])->count(),
             'for_rent' => Property::where('listing_type', 'rent')->count(),
+            'boosted'  => Property::where('is_boosted', true)->count(),
+            'rejected' => Property::where('status', 'rejected')->count(),
         ];
 
-        $pendingCount = Property::where('status', 'pending')->count();
+        $pendingCount = $stats['pending'];
 
         return view('admin.properties.index', compact('properties', 'stats', 'pendingCount'));
     }

@@ -1,405 +1,414 @@
 @extends('layouts.admin-layout')
 
-@section('title', 'Properties Directory')
+@section('title', 'Properties')
+
+@push('styles') @include('admin.partials.ui-kit') @endpush
 
 @section('content')
 
-<div class="min-h-screen bg-slate-50">
-<div class="max-w-[1500px] mx-auto px-6 py-8">
+@php
+    use Illuminate\Support\Facades\Route as Rt;
+
+    $link = fn($n, $p = []) => Rt::has($n) ? route($n, $p) : null;
+
+    /* Unpack a property row into plain values */
+    $read = function ($property) {
+        $json = function ($value) {
+            if (is_string($value)) { $decoded = json_decode($value, true); return is_array($decoded) ? $decoded : null; }
+            return is_array($value) ? $value : null;
+        };
+
+        $name  = $json($property->name);
+        $price = $json($property->price);
+        $imgs  = $json($property->images);
+        $type  = $json($property->type);
+        $addr  = $json($property->address_details);
+        $city  = $addr['city'] ?? null;
+
+        $owner = 'Unassigned';
+        if ($property->owner) {
+            $owner = $property->owner->agent_name
+                ?? $property->owner->company_name
+                ?? $property->owner->username
+                ?? 'Owner';
+        }
+
+        return [
+            'title' => $name['en'] ?? $name['ar'] ?? $name['ku'] ?? (is_string($property->name) ? $property->name : 'Untitled listing'),
+            'price' => (float) ($price['usd'] ?? $price['amount'] ?? (is_numeric($property->price) ? $property->price : 0)),
+            'iqd'   => (float) ($price['iqd'] ?? 0),
+            'image' => is_array($imgs) && count($imgs) ? reset($imgs) : null,
+            'kind'  => $type['category'] ?? 'property',
+            'city'  => is_array($city) ? ($city['en'] ?? 'Unknown') : ($city ?? 'Unknown'),
+            'owner' => $owner,
+            'role'  => class_basename($property->owner_type ?? ''),
+        ];
+    };
+
+    $tone = fn($status) => match ($status) {
+        'available' => ['b-ok', 'fa-circle-dot'],
+        'pending'   => ['b-warn', 'fa-clock'],
+        'sold'      => ['b-plan', 'fa-handshake'],
+        'rented'    => ['b-plan', 'fa-key'],
+        'rejected'  => ['b-bad', 'fa-ban'],
+        default     => ['b-mute', 'fa-circle'],
+    };
+
+    $q          = request()->except(['page']);
+    $hasFilters = request()->anyFilled(['search', 'status', 'listing_type', 'owner_type', 'sort']);
+@endphp
+
+<div class="max-w-[1500px] mx-auto">
 
     {{-- HEADER --}}
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+    <div class="page-head">
         <div>
-            <div class="flex items-center gap-3 mb-1">
-                <div class="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center">
-                    <i class="fas fa-city text-white text-sm"></i>
-                </div>
-                <h1 class="text-2xl font-black text-slate-900 tracking-tight">Properties</h1>
-            </div>
-            <p class="text-slate-400 text-sm ml-11">Manage listings, approvals &amp; inventory</p>
+            <p class="eyebrow mb-1.5">Inventory</p>
+            <h1 class="page-ttl">Properties</h1>
+            <p class="text-[13px] text-slate-500 font-semibold mt-1.5">
+                Showing {{ $properties->firstItem() ?? 0 }}–{{ $properties->lastItem() ?? 0 }} of {{ number_format($properties->total()) }}
+            </p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
+            <button type="button" onclick="dmExportTable('#propsTable', 'properties')" class="btn-ghost"><i class="fas fa-download"></i> Export CSV</button>
             @if(($pendingCount ?? 0) > 0)
-            <a href="{{ route('admin.properties.index', ['status' => 'pending']) }}"
-               class="relative flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100 transition">
-                <span class="flex h-2 w-2 relative">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
-                </span>
-                {{ $pendingCount }} pending approval
-            </a>
+                <a href="{{ route('admin.properties.index', ['status' => 'pending']) }}" class="btn-solid" style="background:linear-gradient(135deg,#f59e0b,#f97316);box-shadow:0 10px 22px -12px rgba(245,158,11,.9)">
+                    <i class="fas fa-hourglass-half"></i> {{ $pendingCount }} to approve
+                </a>
+            @endif
+            @if($link('admin.properties.create'))
+                <a href="{{ $link('admin.properties.create') }}" class="btn-solid"><i class="fas fa-plus"></i> Add listing</a>
             @endif
         </div>
     </div>
 
-    {{-- STAT CARDS --}}
-    @php
-        $statCards = [
-            ['label' => 'Total',    'value' => $stats['total']    ?? 0, 'icon' => 'fa-layer-group',    'iconBg' => 'bg-slate-100',    'iconColor' => 'text-slate-600'],
-            ['label' => 'Active',   'value' => $stats['active']   ?? 0, 'icon' => 'fa-check-circle',   'iconBg' => 'bg-emerald-50',   'iconColor' => 'text-emerald-600'],
-            ['label' => 'Pending',  'value' => $stats['pending']  ?? 0, 'icon' => 'fa-hourglass-half', 'iconBg' => 'bg-amber-50',     'iconColor' => 'text-amber-600'],
-            ['label' => 'For Sale', 'value' => $stats['for_sale'] ?? 0, 'icon' => 'fa-tag',            'iconBg' => 'bg-blue-50',      'iconColor' => 'text-blue-600'],
-            ['label' => 'For Rent', 'value' => $stats['for_rent'] ?? 0, 'icon' => 'fa-key',            'iconBg' => 'bg-violet-50',    'iconColor' => 'text-violet-600'],
-        ];
-    @endphp
-
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-        @foreach($statCards as $s)
-        <div class="bg-white border border-slate-200 rounded-2xl p-4 hover:border-slate-300 hover:shadow-sm transition-all">
-            <div class="w-8 h-8 rounded-lg {{ $s['iconBg'] }} {{ $s['iconColor'] }} flex items-center justify-center mb-3">
-                <i class="fas {{ $s['icon'] }} text-xs"></i>
+    {{-- STATS --}}
+    <div class="stat-row">
+        @php
+            $cards = [
+                ['Total listings', $stats['total'] ?? 0, 'fa-layer-group', '#94a3b8'],
+                ['Live', $stats['active'] ?? 0, 'fa-circle-check', '#10b981'],
+                ['Pending', $stats['pending'] ?? 0, 'fa-hourglass-half', '#f59e0b'],
+                ['For sale', $stats['for_sale'] ?? 0, 'fa-tag', '#303b97'],
+                ['For rent', $stats['for_rent'] ?? 0, 'fa-key', '#8b5cf6'],
+            ];
+        @endphp
+        @foreach($cards as [$label, $value, $icon, $color])
+            <div class="stat">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="eyebrow">{{ $label }}</span>
+                    <i class="fas {{ $icon }} text-[11px]" style="color:{{ $color }}"></i>
+                </div>
+                <b class="num">{{ number_format($value) }}</b>
             </div>
-            <p class="text-xl font-black text-slate-900">{{ number_format($s['value']) }}</p>
-            <p class="text-[11px] text-slate-400 font-medium mt-0.5">{{ $s['label'] }}</p>
-        </div>
         @endforeach
     </div>
 
-    {{-- FILTER BAR --}}
-    <div class="bg-white border border-slate-200 rounded-2xl p-2 mb-5 flex flex-col lg:flex-row items-stretch lg:items-center gap-2 shadow-sm">
-        <div class="relative flex-1">
-            <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-            <form id="search-form" method="GET" action="{{ route('admin.properties.index') }}">
-                @if(request('status'))       <input type="hidden" name="status"       value="{{ request('status') }}">       @endif
-                @if(request('listing_type')) <input type="hidden" name="listing_type" value="{{ request('listing_type') }}"> @endif
-                @if(request('owner_type'))   <input type="hidden" name="owner_type"   value="{{ request('owner_type') }}">   @endif
-                <input type="text" name="search" value="{{ request('search') }}"
-                       class="w-full bg-transparent pl-9 pr-4 py-2.5 text-sm text-slate-700 placeholder-slate-400 border-none focus:ring-0 focus:outline-none"
-                       placeholder="Search title, ID, reference…">
-            </form>
-        </div>
+    {{-- SEARCH --}}
+    <form method="GET" action="{{ route('admin.properties.index') }}" class="search-wrap" id="searchForm">
+        <i class="fas fa-magnifying-glass"></i>
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search listings by title…">
+        @foreach(['status', 'listing_type', 'owner_type', 'sort'] as $keep)
+            @if(request($keep))<input type="hidden" name="{{ $keep }}" value="{{ request($keep) }}">@endif
+        @endforeach
+    </form>
 
-        <div class="h-px lg:h-6 w-full lg:w-px bg-slate-200"></div>
-
-        <div class="flex items-center gap-2 flex-wrap lg:flex-nowrap px-1">
-            @php $selBase = 'bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-600 rounded-xl px-3 py-2 focus:ring-0 focus:border-violet-400 cursor-pointer hover:border-slate-300 transition-colors'; @endphp
-
-            <select id="filter-status" class="{{ $selBase }} min-w-[130px]">
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('status','page'), [])) }}">All statuses</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('status','page'), ['status'=>'available'])) }}" {{ request('status')=='available'?'selected':'' }}>Available</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('status','page'), ['status'=>'pending'])) }}"   {{ request('status')=='pending'  ?'selected':'' }}>Pending</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('status','page'), ['status'=>'sold'])) }}"      {{ request('status')=='sold'     ?'selected':'' }}>Sold</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('status','page'), ['status'=>'rented'])) }}"    {{ request('status')=='rented'   ?'selected':'' }}>Rented</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('status','page'), ['status'=>'rejected'])) }}"  {{ request('status')=='rejected' ?'selected':'' }}>Rejected</option>
-            </select>
-
-            <select id="filter-type" class="{{ $selBase }} min-w-[120px]">
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('listing_type','page'), [])) }}">All types</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('listing_type','page'), ['listing_type'=>'sale'])) }}" {{ request('listing_type')=='sale'?'selected':'' }}>For sale</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('listing_type','page'), ['listing_type'=>'rent'])) }}" {{ request('listing_type')=='rent'?'selected':'' }}>For rent</option>
-            </select>
-
-            <select id="filter-owner" class="{{ $selBase }} min-w-[120px]">
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('owner_type','page'), [])) }}">All owners</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('owner_type','page'), ['owner_type'=>'Agent'])) }}"            {{ request('owner_type')=='Agent'           ?'selected':'' }}>Agent</option>
-                <option value="{{ route('admin.properties.index', array_merge(request()->except('owner_type','page'), ['owner_type'=>'RealEstateOffice'])) }}" {{ request('owner_type')=='RealEstateOffice'?'selected':'' }}>Office</option>
-            </select>
-
-            @if(request()->anyFilled(['search','status','listing_type','owner_type']))
-            <a href="{{ route('admin.properties.index') }}"
-               class="flex items-center gap-1.5 px-3 py-2 bg-rose-50 border border-rose-200 text-rose-500 rounded-xl text-xs font-semibold hover:bg-rose-100 transition whitespace-nowrap">
-                <i class="fas fa-times text-[10px]"></i> Clear
-            </a>
-            @endif
-        </div>
-    </div>
-
-    {{-- RESULTS COUNT --}}
-    <div class="flex items-center justify-between mb-3 px-1">
-        <p class="text-xs text-slate-400 font-medium">
-            <span class="text-slate-700 font-bold">{{ $properties->firstItem() ?? 0 }}–{{ $properties->lastItem() ?? 0 }}</span>
-            of <span class="text-slate-700 font-bold">{{ $properties->total() }}</span> properties
-        </p>
-        <p class="text-xs text-slate-400">Page {{ $properties->currentPage() }} / {{ $properties->lastPage() }}</p>
-    </div>
-
-    {{-- PROPERTY ROWS --}}
-    <div id="properties-table" class="space-y-2">
-
-        @forelse($properties as $property)
+    {{-- FILTER PILLS --}}
+    <div class="pill-row mb-2">
+        <a href="{{ route('admin.properties.index') }}" class="pill {{ !$hasFilters ? 'on' : '' }}">All</a>
         @php
-            $nameData     = is_string($property->name)            ? json_decode($property->name, true)            : $property->name;
-            $propName     = is_array($nameData)                   ? ($nameData['en'] ?? 'Property')                : $nameData;
-
-            $priceData    = is_string($property->price)           ? json_decode($property->price, true)           : $property->price;
-            $priceVal     = 0;
-            if (is_array($priceData))       { $priceVal = $priceData['usd'] ?? $priceData['amount'] ?? 0; }
-            elseif (is_numeric($priceData)) { $priceVal = $priceData; }
-
-            $imageData    = is_string($property->images)          ? json_decode($property->images, true)          : $property->images;
-            $firstImage   = is_array($imageData)                  ? ($imageData[0] ?? null)                       : null;
-
-            $typeData     = is_string($property->type)            ? json_decode($property->type, true)            : $property->type;
-            $typeCategory = is_array($typeData)                   ? ($typeData['category'] ?? 'N/A')               : ($typeData ?? 'N/A');
-
-            $addressData  = is_string($property->address_details) ? json_decode($property->address_details, true) : $property->address_details;
-            $cityData     = is_array($addressData) && isset($addressData['city']) ? $addressData['city'] : null;
-            $cityName     = is_array($cityData)                   ? ($cityData['en'] ?? 'Unknown')                 : ($cityData ?? 'Unknown');
-
-            $ownerName = 'Unknown';
-            if ($property->owner) {
-                if      ($property->owner_type === 'App\Models\Agent')            { $ownerName = $property->owner->name         ?? $property->owner->agent_name ?? $property->owner->username ?? 'Unknown'; }
-                elseif  ($property->owner_type === 'App\Models\RealEstateOffice') { $ownerName = $property->owner->company_name ?? $property->owner->name       ?? 'Unknown'; }
-                elseif  ($property->owner_type === 'App\Models\User')             { $ownerName = $property->owner->username     ?? $property->owner->name       ?? 'Unknown'; }
-            }
-
-            $statusConfig = match($property->status) {
-                'available' => ['bg-emerald-50 border-emerald-200 text-emerald-700', 'fa-circle-dot'],
-                'pending'   => ['bg-amber-50 border-amber-200 text-amber-700',       'fa-clock'],
-                'sold'      => ['bg-blue-50 border-blue-200 text-blue-700',          'fa-handshake'],
-                'rented'    => ['bg-violet-50 border-violet-200 text-violet-700',    'fa-key'],
-                'rejected'  => ['bg-rose-50 border-rose-200 text-rose-600',          'fa-ban'],
-                default     => ['bg-slate-100 border-slate-200 text-slate-600',      'fa-circle'],
-            };
-
-            $uniqueViewers = $property->unique_viewers_count ?? 0;
-            $isNew = $property->created_at->diffInDays() < 7;
+            $statusPills = [
+                ['available', 'Available', 'fa-circle-dot'],
+                ['pending', 'Pending', 'fa-clock'],
+                ['sold', 'Sold', 'fa-handshake'],
+                ['rented', 'Rented', 'fa-key'],
+                ['rejected', 'Rejected', 'fa-ban'],
+            ];
         @endphp
-
-        <div class="group bg-white border border-slate-200 rounded-2xl hover:border-slate-300 hover:shadow-md transition-all duration-200">
-            <div class="flex items-center gap-4 px-5 py-4">
-
-                {{-- Thumbnail --}}
-                <div class="shrink-0 w-[68px] h-[68px] rounded-xl overflow-hidden bg-slate-100 border border-slate-200 relative">
-                    @if($firstImage)
-                        <img src="{{ $firstImage }}" alt="{{ $propName }}" loading="lazy"
-                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                        @if($property->is_boosted)
-                            <div class="absolute top-1 right-1 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
-                                <i class="fas fa-bolt text-white text-[7px]"></i>
-                            </div>
-                        @endif
-                    @else
-                        <div class="w-full h-full flex items-center justify-center text-slate-300">
-                            <i class="fas fa-image text-xl"></i>
-                        </div>
-                    @endif
-                </div>
-
-                {{-- Content --}}
-                <div class="flex-1 min-w-0 flex items-center justify-between gap-4 flex-wrap">
-
-                    {{-- Left: name + meta --}}
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-2 flex-wrap mb-1.5">
-                            <a href="{{ route('admin.properties.show', $property->id) }}"
-                               class="text-sm font-bold text-slate-900 hover:text-violet-600 transition-colors truncate max-w-[300px]">
-                                {{ $propName }}
-                            </a>
-                            @if($isNew)
-                            <span class="shrink-0 px-1.5 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 rounded-md text-[10px] font-bold uppercase tracking-wide">New</span>
-                            @endif
-                            @if($property->is_boosted)
-                            <span class="shrink-0 px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 rounded-md text-[10px] font-bold uppercase tracking-wide">
-                                <i class="fas fa-bolt text-[8px]"></i> Boosted
-                            </span>
-                            @endif
-                        </div>
-
-                        <div class="flex items-center gap-2.5 flex-wrap text-[11px] text-slate-400 font-medium">
-                            <span class="flex items-center gap-1">
-                                <i class="fas fa-map-marker-alt text-[9px] text-slate-300"></i> {{ $cityName }}
-                            </span>
-                            <span class="text-slate-200">·</span>
-                            <span class="flex items-center gap-1">
-                                <i class="fas fa-calendar text-[9px] text-slate-300"></i> {{ $property->created_at->format('M d, Y') }}
-                            </span>
-                            <span class="text-slate-200">·</span>
-                            <span class="text-slate-300">#{{ $property->id }}</span>
-                            <span class="text-slate-200">·</span>
-                            @if($property->owner)
-                                <span>{{ $ownerName }}</span>
-                                <span class="px-1.5 py-0.5 bg-slate-100 rounded text-slate-400 text-[10px]">{{ class_basename($property->owner_type) }}</span>
-                            @else
-                                <span class="text-rose-400">Deleted user</span>
-                            @endif
-                        </div>
-                    </div>
-
-                    {{-- Right: tags + price + stats + actions --}}
-                    <div class="flex items-center gap-2.5 shrink-0 flex-wrap justify-end">
-
-                        {{-- Type badges --}}
-                        <div class="flex items-center gap-1">
-                            <span class="px-2 py-1 bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-600 uppercase tracking-wide">{{ $property->listing_type }}</span>
-                            <span class="px-2 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[10px] text-slate-400">{{ ucfirst($typeCategory) }}</span>
-                        </div>
-
-                        {{-- Status badge --}}
-                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border {{ $statusConfig[0] }} uppercase tracking-wide shrink-0">
-                            <i class="fas {{ $statusConfig[1] }} text-[8px]"></i> {{ ucfirst($property->status) }}
-                        </span>
-
-                        {{-- Price --}}
-                        <div class="text-right min-w-[80px]">
-                            <p class="text-sm font-black text-slate-900 leading-none">${{ number_format((float)$priceVal) }}</p>
-                            <p class="text-[10px] text-slate-400 font-medium mt-0.5">USD</p>
-                        </div>
-
-                        {{-- Stats --}}
-                        <div class="flex items-center gap-1.5">
-                            <div class="flex items-center gap-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg" title="Total hits">
-                                <i class="fas fa-eye text-slate-400 text-[9px]"></i>
-                                <span class="text-[11px] font-bold text-slate-600">{{ number_format($property->views ?? 0) }}</span>
-                            </div>
-                            @if($uniqueViewers > 0)
-                            <div class="flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-100 rounded-lg" title="Authenticated viewers">
-                                <i class="fas fa-user-check text-emerald-500 text-[9px]"></i>
-                                <span class="text-[11px] font-bold text-emerald-600">{{ $uniqueViewers }}</span>
-                            </div>
-                            @endif
-                        </div>
-
-                        {{-- Actions --}}
-                        <div class="flex items-center gap-1 pl-2.5 border-l border-slate-200">
-                            <a href="{{ route('admin.properties.show', $property->id) }}"
-                               class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 transition" title="View">
-                                <i class="fas fa-eye text-[11px]"></i>
-                            </a>
-                            <a href="{{ route('admin.properties.edit', $property->id) }}"
-                               class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition" title="Edit">
-                                <i class="fas fa-pen text-[11px]"></i>
-                            </a>
-                            @if($property->status === 'pending')
-                            <form action="{{ route('admin.properties.approve', $property->id) }}" method="POST" class="inline">
-                                @csrf
-                                <button type="submit" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition" title="Approve">
-                                    <i class="fas fa-check text-[11px]"></i>
-                                </button>
-                            </form>
-                            @endif
-                            <form action="{{ route('admin.properties.delete', $property->id) }}" method="POST"
-                                  onsubmit="return confirm('Delete permanently?')" class="inline">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition" title="Delete">
-                                    <i class="fas fa-trash-alt text-[11px]"></i>
-                                </button>
-                            </form>
-                        </div>
-
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        @empty
-        <div class="bg-white border border-slate-200 rounded-2xl py-24 text-center">
-            <div class="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center mx-auto mb-4 text-slate-300">
-                <i class="fas fa-search text-2xl"></i>
-            </div>
-            <h3 class="text-slate-900 font-bold text-sm mb-1">No properties found</h3>
-            <p class="text-slate-400 text-xs mb-5">No listings match your current filters.</p>
-            <a href="{{ route('admin.properties.index') }}"
-               class="inline-flex items-center gap-2 px-4 py-2 bg-violet-50 border border-violet-200 text-violet-600 rounded-xl text-xs font-bold hover:bg-violet-100 transition">
-                <i class="fas fa-times text-[10px]"></i> Clear filters
+        @foreach($statusPills as [$key, $label, $icon])
+            <a href="{{ route('admin.properties.index', array_merge($q, ['status' => $key])) }}"
+               class="pill {{ request('status') === $key ? ($key === 'rejected' ? 'on-alert' : 'on') : '' }}">
+                <i class="fas {{ $icon }} text-[10px]"></i> {{ $label }}
             </a>
+        @endforeach
+    </div>
+
+    <div class="pill-row mb-5">
+        <a href="{{ route('admin.properties.index', array_merge($q, ['listing_type' => 'sale'])) }}"
+           class="pill {{ request('listing_type') === 'sale' ? 'on' : '' }}"><i class="fas fa-tag text-[10px]"></i> For sale</a>
+        <a href="{{ route('admin.properties.index', array_merge($q, ['listing_type' => 'rent'])) }}"
+           class="pill {{ request('listing_type') === 'rent' ? 'on' : '' }}"><i class="fas fa-key text-[10px]"></i> For rent</a>
+        <a href="{{ route('admin.properties.index', array_merge($q, ['owner_type' => 'Agent'])) }}"
+           class="pill {{ request('owner_type') === 'Agent' ? 'on' : '' }}"><i class="fas fa-user-tie text-[10px]"></i> By agents</a>
+        <a href="{{ route('admin.properties.index', array_merge($q, ['owner_type' => 'RealEstateOffice'])) }}"
+           class="pill {{ request('owner_type') === 'RealEstateOffice' ? 'on' : '' }}"><i class="fas fa-building text-[10px]"></i> By offices</a>
+
+        <span class="w-px bg-slate-200 mx-1 shrink-0"></span>
+
+        @php
+            $sorts = [
+                ['newest', 'Newest', 'fa-arrow-down-wide-short'],
+                ['oldest', 'Oldest', 'fa-arrow-up-wide-short'],
+                ['price_high', 'Price high', 'fa-dollar-sign'],
+                ['views', 'Most viewed', 'fa-eye'],
+            ];
+        @endphp
+        @foreach($sorts as [$key, $label, $icon])
+            <a href="{{ route('admin.properties.index', array_merge($q, ['sort' => $key])) }}"
+               class="pill {{ request('sort') === $key ? 'on' : '' }}"><i class="fas {{ $icon }} text-[10px]"></i> {{ $label }}</a>
+        @endforeach
+
+        @if($hasFilters)
+            <a href="{{ route('admin.properties.index') }}" class="pill" style="background:#fef2f2;color:#b91c1c;border-color:#fecdd3"><i class="fas fa-xmark text-[10px]"></i> Clear</a>
+        @endif
+    </div>
+
+    {{-- ══════════ DESKTOP TABLE ══════════ --}}
+    <div class="card overflow-hidden hidden md:block" id="propsAnchor">
+        <div class="overflow-x-auto">
+            <table class="tbl" id="propsTable">
+                <thead>
+                    <tr>
+                        <th>Listing</th>
+                        <th>Owner</th>
+                        <th class="text-center">Type</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-center">Views</th>
+                        <th class="w-40 text-right" data-noexport>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($properties as $property)
+                        @php
+                            $p = $read($property);
+                            [$badge, $icon] = $tone($property->status);
+                            $isNew   = $property->created_at && $property->created_at->gt(now()->subDays(7));
+                            $uniques = $property->unique_viewers_count ?? 0;
+                        @endphp
+                        <tr>
+                            <td>
+                                <div class="flex items-center gap-3">
+                                    <div class="relative shrink-0">
+                                        @if($p['image'])
+                                            <img src="{{ asset($p['image']) }}" class="avatar !w-14 !h-12 !rounded-xl" loading="lazy" alt="">
+                                        @else
+                                            <div class="avatar !w-14 !h-12 !rounded-xl grid place-items-center text-slate-300"><i class="fas fa-image"></i></div>
+                                        @endif
+                                        @if($property->is_boosted)
+                                            <span class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-500 grid place-items-center border-2 border-white" title="Boosted">
+                                                <i class="fas fa-bolt text-white text-[8px]"></i>
+                                            </span>
+                                        @endif
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <a href="{{ $link('admin.properties.show', $property->id) ?? '#' }}" class="text-[13px] font-bold text-slate-900 hover:text-[#303b97] truncate max-w-[230px]">
+                                                {{ $p['title'] }}
+                                            </a>
+                                            @if($isNew)
+                                                <span class="badge b-ok !text-[9px] shrink-0">NEW</span>
+                                            @endif
+                                        </div>
+                                        <p class="text-[10.5px] font-bold text-slate-400 uppercase mt-0.5 truncate">
+                                            <i class="fas fa-location-dot text-slate-300 mr-1"></i>{{ $p['city'] }}
+                                            <span class="mx-1 text-slate-200">·</span>{{ optional($property->created_at)->format('d M Y') }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td>
+                                @if($property->owner)
+                                    <p class="text-[12px] font-bold text-slate-700 truncate max-w-[150px]">{{ $p['owner'] }}</p>
+                                    <p class="text-[10px] font-black text-slate-400 uppercase mt-0.5">{{ $p['role'] }}</p>
+                                @else
+                                    <span class="badge b-bad">Owner removed</span>
+                                @endif
+                            </td>
+
+                            <td class="text-center">
+                                <span class="badge b-mute">{{ strtoupper($property->listing_type === 'sell' ? 'SALE' : $property->listing_type) }}</span>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase mt-1">{{ $p['kind'] }}</p>
+                            </td>
+
+                            <td class="text-center">
+                                <span class="badge {{ $badge }}"><i class="fas {{ $icon }} text-[8px]"></i> {{ ucfirst($property->status) }}</span>
+                            </td>
+
+                            <td class="text-right">
+                                <p class="text-[14px] font-black text-slate-900 num">${{ number_format($p['price']) }}</p>
+                                @if($p['iqd'] > 0)
+                                    <p class="text-[10.5px] font-bold text-slate-400 num">{{ number_format($p['iqd']) }} IQD</p>
+                                @endif
+                            </td>
+
+                            <td class="text-center">
+                                <p class="text-[13px] font-black text-slate-900 num">{{ number_format($property->views ?? 0) }}</p>
+                                @if($uniques > 0)
+                                    <p class="text-[10px] font-black text-emerald-600">{{ $uniques }} people</p>
+                                @else
+                                    <p class="text-[10px] font-bold text-slate-300 uppercase">hits</p>
+                                @endif
+                            </td>
+
+                            <td data-noexport>
+                                <div class="flex items-center justify-end gap-1.5">
+                                    @if($property->status === 'pending' && $link('admin.properties.approve', $property->id))
+                                        <form method="POST" action="{{ $link('admin.properties.approve', $property->id) }}" class="inline">
+                                            @csrf
+                                            <button class="iact good" title="Approve"><i class="fas fa-check"></i></button>
+                                        </form>
+                                    @endif
+                                    @if($property->status === 'pending' && $link('admin.properties.reject', $property->id))
+                                        <form method="POST" action="{{ $link('admin.properties.reject', $property->id) }}" class="inline" onsubmit="return confirm('Reject this listing?')">
+                                            @csrf
+                                            <button class="iact danger" title="Reject"><i class="fas fa-xmark"></i></button>
+                                        </form>
+                                    @endif
+                                    @if($link('admin.properties.show', $property->id))
+                                        <a href="{{ $link('admin.properties.show', $property->id) }}" class="iact" title="View"><i class="fas fa-eye"></i></a>
+                                    @endif
+                                    @if($link('admin.properties.edit', $property->id))
+                                        <a href="{{ $link('admin.properties.edit', $property->id) }}" class="iact" title="Edit"><i class="fas fa-pen"></i></a>
+                                    @endif
+                                    @if($link('admin.properties.delete', $property->id))
+                                        <form method="POST" action="{{ $link('admin.properties.delete', $property->id) }}" class="inline" onsubmit="return confirm('Delete this listing permanently?')">
+                                            @csrf @method('DELETE')
+                                            <button class="iact danger" title="Delete"><i class="fas fa-trash"></i></button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state">
+                                    <i class="fas fa-house-circle-xmark"></i>
+                                    <h3>No listings match this view</h3>
+                                    <p>Try a different search or clear the filters.</p>
+                                    <a href="{{ route('admin.properties.index') }}" class="btn-ghost inline-flex"><i class="fas fa-rotate-left"></i> Clear filters</a>
+                                </div>
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
+
+        @if($properties->hasPages())
+            <div class="pager">{{ $properties->withQueryString()->links() }}</div>
+        @endif
+    </div>
+
+    {{-- ══════════ MOBILE CARDS ══════════ --}}
+    <div class="md:hidden">
+        @forelse($properties as $property)
+            @php
+                $p = $read($property);
+                [$badge, $icon] = $tone($property->status);
+                $uniques = $property->unique_viewers_count ?? 0;
+            @endphp
+            <div class="mcard">
+                @if($property->status === 'pending')
+                    <div class="mcard-strip" style="background:#fffbeb;color:#b45309">
+                        <span><i class="fas fa-clock mr-1"></i> Waiting for approval</span>
+                        @if($link('admin.properties.approve', $property->id))
+                            <form method="POST" action="{{ $link('admin.properties.approve', $property->id) }}">
+                                @csrf
+                                <button class="underline underline-offset-2">APPROVE</button>
+                            </form>
+                        @endif
+                    </div>
+                @endif
+
+                <div class="relative">
+                    @if($p['image'])
+                        <img src="{{ asset($p['image']) }}" class="w-full h-40 object-cover" loading="lazy" alt="">
+                    @else
+                        <div class="w-full h-40 bg-slate-100 grid place-items-center text-slate-300"><i class="fas fa-image text-2xl"></i></div>
+                    @endif
+
+                    <div class="absolute top-3 left-3 flex gap-1.5">
+                        <span class="badge {{ $badge }} shadow-sm"><i class="fas {{ $icon }} text-[8px]"></i> {{ ucfirst($property->status) }}</span>
+                        @if($property->is_boosted)
+                            <span class="badge shadow-sm" style="background:#f59e0b;color:#fff"><i class="fas fa-bolt text-[8px]"></i> Boosted</span>
+                        @endif
+                    </div>
+
+                    <div class="absolute bottom-0 left-0 right-0 px-4 py-3" style="background:linear-gradient(transparent,rgba(15,19,40,.86))">
+                        <p class="text-white text-[17px] font-black num leading-none">${{ number_format($p['price']) }}</p>
+                        @if($p['iqd'] > 0)
+                            <p class="text-white/60 text-[10.5px] font-bold num mt-0.5">{{ number_format($p['iqd']) }} IQD</p>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="mcard-body">
+                    <a href="{{ $link('admin.properties.show', $property->id) ?? '#' }}" class="block text-[14px] font-black text-slate-900 truncate">{{ $p['title'] }}</a>
+                    <p class="text-[10.5px] font-bold text-slate-400 uppercase mt-1 mb-3 truncate">
+                        <i class="fas fa-location-dot text-slate-300 mr-1"></i>{{ $p['city'] }}
+                        <span class="mx-1.5 text-slate-200">·</span>{{ $property->listing_type === 'sell' ? 'sale' : $property->listing_type }}
+                        <span class="mx-1.5 text-slate-200">·</span>{{ $p['owner'] }}
+                    </p>
+
+                    <div class="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-2.5 mb-3">
+                        <i class="fas fa-eye text-[11px] text-slate-400"></i>
+                        <p class="text-[11.5px] font-bold text-slate-600">
+                            {{ number_format($property->views ?? 0) }} views
+                            @if($uniques > 0)<span class="text-emerald-600"> · {{ $uniques }} signed-in people</span>@endif
+                        </p>
+                        <span class="ml-auto text-[10.5px] font-bold text-slate-400">{{ optional($property->created_at)->format('d M') }}</span>
+                    </div>
+
+                    <div class="mgrid" style="grid-template-columns:repeat(3,1fr)">
+                        <a href="{{ $link('admin.properties.show', $property->id) ?? '#' }}" class="mbtn mbtn-p"><i class="fas fa-eye text-[10px]"></i> View</a>
+                        <a href="{{ $link('admin.properties.edit', $property->id) ?? '#' }}" class="mbtn mbtn-s"><i class="fas fa-pen text-[10px]"></i> Edit</a>
+                        @if($link('admin.properties.delete', $property->id))
+                            <form method="POST" action="{{ $link('admin.properties.delete', $property->id) }}" onsubmit="return confirm('Delete this listing?')">
+                                @csrf @method('DELETE')
+                                <button class="mbtn mbtn-d"><i class="fas fa-trash text-[10px]"></i> Delete</button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        @empty
+            <div class="card empty-state">
+                <i class="fas fa-house-circle-xmark"></i>
+                <h3>No listings match this view</h3>
+                <p>Try a different search or clear the filters.</p>
+                <a href="{{ route('admin.properties.index') }}" class="btn-ghost inline-flex"><i class="fas fa-rotate-left"></i> Clear filters</a>
+            </div>
         @endforelse
 
+        @if($properties->hasPages())
+            <div class="pt-2">{{ $properties->withQueryString()->links() }}</div>
+        @endif
     </div>
-
-    {{-- PAGINATION --}}
-    @if($properties->hasPages())
-    <div id="pagination-wrapper" class="mt-6 flex items-center justify-center gap-1.5 flex-wrap">
-
-        {{-- Prev --}}
-        @if($properties->onFirstPage())
-            <span class="px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-300 text-xs cursor-not-allowed select-none">
-                <i class="fas fa-chevron-left text-[10px]"></i>
-            </span>
-        @else
-            <a href="{{ $properties->previousPageUrl() }}" class="pagination-link px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-500 text-xs font-bold hover:text-slate-900 hover:border-slate-300 hover:shadow-sm transition">
-                <i class="fas fa-chevron-left text-[10px]"></i>
-            </a>
-        @endif
-
-        @php
-            $current = $properties->currentPage();
-            $last    = $properties->lastPage();
-            $window  = 2;
-            $pages   = collect();
-            for ($i = max(1, $current - $window); $i <= min($last, $current + $window); $i++) {
-                $pages->push($i);
-            }
-        @endphp
-
-        @if(!$pages->contains(1))
-            <a href="{{ $properties->url(1) }}" class="pagination-link w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 text-xs font-bold hover:text-slate-900 hover:border-slate-300 hover:shadow-sm transition">1</a>
-        @endif
-        @if($pages->first() > 2)
-            <span class="w-6 text-center text-slate-300 text-xs">…</span>
-        @endif
-
-        @foreach($pages as $page)
-            @if($page === $current)
-                <span class="w-9 h-9 flex items-center justify-center rounded-xl bg-violet-600 text-white text-xs font-black shadow-sm">{{ $page }}</span>
-            @else
-                <a href="{{ $properties->url($page) }}" class="pagination-link w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 text-xs font-bold hover:text-slate-900 hover:border-slate-300 hover:shadow-sm transition">{{ $page }}</a>
-            @endif
-        @endforeach
-
-        @if($pages->last() < $last - 1)
-            <span class="w-6 text-center text-slate-300 text-xs">…</span>
-        @endif
-        @if(!$pages->contains($last))
-            <a href="{{ $properties->url($last) }}" class="pagination-link w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 text-xs font-bold hover:text-slate-900 hover:border-slate-300 hover:shadow-sm transition">{{ $last }}</a>
-        @endif
-
-        {{-- Next --}}
-        @if($properties->hasMorePages())
-            <a href="{{ $properties->nextPageUrl() }}" class="pagination-link px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-500 text-xs font-bold hover:text-slate-900 hover:border-slate-300 hover:shadow-sm transition">
-                <i class="fas fa-chevron-right text-[10px]"></i>
-            </a>
-        @else
-            <span class="px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-300 text-xs cursor-not-allowed select-none">
-                <i class="fas fa-chevron-right text-[10px]"></i>
-            </span>
-        @endif
-
-    </div>
-    @endif
-
-</div>
 </div>
 
-<style>
-    .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-</style>
-
+@push('scripts')
 <script>
+/* Keep the reading position when paging or filtering */
 document.addEventListener('DOMContentLoaded', function () {
-    var SCROLL_KEY = 'dm_props_scroll';
-    var table = document.getElementById('properties-table');
+    const KEY = 'dm_props_scroll';
+    const anchor = document.getElementById('propsAnchor');
 
-    if (sessionStorage.getItem(SCROLL_KEY) && table) {
-        setTimeout(function () {
-            table.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 80);
-        sessionStorage.removeItem(SCROLL_KEY);
+    if (sessionStorage.getItem(KEY) && anchor) {
+        setTimeout(function () { anchor.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
+        sessionStorage.removeItem(KEY);
     }
 
-    function flagAndGo(url) {
-        sessionStorage.setItem(SCROLL_KEY, '1');
-        window.location.href = url;
-    }
-
-    document.querySelectorAll('.pagination-link').forEach(function (link) {
-        link.addEventListener('click', function (e) {
-            e.preventDefault();
-            flagAndGo(this.href);
-        });
+    document.querySelectorAll('.pill, .pagination a, .pager a').forEach(function (el) {
+        el.addEventListener('click', function () { sessionStorage.setItem(KEY, '1'); });
     });
 
-    ['filter-status', 'filter-type', 'filter-owner'].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) el.addEventListener('change', function () { flagAndGo(this.value); });
-    });
-
-    var sf = document.getElementById('search-form');
-    if (sf) sf.addEventListener('submit', function () { sessionStorage.setItem(SCROLL_KEY, '1'); });
+    const form = document.getElementById('searchForm');
+    if (form) form.addEventListener('submit', function () { sessionStorage.setItem(KEY, '1'); });
 });
 </script>
+@endpush
 
 @endsection
