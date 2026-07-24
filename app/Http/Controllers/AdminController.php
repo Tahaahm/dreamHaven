@@ -453,16 +453,31 @@ class AdminController extends Controller
         // ── 9. ENGAGEMENT EXTRAS ──────────────────────────────────────────────
         $activityTable = $this->activityTable();
 
-        $topViewed = $mark('viewed', fn() => $this->safely(function () use ($activityTable, $now) {
+        $topViewed = $mark('viewed', fn() => Cache::remember('admin.dashboard.topviewed', 3600, function () use ($activityTable, $now) {
             if (!$activityTable || !Schema::hasColumn($activityTable, 'property_id')) {
                 return [];
             }
 
-            $rows = DB::table($activityTable)
-                ->where('created_at', '>=', $now->copy()->subDays(30))
-                ->whereNotNull('property_id')
+            $query = DB::table($activityTable)
+                ->where('created_at', '>=', $now->copy()->subDays(7))
+                ->whereNotNull('property_id');
+
+            // Impressions are 50x the volume and only mean "shown in a list".
+            // Count real page opens instead.
+            if (Schema::hasColumn($activityTable, 'interaction_type')) {
+                $query->where('interaction_type', 'view');
+            }
+
+            $rows = $query
                 ->select('property_id', DB::raw('COUNT(*) as hits'), DB::raw('COUNT(DISTINCT user_id) as people'))
-                ->groupBy('property_id')->orderByDesc('hits')->limit(6)->get();
+                ->groupBy('property_id')
+                ->orderByDesc('hits')
+                ->limit(6)
+                ->get();
+
+            if ($rows->isEmpty()) {
+                return [];
+            }
 
             $props = Property::whereIn('id', $rows->pluck('property_id'))->get()->keyBy('id');
 
@@ -477,19 +492,26 @@ class AdminController extends Controller
                     'people' => (int) $r->people,
                 ];
             })->toArray();
-        }, []));
+        }));
 
-        $winBack = $mark('winback', fn() => $this->safely(function () use ($activityTable, $now) {
+        // ── Win-back: bound the scan to 180 days (was scanning the whole table)
+        $winBack = $mark('winback', fn() => Cache::remember('admin.dashboard.winback', 1800, function () use ($activityTable, $now) {
             if (!$activityTable) {
                 return [];
             }
 
             $rows = DB::table($activityTable)
                 ->whereNotNull('user_id')
+                ->where('created_at', '>=', $now->copy()->subDays(180))
                 ->select('user_id', DB::raw('MAX(created_at) as last_at'), DB::raw('COUNT(*) as hits'))
                 ->groupBy('user_id')
                 ->havingRaw('MAX(created_at) < ?', [$now->copy()->subDays(30)])
-                ->orderByDesc('last_at')->limit(6)->get();
+                ->orderByDesc('last_at')
+                ->limit(6)->get();
+
+            if ($rows->isEmpty()) {
+                return [];
+            }
 
             $users = User::whereIn('id', $rows->pluck('user_id'))->get()->keyBy('id');
 
@@ -504,7 +526,7 @@ class AdminController extends Controller
                     'gone'  => Carbon::parse($r->last_at)->diffForHumans(null, true),
                 ];
             })->filter(fn($r) => !empty($r['name']))->values()->toArray();
-        }, []));
+        }));
 
         // ── 10. TODAY'S VIEWINGS ──────────────────────────────────────────────
         $todayAppointments = $mark('appointments', fn() => $this->countIfTable('appointments', function () use ($today) {
