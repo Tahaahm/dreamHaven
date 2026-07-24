@@ -162,7 +162,7 @@
   <h1 class="dm-page-title">Offices</h1>
   <p class="dm-page-sub">
     {{ $stats['total'] ?? 0 }} registered agencies
-    @if(($stats['pending'] ?? 0) > 0) · {{ $stats['pending'] }} pending@endif
+    @if(($stats['pending'] ?? 0) > 0) · {{ $stats['pending'] }} pending @endif
     @if(($stats['expiring_soon'] ?? 0) > 0) · <span style="color:#b91c1c">{{ $stats['expiring_soon'] }} expiring soon</span>@endif
     · week of {{ $briefing['week_label'] ?? '' }}
   </p>
@@ -351,13 +351,13 @@
                   @endif
                 </svg>
                 <div class="dm-ring-label" style="color:{{ $office->dm_label_color }}">
-                  @if($office->dm_expired)✕@elseif($office->dm_days !== null){{ $office->dm_days }}d@else—@endif
+                  @if($office->dm_expired)✕@elseif($office->dm_days !== null){{ $office->dm_days }}d @else—@endif
                 </div>
               </div>
               <div>
                 <div class="dm-sub-plan">{{ $office->current_plan ?? 'Free' }}</div>
                 <div class="dm-sub-date {{ $office->dm_date_class }}">
-                  @if($office->dm_end_date){{ $office->dm_expired ? 'Ended' : 'Ends' }} {{ $office->dm_end_date }}@else No subscription@endif
+                  @if($office->dm_end_date){{ $office->dm_expired ? 'Ended' : 'Ends' }} {{ $office->dm_end_date }}@else No subscription @endif
                 </div>
               </div>
             </div>
@@ -456,13 +456,13 @@
               @endif
             </svg>
             <div class="dm-ring-label" style="color:{{ $office->dm_label_color }}">
-              @if($office->dm_expired)✕@elseif($office->dm_days !== null){{ $office->dm_days }}d@else—@endif
+              @if($office->dm_expired)✕@elseif($office->dm_days !== null){{ $office->dm_days }}d @else—@endif
             </div>
           </div>
           <div>
             <div class="dm-sub-plan">{{ $office->current_plan ?? 'Free' }}</div>
             <div class="dm-sub-date {{ $office->dm_date_class }}" style="font-size:12px">
-              @if($office->dm_end_date){{ $office->dm_expired ? 'Ended' : 'Ends' }} {{ $office->dm_end_date }}@else No subscription@endif
+              @if($office->dm_end_date){{ $office->dm_expired ? 'Ended' : 'Ends' }} {{ $office->dm_end_date }}@else No subscription @endif
             </div>
           </div>
         </div>
