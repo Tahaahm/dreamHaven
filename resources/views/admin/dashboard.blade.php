@@ -192,6 +192,7 @@
     <div class="jump lg:hidden mb-4">
         <a href="#sec-tasks">Tasks</a>
         <a href="#sec-growth">Growth</a>
+        <a href="#sec-visitors">Visitors</a>
         <a href="#sec-retention">Returning</a>
         <a href="#sec-queue">Approvals</a>
         <a href="#sec-renewals">Renewals</a>
@@ -317,7 +318,170 @@
     </div>
 
     {{-- ══════════════════════════════════════════════════════════════
-         4. RETENTION — HOW MANY PEOPLE COME BACK
+         4. VISITORS — everyone, including people who never sign in
+    ═══════════════════════════════════════════════════════════════ --}}
+    <div id="sec-visitors" class="card mb-4 md:mb-6 overflow-hidden scroll-mt-24">
+        <div class="card-hd">
+            <div>
+                <p class="eyebrow mb-1">Traffic</p>
+                <h3 class="card-ttl">Visitors and guests</h3>
+            </div>
+            @if(($visitors['available'] ?? false) && $visitors['live'] > 0)
+                <span class="inline-flex items-center gap-1.5 text-[10.5px] font-black px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700">
+                    <span class="flex h-2 w-2 relative">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    {{ $visitors['live'] }} online now
+                </span>
+            @endif
+        </div>
+
+        @if(!($visitors['available'] ?? false))
+            <div class="empty">
+                <i class="fas fa-chart-line"></i>
+                Visitor tracking isn't switched on yet.<br>
+                <span class="text-[11.5px]">Run the visits migration and register the TrackVisitor middleware.</span>
+            </div>
+        @else
+            <div class="p-4 md:p-6">
+
+                {{-- ── Headline row ─────────────────────────────────── --}}
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 md:gap-7 mb-6">
+
+                    <div>
+                        <div class="flex items-end gap-3 mb-1">
+                            <p class="text-[42px] md:text-[54px] font-black text-slate-900 num leading-none">
+                                {{ number_format($visitors['today']) }}
+                            </p>
+                            <span class="chip mb-2 {{ $visitors['change'] > 0 ? 'chip-up' : ($visitors['change'] < 0 ? 'chip-down' : 'chip-flat') }}">
+                                <i class="fas {{ $visitors['change'] > 0 ? 'fa-arrow-trend-up' : ($visitors['change'] < 0 ? 'fa-arrow-trend-down' : 'fa-minus') }} text-[9px]"></i>
+                                {{ $visitors['change'] > 0 ? '+' : '' }}{{ $visitors['change'] }}%
+                            </span>
+                        </div>
+                        <p class="eyebrow mb-4">people here today</p>
+
+                        {{-- New vs returning today — the headline for guest loyalty --}}
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="rounded-2xl p-4 text-white" style="background:linear-gradient(140deg,#303b97,#4b56b2)">
+                                <p class="text-[26px] font-black num leading-none mb-1">{{ number_format($visitors['returning_today']) }}</p>
+                                <p class="text-[10.5px] font-black uppercase tracking-wide text-white/70">Came back</p>
+                                <p class="text-[10.5px] font-bold text-white/50 mt-1">{{ $visitors['return_rate'] }}% of today</p>
+                            </div>
+                            <div class="rounded-2xl p-4 border border-slate-200">
+                                <p class="text-[26px] font-black num leading-none mb-1 text-slate-900">{{ number_format($visitors['new_today']) }}</p>
+                                <p class="text-[10.5px] font-black uppercase tracking-wide text-slate-400">First time</p>
+                                <p class="text-[10.5px] font-bold text-slate-400 mt-1">brand new today</p>
+                            </div>
+                        </div>
+
+                        <p class="text-[12px] text-slate-500 font-semibold leading-relaxed mt-4">
+                            <b class="text-slate-900 num">{{ number_format($visitors['yesterday']) }}</b> yesterday ·
+                            <b class="text-slate-900 num">{{ number_format($visitors['sessions']) }}</b> sessions ·
+                            <b class="text-slate-900 num">{{ number_format($visitors['month_unique']) }}</b> this month
+                        </p>
+                    </div>
+
+                    {{-- Returning vs first-time, 14 days --}}
+                    <div class="lg:col-span-2">
+                        <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+                            <h4 class="text-[13px] font-extrabold text-slate-900">Returning vs first-time visitors</h4>
+                            <div class="flex items-center gap-3 text-[10.5px] font-bold text-slate-500">
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#303b97"></span> Returning</span>
+                                <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#c7cbe8"></span> First time</span>
+                            </div>
+                        </div>
+                        <div id="visitorChart"></div>
+                    </div>
+                </div>
+
+                {{-- ── Loyalty tiles ────────────────────────────────── --}}
+                <div class="pt-5 border-t border-slate-100">
+                    <h4 class="text-[13px] font-extrabold text-slate-900 mb-3">How loyal are they? <span class="font-bold text-slate-400">Last 30 days</span></h4>
+
+                    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                        @php
+                            $loyalty = [
+                                ['Came back',      number_format($visitors['repeat_30']),  'visited on 2+ days',  'fa-rotate-right'],
+                                ['Regulars',       number_format($visitors['loyal_30']),   'visited on 4+ days',  'fa-heart'],
+                                ['Guests who returned', number_format($visitors['guest_repeat_30']), 'never signed in', 'fa-user-secret'],
+                                ['Visits each',    $visitors['avg_days'],                  'days per person',     'fa-calendar-check'],
+                                ['Made an account',$visitors['converted_30'] . '%',        'of visitors',         'fa-user-plus'],
+                                ['One and done',   $visitors['bounce_share'] . '%',        'came once only',      'fa-door-open'],
+                            ];
+                        @endphp
+                        @foreach($loyalty as [$label, $value, $sub, $icon])
+                            <div class="border border-slate-200 rounded-2xl p-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="eyebrow truncate">{{ $label }}</span>
+                                    <i class="fas {{ $icon }} text-[11px]" style="color:#303b97"></i>
+                                </div>
+                                <p class="text-[24px] font-black text-slate-900 num leading-none mb-1">{{ $value }}</p>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">{{ $sub }}</p>
+                            </div>
+                        @endforeach
+                    </div>
+                </div>
+
+                {{-- ── Signed in vs guests + device split ───────────── --}}
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 md:gap-7 mt-5 pt-5 border-t border-slate-100">
+                    <div>
+                        <div class="flex items-center justify-between mb-2 flex-wrap gap-1">
+                            <h4 class="text-[13px] font-extrabold text-slate-900">Signed in vs guests today</h4>
+                            <span class="text-[11px] font-black" style="color:#303b97">{{ $visitors['guest_share'] }}% never sign in</span>
+                        </div>
+                        @php $signedShare = 100 - $visitors['guest_share']; @endphp
+                        <div class="flex h-3 rounded-full overflow-hidden bg-slate-100 mb-2.5">
+                            <div style="width:{{ $signedShare }}%;background:#303b97"></div>
+                            <div style="width:{{ $visitors['guest_share'] }}%;background:#c7cbe8"></div>
+                        </div>
+                        <div class="flex items-center gap-4 text-[11px] font-bold text-slate-500 flex-wrap">
+                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#303b97"></span> {{ number_format($visitors['signed_in']) }} signed in</span>
+                            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background:#c7cbe8"></span> {{ number_format($visitors['guests']) }} guests</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h4 class="text-[13px] font-extrabold text-slate-900 mb-2">Where they come from</h4>
+                        @php
+                            $totalDevice = max($visitors['app'] + $visitors['web'], 1);
+                            $appShare    = (int) round(($visitors['app'] / $totalDevice) * 100);
+                        @endphp
+                        <div class="flex h-3 rounded-full overflow-hidden bg-slate-100 mb-2.5">
+                            <div style="width:{{ $appShare }}%;background:#8b5cf6"></div>
+                            <div style="width:{{ 100 - $appShare }}%;background:#e2e6f3"></div>
+                        </div>
+                        <div class="flex items-center gap-4 text-[11px] font-bold text-slate-500 flex-wrap">
+                            <span class="flex items-center gap-1.5"><i class="fas fa-mobile-screen" style="color:#8b5cf6"></i> {{ number_format($visitors['app']) }} in the app</span>
+                            <span class="flex items-center gap-1.5"><i class="fas fa-globe text-slate-400"></i> {{ number_format($visitors['web']) }} on the website</span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- ── Landing pages ────────────────────────────────── --}}
+                @if(count($visitors['top_pages']))
+                    <div class="mt-5 pt-5 border-t border-slate-100">
+                        <h4 class="text-[13px] font-extrabold text-slate-900 mb-3">Where guests land today</h4>
+                        @php $topHit = max(array_column($visitors['top_pages'], 'total')) ?: 1; @endphp
+                        <div class="space-y-2">
+                            @foreach($visitors['top_pages'] as $page)
+                                <div class="flex items-center gap-3">
+                                    <span class="text-[11.5px] font-bold text-slate-600 truncate w-32 md:w-64">/{{ ltrim($page['path'], '/') }}</span>
+                                    <div class="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
+                                        <div class="h-full rounded-full" style="width:{{ round(($page['total'] / $topHit) * 100) }}%;background:#303b97"></div>
+                                    </div>
+                                    <span class="text-[11.5px] font-black text-slate-900 num w-10 text-right">{{ number_format($page['total']) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+            </div>
+        @endif
+    </div>
+
+    {{-- ══════════════════════════════════════════════════════════════
+         5. RETENTION — how many people come back
     ═══════════════════════════════════════════════════════════════ --}}
     <div id="sec-retention" class="card mb-4 md:mb-6 overflow-hidden scroll-mt-24">
         <div class="card-hd">
@@ -1017,6 +1181,33 @@
 
     segment('#metricSeg', b => { metric = b.dataset.metric; });
     segment('#rangeSeg',  b => { range = parseInt(b.dataset.range, 10); });
+
+    /* ---------- Visitors: returning vs first-time ---------- */
+    const visitors = @json($visitors);
+    const visitorEl = document.querySelector('#visitorChart');
+
+    if (visitorEl && visitors.available) {
+        const days = mobile ? 7 : 14;
+        new ApexCharts(visitorEl, {
+            series: [
+                { name: 'Returning',  data: (visitors.series_returning || []).slice(-days) },
+                { name: 'First time', data: (visitors.series_new || []).slice(-days) }
+            ],
+            chart: { type: 'bar', stacked: true, height: mobile ? 210 : 262, fontFamily: 'inherit', toolbar: { show: false } },
+            colors: [BRAND, '#c7cbe8'],
+            plotOptions: { bar: { borderRadius: 5, columnWidth: '58%' } },
+            dataLabels: { enabled: false },
+            legend: { show: false },
+            xaxis: {
+                categories: (visitors.labels || []).slice(-days),
+                axisBorder: { show: false }, axisTicks: { show: false },
+                labels: { rotate: 0, hideOverlappingLabels: true, style: { colors: '#94a3b8', fontSize: '10px', fontWeight: 700 } }
+            },
+            yaxis: { labels: { style: { colors: '#94a3b8', fontSize: '10.5px', fontWeight: 700 } } },
+            grid: { borderColor: '#f1f2f7', strokeDashArray: 5 },
+            tooltip: { shared: true, intersect: false, y: { formatter: v => v + ' people' } }
+        }).render();
+    }
 
     /* ---------- Returning vs first-time ---------- */
     const returnEl = document.querySelector('#returnChart');

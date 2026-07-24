@@ -135,6 +135,7 @@ class AdminController extends Controller
             ->with('success', 'Admin account created successfully! You can now login.');
     }
 
+
     public function dashboard(Request $request)
     {
         $now        = Carbon::now();
@@ -147,14 +148,17 @@ class AdminController extends Controller
         // Manual refresh: /admin/dashboard?refresh=1
         if ($request->boolean('refresh')) {
             Cache::forget('admin.dashboard.charts');
+            Cache::forget('admin.dashboard.visitors');
             Cache::forget('admin.dashboard.retention');
             Cache::forget('admin.dashboard.cohorts');
             Cache::forget('admin.sidebar.badges');
+            Cache::forget('admin.users.stats');
+            Cache::forget('admin.tx.stats');
         }
 
-        // ---------------------------------------------------------------
-        // 1. SUBSCRIPTION REVENUE  (IQD)
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 1. SUBSCRIPTION REVENUE (IQD)
+        // ----------------------------------------------------------------------
         $agentSubIds  = $this->safely(fn() => Agent::pluck('subscription_id')->filter()->all(), []);
         $officeSubIds = $this->safely(fn() => RealEstateOffice::pluck('subscription_id')->filter()->all(), []);
 
@@ -174,9 +178,9 @@ class AdminController extends Controller
         $lastMonthRevenue = $this->safely(fn() => (float) Subscription::whereBetween('start_date', [$lastMonthS, $lastMonthE])->sum('monthly_amount'));
         $newSubsThisMonth = $this->safely(fn() => Subscription::where('start_date', '>=', $monthStart)->count());
 
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
         // 2. CORE COUNTS + MONTH-OVER-MONTH DELTAS
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
         $usersThisMonth = $this->safely(fn() => User::where('created_at', '>=', $monthStart)->count());
         $usersLastMonth = $this->safely(fn() => User::whereBetween('created_at', [$lastMonthS, $lastMonthE])->count());
         $propsThisMonth = $this->safely(fn() => Property::where('created_at', '>=', $monthStart)->count());
@@ -213,9 +217,9 @@ class AdminController extends Controller
             'properties' => $this->pctChange($propsThisMonth, $propsLastMonth),
         ];
 
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
         // 3. ACTION CENTER
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
         $pendingApprovals = [
             'properties'   => $this->safely(fn() => Property::where('status', 'pending')->count()),
             'agents'       => $this->safely(fn() => Agent::where('is_verified', false)->count()),
@@ -226,9 +230,9 @@ class AdminController extends Controller
             'providers'    => $this->safely(fn() => ServiceProvider::where('is_verified', false)->count()),
         ];
 
-        // ---------------------------------------------------------------
-        // 4. GROWTH SERIES (12 months) — cached 5 min
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 4. GROWTH SERIES (12 months) — cached 5 minutes
+        // ----------------------------------------------------------------------
         $charts = Cache::remember('admin.dashboard.charts', 300, function () use ($now) {
             $labels = $users = $properties = $revenue = [];
 
@@ -246,45 +250,221 @@ class AdminController extends Controller
 
         $monthlyData = $charts['users'];
 
-        // ═══════════════════════════════════════════════════════════════
-        // 5. RETENTION — HOW MANY PEOPLE COME BACK
-        // ═══════════════════════════════════════════════════════════════
+        // ======================================================================
+        // 5. VISITORS — everyone, including people who never sign in
+        // ======================================================================
+        $visitors = Cache::remember('admin.dashboard.visitors', 120, function () use ($now, $today) {
+            $empty = [
+                'available'        => false,
+                'today'            => 0,
+                'yesterday'        => 0,
+                'change'           => 0,
+                'returning_today'  => 0,
+                'new_today'        => 0,
+                'return_rate'      => 0,
+                'guests'           => 0,
+                'signed_in'        => 0,
+                'guest_share'      => 0,
+                'live'             => 0,
+                'app'              => 0,
+                'web'              => 0,
+                'sessions'         => 0,
+                'month_unique'     => 0,
+                'repeat_30'        => 0,
+                'loyal_30'         => 0,
+                'guest_repeat_30'  => 0,
+                'avg_days'         => 0,
+                'converted_30'     => 0,
+                'bounce_share'     => 0,
+                'labels'           => [],
+                'series'           => [],
+                'series_returning' => [],
+                'series_new'       => [],
+                'top_pages'        => [],
+            ];
+
+            if (!$this->tableExists('visits')) {
+                return $empty;
+            }
+
+            $todayStr = $today->toDateString();
+            $yStr     = $now->copy()->subDay()->toDateString();
+            $from30   = $now->copy()->subDays(29)->toDateString();
+            $from14   = $now->copy()->subDays(13)->toDateString();
+
+            // ── Today at a glance ────────────────────────────────────────────
+            $todayCount = (int) $this->safely(fn() => DB::table('visits')->where('visit_date', $todayStr)->count());
+            $yCount     = (int) $this->safely(fn() => DB::table('visits')->where('visit_date', $yStr)->count());
+
+            $guests = (int) $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', $todayStr)->whereNull('user_id')->count());
+
+            $live = (int) $this->safely(fn() => DB::table('visits')
+                ->where('last_seen_at', '>=', $now->copy()->subMinutes(15))->count());
+
+            $app = (int) $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', $todayStr)->where('source', 'app')->count());
+
+            $sessions = (int) $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', $todayStr)->sum('sessions'));
+
+            $monthUnique = (int) $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', '>=', $now->copy()->startOfMonth()->toDateString())
+                ->distinct()->count('visitor_hash'));
+
+            // ── Returning vs first-time, per day (single query) ──────────────
+            // A visitor counts as "returning" on a day if their very first
+            // visit happened on an earlier date.
+            $firstSeen = DB::table('visits')
+                ->select('visitor_hash', DB::raw('MIN(visit_date) as first_date'))
+                ->groupBy('visitor_hash');
+
+            $trend = collect($this->safely(fn() => DB::table('visits as v')
+                ->joinSub($firstSeen, 'f', 'f.visitor_hash', '=', 'v.visitor_hash')
+                ->where('v.visit_date', '>=', $from14)
+                ->groupBy('v.visit_date')
+                ->select(
+                    'v.visit_date',
+                    DB::raw('SUM(CASE WHEN f.first_date < v.visit_date THEN 1 ELSE 0 END) as back'),
+                    DB::raw('SUM(CASE WHEN f.first_date = v.visit_date THEN 1 ELSE 0 END) as fresh')
+                )
+                ->get()->keyBy('visit_date'), collect()));
+
+            $labels = $series = $seriesReturning = $seriesNew = [];
+
+            for ($i = 13; $i >= 0; $i--) {
+                $d   = $now->copy()->subDays($i);
+                $key = $d->toDateString();
+                $row = $trend->get($key);
+
+                $back  = (int) ($row->back  ?? 0);
+                $fresh = (int) ($row->fresh ?? 0);
+
+                $labels[]          = $d->format('d M');
+                $seriesReturning[] = $back;
+                $seriesNew[]       = $fresh;
+                $series[]          = $back + $fresh;
+            }
+
+            $todayRow      = $trend->get($todayStr);
+            $returningToday = (int) ($todayRow->back  ?? 0);
+            $newToday       = (int) ($todayRow->fresh ?? 0);
+
+            // ── Loyalty over the last 30 days ────────────────────────────────
+            $repeat30 = (int) $this->safely(fn() => DB::query()->fromSub(
+                DB::table('visits')->where('visit_date', '>=', $from30)
+                    ->select('visitor_hash')->groupBy('visitor_hash')
+                    ->havingRaw('COUNT(DISTINCT visit_date) >= 2'),
+                'r'
+            )->count());
+
+            $loyal30 = (int) $this->safely(fn() => DB::query()->fromSub(
+                DB::table('visits')->where('visit_date', '>=', $from30)
+                    ->select('visitor_hash')->groupBy('visitor_hash')
+                    ->havingRaw('COUNT(DISTINCT visit_date) >= 4'),
+                'r'
+            )->count());
+
+            // Guests who came back without ever signing in — your warmest leads
+            $guestRepeat30 = (int) $this->safely(fn() => DB::query()->fromSub(
+                DB::table('visits')->where('visit_date', '>=', $from30)
+                    ->select('visitor_hash')->groupBy('visitor_hash')
+                    ->havingRaw('COUNT(DISTINCT visit_date) >= 2 AND COUNT(user_id) = 0'),
+                'r'
+            )->count());
+
+            $unique30 = (int) $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', '>=', $from30)->distinct()->count('visitor_hash'));
+
+            $rows30 = (int) $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', '>=', $from30)->count());
+
+            $signedHashes30 = (int) $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', '>=', $from30)->whereNotNull('user_id')
+                ->distinct()->count('visitor_hash'));
+
+            // ── Landing pages today ──────────────────────────────────────────
+            $topPages = $this->safely(fn() => DB::table('visits')
+                ->where('visit_date', $todayStr)
+                ->whereNotNull('landing_path')
+                ->select('landing_path', DB::raw('COUNT(*) as total'))
+                ->groupBy('landing_path')
+                ->orderByDesc('total')
+                ->limit(5)->get()
+                ->map(fn($r) => [
+                    'path'  => $r->landing_path === '' ? '/' : $r->landing_path,
+                    'total' => (int) $r->total,
+                ])->toArray(), []);
+
+            return [
+                'available'        => true,
+                'today'            => $todayCount,
+                'yesterday'        => $yCount,
+                'change'           => $this->pctChange($todayCount, $yCount),
+                'returning_today'  => $returningToday,
+                'new_today'        => $newToday,
+                'return_rate'      => $todayCount > 0 ? (int) round(($returningToday / $todayCount) * 100) : 0,
+                'guests'           => $guests,
+                'signed_in'        => max($todayCount - $guests, 0),
+                'guest_share'      => $todayCount > 0 ? (int) round(($guests / $todayCount) * 100) : 0,
+                'live'             => $live,
+                'app'              => $app,
+                'web'              => max($todayCount - $app, 0),
+                'sessions'         => $sessions,
+                'month_unique'     => $monthUnique,
+                'repeat_30'        => $repeat30,
+                'loyal_30'         => $loyal30,
+                'guest_repeat_30'  => $guestRepeat30,
+                'avg_days'         => $unique30 > 0 ? round($rows30 / $unique30, 1) : 0,
+                'converted_30'     => $unique30 > 0 ? (int) round(($signedHashes30 / $unique30) * 100) : 0,
+                'bounce_share'     => $unique30 > 0 ? (int) round((($unique30 - $repeat30) / $unique30) * 100) : 0,
+                'labels'           => $labels,
+                'series'           => $series,
+                'series_returning' => $seriesReturning,
+                'series_new'       => $seriesNew,
+                'top_pages'        => $topPages,
+            ];
+        });
+
+        // ======================================================================
+        // 6. RETENTION — how many people come back
+        // ======================================================================
         $retention = Cache::remember('admin.dashboard.retention', 900, function () use ($now, $today, $monthStart) {
             $table = $this->activityTable();
 
             $empty = [
-                'available'      => false,
-                'source'         => null,
-                'dau'            => 0,
-                'wau'            => 0,
-                'mau'            => 0,
-                'returning'      => 0,
-                'new_active'     => 0,
-                'retention_rate' => 0,
-                'stickiness'     => 0,
+                'available'       => false,
+                'source'          => null,
+                'dau'             => 0,
+                'wau'             => 0,
+                'mau'             => 0,
+                'returning'       => 0,
+                'new_active'      => 0,
+                'retention_rate'  => 0,
+                'stickiness'      => 0,
                 'repeat_visitors' => 0,
-                'avg_sessions'   => 0,
-                'weeks'          => [],
-                'weekly_return'  => [],
-                'weekly_new'     => [],
-                'hourly'         => array_fill(0, 24, 0),
-                'peak_hour'      => null,
+                'avg_sessions'    => 0,
+                'weeks'           => [],
+                'weekly_return'   => [],
+                'weekly_new'      => [],
+                'hourly'          => array_fill(0, 24, 0),
+                'peak_hour'       => null,
             ];
 
             if (!$table) {
                 return $empty;
             }
 
-            $q = fn() => DB::table($table)->whereNotNull('user_id');
+            $base = fn() => DB::table($table)->whereNotNull('user_id');
 
-            $dau = $this->safely(fn() => $q()->whereDate('created_at', $today)->distinct()->count('user_id'));
-            $wau = $this->safely(fn() => $q()->where('created_at', '>=', $now->copy()->subDays(7))->distinct()->count('user_id'));
-            $mau = $this->safely(fn() => $q()->where('created_at', '>=', $now->copy()->subDays(30))->distinct()->count('user_id'));
+            $dau = (int) $this->safely(fn() => $base()->whereDate('created_at', $today)->distinct()->count('user_id'));
+            $wau = (int) $this->safely(fn() => $base()->where('created_at', '>=', $now->copy()->subDays(7))->distinct()->count('user_id'));
+            $mau = (int) $this->safely(fn() => $base()->where('created_at', '>=', $now->copy()->subDays(30))->distinct()->count('user_id'));
 
             // People who came back on 2+ separate days in the last 30 days
-            $repeat = $this->safely(function () use ($q, $now) {
+            $repeat = (int) $this->safely(function () use ($base, $now) {
                 return DB::query()->fromSub(
-                    $q()->where('created_at', '>=', $now->copy()->subDays(30))
+                    $base()->where('created_at', '>=', $now->copy()->subDays(30))
                         ->select('user_id')
                         ->groupBy('user_id')
                         ->havingRaw('COUNT(DISTINCT DATE(created_at)) >= 2'),
@@ -292,43 +472,47 @@ class AdminController extends Controller
                 )->count();
             });
 
-            // New vs returning among users active this month
-            $activeIds  = $this->safely(fn() => $q()->where('created_at', '>=', $monthStart)->distinct()->pluck('user_id'), collect());
-            $activeIds  = collect($activeIds)->filter()->values();
-            $newActive  = $this->safely(fn() => User::whereIn('id', $activeIds)->where('created_at', '>=', $monthStart)->count());
-            $returning  = max($activeIds->count() - $newActive, 0);
+            // New vs returning among people active this month
+            $activeIds = collect($this->safely(fn() => $base()
+                ->where('created_at', '>=', $monthStart)
+                ->distinct()->pluck('user_id'), collect()))->filter()->values();
 
-            // Average visits per active user (last 30 days)
-            $totalHits  = $this->safely(fn() => $q()->where('created_at', '>=', $now->copy()->subDays(30))->count());
+            $newActive = $activeIds->isEmpty() ? 0 : (int) $this->safely(fn() => User::whereIn('id', $activeIds)
+                ->where('created_at', '>=', $monthStart)->count());
+
+            $returning = max($activeIds->count() - $newActive, 0);
+
+            $totalHits   = (int) $this->safely(fn() => $base()->where('created_at', '>=', $now->copy()->subDays(30))->count());
             $avgSessions = $mau > 0 ? round($totalHits / $mau, 1) : 0;
 
-            // 12-week returning vs new trend
+            // 12-week returning vs first-time trend
             $weeks = $weeklyReturn = $weeklyNew = [];
 
             for ($i = 11; $i >= 0; $i--) {
                 $ws = $now->copy()->subWeeks($i)->startOfWeek();
                 $we = $now->copy()->subWeeks($i)->endOfWeek();
 
-                $ids = $this->safely(fn() => $q()->whereBetween('created_at', [$ws, $we])->distinct()->pluck('user_id'), collect());
-                $ids = collect($ids)->filter()->values();
+                $ids = collect($this->safely(fn() => $base()
+                    ->whereBetween('created_at', [$ws, $we])
+                    ->distinct()->pluck('user_id'), collect()))->filter()->values();
 
-                $ret = $ids->isEmpty() ? 0 : $this->safely(fn() => User::whereIn('id', $ids)->where('created_at', '<', $ws)->count());
+                $ret = $ids->isEmpty() ? 0 : (int) $this->safely(fn() => User::whereIn('id', $ids)
+                    ->where('created_at', '<', $ws)->count());
 
                 $weeks[]        = $ws->format('d M');
-                $weeklyReturn[] = (int) $ret;
-                $weeklyNew[]    = max($ids->count() - (int) $ret, 0);
+                $weeklyReturn[] = $ret;
+                $weeklyNew[]    = max($ids->count() - $ret, 0);
             }
 
-            // Peak activity hours (last 30 days)
+            // Busiest hours over the last 30 days
             $hourly = array_fill(0, 24, 0);
-            $rows   = $this->safely(function () use ($table, $now) {
-                return DB::table($table)
-                    ->where('created_at', '>=', $now->copy()->subDays(30))
-                    ->select(DB::raw('HOUR(created_at) as h'), DB::raw('COUNT(*) as c'))
-                    ->groupBy('h')->pluck('c', 'h')->toArray();
-            }, []);
 
-            foreach ($rows as $h => $c) {
+            $hourRows = $this->safely(fn() => DB::table($table)
+                ->where('created_at', '>=', $now->copy()->subDays(30))
+                ->select(DB::raw('HOUR(created_at) as h'), DB::raw('COUNT(*) as c'))
+                ->groupBy('h')->pluck('c', 'h')->toArray(), []);
+
+            foreach ($hourRows as $h => $c) {
                 if ($h >= 0 && $h <= 23) {
                     $hourly[(int) $h] = (int) $c;
                 }
@@ -339,14 +523,14 @@ class AdminController extends Controller
             return [
                 'available'       => true,
                 'source'          => $table,
-                'dau'             => (int) $dau,
-                'wau'             => (int) $wau,
-                'mau'             => (int) $mau,
-                'returning'       => (int) $returning,
-                'new_active'      => (int) $newActive,
+                'dau'             => $dau,
+                'wau'             => $wau,
+                'mau'             => $mau,
+                'returning'       => $returning,
+                'new_active'      => $newActive,
                 'retention_rate'  => $activeIds->count() > 0 ? (int) round(($returning / $activeIds->count()) * 100) : 0,
                 'stickiness'      => $mau > 0 ? (int) round(($dau / $mau) * 100) : 0,
-                'repeat_visitors' => (int) $repeat,
+                'repeat_visitors' => $repeat,
                 'avg_sessions'    => $avgSessions,
                 'weeks'           => $weeks,
                 'weekly_return'   => $weeklyReturn,
@@ -356,11 +540,12 @@ class AdminController extends Controller
             ];
         });
 
-        // ---------------------------------------------------------------
-        // 6. COHORT GRID — do new signups stick around? (cached 30 min)
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 7. COHORTS — do new signups stick around? (cached 30 minutes)
+        // ----------------------------------------------------------------------
         $cohorts = Cache::remember('admin.dashboard.cohorts', 1800, function () use ($now) {
             $table = $this->activityTable();
+
             if (!$table) {
                 return [];
             }
@@ -371,11 +556,11 @@ class AdminController extends Controller
                 $cs = $now->copy()->subWeeks($c)->startOfWeek();
                 $ce = $now->copy()->subWeeks($c)->endOfWeek();
 
-                $ids  = $this->safely(fn() => User::whereBetween('created_at', [$cs, $ce])->pluck('id'), collect());
-                $ids  = collect($ids)->filter()->values();
-                $size = $ids->count();
+                $ids = collect($this->safely(fn() => User::whereBetween('created_at', [$cs, $ce])->pluck('id'), collect()))
+                    ->filter()->values();
 
-                $row = ['label' => $cs->format('d M'), 'size' => $size, 'cells' => []];
+                $size = $ids->count();
+                $row  = ['label' => $cs->format('d M'), 'size' => $size, 'cells' => []];
 
                 for ($w = 0; $w <= $c; $w++) {
                     if ($size === 0) {
@@ -386,7 +571,7 @@ class AdminController extends Controller
                     $ws = $cs->copy()->addWeeks($w);
                     $we = $ws->copy()->endOfWeek();
 
-                    $active = $this->safely(fn() => DB::table($table)
+                    $active = (int) $this->safely(fn() => DB::table($table)
                         ->whereIn('user_id', $ids)
                         ->whereBetween('created_at', [$ws, $we])
                         ->distinct()->count('user_id'));
@@ -400,17 +585,17 @@ class AdminController extends Controller
             return $grid;
         });
 
-        // ---------------------------------------------------------------
-        // 7. MOST VIEWED LISTINGS + WIN-BACK LIST
-        // ---------------------------------------------------------------
-        $table = $this->activityTable();
+        // ----------------------------------------------------------------------
+        // 8. MOST VIEWED LISTINGS + WIN-BACK LIST
+        // ----------------------------------------------------------------------
+        $activityTable = $this->activityTable();
 
-        $topViewed = $this->safely(function () use ($table, $now) {
-            if (!$table || !Schema::hasColumn($table, 'property_id')) {
+        $topViewed = $this->safely(function () use ($activityTable, $now) {
+            if (!$activityTable || !Schema::hasColumn($activityTable, 'property_id')) {
                 return [];
             }
 
-            $rows = DB::table($table)
+            $rows = DB::table($activityTable)
                 ->where('created_at', '>=', $now->copy()->subDays(30))
                 ->whereNotNull('property_id')
                 ->select('property_id', DB::raw('COUNT(*) as hits'), DB::raw('COUNT(DISTINCT user_id) as people'))
@@ -433,12 +618,12 @@ class AdminController extends Controller
             })->toArray();
         }, []);
 
-        $winBack = $this->safely(function () use ($table, $now) {
-            if (!$table) {
+        $winBack = $this->safely(function () use ($activityTable, $now) {
+            if (!$activityTable) {
                 return [];
             }
 
-            $rows = DB::table($table)
+            $rows = DB::table($activityTable)
                 ->whereNotNull('user_id')
                 ->select('user_id', DB::raw('MAX(created_at) as last_at'), DB::raw('COUNT(*) as hits'))
                 ->groupBy('user_id')
@@ -451,19 +636,19 @@ class AdminController extends Controller
             return $rows->map(function ($r) use ($users) {
                 $u = $users->get($r->user_id);
                 return [
-                    'id'     => $r->user_id,
-                    'name'   => $u->username ?? 'Former user',
-                    'email'  => $u->email ?? '',
-                    'image'  => $u->photo_image ?? null,
-                    'hits'   => (int) $r->hits,
-                    'gone'   => Carbon::parse($r->last_at)->diffForHumans(null, true),
+                    'id'    => $r->user_id,
+                    'name'  => $u->username ?? null,
+                    'email' => $u->email ?? '',
+                    'image' => $u->photo_image ?? null,
+                    'hits'  => (int) $r->hits,
+                    'gone'  => Carbon::parse($r->last_at)->diffForHumans(null, true),
                 ];
-            })->filter(fn($r) => $r['name'] !== 'Former user')->values()->toArray();
+            })->filter(fn($r) => !empty($r['name']))->values()->toArray();
         }, []);
 
-        // ---------------------------------------------------------------
-        // 8. INVENTORY BREAKDOWNS
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 9. INVENTORY BREAKDOWNS
+        // ----------------------------------------------------------------------
         $statusCounts = $this->safely(fn() => Property::select('status', DB::raw('COUNT(*) as total'))
             ->groupBy('status')->pluck('total', 'status')->toArray(), []);
 
@@ -473,15 +658,17 @@ class AdminController extends Controller
                 DB::raw('COUNT(*) as total')
             )
                 ->whereNotNull('address_details')
-                ->groupBy('city_name')->orderByDesc('total')->limit(6)->get()
+                ->groupBy('city_name')
+                ->orderByDesc('total')
+                ->limit(6)->get()
                 ->filter(fn($r) => !empty($r->city_name) && $r->city_name !== 'null')
                 ->map(fn($r) => ['city' => $r->city_name, 'total' => (int) $r->total])
                 ->values()->toArray();
         }, []);
 
-        // ---------------------------------------------------------------
-        // 9. RENEWAL RADAR
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 10. RENEWAL RADAR
+        // ----------------------------------------------------------------------
         $radarFrom = $now->copy()->subDays(30);
         $radarTo   = $now->copy()->addDays(14);
         $renewals  = collect();
@@ -489,13 +676,15 @@ class AdminController extends Controller
         $this->safely(function () use (&$renewals, $radarFrom, $radarTo) {
             Agent::with('subscription')
                 ->whereHas('subscription', fn($q) => $q->whereBetween('end_date', [$radarFrom, $radarTo]))
-                ->limit(25)->get()->each(fn($a) => $renewals->push($this->renewalRow($a, 'agent')));
+                ->limit(25)->get()
+                ->each(fn($a) => $renewals->push($this->renewalRow($a, 'agent')));
         });
 
         $this->safely(function () use (&$renewals, $radarFrom, $radarTo) {
             RealEstateOffice::with('subscription')
                 ->whereHas('subscription', fn($q) => $q->whereBetween('end_date', [$radarFrom, $radarTo]))
-                ->limit(25)->get()->each(fn($o) => $renewals->push($this->renewalRow($o, 'office')));
+                ->limit(25)->get()
+                ->each(fn($o) => $renewals->push($this->renewalRow($o, 'office')));
         });
 
         $renewals      = $renewals->sortBy('days')->values();
@@ -503,12 +692,14 @@ class AdminController extends Controller
         $expiredNow    = $renewals->where('days', '<', 0)->sortByDesc('days')->take(8)->values()->toArray();
         $revenueAtRisk = $renewals->where('days', '>=', 0)->where('days', '<=', 7)->sum('amount');
 
-        // ---------------------------------------------------------------
-        // 10. APPROVAL QUEUE
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 11. APPROVAL QUEUE
+        // ----------------------------------------------------------------------
         $pendingProperties = $this->safely(function () {
-            return Property::with('owner')->where('status', 'pending')
-                ->orderBy('created_at', 'asc')->take(6)->get()
+            return Property::with('owner')
+                ->where('status', 'pending')
+                ->orderBy('created_at', 'asc')   // oldest first — fairest queue
+                ->take(6)->get()
                 ->map(fn($p) => [
                     'id'      => $p->id,
                     'name'    => $this->readJsonValue($p->name, 'Untitled property'),
@@ -522,19 +713,20 @@ class AdminController extends Controller
                 ])->toArray();
         }, []);
 
-        // ---------------------------------------------------------------
-        // 11. LEADERBOARDS
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 12. LEADERBOARDS
+        // ----------------------------------------------------------------------
         $topAgents = $this->safely(function () use ($weekStart) {
             return Agent::withCount('properties')
                 ->withCount(['properties as weekly_posts' => fn($q) => $q->where('created_at', '>=', $weekStart)])
-                ->orderByDesc('properties_count')->take(6)->get()
+                ->orderByDesc('properties_count')
+                ->take(6)->get()
                 ->map(fn($a) => [
-                    'id' => $a->id,
-                    'name' => $a->agent_name ?? 'Agent',
-                    'sub' => $a->company_name ?: 'Independent',
-                    'image' => $a->profile_image,
-                    'total' => (int) $a->properties_count,
+                    'id'     => $a->id,
+                    'name'   => $a->agent_name ?? 'Agent',
+                    'sub'    => $a->company_name ?: 'Independent',
+                    'image'  => $a->profile_image,
+                    'total'  => (int) $a->properties_count,
                     'weekly' => (int) $a->weekly_posts,
                 ])->toArray();
         }, []);
@@ -542,24 +734,26 @@ class AdminController extends Controller
         $topOffices = $this->safely(function () use ($weekStart) {
             return RealEstateOffice::withCount('ownedProperties')
                 ->withCount(['ownedProperties as weekly_posts' => fn($q) => $q->where('created_at', '>=', $weekStart)])
-                ->orderByDesc('owned_properties_count')->take(6)->get()
+                ->orderByDesc('owned_properties_count')
+                ->take(6)->get()
                 ->map(fn($o) => [
-                    'id' => $o->id,
-                    'name' => $o->company_name ?? 'Office',
-                    'sub' => $o->city ?: 'Kurdistan',
-                    'image' => $o->logo ?? $o->profile_image,
-                    'total' => (int) $o->owned_properties_count,
+                    'id'     => $o->id,
+                    'name'   => $o->company_name ?? 'Office',
+                    'sub'    => $o->city ?: 'Kurdistan',
+                    'image'  => $o->logo ?? $o->profile_image,
+                    'total'  => (int) $o->owned_properties_count,
                     'weekly' => (int) $o->weekly_posts,
                 ])->toArray();
         }, []);
 
-        // ---------------------------------------------------------------
-        // 12. TODAY'S VIEWINGS
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 13. TODAY'S VIEWINGS
+        // ----------------------------------------------------------------------
         $todayAppointments = $this->safely(function () use ($today) {
             return Appointment::with(['user', 'property'])
                 ->whereDate('appointment_date', $today)
-                ->orderBy('appointment_time', 'asc')->take(6)->get()
+                ->orderBy('appointment_time', 'asc')
+                ->take(6)->get()
                 ->map(fn($a) => [
                     'id'       => $a->id,
                     'time'     => $a->appointment_time ? substr((string) $a->appointment_time, 0, 5) : '--:--',
@@ -569,76 +763,86 @@ class AdminController extends Controller
                 ])->toArray();
         }, []);
 
-        // ---------------------------------------------------------------
-        // 13. ACTIVITY FEED
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 14. ACTIVITY FEED
+        // ----------------------------------------------------------------------
         $activity = collect();
 
         $this->safely(function () use (&$activity) {
             User::latest()->take(6)->get()->each(fn($u) => $activity->push([
-                'icon' => 'fa-user-plus',
-                'tone' => 'blue',
+                'icon'  => 'fa-user-plus',
+                'tone'  => 'blue',
                 'title' => $u->username ?? 'New user',
-                'text' => 'joined the platform',
-                'at' => $u->created_at,
+                'text'  => 'joined the platform',
+                'at'    => $u->created_at,
             ]));
         });
 
         $this->safely(function () use (&$activity) {
             Property::latest()->take(6)->get()->each(fn($p) => $activity->push([
-                'icon' => 'fa-house-circle-check',
-                'tone' => 'indigo',
+                'icon'  => 'fa-house-circle-check',
+                'tone'  => 'indigo',
                 'title' => $this->readJsonValue($p->name, 'New listing'),
-                'text' => 'was listed (' . ($p->status ?? 'pending') . ')',
-                'at' => $p->created_at,
+                'text'  => 'was listed (' . ($p->status ?? 'pending') . ')',
+                'at'    => $p->created_at,
             ]));
         });
 
         $this->safely(function () use (&$activity) {
             Agent::latest()->take(4)->get()->each(fn($a) => $activity->push([
-                'icon' => 'fa-user-tie',
-                'tone' => 'amber',
+                'icon'  => 'fa-user-tie',
+                'tone'  => 'amber',
                 'title' => $a->agent_name ?? 'Agent',
-                'text' => $a->is_verified ? 'registered and is verified' : 'registered — needs review',
-                'at' => $a->created_at,
+                'text'  => $a->is_verified ? 'registered and is verified' : 'registered — needs review',
+                'at'    => $a->created_at,
             ]));
         });
 
         $this->safely(function () use (&$activity) {
             RealEstateOffice::latest()->take(4)->get()->each(fn($o) => $activity->push([
-                'icon' => 'fa-building',
-                'tone' => 'violet',
+                'icon'  => 'fa-building',
+                'tone'  => 'violet',
                 'title' => $o->company_name ?? 'Office',
-                'text' => $o->is_verified ? 'joined as a verified office' : 'joined — needs review',
-                'at' => $o->created_at,
+                'text'  => $o->is_verified ? 'joined as a verified office' : 'joined — needs review',
+                'at'    => $o->created_at,
             ]));
         });
 
-        $activity = $activity->filter(fn($a) => $a['at'] !== null)->sortByDesc('at')->take(12)
+        $activity = $activity->filter(fn($a) => $a['at'] !== null)
+            ->sortByDesc('at')
+            ->take(12)
             ->map(function ($a) {
                 $a['ago'] = Carbon::parse($a['at'])->diffForHumans(null, true) . ' ago';
                 return $a;
-            })->values()->toArray();
+            })
+            ->values()->toArray();
 
-        // ---------------------------------------------------------------
-        // 14. PLATFORM PULSE
-        // ---------------------------------------------------------------
+        // ----------------------------------------------------------------------
+        // 15. PLATFORM PULSE
+        // ----------------------------------------------------------------------
         $pulse = [
             'listings_week'   => $this->safely(fn() => Property::where('created_at', '>=', $weekStart)->count()),
             'boosted'         => $this->safely(fn() => Property::where('is_boosted', true)->count()),
-            'sold_month'      => $this->safely(fn() => Property::where('status', 'sold')->where('updated_at', '>=', $monthStart)->count()),
-            'verify_rate'     => $stats['total_agents'] > 0 ? (int) round(($stats['verified_agents'] / max($stats['total_agents'], 1)) * 100) : 0,
+            'sold_month'      => $this->safely(fn() => Property::where('status', 'sold')
+                ->where('updated_at', '>=', $monthStart)->count()),
+            'verify_rate'     => $stats['total_agents'] > 0
+                ? (int) round(($stats['verified_agents'] / max($stats['total_agents'], 1)) * 100)
+                : 0,
             'avg_price'       => $this->safely(fn() => (float) Property::whereNotNull('price')
                 ->avg(DB::raw("CAST(JSON_UNQUOTE(JSON_EXTRACT(price, '$.usd')) AS DECIMAL(15,2))"))),
             'revenue_at_risk' => (float) $revenueAtRisk,
         ];
 
-        // ---------------------------------------------------------------
-        // 15. LEGACY VARIABLES
-        // ---------------------------------------------------------------
-        $recent_properties = $this->safely(fn() => Property::with('owner')->orderBy('created_at', 'desc')->take(6)->get(), collect());
-        $recent_users      = $this->safely(fn() => User::orderBy('created_at', 'desc')->take(6)->get(), collect());
-        $top_agents        = $this->safely(fn() => Agent::withCount('properties')->orderBy('properties_count', 'desc')->take(5)->get(), collect());
+        // ----------------------------------------------------------------------
+        // 16. LEGACY VARIABLES (kept so older blade code keeps working)
+        // ----------------------------------------------------------------------
+        $recent_properties = $this->safely(fn() => Property::with('owner')
+            ->orderBy('created_at', 'desc')->take(6)->get(), collect());
+
+        $recent_users = $this->safely(fn() => User::orderBy('created_at', 'desc')->take(6)->get(), collect());
+
+        $top_agents = $this->safely(fn() => Agent::withCount('properties')
+            ->orderBy('properties_count', 'desc')->take(5)->get(), collect());
 
         return view('admin.dashboard', compact(
             'stats',
@@ -646,6 +850,7 @@ class AdminController extends Controller
             'pendingApprovals',
             'charts',
             'monthlyData',
+            'visitors',
             'retention',
             'cohorts',
             'topViewed',
@@ -666,6 +871,27 @@ class AdminController extends Controller
         ));
     }
 
+    // ==========================================================================
+    // DASHBOARD HELPERS
+    // ==========================================================================
+
+    /**
+     * Does a table exist? Checked once per request.
+     */
+    private function tableExists(string $table): bool
+    {
+        static $cache = [];
+
+        if (array_key_exists($table, $cache)) {
+            return $cache[$table];
+        }
+
+        try {
+            return $cache[$table] = Schema::hasTable($table);
+        } catch (\Throwable $e) {
+            return $cache[$table] = false;
+        }
+    }
 
     private function pctChange($current, $previous): float
     {
