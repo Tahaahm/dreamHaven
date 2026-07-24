@@ -604,6 +604,9 @@ class AdminController extends Controller
 
         $expiringCount = $stats['expiring_soon'];
 
+        $this->addExpiryMeta($agents);          // <-- ADD THIS LINE
+
+
         return view('admin.agents.index', compact(
             'agents',
             'stats',
@@ -847,14 +850,17 @@ class AdminController extends Controller
                 ->whereBetween('end_date', [now(), $weekEnd]))
             ->take(8)->get()
             ->map(function ($o) {
-                $end = \Carbon\Carbon::parse($o->subscription->end_date);
+                $end  = \Carbon\Carbon::parse($o->subscription->end_date);
+                $days = now()->startOfDay()->diffInDays($end->startOfDay(), false);
                 return [
-                    'id'    => $o->id,
-                    'name'  => $o->company_name,
-                    'image' => $o->logo,
-                    'plan'  => $o->current_plan ?? 'plan',
-                    'days'  => now()->startOfDay()->diffInDays($end->startOfDay(), false),
-                    'ends'  => $end->format('D d M'),
+                    'id'        => $o->id,
+                    'name'      => $o->company_name,
+                    'image'     => $o->logo,
+                    'plan'      => $o->current_plan ?? 'plan',
+                    'days'      => $days,
+                    'ends'      => $end->format('D d M'),
+                    'urg_class' => $days <= 3 ? 'urgent' : 'warn',
+                    'day_label' => $days == 0 ? 'Today' : ($days == 1 ? 'Tomorrow' : $days . 'd left'),
                 ];
             })
             ->sortBy('days')->values()->toArray();
@@ -880,6 +886,9 @@ class AdminController extends Controller
         ];
 
         $expiringCount = $stats['expiring_soon'];
+
+        $this->addExpiryMeta($offices);         // <-- ADD THIS LINE
+
 
         return view('admin.offices.index', compact(
             'offices',
