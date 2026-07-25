@@ -105,26 +105,34 @@ trait BuildsPersonalizedRecommendations
             'bedrooms'     => $profile['bedrooms'],
             'price'        => $this->sanePriceWindow($profile['price'] ?? [], $userId),
             'heat'         => $profile['heat_centroid'] ?? null,
-            'seen_ids'     => array_slice($profile['seen_ids'] ?? [], 0, 300),
+            'seen_ids'     => array_values($profile['seen_ids'] ?? []),
         ];
 
         // ── Tiered relaxation ────────────────────────────────────────────────
         // Drop one constraint at a time until we have enough. Previously this
         // was all-or-nothing, which is why a single bad filter returned zero.
+        // Each entry: [name, filters to drop, how many seen ids to exclude]
+        //   null = exclude all seen, 30 = only the 30 most recent, 0 = exclude none
         $tiers = [
-            'exact'        => [],                                  // everything
-            'no_bedrooms'  => ['bedrooms'],
-            'no_price'     => ['bedrooms', 'price'],
-            'no_city'      => ['bedrooms', 'price', 'cities'],
-            'type_only'    => ['bedrooms', 'price', 'cities', 'heat'],
+            ['exact',       [],                                                                null],
+            ['no_bedrooms', ['bedrooms'],                                                      null],
+            ['no_price',    ['bedrooms', 'price'],                                             null],
+            ['no_city',     ['bedrooms', 'price', 'cities'],                                   null],
+            ['no_heat',     ['bedrooms', 'price', 'cities', 'heat'],                           null],
+            ['recent_seen', ['bedrooms', 'price', 'cities', 'heat'],                           30],
+            ['no_types',    ['bedrooms', 'price', 'cities', 'heat', 'types'],                  30],
+            ['no_listing',  ['bedrooms', 'price', 'cities', 'heat', 'types', 'listing_type'],  30],
+            ['open',        ['bedrooms', 'price', 'cities', 'heat', 'types', 'listing_type'],  0],
         ];
 
-        $results   = collect();
-        $usedTier  = null;
+        $results  = collect();
+        $usedTier = null;
+        $attempts = [];
 
-        foreach ($tiers as $tier => $drop) {
-            $results = $this->runRecommendationQuery($criteria, $drop, $limit * 2);
+        foreach ($tiers as [$tier, $drop, $seenLimit]) {
+            $results  = $this->runRecommendationQuery($criteria, $drop, $limit * 2, $seenLimit);
             $usedTier = $tier;
+            $attempts[$tier] = $results->count();
 
             if ($results->count() >= $limit) {
                 break;
@@ -133,14 +141,15 @@ trait BuildsPersonalizedRecommendations
 
         Log::info('🎯 REC: query results', [
             'user_id' => $userId,
-            'found'   => $results->count(),
-            'needed'  => $limit,
-            'tier'    => $usedTier,
+            'found'    => $results->count(),
+            'needed'   => $limit,
+            'tier'     => $usedTier,
+            'attempts' => $attempts,   // shows exactly which tier started working
         ]);
 
         // ── Top up if still short ────────────────────────────────────────────
         if ($results->count() < $limit) {
-            $existingIds = array_merge($criteria['seen_ids'], $results->pluck('id')->toArray());
+            $existingIds = $results->pluck('id')->toArray();
 
             $general = $this->getGeneralRecommendations($limit + 10)
                 ->filter(fn($p) => !in_array($p->id, $existingIds))
@@ -161,8 +170,12 @@ trait BuildsPersonalizedRecommendations
     // ══════════════════════════════════════════════════════════════════════════
     //  QUERY BUILDER — one tier
     // ══════════════════════════════════════════════════════════════════════════
-    private function runRecommendationQuery(array $c, array $drop, int $limit): Collection
-    {
+    private function runRecommendationQuery(
+        array $c,
+        array $drop,
+        int   $limit,
+        ?int  $seenLimit = null
+    ): Collection {
         $useIndexed = $this->hasIndexedColumns();
 
         $query = Property::query()
@@ -170,8 +183,17 @@ trait BuildsPersonalizedRecommendations
             ->where('published', true)
             ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented']);
 
-        if (!empty($c['seen_ids'])) {
-            $query->whereNotIn('id', $c['seen_ids']);
+        // null = exclude all seen, 30 = only the most recent 30, 0 = exclude none
+        if ($seenLimit === null) {
+            $exclude = $c['seen_ids'];
+        } elseif ($seenLimit > 0) {
+            $exclude = array_slice($c['seen_ids'], 0, $seenLimit);
+        } else {
+            $exclude = [];
+        }
+
+        if (!empty($exclude)) {
+            $query->whereNotIn('id', $exclude);
         }
 
         // ── Property type ────────────────────────────────────────────────────
@@ -194,7 +216,9 @@ trait BuildsPersonalizedRecommendations
 
         // ── Listing type ─────────────────────────────────────────────────────
         if (!in_array('listing_type', $drop) && $c['listing_type']) {
-            $query->where('listing_type', $c['listing_type']);
+            // Accept both spellings — your DB enum is 'sell', the UI says 'sale'
+            $listing = $c['listing_type'] === 'sale' ? ['sale', 'sell'] : [$c['listing_type']];
+            $query->whereIn('listing_type', $listing);
         }
 
         // ── Price ────────────────────────────────────────────────────────────
