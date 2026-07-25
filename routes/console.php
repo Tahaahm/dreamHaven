@@ -26,6 +26,32 @@ Schedule::command('queue:work --queue=notifications,default --stop-when-empty')
 
 /*
 |--------------------------------------------------------------------------
+| Scheduled Broadcasts - every minute
+|--------------------------------------------------------------------------
+| Picks up broadcasts created with a future `scheduled_at` and fires the
+| FCM push once their time arrives. Rows are already in the DB (written by
+| sendBroadcast with data->scheduled = true); this only sends the push.
+| Cheap no-op when nothing is due.
+*/
+Schedule::command('notifications:dispatch-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+/*
+|--------------------------------------------------------------------------
+| Admin Dashboard Cache Warm - every 5 minutes
+|--------------------------------------------------------------------------
+| Rebuilds buildDashboardHeavy() in the background so no admin ever pays
+| the ~10s analytics cost on a cold cache.
+*/
+Schedule::command('dashboard:warm')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();
+
+/*
+|--------------------------------------------------------------------------
 | Property Match Digest - every 3 days at 09:00
 |--------------------------------------------------------------------------
 */

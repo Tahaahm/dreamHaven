@@ -4,35 +4,63 @@ namespace App\Http\Controllers;
 
 use App\Helper\ApiResponse;
 use App\Helper\ResponseDetails;
-use App\Models\Notification;
-use App\Models\User;
 use App\Models\Agent;
-use App\Models\RealEstateOffice;
-use App\Models\Property;
 use App\Models\Appointment;
+use App\Models\Notification;
+use App\Models\Property;
+use App\Models\RealEstateOffice;
+use App\Models\User;
+use App\Services\FirebaseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use App\Services\FirebaseService;
-
 
 class NotificationController extends Controller
 {
     /**
-     * Get notifications for authenticated user/agent/office
+     * Single shared Firebase instance for the whole request.
+     * Previously this was `new FirebaseService()` inside every loop iteration,
+     * which reloaded the service-account credentials once per recipient.
+     */
+    private ?FirebaseService $fcm = null;
+
+    /** Rows inserted per DB batch. */
+    private const CHUNK = 500;
+
+    public function __construct()
+    {
+        try {
+            if (class_exists(FirebaseService::class)) {
+                $this->fcm = app(FirebaseService::class);
+            } else {
+                Log::warning('FirebaseService class not found — all FCM sends will be skipped.');
+            }
+        } catch (\Throwable $e) {
+            Log::error('FirebaseService could not be resolved: ' . $e->getMessage());
+            $this->fcm = null;
+        }
+    }
+
+    // =================================================================
+    // READ / MUTATE  (API)
+    // =================================================================
+
+    /**
+     * List notifications for the authenticated user / agent / office.
      */
     public function index(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
-                'type' => 'nullable|in:property,appointment,system,promotion,alert',
+                'type'     => 'nullable|in:property,appointment,system,promotion,alert',
                 'priority' => 'nullable|in:low,medium,high,urgent',
-                'is_read' => 'nullable|boolean',
-                'limit' => 'nullable|integer|min:1|max:100',
-                'offset' => 'nullable|integer|min:0',
+                'is_read'  => 'nullable|boolean',
+                'limit'    => 'nullable|integer|min:1|max:100',
+                'offset'   => 'nullable|integer|min:0',
             ]);
 
             if ($validator->fails()) {
@@ -43,7 +71,6 @@ class NotificationController extends Controller
                 );
             }
 
-            // Get the authenticated user/agent/office
             $user = Auth::user();
             if (!$user) {
                 return ApiResponse::error(
@@ -53,36 +80,33 @@ class NotificationController extends Controller
                 );
             }
 
-            $query = Notification::query()->notExpired();
+            $column = $this->getRecipientColumn($user);
 
-            // Filter by recipient (user, agent, or office)
-            if ($user instanceof User) {
-                $query->where('user_id', $user->id);
-            } elseif ($user instanceof Agent) {
-                $query->where('agent_id', $user->id);
-            } elseif ($user instanceof RealEstateOffice) {
-                $query->where('office_id', $user->id);
-            }
+            $query = Notification::query()
+                ->notExpired()
+                ->where($column, $user->id);
 
-            // Apply filters
-            if ($request->has('type')) {
+            if ($request->filled('type')) {
                 $query->byType($request->type);
             }
 
-            if ($request->has('priority')) {
+            if ($request->filled('priority')) {
                 $query->byPriority($request->priority);
             }
 
             if ($request->has('is_read')) {
-                if ($request->boolean('is_read')) {
-                    $query->where('is_read', true);
-                } else {
-                    $query->unread();
-                }
+                $request->boolean('is_read')
+                    ? $query->where('is_read', true)
+                    : $query->unread();
             }
 
-            $limit = $request->get('limit', 20);
-            $offset = $request->get('offset', 0);
+            $limit  = (int) $request->get('limit', 20);
+            $offset = (int) $request->get('offset', 0);
+
+            // FIX: total_count used to return the page size, so the client
+            // could never tell whether another page existed. Count first,
+            // then slice.
+            $totalCount = (clone $query)->count();
 
             $notifications = $query->orderBy('sent_at', 'desc')
                 ->limit($limit)
@@ -92,15 +116,19 @@ class NotificationController extends Controller
             $unreadCount = Notification::query()
                 ->notExpired()
                 ->unread()
-                ->where($this->getRecipientColumn($user), $user->id)
+                ->where($column, $user->id)
                 ->count();
 
             return ApiResponse::success(
                 ResponseDetails::successMessage('Notifications retrieved successfully'),
                 [
                     'notifications' => $notifications,
-                    'unread_count' => $unreadCount,
-                    'total_count' => $notifications->count(),
+                    'unread_count'  => $unreadCount,
+                    'total_count'   => $totalCount,
+                    'returned'      => $notifications->count(),
+                    'limit'         => $limit,
+                    'offset'        => $offset,
+                    'has_more'      => ($offset + $notifications->count()) < $totalCount,
                 ],
                 ResponseDetails::CODE_SUCCESS
             );
@@ -114,9 +142,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Mark notification as read
-     */
     public function markAsRead($id)
     {
         try {
@@ -158,9 +183,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Mark all notifications as read
-     */
     public function markAllAsRead()
     {
         try {
@@ -176,8 +198,9 @@ class NotificationController extends Controller
             $updatedCount = Notification::where($this->getRecipientColumn($user), $user->id)
                 ->unread()
                 ->update([
-                    'is_read' => true,
-                    'read_at' => now(),
+                    'is_read'    => true,
+                    'read_at'    => now(),
+                    'updated_at' => now(),
                 ]);
 
             return ApiResponse::success(
@@ -195,9 +218,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Delete notification
-     */
     public function destroy($id)
     {
         try {
@@ -239,9 +259,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Clear all notifications
-     */
     public function clearAll()
     {
         try {
@@ -254,8 +271,7 @@ class NotificationController extends Controller
                 );
             }
 
-            $deletedCount = Notification::where($this->getRecipientColumn($user), $user->id)
-                ->delete();
+            $deletedCount = Notification::where($this->getRecipientColumn($user), $user->id)->delete();
 
             return ApiResponse::success(
                 ResponseDetails::successMessage('All notifications cleared successfully'),
@@ -272,11 +288,10 @@ class NotificationController extends Controller
         }
     }
 
-    // ===== NOTIFICATION CREATION METHODS =====
+    // =================================================================
+    // TRANSACTIONAL NOTIFICATIONS
+    // =================================================================
 
-    /**
-     * Send welcome notification on user registration
-     */
     public function sendWelcomeNotification($userId)
     {
         try {
@@ -286,64 +301,35 @@ class NotificationController extends Controller
                 return false;
             }
 
-            // Create the database notification record
+            $title   = 'Welcome to Our Platform!';
+            $message = "Hello {$user->username}! Welcome to our real estate platform. "
+                . 'Explore thousands of properties and find your dream home.';
+
             $notification = $this->createNotification([
-                'user_id' => $userId,
-                'title' => 'Welcome to Our Platform!',
-                'message' => "Hello {$user->username}! Welcome to our real estate platform. Explore thousands of properties and find your dream home.",
-                'type' => 'system',
-                'priority' => 'medium',
-                'data' => [
-                    'welcome_bonus' => true,
-                    'user_type' => 'new_user',
+                'user_id'     => $userId,
+                'title'       => $title,
+                'message'     => $message,
+                'type'        => 'system',
+                'priority'    => 'medium',
+                'data'        => [
+                    'welcome_bonus'     => true,
+                    'user_type'         => 'new_user',
                     'registration_date' => now()->toDateString(),
                 ],
-                'action_url' => '/properties',
+                'action_url'  => '/properties',
                 'action_text' => 'Browse Properties',
             ]);
 
-            // Send FCM notification using FirebaseService
-            if (class_exists('\App\Services\FirebaseService')) {
-                try {
-                    $firebaseService = new \App\Services\FirebaseService();
-
-                    $notificationPayload = [
-                        'title' => 'Welcome to Our Platform!',
-                        'message' => "Hello {$user->username}! Welcome to our real estate platform. Explore thousands of properties and find your dream home.",
-                    ];
-
-                    $dataPayload = [
-                        'type' => 'system',
-                        'id' => $notification->id ?? null,
-                        'priority' => 'medium',
-                        'action_url' => '/properties',
-                        'action_text' => 'Browse Properties',
-                        'user_type' => 'new_user',
-                        'welcome_bonus' => 'true',
-                        'registration_date' => now()->toDateString(),
-                    ];
-
-                    $fcmResult = $firebaseService->sendToUser($user, $notificationPayload, $dataPayload);
-
-                    if ($fcmResult) {
-                        Log::info('Welcome notification sent via FCM', [
-                            'user_id' => $userId
-                        ]);
-                    } else {
-                        Log::warning('FCM welcome notification failed to send', [
-                            'user_id' => $userId
-                        ]);
-                    }
-                } catch (\Exception $e) {
-                    Log::error('FCM welcome notification error: ' . $e->getMessage(), [
-                        'user_id' => $userId
-                    ]);
-                }
-            } else {
-                Log::warning('FirebaseService class not found - FCM notification skipped', [
-                    'user_id' => $userId
-                ]);
-            }
+            $this->push($user, compact('title', 'message'), [
+                'type'              => 'system',
+                'id'                => $notification?->id,
+                'priority'          => 'medium',
+                'action_url'        => '/properties',
+                'action_text'       => 'Browse Properties',
+                'user_type'         => 'new_user',
+                'welcome_bonus'     => true,
+                'registration_date' => now()->toDateString(),
+            ]);
 
             return true;
         } catch (\Exception $e) {
@@ -352,9 +338,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Send login notification (optional - for security)
-     */
     public function sendLoginNotification($userId, $deviceInfo = null)
     {
         try {
@@ -363,83 +346,46 @@ class NotificationController extends Controller
                 return false;
             }
 
-            // Only send if user has security notifications enabled
-            $preferences = $user->search_preferences ?? [];
-            if (!($preferences['behavior']['enable_notifications'] ?? true)) {
+            if (!$this->notificationsEnabled($user)) {
                 return false;
             }
 
-            // Create the notification record in database
+            $title   = 'Login Alert';
+            $message = 'Your account was accessed from a new device or location at '
+                . now()->format('M j, Y g:i A');
+
             $notification = $this->createNotification([
-                'user_id' => $userId,
-                'title' => 'Login Alert',
-                'message' => "Your account was accessed from a new device or location at " . now()->format('M j, Y g:i A'),
-                'type' => 'system',
-                'priority' => 'low',
-                'data' => [
+                'user_id'    => $userId,
+                'title'      => $title,
+                'message'    => $message,
+                'type'       => 'system',
+                'priority'   => 'low',
+                'data'       => [
                     'device_info' => $deviceInfo,
-                    'login_time' => now()->toISOString(),
+                    'login_time'  => now()->toISOString(),
                 ],
                 'expires_at' => now()->addDays(7),
             ]);
 
-            // Send FCM notification using FirebaseService
-            if (class_exists('\App\Services\FirebaseService')) {
-                try {
-                    $firebaseService = new \App\Services\FirebaseService();
-
-                    $notificationPayload = [
-                        'title' => 'Login Alert',
-                        'message' => "Your account was accessed from a new device or location at " . now()->format('M j, Y g:i A')
-                    ];
-
-                    $dataPayload = [
-                        'type' => 'system',
-                        'id' => $notification->id ?? null,
-                        'device_info' => $deviceInfo,
-                        'login_time' => now()->toISOString(),
-                        'priority' => 'low'
-                    ];
-
-                    // Send FCM notification to all user's devices
-                    $fcmResult = $firebaseService->sendToUser($user, $notificationPayload, $dataPayload);
-
-                    if ($fcmResult) {
-                        Log::info('Login notification sent via FCM', [
-                            'user_id' => $userId,
-                            'device_info' => $deviceInfo
-                        ]);
-                    } else {
-                        Log::warning('FCM notification failed to send', [
-                            'user_id' => $userId,
-                            'device_info' => $deviceInfo
-                        ]);
-                    }
-                } catch (\Exception $e) {
-                    Log::error('FCM notification error: ' . $e->getMessage(), [
-                        'user_id' => $userId,
-                        'device_info' => $deviceInfo
-                    ]);
-                }
-            } else {
-                Log::warning('FirebaseService class not found - FCM notification skipped', [
-                    'user_id' => $userId,
-                    'device_info' => $deviceInfo
-                ]);
-            }
+            $this->push($user, compact('title', 'message'), [
+                'type'        => 'system',
+                'id'          => $notification?->id,
+                'device_info' => $deviceInfo,
+                'login_time'  => now()->toISOString(),
+                'priority'    => 'low',
+            ]);
 
             return true;
         } catch (\Exception $e) {
             Log::error('Error sending login notification: ' . $e->getMessage(), [
                 'user_id' => $userId,
-                'device_info' => $deviceInfo
             ]);
             return false;
         }
     }
 
     /**
-     * Send new property notifications to interested users
+     * Notify users / agents / offices about a newly listed property in their city.
      */
     public function sendNewPropertyNotifications($propertyId)
     {
@@ -449,15 +395,12 @@ class NotificationController extends Controller
                 return false;
             }
 
-            $addressDetails = is_array($property->address_details)
-                ? $property->address_details
-                : json_decode($property->address_details, true);
+            $addressDetails = $this->asArray($property->address_details);
 
             $cityEn = strtolower(trim($addressDetails['city']['en'] ?? ''));
             $cityAr = trim($addressDetails['city']['ar'] ?? '');
             $cityKu = trim($addressDetails['city']['ku'] ?? '');
 
-            // ── Find all recipients ───────────────────────────────────────
             $interestedUsers   = $this->findInterestedUsers($property, $cityEn, $cityAr, $cityKu);
             $interestedAgents  = $this->findInterestedAgents($cityEn, $cityAr, $cityKu);
             $interestedOffices = $this->findInterestedOffices($cityEn, $cityAr, $cityKu);
@@ -467,203 +410,95 @@ class NotificationController extends Controller
                 return true;
             }
 
-            // ── Multilingual payloads ─────────────────────────────────────
             $titles = [
                 'en' => 'New Property Alert!',
                 'ar' => 'تنبيه عقار جديد!',
                 'ku' => 'ئاگادارکردنەوەی خانووی نوێ!',
             ];
 
-            $propertyNames = is_array($property->name)
-                ? $property->name
-                : (json_decode($property->name, true) ?? []);
+            $names = $this->asArray($property->name);
 
             $messages = [
                 'en' => 'A new property matching your city has been listed: '
-                    . ($propertyNames['en'] ?? $propertyNames['ar'] ?? $propertyNames['ku'] ?? 'New Property'),
+                    . ($names['en'] ?? $names['ar'] ?? $names['ku'] ?? 'New Property'),
                 'ar' => 'تم إدراج عقار جديد في مدينتك: '
-                    . ($propertyNames['ar'] ?? $propertyNames['en'] ?? $propertyNames['ku'] ?? 'عقار جديد'),
+                    . ($names['ar'] ?? $names['en'] ?? $names['ku'] ?? 'عقار جديد'),
                 'ku' => 'خانووێکی نوێ لە شارەکەتدا تۆمار کرا: '
-                    . ($propertyNames['ku'] ?? $propertyNames['en'] ?? $propertyNames['ar'] ?? 'خانووی نوێ'),
+                    . ($names['ku'] ?? $names['en'] ?? $names['ar'] ?? 'خانووی نوێ'),
             ];
 
-            $firebaseService = class_exists('\App\Services\FirebaseService')
-                ? new \App\Services\FirebaseService()
-                : null;
+            $price = $this->asArray($property->price);
+            $type  = $this->asArray($property->type);
 
-            // ── Helper closure to build data payload ──────────────────────
-            $buildDataPayload = function ($notificationId, $lang) use ($property, $propertyId, $addressDetails, $messages, $titles) {
-                return [
-                    'type'          => 'property',
-                    'id'            => (string) ($notificationId ?? ''),
-                    'priority'      => 'medium',
-                    'property_id'   => (string) $propertyId,
-                    'property_type' => (string) (is_array($property->type) ? ($property->type['category'] ?? '') : ''),
-                    'price_usd'     => (string) (is_array($property->price) ? ($property->price['usd'] ?? '') : ''),
-                    'price_iqd'     => (string) (is_array($property->price) ? ($property->price['iqd'] ?? '') : ''),
-                    'city'          => json_encode($addressDetails['city'] ?? null),
-                    'match_reason'  => 'city_match',
-                    'language'      => $lang,
-                    'action_url'    => "/properties/{$propertyId}",
-                    'action_text'   => $lang === 'ar' ? 'عرض العقار' : ($lang === 'ku' ? 'خانووەکە ببینە' : 'View Property'),
-                ];
+            $actionText = fn(string $lang) => match ($lang) {
+                'ar'    => 'عرض العقار',
+                'ku'    => 'خانووەکە ببینە',
+                default => 'View Property',
             };
 
-            // ════════════════════════════════════════════════════════════
-            // USERS
-            // ════════════════════════════════════════════════════════════
-            foreach ($interestedUsers as $user) {
-                $lang = strtolower(trim($user->language ?? 'en'));
-                if (!isset($titles[$lang])) $lang = 'en';
-
-                $notification = $this->createNotification([
-                    'user_id'     => $user->id,
-                    'title'       => $titles[$lang],
-                    'message'     => $messages[$lang],
-                    'type'        => 'property',
-                    'priority'    => 'medium',
-                    'data'        => [
-                        'property_id'   => (string) $propertyId,
-                        'property_type' => $property->type['category'] ?? null,
-                        'price_usd'     => is_array($property->price) ? ($property->price['usd'] ?? null) : null,
-                        'city'          => $addressDetails['city'] ?? null,
-                        'match_reason'  => 'city_match',
-                        'language'      => $lang,
-                    ],
-                    'action_url'  => "/properties/{$propertyId}",
-                    'action_text' => $lang === 'ar' ? 'عرض العقار' : ($lang === 'ku' ? 'خانووەکە ببینە' : 'View Property'),
-                    'expires_at'  => now()->addDays(30),
-                ]);
-
-                if ($firebaseService) {
-                    try {
-                        $result = $firebaseService->sendToUser(
-                            $user,
-                            ['title' => $titles[$lang], 'message' => $messages[$lang]],
-                            $buildDataPayload($notification->id ?? null, $lang)
-                        );
-                        if ($result) {
-                            Log::info('New property notification sent via FCM to user', [
-                                'user_id' => $user->id,
-                                'property_id' => $propertyId,
-                                'language' => $lang,
-                            ]);
-                        } else {
-                            Log::warning('FCM new property notification failed for user', [
-                                'user_id' => $user->id,
-                                'property_id' => $propertyId,
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM user notification error: ' . $e->getMessage(), ['user_id' => $user->id]);
+            // One closure handles all three audiences — the original repeated
+            // this block three times with only the ID column changing.
+            $notify = function ($recipients, string $column) use (
+                $titles,
+                $messages,
+                $property,
+                $propertyId,
+                $addressDetails,
+                $price,
+                $type,
+                $actionText
+            ) {
+                foreach ($recipients as $recipient) {
+                    $lang = strtolower(trim($recipient->language ?? 'en'));
+                    if (!isset($titles[$lang])) {
+                        $lang = 'en';
                     }
+
+                    $notification = $this->createNotification([
+                        $column       => $recipient->id,
+                        'title'       => $titles[$lang],
+                        'message'     => $messages[$lang],
+                        'type'        => 'property',
+                        'priority'    => 'medium',
+                        'data'        => [
+                            'property_id'   => (string) $propertyId,
+                            'property_type' => $type['category'] ?? null,
+                            'price_usd'     => $price['usd'] ?? null,
+                            'city'          => $addressDetails['city'] ?? null,
+                            'match_reason'  => 'city_match',
+                            'language'      => $lang,
+                        ],
+                        'action_url'  => "/properties/{$propertyId}",
+                        'action_text' => $actionText($lang),
+                        'expires_at'  => now()->addDays(30),
+                    ]);
+
+                    $this->push(
+                        $recipient,
+                        ['title' => $titles[$lang], 'message' => $messages[$lang]],
+                        [
+                            'type'          => 'property',
+                            'id'            => $notification?->id,
+                            'priority'      => 'medium',
+                            'property_id'   => $propertyId,
+                            'property_type' => $type['category'] ?? '',
+                            'price_usd'     => $price['usd'] ?? '',
+                            'price_iqd'     => $price['iqd'] ?? '',
+                            'city'          => $addressDetails['city'] ?? null,
+                            'match_reason'  => 'city_match',
+                            'language'      => $lang,
+                            'action_url'    => "/properties/{$propertyId}",
+                            'action_text'   => $actionText($lang),
+                        ]
+                    );
                 }
-            }
+            };
 
-            // ════════════════════════════════════════════════════════════
-            // AGENTS
-            // ════════════════════════════════════════════════════════════
-            foreach ($interestedAgents as $agent) {
-                $lang = strtolower(trim($agent->language ?? 'en'));
-                if (!isset($titles[$lang])) $lang = 'en';
+            $notify($interestedUsers, 'user_id');
+            $notify($interestedAgents, 'agent_id');
+            $notify($interestedOffices, 'office_id');
 
-                $notification = $this->createNotification([
-                    'agent_id'    => $agent->id,
-                    'title'       => $titles[$lang],
-                    'message'     => $messages[$lang],
-                    'type'        => 'property',
-                    'priority'    => 'medium',
-                    'data'        => [
-                        'property_id'   => (string) $propertyId,
-                        'property_type' => $property->type['category'] ?? null,
-                        'price_usd'     => is_array($property->price) ? ($property->price['usd'] ?? null) : null,
-                        'city'          => $addressDetails['city'] ?? null,
-                        'match_reason'  => 'city_match',
-                        'language'      => $lang,
-                    ],
-                    'action_url'  => "/properties/{$propertyId}",
-                    'action_text' => $lang === 'ar' ? 'عرض العقار' : ($lang === 'ku' ? 'خانووەکە ببینە' : 'View Property'),
-                    'expires_at'  => now()->addDays(30),
-                ]);
-
-                if ($firebaseService) {
-                    try {
-                        $result = $firebaseService->sendToAgent(
-                            $agent,
-                            ['title' => $titles[$lang], 'message' => $messages[$lang]],
-                            $buildDataPayload($notification->id ?? null, $lang)
-                        );
-                        if ($result) {
-                            Log::info('New property notification sent via FCM to agent', [
-                                'agent_id' => $agent->id,
-                                'property_id' => $propertyId,
-                                'language' => $lang,
-                            ]);
-                        } else {
-                            Log::warning('FCM new property notification failed for agent', [
-                                'agent_id' => $agent->id,
-                                'property_id' => $propertyId,
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM agent notification error: ' . $e->getMessage(), ['agent_id' => $agent->id]);
-                    }
-                }
-            }
-
-            // ════════════════════════════════════════════════════════════
-            // OFFICES
-            // ════════════════════════════════════════════════════════════
-            foreach ($interestedOffices as $office) {
-                $lang = strtolower(trim($office->language ?? 'en'));
-                if (!isset($titles[$lang])) $lang = 'en';
-
-                $notification = $this->createNotification([
-                    'office_id'   => $office->id,
-                    'title'       => $titles[$lang],
-                    'message'     => $messages[$lang],
-                    'type'        => 'property',
-                    'priority'    => 'medium',
-                    'data'        => [
-                        'property_id'   => (string) $propertyId,
-                        'property_type' => $property->type['category'] ?? null,
-                        'price_usd'     => is_array($property->price) ? ($property->price['usd'] ?? null) : null,
-                        'city'          => $addressDetails['city'] ?? null,
-                        'match_reason'  => 'city_match',
-                        'language'      => $lang,
-                    ],
-                    'action_url'  => "/properties/{$propertyId}",
-                    'action_text' => $lang === 'ar' ? 'عرض العقار' : ($lang === 'ku' ? 'خانووەکە ببینە' : 'View Property'),
-                    'expires_at'  => now()->addDays(30),
-                ]);
-
-                if ($firebaseService) {
-                    try {
-                        // ✅ sendToOffice — uses device_tokens on office model
-                        $result = $firebaseService->sendToOffice(
-                            $office,
-                            ['title' => $titles[$lang], 'message' => $messages[$lang]],
-                            $buildDataPayload($notification->id ?? null, $lang)
-                        );
-                        if ($result) {
-                            Log::info('New property notification sent via FCM to office', [
-                                'office_id' => $office->id,
-                                'property_id' => $propertyId,
-                                'language' => $lang,
-                            ]);
-                        } else {
-                            Log::warning('FCM new property notification failed for office', [
-                                'office_id' => $office->id,
-                                'property_id' => $propertyId,
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM office notification error: ' . $e->getMessage(), ['office_id' => $office->id]);
-                    }
-                }
-            }
-
-            Log::info("Sent new property notifications", [
+            Log::info('Sent new property notifications', [
                 'property_id' => $propertyId,
                 'users'       => $interestedUsers->count(),
                 'agents'      => $interestedAgents->count(),
@@ -678,9 +513,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Send nearby property notifications
-     */
     public function sendNearbyPropertyNotifications($userId, $userLat, $userLng, $radius = 5)
     {
         try {
@@ -689,75 +521,60 @@ class NotificationController extends Controller
                 return false;
             }
 
-            // Find nearby properties
+            // FIX: JSON_EXTRACT returns a JSON value, not a number. Without
+            // JSON_UNQUOTE + CAST, radians() silently produced garbage and the
+            // radius filter never matched correctly.
+            $latExpr = 'CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, \'$[0].lat\')) AS DECIMAL(10,7))';
+            $lngExpr = 'CAST(JSON_UNQUOTE(JSON_EXTRACT(locations, \'$[0].lng\')) AS DECIMAL(10,7))';
+
             $nearbyProperties = Property::whereRaw(
-                "(6371 * acos(cos(radians(?)) * cos(radians(JSON_EXTRACT(locations, '$[0].lat'))) * cos(radians(JSON_EXTRACT(locations, '$[0].lng')) - radians(?)) + sin(radians(?)) * sin(radians(JSON_EXTRACT(locations, '$[0].lat'))))) <= ?",
+                "(6371 * acos(
+                    LEAST(1, GREATEST(-1,
+                        cos(radians(?)) * cos(radians({$latExpr}))
+                        * cos(radians({$lngExpr}) - radians(?))
+                        + sin(radians(?)) * sin(radians({$latExpr}))
+                    ))
+                )) <= ?",
                 [$userLat, $userLng, $userLat, $radius]
-            )->where('is_active', true)
+            )
+                ->where('is_active', true)
                 ->where('created_at', '>=', now()->subDays(7))
                 ->limit(5)
                 ->get();
 
-            if ($nearbyProperties->count() > 0) {
-                // Create the notification record in database
-                $notification = $this->createNotification([
-                    'user_id' => $userId,
-                    'title' => 'Properties Near You',
-                    'message' => "We found " . $nearbyProperties->count() . " new properties within {$radius}km of your location.",
-                    'type' => 'property',
-                    'priority' => 'medium',
-                    'data' => [
-                        'nearby_properties' => $nearbyProperties->pluck('id')->toArray(),
-                        'radius_km' => $radius,
-                        'user_location' => ['lat' => $userLat, 'lng' => $userLng],
-                    ],
-                    'action_url' => '/properties/nearby',
-                    'action_text' => 'View Nearby Properties',
-                    'expires_at' => now()->addDays(14),
-                ]);
-
-                // Send FCM notification using FirebaseService
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'Properties Near You',
-                            'message' => "We found " . $nearbyProperties->count() . " new properties within {$radius}km of your location."
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'property',
-                            'id' => $notification->id ?? null,
-                            'priority' => 'medium',
-                            'nearby_properties' => json_encode($nearbyProperties->pluck('id')->toArray()),
-                            'radius_km' => $radius,
-                            'user_location' => json_encode(['lat' => $userLat, 'lng' => $userLng]),
-                            'action_url' => '/properties/nearby',
-                            'action_text' => 'View Nearby Properties'
-                        ];
-
-                        $fcmResult = $firebaseService->sendToUser($user, $notificationPayload, $dataPayload);
-
-                        if ($fcmResult) {
-                            Log::info('Nearby properties notification sent via FCM', [
-                                'user_id' => $userId,
-                                'properties_count' => $nearbyProperties->count()
-                            ]);
-                        } else {
-                            Log::warning('FCM nearby properties notification failed to send', [
-                                'user_id' => $userId,
-                                'properties_count' => $nearbyProperties->count()
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM nearby properties notification error: ' . $e->getMessage(), [
-                            'user_id' => $userId,
-                            'properties_count' => $nearbyProperties->count()
-                        ]);
-                    }
-                }
+            if ($nearbyProperties->isEmpty()) {
+                return true;
             }
+
+            $title   = 'Properties Near You';
+            $message = 'We found ' . $nearbyProperties->count() . " new properties within {$radius}km of your location.";
+
+            $notification = $this->createNotification([
+                'user_id'     => $userId,
+                'title'       => $title,
+                'message'     => $message,
+                'type'        => 'property',
+                'priority'    => 'medium',
+                'data'        => [
+                    'nearby_properties' => $nearbyProperties->pluck('id')->toArray(),
+                    'radius_km'         => $radius,
+                    'user_location'     => ['lat' => $userLat, 'lng' => $userLng],
+                ],
+                'action_url'  => '/properties/nearby',
+                'action_text' => 'View Nearby Properties',
+                'expires_at'  => now()->addDays(14),
+            ]);
+
+            $this->push($user, compact('title', 'message'), [
+                'type'              => 'property',
+                'id'                => $notification?->id,
+                'priority'          => 'medium',
+                'nearby_properties' => $nearbyProperties->pluck('id')->toArray(),
+                'radius_km'         => $radius,
+                'user_location'     => ['lat' => $userLat, 'lng' => $userLng],
+                'action_url'        => '/properties/nearby',
+                'action_text'       => 'View Nearby Properties',
+            ]);
 
             return true;
         } catch (\Exception $e) {
@@ -766,9 +583,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Send appointment confirmation notification
-     */
     public function sendAppointmentNotifications($appointmentId)
     {
         try {
@@ -777,151 +591,113 @@ class NotificationController extends Controller
                 return false;
             }
 
-            // Notify the user
+            $when = "{$appointment->appointment_date} at {$appointment->appointment_time}";
+
+            // ── User ──────────────────────────────────────────────────────
             if ($appointment->user) {
+                $title   = 'Appointment Scheduled';
+                $message = "Your appointment has been scheduled for {$when}.";
+
                 $notification = $this->createNotification([
-                    'user_id' => $appointment->user_id,
-                    'title' => 'Appointment Scheduled',
-                    'message' => "Your appointment has been scheduled for {$appointment->appointment_date} at {$appointment->appointment_time}.",
-                    'type' => 'appointment',
-                    'priority' => 'high',
-                    'data' => [
-                        'appointment_id' => (string) $appointmentId,
+                    'user_id'     => $appointment->user_id,
+                    'title'       => $title,
+                    'message'     => $message,
+                    'type'        => 'appointment',
+                    'priority'    => 'high',
+                    'data'        => [
+                        'appointment_id'   => (string) $appointmentId,
                         'appointment_date' => $appointment->appointment_date,
                         'appointment_time' => $appointment->appointment_time,
                         'appointment_type' => $appointment->type,
-                        'property_id' => $appointment->property_id,
+                        'property_id'      => $appointment->property_id,
                     ],
-                    'action_url' => "/appointments/{$appointmentId}",
+                    'action_url'  => "/appointments/{$appointmentId}",
                     'action_text' => 'View Appointment',
                 ]);
 
-                // Send FCM notification using FirebaseService
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'Appointment Scheduled',
-                            'message' => "Your appointment has been scheduled for {$appointment->appointment_date} at {$appointment->appointment_time}."
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'appointment',
-                            'id' => $notification->id ?? null,
-                            'priority' => 'high',
-                            'appointment_id' => (string) $appointmentId,
-                            'appointment_date' => $appointment->appointment_date,
-                            'appointment_time' => $appointment->appointment_time,
-                            'appointment_type' => $appointment->type,
-                            'property_id' => $appointment->property_id,
-                            'action_url' => "/appointments/{$appointmentId}",
-                            'action_text' => 'View Appointment'
-                        ];
-
-                        $fcmResult = $firebaseService->sendToUser($appointment->user, $notificationPayload, $dataPayload);
-
-                        if ($fcmResult) {
-                            Log::info('Appointment notification sent via FCM to user', [
-                                'user_id' => $appointment->user_id,
-                                'appointment_id' => $appointmentId
-                            ]);
-                        } else {
-                            Log::warning('FCM appointment notification failed to send to user', [
-                                'user_id' => $appointment->user_id,
-                                'appointment_id' => $appointmentId
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM appointment notification error for user: ' . $e->getMessage(), [
-                            'user_id' => $appointment->user_id,
-                            'appointment_id' => $appointmentId
-                        ]);
-                    }
-                }
+                $this->push($appointment->user, compact('title', 'message'), [
+                    'type'             => 'appointment',
+                    'id'               => $notification?->id,
+                    'priority'         => 'high',
+                    'appointment_id'   => $appointmentId,
+                    'appointment_date' => $appointment->appointment_date,
+                    'appointment_time' => $appointment->appointment_time,
+                    'appointment_type' => $appointment->type,
+                    'property_id'      => $appointment->property_id,
+                    'action_url'       => "/appointments/{$appointmentId}",
+                    'action_text'      => 'View Appointment',
+                ]);
             }
 
-            // Notify the agent
+            // ── Agent ─────────────────────────────────────────────────────
             if ($appointment->agent_id) {
-                $agentNotification = $this->createNotification([
-                    'agent_id' => $appointment->agent_id,
-                    'title' => 'New Appointment',
-                    'message' => "You have a new appointment scheduled with {$appointment->client_name} on {$appointment->appointment_date} at {$appointment->appointment_time}.",
-                    'type' => 'appointment',
-                    'priority' => 'high',
-                    'data' => [
-                        'appointment_id' => (string) $appointmentId,
-                        'client_name' => $appointment->client_name,
-                        'client_phone' => $appointment->client_phone,
+                $title   = 'New Appointment';
+                $message = "You have a new appointment scheduled with {$appointment->client_name} on {$when}.";
+
+                $notification = $this->createNotification([
+                    'agent_id'    => $appointment->agent_id,
+                    'title'       => $title,
+                    'message'     => $message,
+                    'type'        => 'appointment',
+                    'priority'    => 'high',
+                    'data'        => [
+                        'appointment_id'   => (string) $appointmentId,
+                        'client_name'      => $appointment->client_name,
+                        'client_phone'     => $appointment->client_phone,
                         'appointment_date' => $appointment->appointment_date,
                         'appointment_time' => $appointment->appointment_time,
                     ],
-                    'action_url' => "/appointments/{$appointmentId}",
+                    'action_url'  => "/appointments/{$appointmentId}",
                     'action_text' => 'View Appointment',
                 ]);
 
-                // Send FCM notification to agent using FirebaseService
-                if (class_exists('\App\Services\FirebaseService') && $appointment->agent) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'New Appointment',
-                            'message' => "You have a new appointment scheduled with {$appointment->client_name} on {$appointment->appointment_date} at {$appointment->appointment_time}."
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'appointment',
-                            'id' => $agentNotification->id ?? null,
-                            'priority' => 'high',
-                            'appointment_id' => (string) $appointmentId,
-                            'client_name' => $appointment->client_name,
-                            'client_phone' => $appointment->client_phone,
-                            'appointment_date' => $appointment->appointment_date,
-                            'appointment_time' => $appointment->appointment_time,
-                            'action_url' => "/appointments/{$appointmentId}",
-                            'action_text' => 'View Appointment'
-                        ];
-
-                        $fcmResult = $firebaseService->sendToAgent($appointment->agent, $notificationPayload, $dataPayload);
-
-                        if ($fcmResult) {
-                            Log::info('Appointment notification sent via FCM to agent', [
-                                'agent_id' => $appointment->agent_id,
-                                'appointment_id' => $appointmentId
-                            ]);
-                        } else {
-                            Log::warning('FCM appointment notification failed to send to agent', [
-                                'agent_id' => $appointment->agent_id,
-                                'appointment_id' => $appointmentId
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM appointment notification error for agent: ' . $e->getMessage(), [
-                            'agent_id' => $appointment->agent_id,
-                            'appointment_id' => $appointmentId
-                        ]);
-                    }
-                }
+                $this->push($appointment->agent, compact('title', 'message'), [
+                    'type'             => 'appointment',
+                    'id'               => $notification?->id,
+                    'priority'         => 'high',
+                    'appointment_id'   => $appointmentId,
+                    'client_name'      => $appointment->client_name,
+                    'client_phone'     => $appointment->client_phone,
+                    'appointment_date' => $appointment->appointment_date,
+                    'appointment_time' => $appointment->appointment_time,
+                    'action_url'       => "/appointments/{$appointmentId}",
+                    'action_text'      => 'View Appointment',
+                ]);
             }
 
-            // Notify the office
+            // ── Office ────────────────────────────────────────────────────
             if ($appointment->office_id) {
-                $this->createNotification([
-                    'office_id' => $appointment->office_id,
-                    'title' => 'New Appointment',
-                    'message' => "A new appointment has been scheduled with {$appointment->client_name} on {$appointment->appointment_date} at {$appointment->appointment_time}.",
-                    'type' => 'appointment',
-                    'priority' => 'medium',
-                    'data' => [
-                        'appointment_id' => (string) $appointmentId,
-                        'client_name' => $appointment->client_name,
-                        'agent_id' => $appointment->agent_id,
+                $title   = 'New Appointment';
+                $message = "A new appointment has been scheduled with {$appointment->client_name} on {$when}.";
+
+                $notification = $this->createNotification([
+                    'office_id'   => $appointment->office_id,
+                    'title'       => $title,
+                    'message'     => $message,
+                    'type'        => 'appointment',
+                    'priority'    => 'medium',
+                    'data'        => [
+                        'appointment_id'   => (string) $appointmentId,
+                        'client_name'      => $appointment->client_name,
+                        'agent_id'         => $appointment->agent_id,
                         'appointment_date' => $appointment->appointment_date,
                         'appointment_time' => $appointment->appointment_time,
                     ],
-                    'action_url' => "/appointments/{$appointmentId}",
+                    'action_url'  => "/appointments/{$appointmentId}",
                     'action_text' => 'View Appointment',
+                ]);
+
+                // FIX: the office branch created the DB row but never pushed.
+                $this->push($appointment->office, compact('title', 'message'), [
+                    'type'             => 'appointment',
+                    'id'               => $notification?->id,
+                    'priority'         => 'medium',
+                    'appointment_id'   => $appointmentId,
+                    'client_name'      => $appointment->client_name,
+                    'appointment_date' => $appointment->appointment_date,
+                    'appointment_time' => $appointment->appointment_time,
+                    'action_url'       => "/appointments/{$appointmentId}",
+                    'action_text'      => 'View Appointment',
                 ]);
             }
 
@@ -932,77 +708,11 @@ class NotificationController extends Controller
         }
     }
 
-
-    /**
-     * Find agents interested in a property by city
-     */
-    private function findInterestedAgents(string $cityEn, string $cityAr, string $cityKu)
-    {
-        try {
-            return Agent::whereRaw("JSON_LENGTH(device_tokens) > 0")
-                ->where(function ($q) use ($cityEn, $cityAr, $cityKu) {
-                    // No city set — always notify
-                    $q->whereNull('city')
-                        ->orWhere('city', '');
-
-                    // City matches (case-insensitive)
-                    if ($cityEn !== '') {
-                        $q->orWhereRaw('LOWER(TRIM(city)) LIKE ?', ['%' . $cityEn . '%']);
-                    }
-                    if ($cityAr !== '') {
-                        $q->orWhereRaw('TRIM(city) LIKE ?', ['%' . $cityAr . '%']);
-                    }
-                    if ($cityKu !== '') {
-                        $q->orWhereRaw('TRIM(city) LIKE ?', ['%' . $cityKu . '%']);
-                    }
-                })
-                ->limit(200)
-                ->get();
-        } catch (\Exception $e) {
-            Log::error('Error finding interested agents: ' . $e->getMessage());
-            return collect();
-        }
-    }
-
-    /**
-     * Find offices interested in a property by city
-     */
-    private function findInterestedOffices(string $cityEn, string $cityAr, string $cityKu)
-    {
-        try {
-            return \App\Models\RealEstateOffice::whereRaw("JSON_LENGTH(device_tokens) > 0")
-                ->where(function ($q) use ($cityEn, $cityAr, $cityKu) {
-                    // No city set — always notify
-                    $q->whereNull('city')
-                        ->orWhere('city', '');
-
-                    // City matches (case-insensitive)
-                    if ($cityEn !== '') {
-                        $q->orWhereRaw('LOWER(TRIM(city)) LIKE ?', ['%' . $cityEn . '%']);
-                    }
-                    if ($cityAr !== '') {
-                        $q->orWhereRaw('TRIM(city) LIKE ?', ['%' . $cityAr . '%']);
-                    }
-                    if ($cityKu !== '') {
-                        $q->orWhereRaw('TRIM(city) LIKE ?', ['%' . $cityKu . '%']);
-                    }
-                })
-                ->limit(200)
-                ->get();
-        } catch (\Exception $e) {
-            Log::error('Error finding interested offices: ' . $e->getMessage());
-            return collect();
-        }
-    }
-
-    /**
-     * Send appointment status update notifications
-     */
     public function sendAppointmentStatusNotification($appointmentId, $newStatus)
     {
         try {
             $appointment = Appointment::with(['user', 'agent', 'office'])->find($appointmentId);
-            if (!$appointment) {
+            if (!$appointment || !$appointment->user) {
                 return false;
             }
 
@@ -1012,74 +722,40 @@ class NotificationController extends Controller
                 'cancelled' => 'Your appointment has been cancelled',
             ];
 
-            $message = $statusMessages[$newStatus] ?? "Your appointment status has been updated to {$newStatus}";
+            $base    = $statusMessages[$newStatus] ?? "Your appointment status has been updated to {$newStatus}";
+            $title   = 'Appointment Update';
+            $message = $base . " for {$appointment->appointment_date} at {$appointment->appointment_time}.";
+            $prio    = $newStatus === 'cancelled' ? 'high' : 'medium';
 
-            // Notify the user
-            if ($appointment->user) {
-                $notification = $this->createNotification([
-                    'user_id' => $appointment->user_id,
-                    'title' => 'Appointment Update',
-                    'message' => $message . " for {$appointment->appointment_date} at {$appointment->appointment_time}.",
-                    'type' => 'appointment',
-                    'priority' => $newStatus === 'cancelled' ? 'high' : 'medium',
-                    'data' => [
-                        'appointment_id' => (string) $appointmentId,
-                        'old_status' => $appointment->getOriginal('status'),
-                        'new_status' => $newStatus,
-                        'appointment_date' => $appointment->appointment_date,
-                        'appointment_time' => $appointment->appointment_time,
-                    ],
-                    'action_url' => "/appointments/{$appointmentId}",
-                    'action_text' => 'View Appointment',
-                ]);
+            $notification = $this->createNotification([
+                'user_id'     => $appointment->user_id,
+                'title'       => $title,
+                'message'     => $message,
+                'type'        => 'appointment',
+                'priority'    => $prio,
+                'data'        => [
+                    'appointment_id'   => (string) $appointmentId,
+                    'old_status'       => $appointment->getOriginal('status'),
+                    'new_status'       => $newStatus,
+                    'appointment_date' => $appointment->appointment_date,
+                    'appointment_time' => $appointment->appointment_time,
+                ],
+                'action_url'  => "/appointments/{$appointmentId}",
+                'action_text' => 'View Appointment',
+            ]);
 
-                // Send FCM notification using FirebaseService
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'Appointment Update',
-                            'message' => $message . " for {$appointment->appointment_date} at {$appointment->appointment_time}."
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'appointment',
-                            'id' => $notification->id ?? null,
-                            'priority' => $newStatus === 'cancelled' ? 'high' : 'medium',
-                            'appointment_id' => (string) $appointmentId,
-                            'old_status' => $appointment->getOriginal('status'),
-                            'new_status' => $newStatus,
-                            'appointment_date' => $appointment->appointment_date,
-                            'appointment_time' => $appointment->appointment_time,
-                            'action_url' => "/appointments/{$appointmentId}",
-                            'action_text' => 'View Appointment'
-                        ];
-
-                        $fcmResult = $firebaseService->sendToUser($appointment->user, $notificationPayload, $dataPayload);
-
-                        if ($fcmResult) {
-                            Log::info('Appointment status notification sent via FCM', [
-                                'user_id' => $appointment->user_id,
-                                'appointment_id' => (string) $appointmentId,
-                                'new_status' => $newStatus
-                            ]);
-                        } else {
-                            Log::warning('FCM appointment status notification failed to send', [
-                                'user_id' => $appointment->user_id,
-                                'appointment_id' => (string) $appointmentId,
-                                'new_status' => $newStatus
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM appointment status notification error: ' . $e->getMessage(), [
-                            'user_id' => $appointment->user_id,
-                            'appointment_id' => (string) $appointmentId,
-                            'new_status' => $newStatus
-                        ]);
-                    }
-                }
-            }
+            $this->push($appointment->user, compact('title', 'message'), [
+                'type'             => 'appointment',
+                'id'               => $notification?->id,
+                'priority'         => $prio,
+                'appointment_id'   => $appointmentId,
+                'old_status'       => $appointment->getOriginal('status'),
+                'new_status'       => $newStatus,
+                'appointment_date' => $appointment->appointment_date,
+                'appointment_time' => $appointment->appointment_time,
+                'action_url'       => "/appointments/{$appointmentId}",
+                'action_text'      => 'View Appointment',
+            ]);
 
             return true;
         } catch (\Exception $e) {
@@ -1089,148 +765,94 @@ class NotificationController extends Controller
     }
 
     /**
-     * Send reminder notifications for upcoming appointments
+     * Reminder for tomorrow's appointments. Chunked so a busy day can't
+     * exhaust memory or blow the execution limit.
      */
     public function sendAppointmentReminders()
     {
         try {
-            // Get appointments for tomorrow
-            $upcomingAppointments = Appointment::with(['user', 'agent', 'office'])
+            $total = 0;
+
+            Appointment::with(['user', 'agent'])
                 ->whereDate('appointment_date', now()->addDay())
                 ->whereIn('status', ['pending', 'confirmed'])
-                ->get();
+                ->chunkById(200, function ($appointments) use (&$total) {
+                    foreach ($appointments as $appointment) {
+                        $total++;
 
-            foreach ($upcomingAppointments as $appointment) {
-                // Remind user
-                if ($appointment->user) {
-                    $userNotification = $this->createNotification([
-                        'user_id' => $appointment->user_id,
-                        'title' => 'Appointment Reminder',
-                        'message' => "You have an appointment tomorrow at {$appointment->appointment_time}. Don't forget!",
-                        'type' => 'appointment',
-                        'priority' => 'medium',
-                        'data' => [
-                            'appointment_id' => $appointment->id,
-                            'appointment_date' => $appointment->appointment_date,
-                            'appointment_time' => $appointment->appointment_time,
-                            'reminder_type' => 'day_before',
-                        ],
-                        'action_url' => "/appointments/{$appointment->id}",
-                        'action_text' => 'View Appointment',
-                        'expires_at' => now()->addDays(2),
-                    ]);
+                        if ($appointment->user) {
+                            $title   = 'Appointment Reminder';
+                            $message = "You have an appointment tomorrow at {$appointment->appointment_time}. Don't forget!";
 
-                    // Send FCM notification using FirebaseService
-                    if (class_exists('\App\Services\FirebaseService')) {
-                        try {
-                            $firebaseService = new \App\Services\FirebaseService();
+                            $n = $this->createNotification([
+                                'user_id'     => $appointment->user_id,
+                                'title'       => $title,
+                                'message'     => $message,
+                                'type'        => 'appointment',
+                                'priority'    => 'medium',
+                                'data'        => [
+                                    'appointment_id'   => (string) $appointment->id,
+                                    'appointment_date' => $appointment->appointment_date,
+                                    'appointment_time' => $appointment->appointment_time,
+                                    'reminder_type'    => 'day_before',
+                                ],
+                                'action_url'  => "/appointments/{$appointment->id}",
+                                'action_text' => 'View Appointment',
+                                'expires_at'  => now()->addDays(2),
+                            ]);
 
-                            $notificationPayload = [
-                                'title' => 'Appointment Reminder',
-                                'message' => "You have an appointment tomorrow at {$appointment->appointment_time}. Don't forget!"
-                            ];
-
-                            $dataPayload = [
-                                'type' => 'appointment',
-                                'id' => $userNotification->id ?? null,
-                                'priority' => 'medium',
-                                'appointment_id' => $appointment->id,
+                            $this->push($appointment->user, compact('title', 'message'), [
+                                'type'             => 'appointment',
+                                'id'               => $n?->id,
+                                'priority'         => 'medium',
+                                'appointment_id'   => $appointment->id,
                                 'appointment_date' => $appointment->appointment_date,
                                 'appointment_time' => $appointment->appointment_time,
-                                'reminder_type' => 'day_before',
-                                'action_url' => "/appointments/{$appointment->id}",
-                                'action_text' => 'View Appointment'
-                            ];
+                                'reminder_type'    => 'day_before',
+                                'action_url'       => "/appointments/{$appointment->id}",
+                                'action_text'      => 'View Appointment',
+                            ]);
+                        }
 
-                            $fcmResult = $firebaseService->sendToUser($appointment->user, $notificationPayload, $dataPayload);
+                        if ($appointment->agent_id) {
+                            $title   = 'Appointment Reminder';
+                            $message = "You have an appointment with {$appointment->client_name} tomorrow at {$appointment->appointment_time}.";
 
-                            if ($fcmResult) {
-                                Log::info('Appointment reminder sent via FCM to user', [
-                                    'user_id' => $appointment->user_id,
-                                    'appointment_id' => $appointment->id
-                                ]);
-                            } else {
-                                Log::warning('FCM appointment reminder failed to send to user', [
-                                    'user_id' => $appointment->user_id,
-                                    'appointment_id' => $appointment->id
-                                ]);
-                            }
-                        } catch (\Exception $e) {
-                            Log::error('FCM appointment reminder error for user: ' . $e->getMessage(), [
-                                'user_id' => $appointment->user_id,
-                                'appointment_id' => $appointment->id
+                            $n = $this->createNotification([
+                                'agent_id'    => $appointment->agent_id,
+                                'title'       => $title,
+                                'message'     => $message,
+                                'type'        => 'appointment',
+                                'priority'    => 'medium',
+                                'data'        => [
+                                    'appointment_id'   => (string) $appointment->id,
+                                    'client_name'      => $appointment->client_name,
+                                    'appointment_date' => $appointment->appointment_date,
+                                    'appointment_time' => $appointment->appointment_time,
+                                    'reminder_type'    => 'day_before',
+                                ],
+                                'action_url'  => "/appointments/{$appointment->id}",
+                                'action_text' => 'View Appointment',
+                                'expires_at'  => now()->addDays(2),
+                            ]);
+
+                            $this->push($appointment->agent, compact('title', 'message'), [
+                                'type'             => 'appointment',
+                                'id'               => $n?->id,
+                                'priority'         => 'medium',
+                                'appointment_id'   => $appointment->id,
+                                'client_name'      => $appointment->client_name,
+                                'appointment_date' => $appointment->appointment_date,
+                                'appointment_time' => $appointment->appointment_time,
+                                'reminder_type'    => 'day_before',
+                                'action_url'       => "/appointments/{$appointment->id}",
+                                'action_text'      => 'View Appointment',
                             ]);
                         }
                     }
-                }
+                });
 
-                // Remind agent
-                if ($appointment->agent_id) {
-                    $agentNotification = $this->createNotification([
-                        'agent_id' => $appointment->agent_id,
-                        'title' => 'Appointment Reminder',
-                        'message' => "You have an appointment with {$appointment->client_name} tomorrow at {$appointment->appointment_time}.",
-                        'type' => 'appointment',
-                        'priority' => 'medium',
-                        'data' => [
-                            'appointment_id' => $appointment->id,
-                            'client_name' => $appointment->client_name,
-                            'appointment_date' => $appointment->appointment_date,
-                            'appointment_time' => $appointment->appointment_time,
-                            'reminder_type' => 'day_before',
-                        ],
-                        'action_url' => "/appointments/{$appointment->id}",
-                        'action_text' => 'View Appointment',
-                        'expires_at' => now()->addDays(2),
-                    ]);
-
-                    // Send FCM notification to agent using FirebaseService
-                    if (class_exists('\App\Services\FirebaseService') && $appointment->agent) {
-                        try {
-                            $firebaseService = new \App\Services\FirebaseService();
-
-                            $notificationPayload = [
-                                'title' => 'Appointment Reminder',
-                                'message' => "You have an appointment with {$appointment->client_name} tomorrow at {$appointment->appointment_time}."
-                            ];
-
-                            $dataPayload = [
-                                'type' => 'appointment',
-                                'id' => $agentNotification->id ?? null,
-                                'priority' => 'medium',
-                                'appointment_id' => $appointment->id,
-                                'client_name' => $appointment->client_name,
-                                'appointment_date' => $appointment->appointment_date,
-                                'appointment_time' => $appointment->appointment_time,
-                                'reminder_type' => 'day_before',
-                                'action_url' => "/appointments/{$appointment->id}",
-                                'action_text' => 'View Appointment'
-                            ];
-
-                            $fcmResult = $firebaseService->sendToAgent($appointment->agent, $notificationPayload, $dataPayload);
-
-                            if ($fcmResult) {
-                                Log::info('Appointment reminder sent via FCM to agent', [
-                                    'agent_id' => $appointment->agent_id,
-                                    'appointment_id' => $appointment->id
-                                ]);
-                            } else {
-                                Log::warning('FCM appointment reminder failed to send to agent', [
-                                    'agent_id' => $appointment->agent_id,
-                                    'appointment_id' => $appointment->id
-                                ]);
-                            }
-                        } catch (\Exception $e) {
-                            Log::error('FCM appointment reminder error for agent: ' . $e->getMessage(), [
-                                'agent_id' => $appointment->agent_id,
-                                'appointment_id' => $appointment->id
-                            ]);
-                        }
-                    }
-                }
-            }
-
-            Log::info("Sent appointment reminders for " . $upcomingAppointments->count() . " appointments");
+            Log::info("Sent appointment reminders for {$total} appointments");
             return true;
         } catch (\Exception $e) {
             Log::error('Error sending appointment reminders: ' . $e->getMessage());
@@ -1238,9 +860,6 @@ class NotificationController extends Controller
         }
     }
 
-    /**
-     * Send property price drop notifications
-     */
     public function sendPriceDropNotification($propertyId, $oldPriceUSD, $newPriceUSD)
     {
         try {
@@ -1249,79 +868,56 @@ class NotificationController extends Controller
                 return false;
             }
 
-            $priceDropPercent = round((($oldPriceUSD - $newPriceUSD) / $oldPriceUSD) * 100);
-            if ($priceDropPercent < 5) { // Only notify for drops of 5% or more
+            $old = (float) $oldPriceUSD;
+            $new = (float) $newPriceUSD;
+
+            // FIX: this used to divide by $oldPriceUSD unguarded — a property
+            // with a null/zero old price threw a DivisionByZeroError.
+            if ($old <= 0 || $new >= $old) {
                 return false;
             }
 
-            // Find users who might be interested
+            $priceDropPercent = (int) round((($old - $new) / $old) * 100);
+            if ($priceDropPercent < 5) {
+                return false;
+            }
+
+            $title   = 'Price Drop Alert! 📉';
+            $message = "Great news! The price of a property you might like has dropped by {$priceDropPercent}%!";
+
             $interestedUsers = $this->findInterestedUsers($property);
 
             foreach ($interestedUsers as $user) {
                 $notification = $this->createNotification([
-                    'user_id' => $user->id,
-                    'title' => 'Price Drop Alert! 📉',
-                    'message' => "Great news! The price of a property you might like has dropped by {$priceDropPercent}%!",
-                    'type' => 'property',
-                    'priority' => 'high',
-                    'data' => [
-                        'property_id' => (string) $propertyId,
-                        'old_price_usd' => $oldPriceUSD,
-                        'new_price_usd' => $newPriceUSD,
+                    'user_id'     => $user->id,
+                    'title'       => $title,
+                    'message'     => $message,
+                    'type'        => 'property',
+                    'priority'    => 'high',
+                    'data'        => [
+                        'property_id'        => (string) $propertyId,
+                        'old_price_usd'      => $old,
+                        'new_price_usd'      => $new,
                         'price_drop_percent' => $priceDropPercent,
-                        'savings_usd' => $oldPriceUSD - $newPriceUSD,
+                        'savings_usd'        => $old - $new,
                     ],
-                    'action_url' => "/properties/{$propertyId}",
+                    'action_url'  => "/properties/{$propertyId}",
                     'action_text' => 'View Property',
-                    'expires_at' => now()->addDays(14),
+                    'expires_at'  => now()->addDays(14),
                 ]);
 
-                // Send FCM notification using FirebaseService
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'Price Drop Alert! 📉',
-                            'message' => "Great news! The price of a property you might like has dropped by {$priceDropPercent}%!"
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'property',
-                            'id' => $notification->id ?? null,
-                            'priority' => 'high',
-                            'property_id' => (string) $propertyId,
-                            'old_price_usd' => $oldPriceUSD,
-                            'new_price_usd' => $newPriceUSD,
-                            'price_drop_percent' => $priceDropPercent,
-                            'savings_usd' => $oldPriceUSD - $newPriceUSD,
-                            'action_url' => "/properties/{$propertyId}",
-                            'action_text' => 'View Property'
-                        ];
-
-                        $fcmResult = $firebaseService->sendToUser($user, $notificationPayload, $dataPayload);
-
-                        if ($fcmResult) {
-                            Log::info('Price drop notification sent via FCM', [
-                                'user_id' => $user->id,
-                                'property_id' => (string) $propertyId,
-                                'price_drop_percent' => $priceDropPercent
-                            ]);
-                        } else {
-                            Log::warning('FCM price drop notification failed to send', [
-                                'user_id' => $user->id,
-                                'property_id' => (string) $propertyId,
-                                'price_drop_percent' => $priceDropPercent
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM price drop notification error: ' . $e->getMessage(), [
-                            'user_id' => $user->id,
-                            'property_id' => (string) $propertyId,
-                            'price_drop_percent' => $priceDropPercent
-                        ]);
-                    }
-                }
+                $this->push($user, compact('title', 'message'), [
+                    'type'               => 'property',
+                    'id'                 => $notification?->id,
+                    'priority'           => 'high',
+                    'property_id'        => $propertyId,
+                    'old_price_usd'      => $old,
+                    'new_price_usd'      => $new,
+                    'price_drop_percent' => $priceDropPercent,
+                    'savings_usd'        => $old - $new,
+                    'action_url'         => "/properties/{$propertyId}",
+                    'action_text'        => 'View Property',
+                ]);
             }
 
             return true;
@@ -1331,8 +927,426 @@ class NotificationController extends Controller
         }
     }
 
+    public function sendNewOfficeNotification($officeId)
+    {
+        try {
+            $office = RealEstateOffice::find($officeId);
+            if (!$office || !$office->latitude || !$office->longitude) {
+                return false;
+            }
+
+            $radius  = 20;
+            $title   = 'New Real Estate Office in Your Area';
+            $message = "A new real estate office '{$office->company_name}' has opened in your area. Check out their services!";
+
+            $interestedUsers = $this->notifiableUsers()
+                ->whereNotNull('lat')
+                ->whereNotNull('lng')
+                ->whereRaw(
+                    '(6371 * acos(LEAST(1, GREATEST(-1,
+                        cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?))
+                        + sin(radians(?)) * sin(radians(lat))
+                    )))) <= ?',
+                    [$office->latitude, $office->longitude, $office->latitude, $radius]
+                )
+                ->limit(100)
+                ->get();
+
+            foreach ($interestedUsers as $user) {
+                $notification = $this->createNotification([
+                    'user_id'     => $user->id,
+                    'title'       => $title,
+                    'message'     => $message,
+                    'type'        => 'system',
+                    'priority'    => 'medium',
+                    'data'        => [
+                        'office_id'        => (string) $officeId,
+                        'office_name'      => $office->company_name,
+                        'office_city'      => $office->city,
+                        'office_district'  => $office->district,
+                        'years_experience' => $office->years_experience,
+                    ],
+                    'action_url'  => "/offices/{$officeId}",
+                    'action_text' => 'View Office',
+                    'expires_at'  => now()->addDays(30),
+                ]);
+
+                $this->push($user, compact('title', 'message'), [
+                    'type'             => 'system',
+                    'id'               => $notification?->id,
+                    'priority'         => 'medium',
+                    'office_id'        => $officeId,
+                    'office_name'      => $office->company_name,
+                    'office_city'      => $office->city,
+                    'office_district'  => $office->district,
+                    'years_experience' => $office->years_experience,
+                    'action_url'       => "/offices/{$officeId}",
+                    'action_text'      => 'View Office',
+                ]);
+            }
+
+            Log::info("Sent new office notifications to {$interestedUsers->count()} users for office: {$officeId}");
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Error sending new office notifications: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function sendOfficeVerificationNotification($officeId)
+    {
+        try {
+            $office = RealEstateOffice::find($officeId);
+            if (!$office) {
+                return false;
+            }
+
+            // ── Office's own agents ───────────────────────────────────────
+            $agentTitle   = 'Office Verified Successfully!';
+            $agentMessage = "Congratulations! Your office '{$office->company_name}' has been verified. "
+                . 'This will increase your credibility with clients.';
+
+            foreach (Agent::where('office_id', $officeId)->get() as $agent) {
+                $n = $this->createNotification([
+                    'agent_id'    => $agent->id,
+                    'title'       => $agentTitle,
+                    'message'     => $agentMessage,
+                    'type'        => 'system',
+                    'priority'    => 'high',
+                    'data'        => [
+                        'office_id'         => (string) $officeId,
+                        'office_name'       => $office->company_name,
+                        'verification_date' => now()->toDateString(),
+                    ],
+                    'action_url'  => "/offices/{$officeId}",
+                    'action_text' => 'View Office Profile',
+                ]);
+
+                $this->push($agent, ['title' => $agentTitle, 'message' => $agentMessage], [
+                    'type'              => 'system',
+                    'id'                => $n?->id,
+                    'priority'          => 'high',
+                    'office_id'         => $officeId,
+                    'office_name'       => $office->company_name,
+                    'verification_date' => now()->toDateString(),
+                    'action_url'        => "/offices/{$officeId}",
+                    'action_text'       => 'View Office Profile',
+                ]);
+            }
+
+            // ── Users who booked with this office in the last 30 days ─────
+            $recentUsers = User::whereIn('id', function ($q) use ($officeId) {
+                $q->select('user_id')
+                    ->from('appointments')
+                    ->where('office_id', $officeId)
+                    ->where('created_at', '>=', now()->subDays(30))
+                    ->whereNotNull('user_id')
+                    ->distinct();
+            })->get();
+
+            if ($recentUsers->isNotEmpty()) {
+                $title   = 'Office Verification Update';
+                $message = "Good news! '{$office->company_name}' that you recently interacted with "
+                    . 'has been verified for authenticity and quality.';
+
+                $this->insertBulk($recentUsers, 'user_id', [
+                    'title'       => $title,
+                    'message'     => $message,
+                    'type'        => 'system',
+                    'priority'    => 'medium',
+                    'data'        => [
+                        'office_id'         => (string) $officeId,
+                        'office_name'       => $office->company_name,
+                        'verification_date' => now()->toDateString(),
+                    ],
+                    'action_url'  => "/offices/{$officeId}",
+                    'action_text' => 'View Office',
+                    'expires_at'  => now()->addDays(14),
+                ]);
+
+                $this->pushMany($recentUsers, compact('title', 'message'), [
+                    'type'              => 'system',
+                    'priority'          => 'medium',
+                    'office_id'         => $officeId,
+                    'office_name'       => $office->company_name,
+                    'verification_date' => now()->toDateString(),
+                    'action_url'        => "/offices/{$officeId}",
+                    'action_text'       => 'View Office',
+                ]);
+            }
+
+            // ── Nearby users who haven't interacted ───────────────────────
+            if ($office->latitude && $office->longitude) {
+                $nearbyUsers = $this->notifiableUsers()
+                    ->whereNotNull('lat')
+                    ->whereNotNull('lng')
+                    ->whereRaw(
+                        '(6371 * acos(LEAST(1, GREATEST(-1,
+                            cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?))
+                            + sin(radians(?)) * sin(radians(lat))
+                        )))) <= ?',
+                        [$office->latitude, $office->longitude, $office->latitude, 15]
+                    )
+                    ->whereNotIn('id', $recentUsers->pluck('id'))
+                    ->limit(50)
+                    ->get();
+
+                if ($nearbyUsers->isNotEmpty()) {
+                    $title   = 'Verified Office Near You';
+                    $message = "'{$office->company_name}' in your area has been verified. "
+                        . 'You can now trust their services with confidence!';
+
+                    $this->insertBulk($nearbyUsers, 'user_id', [
+                        'title'       => $title,
+                        'message'     => $message,
+                        'type'        => 'promotion',
+                        'priority'    => 'medium',
+                        'data'        => [
+                            'office_id'          => (string) $officeId,
+                            'office_name'        => $office->company_name,
+                            'office_city'        => $office->city,
+                            'verification_badge' => true,
+                        ],
+                        'action_url'  => "/offices/{$officeId}",
+                        'action_text' => 'Explore Services',
+                        'expires_at'  => now()->addDays(7),
+                    ]);
+
+                    $this->pushMany($nearbyUsers, compact('title', 'message'), [
+                        'type'               => 'promotion',
+                        'priority'           => 'medium',
+                        'office_id'          => $officeId,
+                        'office_name'        => $office->company_name,
+                        'office_city'        => $office->city,
+                        'verification_badge' => true,
+                        'action_url'         => "/offices/{$officeId}",
+                        'action_text'        => 'Explore Services',
+                    ]);
+                }
+            }
+
+            Log::info("Sent verification notifications for office: {$officeId}");
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Error sending office verification notifications: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    public function sendOfficeAppointmentNotification($appointmentId, $type = 'new')
+    {
+        try {
+            $appointment = Appointment::with(['user', 'agent', 'office', 'property'])->find($appointmentId);
+            if (!$appointment || !$appointment->office_id) {
+                return false;
+            }
+
+            $when = "{$appointment->appointment_date} at {$appointment->appointment_time}";
+
+            $messageMap = [
+                'new'         => "New appointment scheduled with {$appointment->client_name} on {$when}",
+                'cancelled'   => "Appointment with {$appointment->client_name} scheduled for {$appointment->appointment_date} has been cancelled",
+                'rescheduled' => "Appointment with {$appointment->client_name} has been rescheduled to {$when}",
+                'confirmed'   => "Appointment with {$appointment->client_name} for {$appointment->appointment_date} has been confirmed",
+            ];
+
+            $title   = 'Appointment ' . ucfirst($type);
+            $message = $messageMap[$type] ?? 'Appointment status updated';
+            $prio    = $type === 'new' ? 'high' : 'medium';
+
+            $notification = $this->createNotification([
+                'office_id'   => $appointment->office_id,
+                'title'       => $title,
+                'message'     => $message,
+                'type'        => 'appointment',
+                'priority'    => $prio,
+                'data'        => [
+                    'appointment_id'   => (string) $appointmentId,
+                    'client_name'      => $appointment->client_name,
+                    'client_phone'     => $appointment->client_phone,
+                    'appointment_date' => $appointment->appointment_date,
+                    'appointment_time' => $appointment->appointment_time,
+                    'appointment_type' => $appointment->type,
+                    'status_change'    => $type,
+                ],
+                'action_url'  => "/appointments/{$appointmentId}",
+                'action_text' => 'View Appointment',
+            ]);
+
+            // FIX: this method only ever wrote to the DB — no push was sent.
+            $this->push($appointment->office, compact('title', 'message'), [
+                'type'             => 'appointment',
+                'id'               => $notification?->id,
+                'priority'         => $prio,
+                'appointment_id'   => $appointmentId,
+                'client_name'      => $appointment->client_name,
+                'appointment_date' => $appointment->appointment_date,
+                'appointment_time' => $appointment->appointment_time,
+                'status_change'    => $type,
+                'action_url'       => "/appointments/{$appointmentId}",
+                'action_text'      => 'View Appointment',
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Error sending office appointment notification: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    // =================================================================
+    // PROPERTY LIFECYCLE (owner-facing)
+    // =================================================================
+
+    public function sendPropertyVerificationNotification($propertyId)
+    {
+        return $this->notifyOwner(
+            $propertyId,
+            fn($p) => $p->verified,
+            fn($p) => [
+                'title'       => 'Property Verified Successfully!',
+                'message'     => "Congratulations! Your property '{$this->getPropertyName($p)}' has been verified by our team.",
+                'priority'    => 'high',
+                'data'        => [
+                    'property_id'       => (string) $p->id,
+                    'property_name'     => $p->name,
+                    'verification_date' => now()->toDateString(),
+                ],
+            ]
+        );
+    }
+
+    public function sendPropertyStatusChangeNotification($propertyId, $oldStatus, $newStatus)
+    {
+        $important = ['sold', 'rented', 'available', 'cancelled'];
+        if (!in_array($newStatus, $important, true)) {
+            return false;
+        }
+
+        $statusMessages = [
+            'sold'      => 'Your property has been marked as sold',
+            'rented'    => 'Your property has been marked as rented',
+            'available' => 'Your property is now available for viewing',
+            'cancelled' => 'Your property listing has been cancelled',
+        ];
+
+        $base = $statusMessages[$newStatus] ?? "Your property status has been updated to {$newStatus}";
+
+        return $this->notifyOwner(
+            $propertyId,
+            fn($p) => true,
+            fn($p) => [
+                'title'    => 'Property Status Update',
+                'message'  => $base . ' - ' . $this->getPropertyName($p),
+                'priority' => $newStatus === 'cancelled' ? 'high' : 'medium',
+                'data'     => [
+                    'property_id'   => (string) $p->id,
+                    'old_status'    => $oldStatus,
+                    'new_status'    => $newStatus,
+                    'property_name' => $p->name,
+                ],
+            ]
+        );
+    }
+
+    public function sendPropertyBoostNotification($propertyId, $isBoosted)
+    {
+        return $this->notifyOwner(
+            $propertyId,
+            fn($p) => true,
+            fn($p) => [
+                'title'    => $isBoosted ? 'Property Boosted!' : 'Property Boost Removed',
+                'message'  => $isBoosted
+                    ? "Your property '{$this->getPropertyName($p)}' is now boosted and will get more visibility!"
+                    : "The boost for your property '{$this->getPropertyName($p)}' has been removed.",
+                'priority' => 'medium',
+                'data'     => [
+                    'property_id'   => (string) $p->id,
+                    'property_name' => $p->name,
+                    'is_boosted'    => (bool) $isBoosted,
+                    'boost_date'    => now()->toDateString(),
+                ],
+            ]
+        );
+    }
+
+    public function sendPropertyPublishNotification($propertyId, $isPublished)
+    {
+        return $this->notifyOwner(
+            $propertyId,
+            fn($p) => true,
+            fn($p) => [
+                'title'    => $isPublished ? 'Property Published!' : 'Property Unpublished',
+                'message'  => $isPublished
+                    ? "Your property '{$this->getPropertyName($p)}' is now live and visible to users!"
+                    : "Your property '{$this->getPropertyName($p)}' has been removed from public listings.",
+                'priority' => 'medium',
+                'data'     => [
+                    'property_id'   => (string) $p->id,
+                    'property_name' => $p->name,
+                    'is_published'  => (bool) $isPublished,
+                    'publish_date'  => now()->toDateString(),
+                ],
+            ]
+        );
+    }
+
     /**
-     * Send system-wide announcement
+     * Shared body for the four owner-facing property notifications above.
+     */
+    private function notifyOwner($propertyId, callable $guard, callable $build): bool
+    {
+        try {
+            $property = Property::find($propertyId);
+            if (!$property || !$guard($property)) {
+                return false;
+            }
+
+            $owner = $this->loadOwner($property);
+            if (!$owner) {
+                return false;
+            }
+
+            $payload = $build($property);
+
+            $notification = $this->createNotification([
+                $this->getOwnerColumn($owner) => $owner->id,
+                'title'       => $payload['title'],
+                'message'     => $payload['message'],
+                'type'        => 'system',
+                'priority'    => $payload['priority'],
+                'data'        => $payload['data'],
+                'action_url'  => "/properties/{$propertyId}",
+                'action_text' => 'View Property',
+            ]);
+
+            $this->push(
+                $owner,
+                ['title' => $payload['title'], 'message' => $payload['message']],
+                array_merge($payload['data'], [
+                    'type'        => 'system',
+                    'id'          => $notification?->id,
+                    'priority'    => $payload['priority'],
+                    'action_url'  => "/properties/{$propertyId}",
+                    'action_text' => 'View Property',
+                ])
+            );
+
+            return true;
+        } catch (\Exception $e) {
+            Log::error('Error sending owner property notification: ' . $e->getMessage(), [
+                'property_id' => $propertyId,
+            ]);
+            return false;
+        }
+    }
+
+    // =================================================================
+    // ADMIN BROADCASTS
+    // =================================================================
+
+    /**
+     * Single-language system announcement.
      */
     public function sendSystemAnnouncement(Request $request)
     {
@@ -1357,136 +1371,30 @@ class NotificationController extends Controller
                 );
             }
 
-            // ── Resolve image URL ─────────────────────────────────────────────
-            $imageUrl = null;
-            if ($request->hasFile('image') && $request->file('image')->isValid()) {
-                $path     = $request->file('image')->store('notifications', 'public');
-                $imageUrl = config('app.url') . \Illuminate\Support\Facades\Storage::url($path);
-            } elseif ($request->filled('image_url')) {
-                $url      = $request->image_url;
-                $imageUrl = str_starts_with($url, 'http')
-                    ? $url
-                    : rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
-            }
+            $imageUrl = $this->resolveImageUrl($request);
 
-            $recipientType   = $request->recipient_type;
-            $notifications   = [];
-            $now             = now();
-
-            $fcmNotification = [
-                'title'   => $request->title,
-                'message' => $request->message,
-                'image'   => $imageUrl,
-            ];
-
-            $fcmData = [
-                'type'         => 'system',
-                'priority'     => $request->priority,
-                'announcement' => 'true',
-                'action_url'   => $request->action_url  ?? '',
-                'action_text'  => $request->action_text ?? '',
-                'image_url'    => $imageUrl ?? '',
-            ];
-
-            $firebaseService = class_exists('\App\Services\FirebaseService')
-                ? new \App\Services\FirebaseService()
-                : null;
-
-            // ── USERS ─────────────────────────────────────────────────────────
-            if ($recipientType === 'users' || $recipientType === 'all') {
-                $users = User::where('search_preferences->behavior->enable_notifications', true)->get();
-                foreach ($users as $user) {
-                    $notifications[] = [
-                        'id'          => (string) Str::uuid(),
-                        'user_id'     => $user->id,
-                        'agent_id'    => null,
-                        'office_id'   => null,
-                        'title'       => $request->title,
-                        'message'     => $request->message,
-                        'type'        => 'system',
-                        'priority'    => $request->priority,
-                        'image_url'   => $imageUrl,
-                        'data'        => json_encode(['announcement' => true]),
-                        'action_url'  => $request->action_url,
-                        'action_text' => $request->action_text,
-                        'is_read'     => false,
-                        'sent_at'     => $now,
-                        'expires_at'  => $request->expires_at,
-                        'created_at'  => $now,
-                        'updated_at'  => $now,
-                    ];
-                    $firebaseService?->sendToUser($user, $fcmNotification, $fcmData);
-                }
-            }
-
-            // ── AGENTS ────────────────────────────────────────────────────────
-            if ($recipientType === 'agents' || $recipientType === 'all') {
-                $agents = Agent::where('is_verified', true)->get();
-                foreach ($agents as $agent) {
-                    $notifications[] = [
-                        'id'          => (string) Str::uuid(),
-                        'user_id'     => null,
-                        'agent_id'    => $agent->id,
-                        'office_id'   => null,
-                        'title'       => $request->title,
-                        'message'     => $request->message,
-                        'type'        => 'system',
-                        'priority'    => $request->priority,
-                        'image_url'   => $imageUrl,
-                        'data'        => json_encode(['announcement' => true]),
-                        'action_url'  => $request->action_url,
-                        'action_text' => $request->action_text,
-                        'is_read'     => false,
-                        'sent_at'     => $now,
-                        'expires_at'  => $request->expires_at,
-                        'created_at'  => $now,
-                        'updated_at'  => $now,
-                    ];
-                    $firebaseService?->sendToAgent($agent, $fcmNotification, $fcmData);
-                }
-            }
-
-            // ── OFFICES ───────────────────────────────────────────────────────
-            if ($recipientType === 'offices' || $recipientType === 'all') {
-                $offices = RealEstateOffice::where('is_verified', true)->get();
-                foreach ($offices as $office) {
-                    $notifications[] = [
-                        'id'          => (string) Str::uuid(),
-                        'user_id'     => null,
-                        'agent_id'    => null,
-                        'office_id'   => $office->id,
-                        'title'       => $request->title,
-                        'message'     => $request->message,
-                        'type'        => 'system',
-                        'priority'    => $request->priority,
-                        'image_url'   => $imageUrl,
-                        'data'        => json_encode(['announcement' => true]),
-                        'action_url'  => $request->action_url,
-                        'action_text' => $request->action_text,
-                        'is_read'     => false,
-                        'sent_at'     => $now,
-                        'expires_at'  => $request->expires_at,
-                        'created_at'  => $now,
-                        'updated_at'  => $now,
-                    ];
-                    // ✅ FIX: offices were in DB but never got FCM in original
-                    $firebaseService?->sendToOffice($office, $fcmNotification, $fcmData);
-                }
-            }
-
-            // ── Bulk insert ───────────────────────────────────────────────────
-            if (!empty($notifications)) {
-                foreach (array_chunk($notifications, 500) as $chunk) {
-                    DB::table('notifications')->insert($chunk);
-                }
-            }
+            $counts = $this->fanOut([
+                'recipient_type' => $request->recipient_type,
+                'titles'         => ['en' => $request->title],
+                'messages'       => ['en' => $request->message],
+                'type'           => 'system',
+                'priority'       => $request->priority,
+                'image_url'      => $imageUrl,
+                'action_url'     => $request->action_url,
+                'action_text'    => $request->action_text,
+                'expires_at'     => $request->expires_at,
+                'sent_at'        => now(),
+                'send_fcm'       => true,
+                'data_extra'     => ['announcement' => true],
+            ]);
 
             return ApiResponse::success(
                 ResponseDetails::successMessage('System announcement sent successfully'),
                 [
-                    'sent_to'       => count($notifications),
-                    'recipient_type' => $recipientType,
-                    'image_url'     => $imageUrl,
+                    'sent_to'        => array_sum($counts),
+                    'recipient_type' => $request->recipient_type,
+                    'breakdown'      => $counts,
+                    'image_url'      => $imageUrl,
                 ],
                 ResponseDetails::CODE_SUCCESS
             );
@@ -1501,1035 +1409,8 @@ class NotificationController extends Controller
     }
 
     /**
-     * Send notification when new office is created
+     * Multilingual broadcast (EN required, AR/KU optional).
      */
-    public function sendNewOfficeNotification($officeId)
-    {
-        try {
-            $office = RealEstateOffice::find($officeId);
-            if (!$office || !$office->latitude || !$office->longitude) {
-                return false;
-            }
-
-            // Find users within 20km radius of the new office
-            $radius = 20; // 20km radius
-            $interestedUsers = User::whereNotNull('lat')
-                ->whereNotNull('lng')
-                ->whereRaw(
-                    "(6371 * acos(cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?)) + sin(radians(?)) * sin(radians(lat)))) <= ?",
-                    [$office->latitude, $office->longitude, $office->latitude, $radius]
-                )
-                ->where('search_preferences->behavior->enable_notifications', true)
-                ->limit(100)
-                ->get();
-
-            foreach ($interestedUsers as $user) {
-                $notification = $this->createNotification([
-                    'user_id' => $user->id,
-                    'title' => 'New Real Estate Office in Your Area',
-                    'message' => "A new real estate office '{$office->company_name}' has opened in your area. Check out their services!",
-                    'type' => 'system',
-                    'priority' => 'medium',
-                    'data' => [
-                        'office_id' => (string) $officeId,
-                        'office_name' => $office->company_name,
-                        'office_city' => $office->city,
-                        'office_district' => $office->district,
-                        'years_experience' => $office->years_experience,
-                    ],
-                    'action_url' => "/offices/{$officeId}",
-                    'action_text' => 'View Office',
-                    'expires_at' => now()->addDays(30),
-                ]);
-
-                // Send FCM notification using FirebaseService
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'New Real Estate Office in Your Area',
-                            'message' => "A new real estate office '{$office->company_name}' has opened in your area. Check out their services!"
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'system',
-                            'id' => $notification->id ?? null,
-                            'priority' => 'medium',
-                            'office_id' => (string) $officeId,
-                            'office_name' => $office->company_name,
-                            'office_city' => $office->city,
-                            'office_district' => $office->district,
-                            'years_experience' => $office->years_experience,
-                            'action_url' => "/offices/{$officeId}",
-                            'action_text' => 'View Office'
-                        ];
-
-                        $fcmResult = $firebaseService->sendToUser($user, $notificationPayload, $dataPayload);
-
-                        if ($fcmResult) {
-                            Log::info('New office notification sent via FCM', [
-                                'user_id' => $user->id,
-                                'office_id' => $officeId
-                            ]);
-                        } else {
-                            Log::warning('FCM new office notification failed to send', [
-                                'user_id' => $user->id,
-                                'office_id' => $officeId
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM new office notification error: ' . $e->getMessage(), [
-                            'user_id' => $user->id,
-                            'office_id' => $officeId
-                        ]);
-                    }
-                }
-            }
-
-            Log::info("Sent new office notifications to " . $interestedUsers->count() . " users for office: {$officeId}");
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error sending new office notifications: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Send notification when office gets verified (Batch optimized for nearby users)
-     */
-    public function sendOfficeVerificationNotification($officeId)
-    {
-        try {
-            $office = RealEstateOffice::find($officeId);
-            if (!$office) {
-                return false;
-            }
-
-            // Notify office agents about verification (individual notifications)
-            $agents = Agent::where('office_id', $officeId)->get();
-            foreach ($agents as $agent) {
-                $agentNotification = $this->createNotification([
-                    'agent_id' => $agent->id,
-                    'title' => 'Office Verified Successfully!',
-                    'message' => "Congratulations! Your office '{$office->company_name}' has been verified. This will increase your credibility with clients.",
-                    'type' => 'system',
-                    'priority' => 'high',
-                    'data' => [
-                        'office_id' => (string) $officeId,
-                        'office_name' => $office->company_name,
-                        'verification_date' => now()->toDateString(),
-                    ],
-                    'action_url' => "/offices/{$officeId}",
-                    'action_text' => 'View Office Profile',
-                ]);
-
-                // Send FCM notification to agent using FirebaseService
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'Office Verified Successfully!',
-                            'message' => "Congratulations! Your office '{$office->company_name}' has been verified. This will increase your credibility with clients."
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'system',
-                            'id' => $agentNotification->id ?? null,
-                            'priority' => 'high',
-                            'office_id' => (string) $officeId,
-                            'office_name' => $office->company_name,
-                            'verification_date' => now()->toDateString(),
-                            'action_url' => "/offices/{$officeId}",
-                            'action_text' => 'View Office Profile'
-                        ];
-
-                        $fcmResult = $firebaseService->sendToAgent($agent, $notificationPayload, $dataPayload);
-
-                        if ($fcmResult) {
-                            Log::info('Office verification notification sent via FCM to agent', [
-                                'agent_id' => $agent->id,
-                                'office_id' => $officeId
-                            ]);
-                        } else {
-                            Log::warning('FCM office verification notification failed to send to agent', [
-                                'agent_id' => $agent->id,
-                                'office_id' => $officeId
-                            ]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('FCM office verification notification error for agent: ' . $e->getMessage(), [
-                            'agent_id' => $agent->id,
-                            'office_id' => $officeId
-                        ]);
-                    }
-                }
-            }
-
-            // Get recent users who interacted with this office
-            $recentUsers = User::whereIn('id', function ($query) use ($officeId) {
-                $query->select('user_id')
-                    ->from('appointments')
-                    ->where('office_id', $officeId)
-                    ->where('created_at', '>=', now()->subDays(30))
-                    ->distinct();
-            })->get();
-
-            // Batch notification for recent users
-            if ($recentUsers->isNotEmpty()) {
-                // Create database notifications for recent users
-                $recentUserNotifications = [];
-                foreach ($recentUsers as $user) {
-                    $notificationId = (string) Str::uuid();
-                    $recentUserNotifications[] = [
-                        'id' => $notificationId,
-                        'user_id' => $user->id,
-                        'agent_id' => null,
-                        'office_id' => null,
-                        'title' => 'Office Verification Update',
-                        'message' => "Good news! '{$office->company_name}' that you recently interacted with has been verified for authenticity and quality.",
-                        'type' => 'system',
-                        'priority' => 'medium',
-                        'data' => json_encode([
-                            'office_id' => (string) $officeId,
-                            'office_name' => $office->company_name,
-                            'verification_date' => now()->toDateString(),
-                        ]),
-                        'action_url' => "/offices/{$officeId}",
-                        'action_text' => 'View Office',
-                        'is_read' => false,
-                        'sent_at' => now(),
-                        'expires_at' => now()->addDays(14),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
-                }
-
-                // Bulk insert notifications for recent users
-                DB::table('notifications')->insert($recentUserNotifications);
-
-                // Send batch FCM notifications to recent users
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $userNotificationPayload = [
-                            'title' => 'Office Verification Update',
-                            'message' => "Good news! '{$office->company_name}' that you recently interacted with has been verified for authenticity and quality."
-                        ];
-
-                        $userDataPayload = [
-                            'type' => 'system',
-                            'priority' => 'medium',
-                            'office_id' => (string) $officeId,
-                            'office_name' => $office->company_name,
-                            'verification_date' => now()->toDateString(),
-                            'action_url' => "/offices/{$officeId}",
-                            'action_text' => 'View Office'
-                        ];
-
-                        $userFcmResults = $firebaseService->sendToMultipleUsers($recentUsers, $userNotificationPayload, $userDataPayload);
-
-                        // Log recent users batch results
-                        $userSuccessCount = 0;
-                        $userFailureCount = 0;
-                        if (is_array($userFcmResults)) {
-                            foreach ($userFcmResults as $result) {
-                                if (isset($result['success']) && $result['success']) {
-                                    $userSuccessCount++;
-                                } else {
-                                    $userFailureCount++;
-                                }
-                            }
-                        }
-
-                        Log::info('Office verification batch FCM notifications sent to recent users', [
-                            'office_id' => (string) $officeId,
-                            'recent_users_count' => $recentUsers->count(),
-                            'fcm_success' => $userSuccessCount,
-                            'fcm_failures' => $userFailureCount
-                        ]);
-                    } catch (\Exception $e) {
-                        Log::error('FCM batch office verification notification error for recent users: ' . $e->getMessage(), [
-                            'office_id' => (string) $officeId,
-                            'user_count' => $recentUsers->count()
-                        ]);
-                    }
-                }
-            }
-
-            // Notify nearby users about the verified office (batch)
-            if ($office->latitude && $office->longitude) {
-                $nearbyUsers = User::whereNotNull('lat')
-                    ->whereNotNull('lng')
-                    ->whereRaw(
-                        "(6371 * acos(cos(radians(?)) * cos(radians(lat)) * cos(radians(lng) - radians(?)) + sin(radians(?)) * sin(radians(lat)))) <= ?",
-                        [$office->latitude, $office->longitude, $office->latitude, 15]
-                    )
-                    ->where('search_preferences->behavior->enable_notifications', true)
-                    ->whereNotIn('id', $recentUsers->pluck('id'))
-                    ->limit(50)
-                    ->get();
-
-                if ($nearbyUsers->isNotEmpty()) {
-                    // Create database notifications for nearby users
-                    $nearbyUserNotifications = [];
-                    foreach ($nearbyUsers as $user) {
-                        $notificationId = (string) Str::uuid();
-                        $nearbyUserNotifications[] = [
-                            'id' => $notificationId,
-                            'user_id' => $user->id,
-                            'agent_id' => null,
-                            'office_id' => null,
-                            'title' => 'Verified Office Near You',
-                            'message' => "'{$office->company_name}' in your area has been verified. You can now trust their services with confidence!",
-                            'type' => 'promotion',
-                            'priority' => 'medium',
-                            'data' => json_encode([
-                                'office_id' => (string) $officeId,
-                                'office_name' => $office->company_name,
-                                'office_city' => $office->city,
-                                'verification_badge' => true,
-                            ]),
-                            'action_url' => "/offices/{$officeId}",
-                            'action_text' => 'Explore Services',
-                            'is_read' => false,
-                            'sent_at' => now(),
-                            'expires_at' => now()->addDays(7),
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-                    }
-
-                    // Bulk insert notifications for nearby users
-                    DB::table('notifications')->insert($nearbyUserNotifications);
-
-                    // Send batch FCM notifications to nearby users
-                    if (class_exists('\App\Services\FirebaseService')) {
-                        try {
-                            $firebaseService = new \App\Services\FirebaseService();
-
-                            $nearbyNotificationPayload = [
-                                'title' => 'Verified Office Near You',
-                                'message' => "'{$office->company_name}' in your area has been verified. You can now trust their services with confidence!"
-                            ];
-
-                            $nearbyDataPayload = [
-                                'type' => 'promotion',
-                                'priority' => 'medium',
-                                'office_id' => (string) $officeId,
-                                'office_name' => $office->company_name,
-                                'office_city' => $office->city,
-                                'verification_badge' => 'true',
-                                'action_url' => "/offices/{$officeId}",
-                                'action_text' => 'Explore Services'
-                            ];
-
-                            $nearbyFcmResults = $firebaseService->sendToMultipleUsers($nearbyUsers, $nearbyNotificationPayload, $nearbyDataPayload);
-
-                            // Log nearby users batch results
-                            $nearbySuccessCount = 0;
-                            $nearbyFailureCount = 0;
-                            if (is_array($nearbyFcmResults)) {
-                                foreach ($nearbyFcmResults as $result) {
-                                    if (isset($result['success']) && $result['success']) {
-                                        $nearbySuccessCount++;
-                                    } else {
-                                        $nearbyFailureCount++;
-                                    }
-                                }
-                            }
-
-                            Log::info('Office verification batch FCM notifications sent to nearby users', [
-                                'office_id' => (string) $officeId,
-                                'nearby_users_count' => $nearbyUsers->count(),
-                                'fcm_success' => $nearbySuccessCount,
-                                'fcm_failures' => $nearbyFailureCount
-                            ]);
-                        } catch (\Exception $e) {
-                            Log::error('FCM batch verified office notification error for nearby users: ' . $e->getMessage(), [
-                                'office_id' => (string) $officeId,
-                                'user_count' => $nearbyUsers->count()
-                            ]);
-                        }
-                    }
-                }
-            }
-
-            Log::info("Sent verification notifications for office: {$officeId}");
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error sending office verification notifications: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Send appointment-related notifications to office
-     */
-    public function sendOfficeAppointmentNotification($appointmentId, $type = 'new')
-    {
-        try {
-            $appointment = Appointment::with(['user', 'agent', 'office', 'property'])->find($appointmentId);
-            if (!$appointment || !$appointment->office_id) {
-                return false;
-            }
-
-            $messageMap = [
-                'new' => "New appointment scheduled with {$appointment->client_name} on {$appointment->appointment_date} at {$appointment->appointment_time}",
-                'cancelled' => "Appointment with {$appointment->client_name} scheduled for {$appointment->appointment_date} has been cancelled",
-                'rescheduled' => "Appointment with {$appointment->client_name} has been rescheduled to {$appointment->appointment_date} at {$appointment->appointment_time}",
-                'confirmed' => "Appointment with {$appointment->client_name} for {$appointment->appointment_date} has been confirmed",
-            ];
-
-            $this->createNotification([
-                'office_id' => $appointment->office_id,
-                'title' => 'Appointment ' . ucfirst($type),
-                'message' => $messageMap[$type] ?? 'Appointment status updated',
-                'type' => 'appointment',
-                'priority' => $type === 'new' ? 'high' : 'medium',
-                'data' => [
-                    'appointment_id' => (string) $appointmentId,
-                    'client_name' => $appointment->client_name,
-                    'client_phone' => $appointment->client_phone,
-                    'appointment_date' => $appointment->appointment_date,
-                    'appointment_time' => $appointment->appointment_time,
-                    'appointment_type' => $appointment->type,
-                    'status_change' => $type,
-                ],
-                'action_url' => "/appointments/{$appointmentId}",
-                'action_text' => 'View Appointment',
-            ]);
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error sending office appointment notification: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    // ===== PRIVATE HELPER METHODS =====
-
-    /**
-     * Create a notification record
-     */
-    private function createNotification(array $data)
-    {
-        try {
-            $data['id'] = (string) Str::uuid();
-            $data['sent_at'] = now();
-
-            return Notification::create($data);
-        } catch (\Exception $e) {
-            Log::error('Error creating notification: ' . $e->getMessage(), $data);
-            return null;
-        }
-    }
-
-    /**
-     * Find users who might be interested in a property
-     */
-    private function findInterestedUsers(
-        Property $property,
-        string $cityEn = '',
-        string $cityAr = '',
-        string $cityKu = ''
-    ) {
-        try {
-            if ($cityEn === '' && $cityAr === '' && $cityKu === '') {
-                $addressDetails = is_array($property->address_details)
-                    ? $property->address_details
-                    : json_decode($property->address_details, true);
-
-                $cityEn = strtolower(trim($addressDetails['city']['en'] ?? ''));
-                $cityAr = trim($addressDetails['city']['ar'] ?? '');
-                $cityKu = trim($addressDetails['city']['ku'] ?? '');
-            }
-
-            // ✅ Normalize city strings — lowercase + trim for case-insensitive matching
-            $cityEn = strtolower(trim($cityEn));
-            $cityAr = trim($cityAr);
-            $cityKu = trim($cityKu);
-
-            $query = User::where(function ($q) {
-                // Include users with notifications enabled OR preference not set at all
-                $q->where('search_preferences->behavior->enable_notifications', true)
-                    ->orWhereNull('search_preferences')
-                    ->orWhereRaw("JSON_EXTRACT(search_preferences, '$.behavior.enable_notifications') IS NULL");
-            });
-
-            // ✅ Must have at least one device token to receive FCM
-            $query->whereRaw("JSON_LENGTH(device_tokens) > 0");
-
-            // ✅ City matching: send to user if:
-            //    1. Their place matches the property city (case-insensitive)
-            //    2. OR their place is null/empty (they never set a city — notify them anyway)
-            $query->where(function ($q) use ($cityEn, $cityAr, $cityKu) {
-                // Users with no city set — always notify
-                $q->whereNull('place')
-                    ->orWhere('place', '')
-                    ->orWhere('place', ' ');
-
-                // Users whose place matches property city (any language, case-insensitive)
-                if ($cityEn !== '') {
-                    $q->orWhereRaw('LOWER(TRIM(place)) LIKE ?', ['%' . $cityEn . '%']);
-                }
-                if ($cityAr !== '') {
-                    $q->orWhereRaw('TRIM(place) LIKE ?', ['%' . $cityAr . '%']);
-                }
-                if ($cityKu !== '') {
-                    $q->orWhereRaw('TRIM(place) LIKE ?', ['%' . $cityKu . '%']);
-                }
-
-                // Also check search_preferences->location->city (case-insensitive)
-                if ($cityEn !== '') {
-                    $q->orWhereRaw(
-                        "LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(search_preferences, '$.location.city')))) LIKE ?",
-                        ['%' . $cityEn . '%']
-                    );
-                }
-            });
-
-            return $query->limit(200)->get();
-        } catch (\Exception $e) {
-            Log::error('Error finding interested users: ' . $e->getMessage());
-            return collect();
-        }
-    }
-
-    /**
-     * Get the appropriate recipient column based on user type
-     */
-    private function getRecipientColumn($user)
-    {
-        if ($user instanceof User) {
-            return 'user_id';
-        } elseif ($user instanceof Agent) {
-            return 'agent_id';
-        } elseif ($user instanceof RealEstateOffice) {
-            return 'office_id';
-        }
-
-        return 'user_id'; // Default
-    }
-    /**
-     * Send notification when property gets verified
-     */
-    public function sendPropertyVerificationNotification($propertyId)
-    {
-        try {
-            $property = Property::find($propertyId);
-            if (!$property || !$property->verified) {
-                return false;
-            }
-
-            // Notify property owner about verification
-            $owner = $this->loadOwner($property);
-            if ($owner) {
-                $notification = $this->createNotification([
-                    $this->getOwnerColumn($owner) => $owner->id,
-                    'title' => 'Property Verified Successfully!',
-                    'message' => "Congratulations! Your property '{$this->getPropertyName($property)}' has been verified by our team.",
-                    'type' => 'system',
-                    'priority' => 'high',
-                    'data' => [
-                        'property_id' => (string) $propertyId,
-                        'property_name' => $property->name,
-                        'verification_date' => now()->toDateString(),
-                    ],
-                    'action_url' => "/properties/{$propertyId}",
-                    'action_text' => 'View Property',
-                ]);
-
-                // Send Firebase notification
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'Property Verified Successfully!',
-                            'message' => "Congratulations! Your property has been verified by our team."
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'system',
-                            'id' => $notification->id ?? null,
-                            'priority' => 'high',
-                            'property_id' => (string) $propertyId,
-                            'verification_date' => now()->toDateString(),
-                            'action_url' => "/properties/{$propertyId}",
-                            'action_text' => 'View Property'
-                        ];
-
-                        $this->sendFirebaseToOwner($owner, $firebaseService, $notificationPayload, $dataPayload);
-                    } catch (\Exception $e) {
-                        Log::error('FCM property verification notification error: ' . $e->getMessage(), [
-                            'property_id' => (string) $propertyId,
-                            'owner_id' => $owner->id
-                        ]);
-                    }
-                }
-            }
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error sending property verification notification: ' . $e->getMessage());
-            return false;
-        }
-    }
-    /**
-     * Send notification when property status changes
-     */
-    public function sendPropertyStatusChangeNotification($propertyId, $oldStatus, $newStatus)
-    {
-        try {
-            $property = Property::find($propertyId);
-            if (!$property) {
-                return false;
-            }
-
-            // Only notify for important status changes
-            $importantStatuses = ['sold', 'rented', 'available', 'cancelled'];
-            if (!in_array($newStatus, $importantStatuses)) {
-                return false;
-            }
-
-            $statusMessages = [
-                'sold' => 'Your property has been marked as sold',
-                'rented' => 'Your property has been marked as rented',
-                'available' => 'Your property is now available for viewing',
-                'cancelled' => 'Your property listing has been cancelled',
-            ];
-
-            $message = $statusMessages[$newStatus] ?? "Your property status has been updated to {$newStatus}";
-
-            // Notify property owner
-            $owner = $this->loadOwner($property);
-            if ($owner) {
-                $notification = $this->createNotification([
-                    $this->getOwnerColumn($owner) => $owner->id,
-                    'title' => 'Property Status Update',
-                    'message' => $message . " - " . $this->getPropertyName($property),
-                    'type' => 'system',
-                    'priority' => $newStatus === 'cancelled' ? 'high' : 'medium',
-                    'data' => [
-                        'property_id' => (string) $propertyId,
-                        'old_status' => $oldStatus,
-                        'new_status' => $newStatus,
-                        'property_name' => $property->name,
-                    ],
-                    'action_url' => "/properties/{$propertyId}",
-                    'action_text' => 'View Property',
-                ]);
-
-                // Send Firebase notification
-                if (class_exists('\App\Services\FirebaseService')) {
-                    try {
-                        $firebaseService = new \App\Services\FirebaseService();
-
-                        $notificationPayload = [
-                            'title' => 'Property Status Update',
-                            'message' => $message
-                        ];
-
-                        $dataPayload = [
-                            'type' => 'system',
-                            'id' => $notification->id ?? null,
-                            'priority' => $newStatus === 'cancelled' ? 'high' : 'medium',
-                            'property_id' => (string) $propertyId,
-                            'old_status' => $oldStatus,
-                            'new_status' => $newStatus,
-                            'action_url' => "/properties/{$propertyId}",
-                            'action_text' => 'View Property'
-                        ];
-
-                        $this->sendFirebaseToOwner($owner, $firebaseService, $notificationPayload, $dataPayload);
-                    } catch (\Exception $e) {
-                        Log::error('FCM property status notification error: ' . $e->getMessage(), [
-                            'property_id' => (string) $propertyId,
-                            'new_status' => $newStatus
-                        ]);
-                    }
-                }
-            }
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error sending property status notification: ' . $e->getMessage());
-            return false;
-        }
-    }
-    /**
-     * Helper: Load property owner
-     */
-    private function loadOwner($property)
-    {
-        if (!$property->owner_type || !$property->owner_id) {
-            return null;
-        }
-
-        $ownerClass = $property->owner_type;
-        if (class_exists($ownerClass)) {
-            return $ownerClass::find($property->owner_id);
-        }
-
-        return null;
-    }
-
-    /**
-     * Helper: Get owner column name
-     */
-    private function getOwnerColumn($owner)
-    {
-        switch (get_class($owner)) {
-            case 'App\\Models\\User':
-                return 'user_id';
-            case 'App\\Models\\Agent':
-                return 'agent_id';
-            case 'App\\Models\\RealEstateOffice':
-                return 'office_id';
-            default:
-                return 'user_id';
-        }
-    }
-
-    /**
-     * Helper: Get property name
-     */
-    private function getPropertyName($property)
-    {
-        if (is_array($property->name)) {
-            return $property->name['en'] ?? $property->name['ar'] ?? $property->name['ku'] ?? 'Property';
-        }
-        return $property->name ?? 'Property';
-    }
-
-    /**
-     * Helper: Send Firebase notification to owner
-     */
-    /**
-     * Helper: Send Firebase notification to property owner (user / agent / office).
-     */
-    private function sendFirebaseToOwner($owner, $firebaseService, $notificationPayload, $dataPayload)
-    {
-        switch (get_class($owner)) {
-            case 'App\\Models\\User':
-                return $firebaseService->sendToUser($owner, $notificationPayload, $dataPayload);
-            case 'App\\Models\\Agent':
-                return $firebaseService->sendToAgent($owner, $notificationPayload, $dataPayload);
-            case 'App\\Models\\RealEstateOffice':
-                // ✅ FIX: was a silent no-op (just logged). Now actually sends FCM.
-                return $firebaseService->sendToOffice($owner, $notificationPayload, $dataPayload);
-            default:
-                return false;
-        }
-    }
-    /**
-     * Send notification when property gets boosted/unboosted
-     */
-    public function sendPropertyBoostNotification($propertyId, $isBoosted)
-    {
-        try {
-            $property = Property::find($propertyId);
-            if (!$property) return false;
-
-            $owner = $this->loadOwner($property);
-            if (!$owner) return false;
-
-            $title = $isBoosted ? 'Property Boosted!' : 'Property Boost Removed';
-            $message = $isBoosted
-                ? "Your property '{$this->getPropertyName($property)}' is now boosted and will get more visibility!"
-                : "The boost for your property '{$this->getPropertyName($property)}' has been removed.";
-
-            $notification = $this->createNotification([
-                $this->getOwnerColumn($owner) => $owner->id,
-                'title' => $title,
-                'message' => $message,
-                'type' => 'system',
-                'priority' => 'medium',
-                'data' => [
-                    'property_id' => (string) $propertyId,
-                    'property_name' => $property->name,
-                    'is_boosted' => $isBoosted,
-                    'boost_date' => now()->toDateString(),
-                ],
-                'action_url' => "/properties/{$propertyId}",
-                'action_text' => 'View Property',
-            ]);
-
-            // Send Firebase notification
-            if (class_exists('\App\Services\FirebaseService')) {
-                try {
-                    $firebaseService = new \App\Services\FirebaseService();
-
-                    $notificationPayload = [
-                        'title' => $title,
-                        'message' => $message
-                    ];
-
-                    $dataPayload = [
-                        'type' => 'system',
-                        'id' => $notification->id ?? null,
-                        'priority' => 'medium',
-                        'property_id' => (string) $propertyId,
-                        'is_boosted' => $isBoosted,
-                        'boost_date' => now()->toDateString(),
-                        'action_url' => "/properties/{$propertyId}",
-                        'action_text' => 'View Property'
-                    ];
-
-                    $this->sendFirebaseToOwner($owner, $firebaseService, $notificationPayload, $dataPayload);
-                } catch (\Exception $e) {
-                    Log::error('FCM boost notification error: ' . $e->getMessage(), [
-                        'property_id' => (string) $propertyId,
-                        'owner_id' => $owner->id
-                    ]);
-                }
-            }
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error sending boost notification: ' . $e->getMessage());
-            return false;
-        }
-    }
-    /**
-     * Send notification when property gets published/unpublished
-     */
-    public function sendPropertyPublishNotification($propertyId, $isPublished)
-    {
-        try {
-            $property = Property::find($propertyId);
-            if (!$property) return false;
-
-            $owner = $this->loadOwner($property);
-            if (!$owner) return false;
-
-            $title = $isPublished ? 'Property Published!' : 'Property Unpublished';
-            $message = $isPublished
-                ? "Your property '{$this->getPropertyName($property)}' is now live and visible to users!"
-                : "Your property '{$this->getPropertyName($property)}' has been removed from public listings.";
-
-            $notification = $this->createNotification([
-                $this->getOwnerColumn($owner) => $owner->id,
-                'title' => $title,
-                'message' => $message,
-                'type' => 'system',
-                'priority' => 'medium',
-                'data' => [
-                    'property_id' => (string) $propertyId,
-                    'property_name' => $property->name,
-                    'is_published' => $isPublished,
-                    'publish_date' => now()->toDateString(),
-                ],
-                'action_url' => "/properties/{$propertyId}",
-                'action_text' => 'View Property',
-            ]);
-
-            // Send Firebase notification
-            if (class_exists('\App\Services\FirebaseService')) {
-                try {
-                    $firebaseService = new \App\Services\FirebaseService();
-
-                    $notificationPayload = [
-                        'title' => $title,
-                        'message' => $message
-                    ];
-
-                    $dataPayload = [
-                        'type' => 'system',
-                        'id' => $notification->id ?? null,
-                        'priority' => 'medium',
-                        'property_id' => (string) $propertyId,
-                        'is_published' => $isPublished,
-                        'publish_date' => now()->toDateString(),
-                        'action_url' => "/properties/{$propertyId}",
-                        'action_text' => 'View Property'
-                    ];
-
-                    $this->sendFirebaseToOwner($owner, $firebaseService, $notificationPayload, $dataPayload);
-                } catch (\Exception $e) {
-                    Log::error('FCM publish notification error: ' . $e->getMessage(), [
-                        'property_id' => (string) $propertyId,
-                        'owner_id' => $owner->id
-                    ]);
-                }
-            }
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Error sending publish notification: ' . $e->getMessage());
-            return false;
-        }
-    }
-
-    public function markAsReadWeb($id)
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return redirect()->route('login-page')->with('error', 'Please log in');
-            }
-
-            $notification = DB::table('notifications')
-                ->where('id', $id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if (!$notification) {
-                return redirect()->back()->with('error', 'Notification not found');
-            }
-
-            DB::table('notifications')
-                ->where('id', $id)
-                ->update([
-                    'is_read' => true,
-                    'read_at' => now(),
-                    'updated_at' => now()
-                ]);
-
-            Log::info('Notification marked as read (web)', [
-                'user_id' => $user->id,
-                'notification_id' => $id
-            ]);
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Notification marked as read'
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Mark notification as read error (web)', [
-                'message' => $e->getMessage(),
-                'notification_id' => $id,
-                'user_id' => Auth::id()
-            ]);
-
-            return response()->json([
-                'status' => false,
-                'message' => 'Failed to mark notification as read'
-            ], 500);
-        }
-    }
-
-    /**
-     * Delete notification (Web version - returns redirect)
-     */
-    public function deleteWeb($id)
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return redirect()->route('login-page')->with('error', 'Please log in');
-            }
-
-            $notification = DB::table('notifications')
-                ->where('id', $id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if (!$notification) {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Notification not found'
-                ], 404);
-            }
-
-            DB::table('notifications')
-                ->where('id', $id)
-                ->delete();
-
-            Log::info('Notification deleted (web)', [
-                'user_id' => $user->id,
-                'notification_id' => $id
-            ]);
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Notification deleted successfully'
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Delete notification error (web)', [
-                'message' => $e->getMessage(),
-                'notification_id' => $id,
-                'user_id' => Auth::id()
-            ]);
-
-            return response()->json([
-                'status' => false,
-                'message' => 'Failed to delete notification'
-            ], 500);
-        }
-    }
-
-
-
-    //  zana's code --------------------------------------------------------------------------------------------
-
-    public function showNotifications()
-    {
-        // Retrieve notifications (add any necessary logic here, e.g., filtering by user)
-        $notifications = Notification::all();
-
-        // Pass notifications data to the view in the 'agent' folder
-        return view('agent.notification', compact('notifications'));
-    }
-
-
-    public function showNotificationsPage()
-    {
-        try {
-            $user = Auth::user();
-
-            if (!$user) {
-                return redirect()->route('login-page')->with('error', 'Please log in to view your notifications');
-            }
-
-            $notifications = DB::table('notifications')
-                ->where('user_id', $user->id)
-                ->where(function ($query) {
-                    $query->whereNull('expires_at')
-                        ->orWhere('expires_at', '>', now());
-                })
-                ->orderBy('sent_at', 'desc')
-                ->get()
-                ->map(function ($notification) {
-                    return (object) [
-                        'id'          => $notification->id,
-                        'title'       => $notification->title,
-                        'message'     => $notification->message,
-                        'type'        => $notification->type,
-                        'priority'    => $notification->priority,
-                        'image_url'   => $notification->image_url ?? null,   // ← added
-                        'data'        => json_decode($notification->data, true),
-                        'action_url'  => $notification->action_url,
-                        'action_text' => $notification->action_text,
-                        'is_read'     => $notification->is_read,
-                        'read_at'     => $notification->read_at,
-                        'sent_at'     => $notification->sent_at,
-                        'created_at'  => $notification->created_at,
-                        'updated_at'  => $notification->updated_at,
-                    ];
-                });
-
-            Log::info('User notifications page loaded', [
-                'user_id'             => $user->id,
-                'notifications_count' => $notifications->count(),
-            ]);
-
-            return view('user.notifications', compact('notifications'));
-        } catch (\Exception $e) {
-            Log::error('Error loading user notifications page', [
-                'message' => $e->getMessage(),
-                'user_id' => Auth::id(),
-            ]);
-
-            return redirect()->back()->with('error', 'Failed to load notifications');
-        }
-    }
-
     public function sendBroadcast(Request $request)
     {
         try {
@@ -2559,218 +1440,71 @@ class NotificationController extends Controller
                 );
             }
 
-            // ── Resolve image URL ─────────────────────────────────────────────
-            $imageUrl = null;
-            if ($request->hasFile('image') && $request->file('image')->isValid()) {
-                $path     = $request->file('image')->store('notifications', 'public');
-                $imageUrl = config('app.url') . \Illuminate\Support\Facades\Storage::url($path);
-            } elseif ($request->filled('image_url')) {
-                $url      = $request->image_url;
-                $imageUrl = str_starts_with($url, 'http')
-                    ? $url
-                    : rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
-            }
+            $imageUrl = $this->resolveImageUrl($request);
 
-            // ── Build multilingual payloads (only filled ones) ────────────────
+            // Only keep languages the admin actually filled in.
             $titles = array_filter([
                 'en' => $request->title_en,
                 'ar' => $request->title_ar,
                 'ku' => $request->title_ku,
             ]);
+
             $messages = array_filter([
                 'en' => $request->message_en,
                 'ar' => $request->message_ar,
                 'ku' => $request->message_ku,
             ]);
 
-            // ── Collect recipients ────────────────────────────────────────────
-            $users   = collect();
-            $agents  = collect();
-            $offices = collect();
-            $type    = $request->recipient_type;
+            // FIX: scheduled_at was validated and then thrown away. Rows are
+            // now stored with a future sent_at and the push is deferred; the
+            // `notifications:dispatch-scheduled` command picks them up.
+            $scheduledAt = $request->filled('scheduled_at')
+                ? \Carbon\Carbon::parse($request->scheduled_at)
+                : null;
 
-            if (in_array($type, ['users', 'all'])) {
-                $users = User::where('search_preferences->behavior->enable_notifications', true)->get();
-            }
-            if (in_array($type, ['agents', 'all'])) {
-                $agents = Agent::where('is_verified', true)->get();
-            }
-            if (in_array($type, ['offices', 'all'])) {
-                $offices = RealEstateOffice::where('is_verified', true)->get();
-            }
+            $counts = $this->fanOut([
+                'recipient_type' => $request->recipient_type,
+                'titles'         => $titles,
+                'messages'       => $messages,
+                'type'           => $request->type,
+                'priority'       => $request->priority,
+                'image_url'      => $imageUrl,
+                'action_url'     => $request->action_url,
+                'action_text'    => $request->action_text,
+                'expires_at'     => $request->expires_at,
+                'sent_at'        => $scheduledAt ?? now(),
+                'send_fcm'       => $scheduledAt === null,
+                'data_extra'     => [
+                    'broadcast' => true,
+                    'titles'    => $titles,
+                    'messages'  => $messages,
+                    'scheduled' => $scheduledAt !== null,
+                ],
+            ]);
 
-            $notifications = [];
-            $now           = now();
+            $warnings = $this->translationWarnings($request->recipient_type, $titles);
 
-            // ── USERS ─────────────────────────────────────────────────────────
-            foreach ($users as $user) {
-                $resolved        = $this->resolveLanguage($user->language, $titles, $messages);
-                $notifications[] = [
-                    'id'          => (string) Str::uuid(),
-                    'user_id'     => $user->id,
-                    'agent_id'    => null,
-                    'office_id'   => null,
-                    'title'       => $resolved['title'],
-                    'message'     => $resolved['message'],
-                    'type'        => $request->type,
-                    'priority'    => $request->priority,
-                    'image_url'   => $imageUrl,
-                    'data'        => json_encode([
-                        'broadcast' => true,
-                        'titles'    => $titles,
-                        'messages'  => $messages,
-                    ]),
-                    'action_url'  => $request->action_url,
-                    'action_text' => $request->action_text,
-                    'is_read'     => false,
-                    'sent_at'     => $now,
-                    'expires_at'  => $request->expires_at,
-                    'created_at'  => $now,
-                    'updated_at'  => $now,
-                ];
-            }
-
-            // ── AGENTS ────────────────────────────────────────────────────────
-            foreach ($agents as $agent) {
-                $resolved        = $this->resolveLanguage($agent->language, $titles, $messages);
-                $notifications[] = [
-                    'id'          => (string) Str::uuid(),
-                    'user_id'     => null,
-                    'agent_id'    => $agent->id,
-                    'office_id'   => null,
-                    'title'       => $resolved['title'],
-                    'message'     => $resolved['message'],
-                    'type'        => $request->type,
-                    'priority'    => $request->priority,
-                    'image_url'   => $imageUrl,
-                    'data'        => json_encode([
-                        'broadcast' => true,
-                        'titles'    => $titles,
-                        'messages'  => $messages,
-                    ]),
-                    'action_url'  => $request->action_url,
-                    'action_text' => $request->action_text,
-                    'is_read'     => false,
-                    'sent_at'     => $now,
-                    'expires_at'  => $request->expires_at,
-                    'created_at'  => $now,
-                    'updated_at'  => $now,
-                ];
-            }
-
-            // ── OFFICES ───────────────────────────────────────────────────────
-            foreach ($offices as $office) {
-                $resolved        = $this->resolveLanguage($office->language ?? null, $titles, $messages);
-                $notifications[] = [
-                    'id'          => (string) Str::uuid(),
-                    'user_id'     => null,
-                    'agent_id'    => null,
-                    'office_id'   => $office->id,
-                    'title'       => $resolved['title'],
-                    'message'     => $resolved['message'],
-                    'type'        => $request->type,
-                    'priority'    => $request->priority,
-                    'image_url'   => $imageUrl,
-                    'data'        => json_encode([
-                        'broadcast' => true,
-                        'titles'    => $titles,
-                        'messages'  => $messages,
-                    ]),
-                    'action_url'  => $request->action_url,
-                    'action_text' => $request->action_text,
-                    'is_read'     => false,
-                    'sent_at'     => $now,
-                    'expires_at'  => $request->expires_at,
-                    'created_at'  => $now,
-                    'updated_at'  => $now,
-                ];
-            }
-
-            // ── Bulk insert in chunks of 500 ──────────────────────────────────
-            foreach (array_chunk($notifications, 500) as $chunk) {
-                DB::table('notifications')->insert($chunk);
-            }
-
-            // ── FCM — per-recipient language + image ──────────────────────────
-            if (class_exists('\App\Services\FirebaseService')) {
-                $firebaseService = new \App\Services\FirebaseService();
-
-                // Shared data payload (Flutter reads titles/messages JSON to pick its own lang)
-                $fcmData = [
-                    'type'        => $request->type,
-                    'priority'    => $request->priority,
-                    'broadcast'   => 'true',
-                    'titles'      => json_encode($titles),
-                    'messages'    => json_encode($messages),
-                    'action_url'  => $request->action_url  ?? '',
-                    'action_text' => $request->action_text ?? '',
-                    'image_url'   => $imageUrl ?? '',
-                ];
-
-                // Users
-                foreach ($users as $user) {
-                    $resolved = $this->resolveLanguage($user->language, $titles, $messages);
-                    $firebaseService->sendToUser($user, [
-                        'title'   => $resolved['title'],
-                        'message' => $resolved['message'],
-                        'image'   => $imageUrl,
-                    ], $fcmData);
-                }
-
-                // Agents
-                foreach ($agents as $agent) {
-                    $resolved = $this->resolveLanguage($agent->language, $titles, $messages);
-                    $firebaseService->sendToAgent($agent, [
-                        'title'   => $resolved['title'],
-                        'message' => $resolved['message'],
-                        'image'   => $imageUrl,
-                    ], $fcmData);
-                }
-
-                // ✅ FIX: Offices were missing FCM entirely in the original
-                foreach ($offices as $office) {
-                    $resolved = $this->resolveLanguage($office->language ?? null, $titles, $messages);
-                    $firebaseService->sendToOffice($office, [
-                        'title'   => $resolved['title'],
-                        'message' => $resolved['message'],
-                        'image'   => $imageUrl,
-                    ], $fcmData);
-                }
-            }
-
-            // ── Translation warnings ──────────────────────────────────────────
-            $warnings        = [];
-            $hasKuRecipients = $users->where('language', 'ku')->isNotEmpty()
-                || $agents->where('language', 'ku')->isNotEmpty();
-            $hasArRecipients = $users->where('language', 'ar')->isNotEmpty()
-                || $agents->where('language', 'ar')->isNotEmpty();
-
-            if ($hasKuRecipients && empty($titles['ku'])) {
-                $warnings[] = 'Some recipients have Kurdish selected but no Kurdish translation was provided — they received English.';
-            }
-            if ($hasArRecipients && empty($titles['ar'])) {
-                $warnings[] = 'Some recipients have Arabic selected but no Arabic translation was provided — they received English.';
-            }
-
-            Log::info('Broadcast sent', [
-                'users'    => $users->count(),
-                'agents'   => $agents->count(),
-                'offices'  => $offices->count(),
-                'total'    => count($notifications),
-                'type'     => $request->type,
-                'image'    => $imageUrl,
-                'warnings' => $warnings,
+            Log::info('Broadcast queued/sent', [
+                'breakdown'    => $counts,
+                'total'        => array_sum($counts),
+                'type'         => $request->type,
+                'image'        => $imageUrl,
+                'scheduled_at' => $scheduledAt?->toDateTimeString(),
+                'warnings'     => $warnings,
             ]);
 
             return ApiResponse::success(
-                ResponseDetails::successMessage('Broadcast sent successfully'),
+                ResponseDetails::successMessage(
+                    $scheduledAt ? 'Broadcast scheduled successfully' : 'Broadcast sent successfully'
+                ),
                 [
-                    'sent_to'   => count($notifications),
-                    'users'     => $users->count(),
-                    'agents'    => $agents->count(),
-                    'offices'   => $offices->count(),
-                    'image_url' => $imageUrl,
-                    'warnings'  => $warnings,
+                    'sent_to'      => array_sum($counts),
+                    'users'        => $counts['user_id']   ?? 0,
+                    'agents'       => $counts['agent_id']  ?? 0,
+                    'offices'      => $counts['office_id'] ?? 0,
+                    'image_url'    => $imageUrl,
+                    'scheduled_at' => $scheduledAt?->toDateTimeString(),
+                    'warnings'     => $warnings,
                 ],
                 ResponseDetails::CODE_SUCCESS
             );
@@ -2784,27 +1518,632 @@ class NotificationController extends Controller
         }
     }
 
+    /**
+     * Chunked fan-out to users / agents / offices.
+     *
+     * The old version loaded every recipient into memory with ->get(), then
+     * looped twice (once to build rows, once for FCM). This walks the table in
+     * batches of 500, inserting and pushing in the same pass.
+     *
+     * @return array<string,int> keyed by recipient column
+     */
+    private function fanOut(array $opts): array
+    {
+        $type      = $opts['recipient_type'];
+        $titles    = $opts['titles'];
+        $messages  = $opts['messages'];
+        $imageUrl  = $opts['image_url']  ?? null;
+        $sentAt    = $opts['sent_at']    ?? now();
+        $sendFcm   = $opts['send_fcm']   ?? true;
+        $dataExtra = $opts['data_extra'] ?? [];
+        $now       = now();
+
+        $counts = [];
+
+        $targets = [];
+        if (in_array($type, ['users', 'all'], true)) {
+            // FIX: was `where('search_preferences->behavior->enable_notifications', true)`,
+            // which silently excluded every user whose preferences are NULL.
+            $targets['user_id'] = $this->notifiableUsers();
+        }
+        if (in_array($type, ['agents', 'all'], true)) {
+            $targets['agent_id'] = Agent::where('is_verified', true);
+        }
+        if (in_array($type, ['offices', 'all'], true)) {
+            $targets['office_id'] = RealEstateOffice::where('is_verified', true);
+        }
+
+        $fcmData = $this->stringify(array_merge($dataExtra, [
+            'type'        => $opts['type'],
+            'priority'    => $opts['priority'],
+            'titles'      => $titles,
+            'messages'    => $messages,
+            'action_url'  => $opts['action_url']  ?? '',
+            'action_text' => $opts['action_text'] ?? '',
+            'image_url'   => $imageUrl ?? '',
+        ]));
+
+        foreach ($targets as $column => $query) {
+            $counts[$column] = 0;
+
+            $query->chunkById(self::CHUNK, function ($recipients) use (
+                &$counts,
+                $column,
+                $titles,
+                $messages,
+                $opts,
+                $imageUrl,
+                $sentAt,
+                $sendFcm,
+                $dataExtra,
+                $fcmData,
+                $now
+            ) {
+                $rows = [];
+
+                foreach ($recipients as $recipient) {
+                    $resolved = $this->resolveLanguage($recipient->language ?? null, $titles, $messages);
+
+                    $rows[] = [
+                        'id'          => (string) Str::uuid(),
+                        'user_id'     => $column === 'user_id'   ? $recipient->id : null,
+                        'agent_id'    => $column === 'agent_id'  ? $recipient->id : null,
+                        'office_id'   => $column === 'office_id' ? $recipient->id : null,
+                        'title'       => $resolved['title'],
+                        'message'     => $resolved['message'],
+                        'type'        => $opts['type'],
+                        'priority'    => $opts['priority'],
+                        'image_url'   => $imageUrl,
+                        'data'        => json_encode($dataExtra),
+                        'action_url'  => $opts['action_url']  ?? null,
+                        'action_text' => $opts['action_text'] ?? null,
+                        'is_read'     => false,
+                        'sent_at'     => $sentAt,
+                        'expires_at'  => $opts['expires_at'] ?? null,
+                        'created_at'  => $now,
+                        'updated_at'  => $now,
+                    ];
+
+                    if ($sendFcm) {
+                        $this->push(
+                            $recipient,
+                            [
+                                'title'   => $resolved['title'],
+                                'message' => $resolved['message'],
+                                'image'   => $imageUrl,
+                            ],
+                            $fcmData
+                        );
+                    }
+                }
+
+                if ($rows) {
+                    DB::table('notifications')->insert($rows);
+                    $counts[$column] += count($rows);
+                }
+            });
+        }
+
+        return $counts;
+    }
 
     /**
-     * Resolve the correct title/message for a recipient based on their language.
-     * Fallback chain: user's lang → 'en' → first available
+     * Warn the admin when recipients speak a language they left blank.
+     */
+    private function translationWarnings(string $recipientType, array $titles): array
+    {
+        $warnings = [];
+
+        foreach (['ku' => 'Kurdish', 'ar' => 'Arabic'] as $code => $label) {
+            if (!empty($titles[$code])) {
+                continue;
+            }
+
+            $exists = false;
+
+            if (in_array($recipientType, ['users', 'all'], true)) {
+                $exists = $this->notifiableUsers()->where('language', $code)->exists();
+            }
+            if (!$exists && in_array($recipientType, ['agents', 'all'], true)) {
+                $exists = Agent::where('is_verified', true)->where('language', $code)->exists();
+            }
+            if (!$exists && in_array($recipientType, ['offices', 'all'], true)) {
+                $exists = RealEstateOffice::where('is_verified', true)->where('language', $code)->exists();
+            }
+
+            if ($exists) {
+                $warnings[] = "Some recipients have {$label} selected but no {$label} translation "
+                    . 'was provided — they received English.';
+            }
+        }
+
+        return $warnings;
+    }
+
+    // =================================================================
+    // WEB (admin panel / blade)
+    // =================================================================
+
+    public function showNotifications()
+    {
+        $notifications = Notification::orderBy('sent_at', 'desc')->limit(200)->get();
+
+        return view('agent.notification', compact('notifications'));
+    }
+
+    public function showNotificationsPage()
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return redirect()->route('login-page')->with('error', 'Please log in to view your notifications');
+            }
+
+            // Kept on the query builder + stdClass mapping on purpose — the
+            // user.notifications blade reads `data` as a decoded array.
+            $notifications = DB::table('notifications')
+                ->where('user_id', $user->id)
+                ->where(function ($query) {
+                    $query->whereNull('expires_at')
+                        ->orWhere('expires_at', '>', now());
+                })
+                ->orderBy('sent_at', 'desc')
+                ->get()
+                ->map(fn($n) => (object) [
+                    'id'          => $n->id,
+                    'title'       => $n->title,
+                    'message'     => $n->message,
+                    'type'        => $n->type,
+                    'priority'    => $n->priority,
+                    'image_url'   => $n->image_url ?? null,
+                    'data'        => json_decode($n->data, true),
+                    'action_url'  => $n->action_url,
+                    'action_text' => $n->action_text,
+                    'is_read'     => $n->is_read,
+                    'read_at'     => $n->read_at,
+                    'sent_at'     => $n->sent_at,
+                    'created_at'  => $n->created_at,
+                    'updated_at'  => $n->updated_at,
+                ]);
+
+            Log::info('User notifications page loaded', [
+                'user_id'             => $user->id,
+                'notifications_count' => $notifications->count(),
+            ]);
+
+            return view('user.notifications', compact('notifications'));
+        } catch (\Exception $e) {
+            Log::error('Error loading user notifications page', [
+                'message' => $e->getMessage(),
+                'user_id' => Auth::id(),
+            ]);
+
+            return redirect()->back()->with('error', 'Failed to load notifications');
+        }
+    }
+
+    /**
+     * FIX: used to return a redirect on the "not logged in" / "not found"
+     * branches and JSON everywhere else, so the fetch() caller choked on HTML.
+     * Always JSON now.
+     */
+    public function markAsReadWeb($id)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['status' => false, 'message' => 'Please log in'], 401);
+            }
+
+            $updated = Notification::where('id', $id)
+                ->where('user_id', $user->id)
+                ->update([
+                    'is_read'    => true,
+                    'read_at'    => now(),
+                    'updated_at' => now(),
+                ]);
+
+            if (!$updated) {
+                return response()->json(['status' => false, 'message' => 'Notification not found'], 404);
+            }
+
+            return response()->json(['status' => true, 'message' => 'Notification marked as read']);
+        } catch (\Exception $e) {
+            Log::error('Mark notification as read error (web)', [
+                'message'         => $e->getMessage(),
+                'notification_id' => $id,
+                'user_id'         => Auth::id(),
+            ]);
+
+            return response()->json(['status' => false, 'message' => 'Failed to mark notification as read'], 500);
+        }
+    }
+
+    public function deleteWeb($id)
+    {
+        try {
+            $user = Auth::user();
+            if (!$user) {
+                return response()->json(['status' => false, 'message' => 'Please log in'], 401);
+            }
+
+            $deleted = Notification::where('id', $id)
+                ->where('user_id', $user->id)
+                ->delete();
+
+            if (!$deleted) {
+                return response()->json(['status' => false, 'message' => 'Notification not found'], 404);
+            }
+
+            return response()->json(['status' => true, 'message' => 'Notification deleted successfully']);
+        } catch (\Exception $e) {
+            Log::error('Delete notification error (web)', [
+                'message'         => $e->getMessage(),
+                'notification_id' => $id,
+                'user_id'         => Auth::id(),
+            ]);
+
+            return response()->json(['status' => false, 'message' => 'Failed to delete notification'], 500);
+        }
+    }
+
+    // =================================================================
+    // PRIVATE HELPERS
+    // =================================================================
+
+    /**
+     * Coerce every FCM data value to a string.
+     *
+     * This is the big one: FCM's v1 API rejects the whole message if any data
+     * value is not a string. The old code passed nulls, ints and booleans
+     * (`'id' => null`, `'is_boosted' => true`, `'price_drop_percent' => 42`),
+     * so those pushes were failing server-side while the logs said "sent".
+     */
+    private function stringify(array $data): array
+    {
+        $out = [];
+
+        foreach ($data as $key => $value) {
+            if ($value === null) {
+                $out[$key] = '';
+            } elseif (is_bool($value)) {
+                $out[$key] = $value ? 'true' : 'false';
+            } elseif (is_array($value)) {
+                $out[$key] = json_encode($value, JSON_UNESCAPED_UNICODE);
+            } elseif ($value instanceof \DateTimeInterface) {
+                $out[$key] = $value->format(\DateTimeInterface::ATOM);
+            } else {
+                $out[$key] = (string) $value;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Send one push to whichever recipient type was passed.
+     * Never throws — a Firebase failure must not roll back the DB write.
+     */
+    private function push($recipient, array $notification, array $data = []): bool
+    {
+        if (!$this->fcm || !$recipient) {
+            return false;
+        }
+
+        try {
+            $payload = $this->stringify($data);
+
+            return match (true) {
+                $recipient instanceof User              => (bool) $this->fcm->sendToUser($recipient, $notification, $payload),
+                $recipient instanceof Agent             => (bool) $this->fcm->sendToAgent($recipient, $notification, $payload),
+                $recipient instanceof RealEstateOffice  => (bool) $this->fcm->sendToOffice($recipient, $notification, $payload),
+                default                                 => false,
+            };
+        } catch (\Throwable $e) {
+            Log::error('FCM dispatch failed: ' . $e->getMessage(), [
+                'recipient' => $recipient::class,
+                'id'        => $recipient->id ?? null,
+            ]);
+            return false;
+        }
+    }
+
+    /**
+     * Batch push using the multicast endpoint when the collection is Users.
+     */
+    private function pushMany($recipients, array $notification, array $data = []): void
+    {
+        if (!$this->fcm || $recipients->isEmpty()) {
+            return;
+        }
+
+        try {
+            $payload = $this->stringify($data);
+
+            if (
+                $recipients->first() instanceof User
+                && method_exists($this->fcm, 'sendToMultipleUsers')
+            ) {
+                $this->fcm->sendToMultipleUsers($recipients, $notification, $payload);
+                return;
+            }
+
+            foreach ($recipients as $recipient) {
+                $this->push($recipient, $notification, $data);
+            }
+        } catch (\Throwable $e) {
+            Log::error('FCM batch dispatch failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Bulk-insert one notification row per recipient.
+     */
+    private function insertBulk($recipients, string $column, array $payload): int
+    {
+        $now  = now();
+        $rows = [];
+
+        foreach ($recipients as $recipient) {
+            $rows[] = [
+                'id'          => (string) Str::uuid(),
+                'user_id'     => $column === 'user_id'   ? $recipient->id : null,
+                'agent_id'    => $column === 'agent_id'  ? $recipient->id : null,
+                'office_id'   => $column === 'office_id' ? $recipient->id : null,
+                'title'       => $payload['title'],
+                'message'     => $payload['message'],
+                'type'        => $payload['type'],
+                'priority'    => $payload['priority'],
+                'image_url'   => $payload['image_url']   ?? null,
+                'data'        => json_encode($payload['data'] ?? []),
+                'action_url'  => $payload['action_url']  ?? null,
+                'action_text' => $payload['action_text'] ?? null,
+                'is_read'     => false,
+                'sent_at'     => $now,
+                'expires_at'  => $payload['expires_at']  ?? null,
+                'created_at'  => $now,
+                'updated_at'  => $now,
+            ];
+        }
+
+        foreach (array_chunk($rows, self::CHUNK) as $chunk) {
+            DB::table('notifications')->insert($chunk);
+        }
+
+        return count($rows);
+    }
+
+    private function createNotification(array $data): ?Notification
+    {
+        try {
+            $data['id']      = (string) Str::uuid();
+            $data['sent_at'] = now();
+
+            return Notification::create($data);
+        } catch (\Exception $e) {
+            Log::error('Error creating notification: ' . $e->getMessage(), $data);
+            return null;
+        }
+    }
+
+    /**
+     * Base query for users who should receive notifications:
+     * preference explicitly on, OR never set (the default).
+     */
+    private function notifiableUsers()
+    {
+        return User::where(function ($q) {
+            $q->where('search_preferences->behavior->enable_notifications', true)
+                ->orWhereNull('search_preferences')
+                ->orWhereRaw("JSON_EXTRACT(search_preferences, '\$.behavior.enable_notifications') IS NULL");
+        });
+    }
+
+    private function notificationsEnabled($user): bool
+    {
+        $prefs = $user->search_preferences ?? [];
+
+        return (bool) ($prefs['behavior']['enable_notifications'] ?? true);
+    }
+
+    /**
+     * Find users interested in a property, matched by city in any of the
+     * three languages. Users with no city set are always included.
+     */
+    private function findInterestedUsers(
+        Property $property,
+        string $cityEn = '',
+        string $cityAr = '',
+        string $cityKu = ''
+    ) {
+        try {
+            if ($cityEn === '' && $cityAr === '' && $cityKu === '') {
+                $addressDetails = $this->asArray($property->address_details);
+
+                $cityEn = $addressDetails['city']['en'] ?? '';
+                $cityAr = $addressDetails['city']['ar'] ?? '';
+                $cityKu = $addressDetails['city']['ku'] ?? '';
+            }
+
+            $cityEn = strtolower(trim($cityEn));
+            $cityAr = trim($cityAr);
+            $cityKu = trim($cityKu);
+
+            return $this->notifiableUsers()
+                ->whereRaw('JSON_LENGTH(device_tokens) > 0')
+                ->where(function ($q) use ($cityEn, $cityAr, $cityKu) {
+                    $q->whereNull('place')
+                        ->orWhereRaw("TRIM(COALESCE(place, '')) = ''");
+
+                    if ($cityEn !== '') {
+                        $q->orWhereRaw('LOWER(TRIM(place)) LIKE ?', ['%' . $cityEn . '%'])
+                            ->orWhereRaw(
+                                "LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(search_preferences, '\$.location.city')))) LIKE ?",
+                                ['%' . $cityEn . '%']
+                            );
+                    }
+                    if ($cityAr !== '') {
+                        $q->orWhereRaw('TRIM(place) LIKE ?', ['%' . $cityAr . '%']);
+                    }
+                    if ($cityKu !== '') {
+                        $q->orWhereRaw('TRIM(place) LIKE ?', ['%' . $cityKu . '%']);
+                    }
+                })
+                ->limit(200)
+                ->get();
+        } catch (\Exception $e) {
+            Log::error('Error finding interested users: ' . $e->getMessage());
+            return collect();
+        }
+    }
+
+    private function findInterestedAgents(string $cityEn, string $cityAr, string $cityKu)
+    {
+        return $this->findInterestedByCity(Agent::query(), $cityEn, $cityAr, $cityKu, 'agents');
+    }
+
+    private function findInterestedOffices(string $cityEn, string $cityAr, string $cityKu)
+    {
+        return $this->findInterestedByCity(RealEstateOffice::query(), $cityEn, $cityAr, $cityKu, 'offices');
+    }
+
+    /**
+     * Shared city-matching query for agents and offices — the original had
+     * two near-identical copies of this.
+     */
+    private function findInterestedByCity($query, string $cityEn, string $cityAr, string $cityKu, string $label)
+    {
+        try {
+            return $query
+                ->whereRaw('JSON_LENGTH(device_tokens) > 0')
+                ->where(function ($q) use ($cityEn, $cityAr, $cityKu) {
+                    $q->whereNull('city')
+                        ->orWhereRaw("TRIM(COALESCE(city, '')) = ''");
+
+                    if ($cityEn !== '') {
+                        $q->orWhereRaw('LOWER(TRIM(city)) LIKE ?', ['%' . $cityEn . '%']);
+                    }
+                    if ($cityAr !== '') {
+                        $q->orWhereRaw('TRIM(city) LIKE ?', ['%' . $cityAr . '%']);
+                    }
+                    if ($cityKu !== '') {
+                        $q->orWhereRaw('TRIM(city) LIKE ?', ['%' . $cityKu . '%']);
+                    }
+                })
+                ->limit(200)
+                ->get();
+        } catch (\Exception $e) {
+            Log::error("Error finding interested {$label}: " . $e->getMessage());
+            return collect();
+        }
+    }
+
+    private function getRecipientColumn($user): string
+    {
+        return match (true) {
+            $user instanceof User             => 'user_id',
+            $user instanceof Agent            => 'agent_id',
+            $user instanceof RealEstateOffice => 'office_id',
+            default                           => 'user_id',
+        };
+    }
+
+    private function getOwnerColumn($owner): string
+    {
+        return $this->getRecipientColumn($owner);
+    }
+
+    private function loadOwner($property)
+    {
+        if (!$property->owner_type || !$property->owner_id) {
+            return null;
+        }
+
+        $ownerClass = $property->owner_type;
+
+        // Guard against an arbitrary class name in the column.
+        $allowed = [User::class, Agent::class, RealEstateOffice::class];
+        if (!in_array(ltrim($ownerClass, '\\'), $allowed, true)) {
+            Log::warning('Unexpected owner_type on property', [
+                'property_id' => $property->id,
+                'owner_type'  => $ownerClass,
+            ]);
+            return null;
+        }
+
+        return $ownerClass::find($property->owner_id);
+    }
+
+    private function getPropertyName($property): string
+    {
+        $name = $this->asArray($property->name);
+
+        if ($name) {
+            return $name['en'] ?? $name['ar'] ?? $name['ku'] ?? 'Property';
+        }
+
+        return is_string($property->name) && $property->name !== '' ? $property->name : 'Property';
+    }
+
+    /**
+     * Normalise a column that may be a JSON string or an already-cast array.
+     */
+    private function asArray($value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && $value !== '') {
+            return json_decode($value, true) ?: [];
+        }
+
+        return [];
+    }
+
+    private function resolveImageUrl(Request $request): ?string
+    {
+        if ($request->hasFile('image') && $request->file('image')->isValid()) {
+            $path = $request->file('image')->store('notifications', 'public');
+            return rtrim(config('app.url'), '/') . Storage::url($path);
+        }
+
+        if ($request->filled('image_url')) {
+            $url = $request->image_url;
+            return str_starts_with($url, 'http')
+                ? $url
+                : rtrim(config('app.url'), '/') . '/' . ltrim($url, '/');
+        }
+
+        return null;
+    }
+
+    /**
+     * Pick the recipient's language, falling back to English, then to
+     * whatever the admin actually filled in.
      */
     private function resolveLanguage(?string $userLang, array $titles, array $messages): array
     {
+        if (empty($titles) || empty($messages)) {
+            return ['title' => '', 'message' => ''];
+        }
+
         $lang = strtolower(trim($userLang ?? 'en'));
 
-        // If the user's language was filled by admin, use it
-        if (isset($titles[$lang]) && isset($messages[$lang])) {
+        if (isset($titles[$lang], $messages[$lang])) {
             return ['title' => $titles[$lang], 'message' => $messages[$lang]];
         }
 
-        // Fallback to English
-        if (isset($titles['en']) && isset($messages['en'])) {
+        if (isset($titles['en'], $messages['en'])) {
             return ['title' => $titles['en'], 'message' => $messages['en']];
         }
 
-        // Last resort: first available language
         $first = array_key_first($titles);
-        return ['title' => $titles[$first], 'message' => $messages[$first]];
+
+        return [
+            'title'   => $titles[$first],
+            'message' => $messages[$first] ?? '',
+        ];
     }
 }

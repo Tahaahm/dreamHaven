@@ -1,487 +1,569 @@
 {{-- resources/views/admin/notifications/broadcast.blade.php --}}
 @extends('layouts.admin-layout')
 
-@section('title', 'Broadcast Notification')
+@section('title', 'Broadcast')
+
+@push('styles') @include('admin.partials.ui-kit') @endpush
 
 @section('content')
+
+@php
+    use Illuminate\Support\Facades\Route as Rt;
+    $link = fn($n, $p = []) => Rt::has($n) ? route($n, $p) : null;
+
+    // Pre-targeted people, e.g. from the dashboard "Gone quiet" card:
+    //   /admin/notifications/broadcast?users=id1,id2,id3
+    $preIds = collect(explode(',', (string) request('users')))->filter()->unique()->values();
+
+    $preUsers = collect();
+    if ($preIds->isNotEmpty()) {
+        try {
+            $preUsers = \App\Models\User::whereIn('id', $preIds)
+                ->select('id', 'username', 'email', 'language', 'photo_image')
+                ->get();
+        } catch (\Throwable $e) {
+            $preUsers = collect();
+        }
+    }
+
+    $preset = request('preset'); // e.g. "winback"
+@endphp
+
 <style>
-.dmbc * { box-sizing: border-box; }
-.dmbc { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    .bc-grid { display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start; }
+    @media (max-width:1023px) { .bc-grid { grid-template-columns:1fr; } }
 
-.dmbc-wrap {
-    max-width: 1020px;
-    margin: 0 auto;
-    padding: 36px 28px 100px;
-}
+    .bc-tabs { display:flex; gap:2px; background:#f1f2f7; padding:4px; border-radius:12px; margin-bottom:18px; }
+    .bc-tab { flex:1; border:0; background:transparent; padding:9px 12px; border-radius:9px; font-size:12.5px; font-weight:800;
+              color:#64748b; cursor:pointer; transition:.16s; font-family:inherit; }
+    .bc-tab.on { background:#fff; color:var(--dm); box-shadow:0 1px 3px rgba(15,23,42,.12); }
+    .bc-pane { display:none; }
+    .bc-pane.on { display:block; }
 
-/* Header */
-.dmbc-hdr { display:flex; align-items:center; gap:18px; margin-bottom:36px; padding-bottom:28px; border-bottom:1px solid #E5E7EB; }
-.dmbc-hdr-ico { width:56px; height:56px; flex-shrink:0; background:linear-gradient(145deg,#7C4FD4,#6C3FC5); border-radius:18px; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(108,63,197,.38); }
-.dmbc-hdr-ico svg { width:26px; height:26px; color:#fff; }
-.dmbc-hdr-txt h1 { font-size:1.45rem; font-weight:800; color:#111827; margin:0 0 4px; letter-spacing:-.025em; }
-.dmbc-hdr-txt p { font-size:.83rem; color:#9CA3AF; margin:0; }
+    .bc-f { margin-bottom:16px; }
+    .bc-f > label { display:block; font-size:10px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#94a3b8; margin-bottom:7px; }
+    .bc-f .opt { font-weight:600; text-transform:none; letter-spacing:0; color:#cbd5e1; font-size:10.5px; }
+    .bc-f input[type=text], .bc-f input[type=url], .bc-f input[type=datetime-local], .bc-f select, .bc-f textarea {
+        width:100%; padding:11px 14px; border:1px solid #e6e8f2; border-radius:12px; font-size:13.5px; font-weight:600;
+        color:#0f172a; background:#fff; outline:none; transition:.16s; font-family:inherit;
+    }
+    .bc-f input:focus, .bc-f select:focus, .bc-f textarea:focus { border-color:var(--dm); box-shadow:0 0 0 3px rgba(48,59,151,.12); }
+    .bc-f textarea { resize:vertical; min-height:88px; line-height:1.55; }
+    .bc-count { font-size:10.5px; font-weight:700; color:#a8b0c4; text-align:right; margin-top:5px; }
+    .bc-count.warn { color:#d97706; } .bc-count.over { color:#e11d48; }
+    .bc-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 
-/* Result banner */
-.dmbc-result { display:none; padding:14px 18px; border-radius:12px; font-size:.875rem; font-weight:600; margin-bottom:28px; gap:12px; align-items:flex-start; animation:dmbcfi .2s ease; }
-@keyframes dmbcfi { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
-.dmbc-result.show { display:flex; }
-.dmbc-result.ok  { background:#F0FFF4; border:1.5px solid #86EFAC; color:#166534; }
-.dmbc-result.err { background:#FFF5F5; border:1.5px solid #FECACA; color:#991B1B; }
-.dmbc-warn { display:none; margin-top:10px; padding:10px 14px; background:#FFFBEB; border:1.5px solid #FCD34D; border-radius:8px; font-size:.8rem; color:#92400E; font-weight:500; }
-.dmbc-warn.show { display:block; }
-.dmbc-warn ul { margin:6px 0 0; padding-left:18px; }
-.dmbc-warn li  { margin-bottom:3px; }
+    /* Recipients */
+    .bc-rec { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    @media (max-width:520px) { .bc-rec { grid-template-columns:1fr; } }
+    .bc-rec input { position:absolute; opacity:0; width:0; height:0; }
+    .bc-rec label { display:flex; align-items:center; gap:10px; padding:13px 14px; border:1px solid #e6e8f2; border-radius:13px;
+                    cursor:pointer; font-size:13px; font-weight:700; color:#475569; transition:.16s; min-height:48px; }
+    .bc-rec label i { width:18px; text-align:center; color:#94a3b8; }
+    .bc-rec input:checked + label { border-color:var(--dm); background:var(--dm-soft); color:var(--dm); box-shadow:0 0 0 3px rgba(48,59,151,.08); }
+    .bc-rec input:checked + label i { color:var(--dm); }
 
-/* Grid */
-.dmbc-grid { display:grid; grid-template-columns:1fr 330px; gap:20px; align-items:start; }
-@media(max-width:820px){ .dmbc-grid{grid-template-columns:1fr;} }
+    .bc-chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+    .bc-chip { display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:999px; background:var(--dm-soft);
+               color:var(--dm); font-size:11.5px; font-weight:800; }
+    .bc-chip span.lang { background:#fff; padding:1px 6px; border-radius:999px; font-size:9.5px; color:#64748b; }
 
-/* Card */
-.dmbc-card { background:#fff; border-radius:14px; border:1px solid #F3F4F6; box-shadow:0 2px 16px rgba(0,0,0,.06); overflow:hidden; margin-bottom:18px; }
-.dmbc-card:last-child { margin-bottom:0; }
-.dmbc-card-hd { padding:16px 20px; border-bottom:1px solid #F3F4F6; display:flex; align-items:center; gap:10px; background:#FAFAFA; }
-.dmbc-card-hd h2 { font-size:.72rem; font-weight:800; color:#6B7280; margin:0; flex:1; text-transform:uppercase; letter-spacing:.08em; }
-.dmbc-pill { font-size:.62rem; font-weight:700; padding:3px 10px; border-radius:20px; text-transform:uppercase; letter-spacing:.05em; }
-.dmbc-pill-p { background:#F0EBFF; color:#6C3FC5; }
-.dmbc-pill-g { background:#F3F4F6; color:#6B7280; }
-.dmbc-card-bd { padding:22px; }
+    /* Drop zone */
+    .bc-drop { border:2px dashed #d7dbe8; border-radius:14px; padding:26px 18px; text-align:center; cursor:pointer;
+               position:relative; background:#fafbfd; transition:.18s; }
+    .bc-drop:hover, .bc-drop.over { border-color:var(--dm); background:var(--dm-soft); }
+    .bc-drop input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; }
+    .bc-drop i { font-size:22px; color:#c3cadd; display:block; margin-bottom:9px; }
+    .bc-drop p { margin:3px 0; font-size:12.5px; font-weight:600; color:#94a3b8; }
+    .bc-drop b { color:var(--dm); }
+    .bc-prev { margin-top:13px; position:relative; display:none; }
+    .bc-prev.show { display:block; }
+    .bc-prev img { width:100%; max-height:170px; object-fit:cover; border-radius:12px; border:1px solid #e6e8f2; display:block; }
+    .bc-prev button { position:absolute; top:9px; right:9px; width:30px; height:30px; border-radius:999px; border:0;
+                      background:rgba(15,19,40,.6); color:#fff; cursor:pointer; font-size:13px; }
+    .bc-prev button:hover { background:#e11d48; }
 
-/* Fields */
-.dmbc-f { margin-bottom:16px; }
-.dmbc-f:last-child { margin-bottom:0; }
-.dmbc-f>label { display:block; font-size:.72rem; font-weight:700; color:#6B7280; text-transform:uppercase; letter-spacing:.07em; margin-bottom:7px; }
-.req  { color:#EF4444; margin-left:2px; }
-.hint { font-weight:400; text-transform:none; color:#9CA3AF; font-size:.72rem; margin-left:5px; letter-spacing:0; }
-.dmbc-f input[type=text],.dmbc-f input[type=url],.dmbc-f input[type=datetime-local],.dmbc-f select,.dmbc-f textarea { width:100%; padding:10px 14px; border:1.5px solid #E5E7EB; border-radius:9px; font-size:.9rem; color:#374151; background:#fff; transition:border-color .15s,box-shadow .15s; outline:none; font-family:inherit; }
-.dmbc-f input:focus,.dmbc-f select:focus,.dmbc-f textarea:focus { border-color:#6C3FC5; box-shadow:0 0 0 3px rgba(108,63,197,.1); }
-.dmbc-f textarea { resize:vertical; min-height:80px; line-height:1.5; }
-.dmbc-cc { font-size:.7rem; color:#9CA3AF; text-align:right; margin-top:5px; transition:color .15s; }
-.dmbc-cc.warn { color:#F59E0B; }
-.dmbc-cc.over { color:#EF4444; font-weight:700; }
-.dmbc-2col { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    /* Phone preview */
+    .bc-phone { width:216px; margin:20px auto 16px; background:#14172a; border-radius:32px; padding:13px 9px 17px;
+                box-shadow:0 22px 50px -18px rgba(15,23,42,.6); }
+    .bc-phone::before { content:''; display:block; width:54px; height:5px; background:#2a2f4a; border-radius:3px; margin:0 auto 11px; }
+    .bc-scr { background:#eef0f6; border-radius:22px; overflow:hidden; min-height:300px; }
+    .bc-bar { background:#14172a; color:rgba(255,255,255,.45); font-size:9px; font-weight:700; padding:6px 14px; display:flex; justify-content:space-between; }
+    .bc-strip { background:#e2e5ee; padding:5px 11px; font-size:9.5px; font-weight:800; color:#7c869c; text-transform:uppercase; letter-spacing:.06em; }
+    .bc-note { margin:10px 8px; background:#fff; border-radius:14px; box-shadow:0 2px 12px rgba(15,23,42,.13); overflow:hidden; }
+    .bc-note-hd { display:flex; align-items:center; gap:6px; padding:9px 11px 5px; }
+    .bc-note-ico { width:19px; height:19px; border-radius:6px; background:linear-gradient(135deg,var(--dm),var(--dm-light)); flex-shrink:0; }
+    .bc-note-app { font-size:9px; font-weight:900; color:#94a3b8; text-transform:uppercase; letter-spacing:.07em; flex:1; }
+    .bc-note-time { font-size:9px; color:#94a3b8; font-weight:700; }
+    .bc-note-bd { padding:0 11px 10px; }
+    .bc-note-img { width:100%; max-height:72px; object-fit:cover; border-radius:6px; margin-bottom:7px; display:none; }
+    .bc-note-img.show { display:block; }
+    .bc-note-t { font-size:11.5px; font-weight:900; color:#0f172a; margin-bottom:3px; line-height:1.3; }
+    .bc-note-m { font-size:10.5px; color:#64748b; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    .bc-note[dir=rtl] .bc-note-t, .bc-note[dir=rtl] .bc-note-m { text-align:right; }
 
-/* Lang tabs */
-.dmbc-ltabs { display:flex; gap:0; margin-bottom:20px; border-bottom:2px solid #F3F4F6; }
-.dmbc-ltab { padding:8px 18px 10px; border:none; background:transparent; font-size:.82rem; font-weight:700; color:#9CA3AF; cursor:pointer; transition:all .15s; border-bottom:2px solid transparent; margin-bottom:-2px; font-family:inherit; }
-.dmbc-ltab.on { color:#6C3FC5; border-bottom-color:#6C3FC5; }
-.dmbc-ltab:hover:not(.on) { color:#6C3FC5; }
-.dmbc-lpane { display:none; }
-.dmbc-lpane.on { display:block; }
+    .bc-langbar { display:flex; gap:5px; justify-content:center; margin-bottom:4px; }
+    .bc-langbtn { border:1px solid #e6e8f2; background:#fff; border-radius:999px; padding:4px 11px; font-size:10.5px;
+                  font-weight:800; color:#94a3b8; cursor:pointer; font-family:inherit; transition:.16s; }
+    .bc-langbtn.on { background:var(--dm); border-color:transparent; color:#fff; }
 
-/* Image drop */
-.dmbc-drop { border:2px dashed #D1D5DB; border-radius:12px; padding:30px 20px; text-align:center; cursor:pointer; transition:all .2s; position:relative; background:#FAFAFA; }
-.dmbc-drop:hover,.dmbc-drop.over { border-color:#6C3FC5; background:#F5F0FF; }
-.dmbc-drop input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
-.dmbc-drop-ico { font-size:2rem; display:block; margin-bottom:10px; }
-.dmbc-drop p { margin:4px 0; font-size:.84rem; color:#9CA3AF; }
-.dmbc-drop strong { color:#6C3FC5; }
-.dmbc-prev-img { margin-top:14px; position:relative; display:none; }
-.dmbc-prev-img.show { display:block; }
-.dmbc-prev-img img { width:100%; max-height:160px; object-fit:cover; border-radius:10px; border:1px solid #E5E7EB; display:block; }
-.dmbc-rm-btn { position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,.55); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff; font-size:.85rem; transition:background .15s; }
-.dmbc-rm-btn:hover { background:#EF4444; }
-.dmbc-url-row { display:flex; gap:8px; margin-top:14px; }
-.dmbc-url-row input { flex:1; padding:10px 14px; border:1.5px solid #E5E7EB; border-radius:9px; font-size:.875rem; color:#374151; outline:none; font-family:inherit; transition:border-color .15s; }
-.dmbc-url-row input:focus { border-color:#6C3FC5; }
-.dmbc-url-btn { padding:10px 16px; border-radius:9px; border:1.5px solid #E5E7EB; background:#fff; font-size:.8rem; font-weight:700; color:#6B7280; cursor:pointer; white-space:nowrap; transition:all .15s; font-family:inherit; }
-.dmbc-url-btn:hover { border-color:#6C3FC5; color:#6C3FC5; background:#F5F0FF; }
+    .bc-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:4px; padding:14px 16px; border-top:1px solid #f1f2f7; }
+    .bc-stat { text-align:center; }
+    .bc-stat b { display:block; font-size:20px; font-weight:900; color:var(--dm); line-height:1; }
+    .bc-stat span { font-size:9.5px; font-weight:800; color:#a8b0c4; text-transform:uppercase; letter-spacing:.06em; }
 
-/* Recipient chips */
-.dmbc-rc-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-.dmbc-rc { position:relative; }
-.dmbc-rc input[type=radio] { position:absolute; opacity:0; width:0; height:0; }
-.dmbc-rc label { display:flex; align-items:center; gap:10px; padding:12px 14px; border:1.5px solid #E5E7EB; border-radius:11px; cursor:pointer; transition:all .15s; font-size:.875rem; font-weight:600; color:#4B5563; font-family:inherit; }
-.dmbc-rc label .rci { font-size:1.1rem; }
-.dmbc-rc input:checked+label { border-color:#6C3FC5; background:#F5F0FF; color:#6C3FC5; box-shadow:0 0 0 3px rgba(108,63,197,.08); }
-.dmbc-rc label:hover { border-color:#6C3FC5; }
+    .bc-send { padding:15px 16px; border-top:1px solid #f1f2f7; }
+    .bc-spin { width:16px; height:16px; border:2.5px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%;
+               animation:bcspin .7s linear infinite; display:none; }
+    .bc-spin.on { display:block; }
+    @keyframes bcspin { to { transform:rotate(360deg); } }
 
-/* Right panel */
-.dmbc-panel { background:#fff; border-radius:14px; border:1px solid #F3F4F6; box-shadow:0 2px 16px rgba(0,0,0,.06); overflow:hidden; position:sticky; top:24px; }
-.dmbc-panel-hd { padding:15px 18px; border-bottom:1px solid #F3F4F6; background:#FAFAFA; display:flex; align-items:center; gap:8px; }
-.dmbc-panel-hd svg { color:#9CA3AF; width:15px; height:15px; }
-.dmbc-panel-hd h2 { font-size:.72rem; font-weight:800; color:#6B7280; margin:0; text-transform:uppercase; letter-spacing:.08em; }
-
-/* Phone */
-.dmbc-phone { width:210px; margin:22px auto 18px; background:#18181B; border-radius:30px; padding:14px 9px 18px; box-shadow:0 20px 48px rgba(0,0,0,.28),0 0 0 1px rgba(255,255,255,.04); }
-.dmbc-phone::before { content:''; display:block; width:52px; height:5px; background:#27272A; border-radius:3px; margin:0 auto 12px; }
-.dmbc-phone-scr { background:#F4F4F5; border-radius:20px; overflow:hidden; min-height:320px; }
-.dmbc-ph-bar { background:#18181B; color:rgba(255,255,255,.5); font-size:.5rem; font-weight:600; padding:5px 14px; display:flex; justify-content:space-between; letter-spacing:.03em; }
-.dmbc-ph-ntf { background:#E4E4E7; padding:5px 10px; font-size:.58rem; font-weight:700; color:#71717A; border-bottom:1px solid #D4D4D8; text-transform:uppercase; letter-spacing:.03em; }
-
-/* Notif bubble */
-.dmbc-nb { margin:10px 7px; background:#fff; border-radius:13px; box-shadow:0 2px 12px rgba(0,0,0,.12); overflow:hidden; border:1px solid #F3F4F6; }
-.dmbc-nb-hd { display:flex; align-items:center; gap:6px; padding:8px 10px 4px; }
-.dmbc-nb-ico { width:18px; height:18px; flex-shrink:0; background:linear-gradient(135deg,#6C3FC5,#7C4FD4); border-radius:5px; }
-.dmbc-nb-app { font-size:.52rem; font-weight:800; color:#9CA3AF; text-transform:uppercase; letter-spacing:.06em; flex:1; }
-.dmbc-nb-time { font-size:.52rem; color:#9CA3AF; }
-.dmbc-nb-body { padding:0 10px 9px; }
-.dmbc-nb-img { width:100%; max-height:68px; object-fit:cover; display:none; margin-bottom:6px; border-radius:4px; }
-.dmbc-nb-img.show { display:block; }
-.dmbc-nb-title { font-size:.68rem; font-weight:800; color:#111827; margin-bottom:3px; line-height:1.3; }
-.dmbc-nb-msg { font-size:.62rem; color:#6B7280; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.dmbc-nb-badge { display:inline-flex; align-items:center; gap:3px; font-size:.57rem; font-weight:700; padding:2px 8px; border-radius:20px; margin-top:6px; }
-.dmbc-nb-badge.low    { background:#EFF6FF; color:#1D4ED8; }
-.dmbc-nb-badge.medium { background:#FFFBEB; color:#B45309; }
-.dmbc-nb-badge.high   { background:#FFF5F5; color:#DC2626; }
-.dmbc-nb-badge.urgent { background:#FFF5F5; color:#DC2626; animation:dmbcp 1.2s infinite; }
-@keyframes dmbcp { 0%,100%{opacity:1} 50%{opacity:.5} }
-
-/* Stats */
-.dmbc-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; padding:14px 16px; border-top:1px solid #F3F4F6; }
-.dmbc-stat { text-align:center; }
-.dmbc-stat-n { font-size:1.3rem; font-weight:900; color:#6C3FC5; line-height:1; }
-.dmbc-stat-l { font-size:.6rem; font-weight:700; color:#9CA3AF; text-transform:uppercase; letter-spacing:.05em; margin-top:4px; }
-
-/* Submit */
-.dmbc-sub { padding:16px 18px; border-top:1px solid #F3F4F6; }
-.dmbc-btn { width:100%; padding:14px; background:linear-gradient(135deg,#6C3FC5 0%,#7C4FD4 100%); color:#fff; border:none; border-radius:11px; font-size:.95rem; font-weight:800; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px; transition:all .2s; box-shadow:0 4px 18px rgba(108,63,197,.38); font-family:inherit; letter-spacing:-.01em; }
-.dmbc-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 28px rgba(108,63,197,.48); }
-.dmbc-btn:active:not(:disabled) { transform:translateY(0); }
-.dmbc-btn:disabled { opacity:.55; cursor:not-allowed; transform:none; }
-.dmbc-spin { width:18px; height:18px; flex-shrink:0; border:2.5px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:dmbcsp .7s linear infinite; display:none; }
-.dmbc-spin.on { display:block; }
-@keyframes dmbcsp { to{transform:rotate(360deg)} }
-.dmbc-sub-note { text-align:center; font-size:.7rem; color:#9CA3AF; margin:9px 0 0; }
+    .bc-result { display:none; padding:14px 16px; border-radius:14px; font-size:13px; font-weight:700; margin-bottom:18px; gap:11px; align-items:flex-start; }
+    .bc-result.show { display:flex; }
+    .bc-result.ok { background:#ecfdf5; border:1px solid #a7f3d0; color:#047857; }
+    .bc-result.err { background:#fef2f2; border:1px solid #fecdd3; color:#b91c1c; }
 </style>
 
-<div class="dmbc">
-<div class="dmbc-wrap">
+<div class="max-w-[1500px] mx-auto">
 
-    <div class="dmbc-hdr">
-        <div class="dmbc-hdr-ico">
-            <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-            </svg>
-        </div>
-        <div class="dmbc-hdr-txt">
-            <h1>Broadcast Notification</h1>
-            <p>Send push notifications to users, agents &amp; offices — full multilingual support</p>
+    {{-- HEADER --}}
+    <div class="page-head">
+        <div>
+            <p class="eyebrow mb-1.5">Communication</p>
+            <h1 class="page-ttl">Broadcast</h1>
+            <p class="text-[13px] text-slate-500 font-semibold mt-1.5">
+                Every person receives it in their own language — English, Arabic or Kurdish.
+            </p>
         </div>
     </div>
 
-    <div class="dmbc-result" id="bcRes">
-        <div>
-            <div id="bcResMsg"></div>
-            <div class="dmbc-warn" id="bcWarn">
-                <strong>⚠ Translation warnings:</strong>
-                <ul id="bcWarnList"></ul>
-            </div>
-        </div>
+    <div class="bc-result" id="bcRes">
+        <i class="fas fa-circle-check mt-0.5" id="bcResIco"></i>
+        <div class="flex-1"><div id="bcResMsg"></div><div id="bcResWarn" class="mt-2 text-[12px] font-semibold opacity-80"></div></div>
     </div>
 
     <form id="bcForm" enctype="multipart/form-data">
         @csrf
-        <div class="dmbc-grid">
+        @foreach($preUsers as $u)
+            <input type="hidden" name="user_ids[]" value="{{ $u->id }}">
+        @endforeach
 
+        <div class="bc-grid">
             <div>
-                {{-- Content --}}
-                <div class="dmbc-card">
-                    <div class="dmbc-card-hd">
-                        <h2>Notification Content</h2>
-                        <span class="dmbc-pill dmbc-pill-p">Multilingual</span>
+                {{-- ── MESSAGE ─────────────────────────────────────────── --}}
+                <div class="card mb-5">
+                    <div class="card-hd">
+                        <div><p class="eyebrow mb-1">Content</p><h3 class="card-ttl">What are you sending?</h3></div>
+                        <span class="badge b-plan">3 languages</span>
                     </div>
-                    <div class="dmbc-card-bd">
-                        <div class="dmbc-ltabs">
-                            <button type="button" class="dmbc-ltab on" data-lang="en">🇬🇧 English</button>
-                            <button type="button" class="dmbc-ltab" data-lang="ar">🇸🇦 Arabic</button>
-                            <button type="button" class="dmbc-ltab" data-lang="ku">🟢 Kurdish</button>
+                    <div class="p-4 md:p-5">
+                        <div class="bc-tabs">
+                            <button type="button" class="bc-tab on" data-lang="en">English</button>
+                            <button type="button" class="bc-tab" data-lang="ar">العربية</button>
+                            <button type="button" class="bc-tab" data-lang="ku">کوردی</button>
                         </div>
-                        <div class="dmbc-lpane on" id="lp-en">
-                            <div class="dmbc-f">
-                                <label>Title <span class="req">*</span></label>
-                                <input type="text" name="title_en" id="title_en" maxlength="100" placeholder="e.g. New properties in your area!" oninput="lp();dmCC(this,100,'cten')">
-                                <div class="dmbc-cc" id="cten">0 / 100</div>
+
+                        {{-- English --}}
+                        <div class="bc-pane on" id="pane-en">
+                            <div class="bc-f">
+                                <label>Title <span style="color:#e11d48">*</span></label>
+                                <input type="text" name="title_en" id="t_en" maxlength="100"
+                                       placeholder="New properties in your area" oninput="bcPreview();bcCount(this,100,'c_t_en')">
+                                <div class="bc-count" id="c_t_en">0 / 100</div>
                             </div>
-                            <div class="dmbc-f">
-                                <label>Message <span class="req">*</span></label>
-                                <textarea name="message_en" id="message_en" maxlength="500" rows="3" placeholder="Describe what this notification is about…" oninput="lp();dmCC(this,500,'cmen')"></textarea>
-                                <div class="dmbc-cc" id="cmen">0 / 500</div>
-                            </div>
-                        </div>
-                        <div class="dmbc-lpane" id="lp-ar">
-                            <div class="dmbc-f">
-                                <label>Title <span class="hint">(optional)</span></label>
-                                <input type="text" name="title_ar" maxlength="100" placeholder="مثال: عقارات جديدة في منطقتك!" dir="rtl">
-                            </div>
-                            <div class="dmbc-f">
-                                <label>Message <span class="hint">(optional)</span></label>
-                                <textarea name="message_ar" maxlength="500" rows="3" placeholder="وصف الإشعار…" dir="rtl"></textarea>
+                            <div class="bc-f">
+                                <label>Message <span style="color:#e11d48">*</span></label>
+                                <textarea name="message_en" id="m_en" maxlength="500" rows="3"
+                                          placeholder="Tell them what's new…" oninput="bcPreview();bcCount(this,500,'c_m_en')"></textarea>
+                                <div class="bc-count" id="c_m_en">0 / 500</div>
                             </div>
                         </div>
-                        <div class="dmbc-lpane" id="lp-ku">
-                            <div class="dmbc-f">
-                                <label>Title <span class="hint">(optional)</span></label>
-                                <input type="text" name="title_ku" maxlength="100" placeholder="نموونە: خانووی نوێ لە ناوچەکەتدا!" dir="rtl">
+
+                        {{-- Arabic --}}
+                        <div class="bc-pane" id="pane-ar">
+                            <div class="bc-f">
+                                <label>Title <span class="opt">— falls back to English if empty</span></label>
+                                <input type="text" name="title_ar" id="t_ar" maxlength="100" dir="rtl"
+                                       placeholder="عقارات جديدة في منطقتك" oninput="bcPreview()">
                             </div>
-                            <div class="dmbc-f">
-                                <label>Message <span class="hint">(optional)</span></label>
-                                <textarea name="message_ku" maxlength="500" rows="3" placeholder="ڕوونکردنەوەی ئاگادارکردنەوەکە…" dir="rtl"></textarea>
+                            <div class="bc-f">
+                                <label>Message <span class="opt">— falls back to English</span></label>
+                                <textarea name="message_ar" id="m_ar" maxlength="500" rows="3" dir="rtl"
+                                          placeholder="وصف الإشعار…" oninput="bcPreview()"></textarea>
+                            </div>
+                        </div>
+
+                        {{-- Kurdish --}}
+                        <div class="bc-pane" id="pane-ku">
+                            <div class="bc-f">
+                                <label>Title <span class="opt">— falls back to English if empty</span></label>
+                                <input type="text" name="title_ku" id="t_ku" maxlength="100" dir="rtl"
+                                       placeholder="خانووی نوێ لە ناوچەکەتدا" oninput="bcPreview()">
+                            </div>
+                            <div class="bc-f">
+                                <label>Message <span class="opt">— falls back to English</span></label>
+                                <textarea name="message_ku" id="m_ku" maxlength="500" rows="3" dir="rtl"
+                                          placeholder="ڕوونکردنەوەی ئاگادارکردنەوەکە…" oninput="bcPreview()"></textarea>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Image --}}
-                <div class="dmbc-card">
-                    <div class="dmbc-card-hd">
-                        <h2>Notification Image</h2>
-                        <span class="dmbc-pill dmbc-pill-g">Optional</span>
+                {{-- ── RECIPIENTS ──────────────────────────────────────── --}}
+                <div class="card mb-5">
+                    <div class="card-hd">
+                        <div><p class="eyebrow mb-1">Audience</p><h3 class="card-ttl">Who receives it?</h3></div>
+                        @if($preUsers->isNotEmpty())
+                            <span class="badge b-warn">{{ $preUsers->count() }} pre-selected</span>
+                        @endif
                     </div>
-                    <div class="dmbc-card-bd">
-                        <p style="font-size:.83rem;color:#9CA3AF;margin:0 0 16px;line-height:1.6">
-                            Images appear in the notification tray and boost open rates.<br>
-                            Recommended: <strong style="color:#374151">1200 × 628 px</strong> · max 2 MB · JPG/PNG/WEBP
+                    <div class="p-4 md:p-5">
+                        <div class="bc-rec">
+                            @php
+                                $recipients = [
+                                    ['all', 'Everyone', 'fa-earth-americas'],
+                                    ['users', 'Users only', 'fa-user'],
+                                    ['agents', 'Agents only', 'fa-user-tie'],
+                                    ['offices', 'Offices only', 'fa-building'],
+                                ];
+                                $defaultPick = $preUsers->isNotEmpty() ? 'selected' : 'all';
+                            @endphp
+                            @foreach($recipients as [$val, $label, $icon])
+                                <div style="position:relative">
+                                    <input type="radio" name="recipient_type" id="r-{{ $val }}" value="{{ $val }}"
+                                           {{ $defaultPick === $val ? 'checked' : '' }} onchange="bcCounts()">
+                                    <label for="r-{{ $val }}"><i class="fas {{ $icon }}"></i> {{ $label }}</label>
+                                </div>
+                            @endforeach
+
+                            @if($preUsers->isNotEmpty())
+                                <div style="position:relative;grid-column:1/-1">
+                                    <input type="radio" name="recipient_type" id="r-selected" value="selected" checked onchange="bcCounts()">
+                                    <label for="r-selected">
+                                        <i class="fas fa-user-check"></i>
+                                        {{ $preset === 'winback' ? 'Win back these people' : 'Selected people' }}
+                                        <span class="badge b-plan ml-auto">{{ $preUsers->count() }}</span>
+                                    </label>
+                                </div>
+                            @endif
+                        </div>
+
+                        @if($preUsers->isNotEmpty())
+                            <div class="bc-chips">
+                                @foreach($preUsers as $u)
+                                    <span class="bc-chip">
+                                        {{ $u->username }}
+                                        <span class="lang">{{ strtoupper($u->language ?: 'en') }}</span>
+                                    </span>
+                                @endforeach
+                            </div>
+                            @php $langMix = $preUsers->groupBy(fn($u) => $u->language ?: 'en')->map->count(); @endphp
+                            <p class="text-[11.5px] font-bold text-slate-500 mt-3">
+                                <i class="fas fa-language mr-1" style="color:var(--dm)"></i>
+                                Language mix:
+                                @foreach($langMix as $lang => $n)
+                                    {{ strtoupper($lang) }} {{ $n }}@if(!$loop->last) · @endif
+                                @endforeach
+                                — each person gets their own version.
+                            </p>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- ── IMAGE ───────────────────────────────────────────── --}}
+                <div class="card mb-5">
+                    <div class="card-hd">
+                        <div><p class="eyebrow mb-1">Media</p><h3 class="card-ttl">Image</h3></div>
+                        <span class="badge b-mute">Optional</span>
+                    </div>
+                    <div class="p-4 md:p-5">
+                        <p class="text-[12.5px] text-slate-500 font-semibold mb-4">
+                            Shows in the notification tray and lifts open rates.
+                            Best at <b class="text-slate-700">1200 × 628</b>, under 2 MB.
                         </p>
-                        <div class="dmbc-drop" id="dmDrop">
-                            <input type="file" name="image" id="dmFile" accept="image/jpeg,image/png,image/webp" onchange="dmFileChange(this)">
-                            <span class="dmbc-drop-ico">🖼️</span>
-                            <p><strong>Click to upload</strong> or drag &amp; drop</p>
-                            <p style="font-size:.76rem">JPG · PNG · WEBP &nbsp;·&nbsp; max 2 MB</p>
+
+                        <div class="bc-drop" id="bcDrop">
+                            <input type="file" name="image" id="bcFile" accept="image/jpeg,image/png,image/webp" onchange="bcFile(this)">
+                            <i class="fas fa-image"></i>
+                            <p><b>Click to upload</b> or drag and drop</p>
+                            <p style="font-size:11.5px">JPG · PNG · WEBP · max 2 MB</p>
                         </div>
-                        <div class="dmbc-prev-img" id="dmPrevWrap">
-                            <img id="dmPrevImg" src="" alt="Preview">
-                            <button type="button" class="dmbc-rm-btn" onclick="dmRmImg()" title="Remove">✕</button>
+
+                        <div class="bc-prev" id="bcPrevWrap">
+                            <img id="bcPrevImg" src="" alt="">
+                            <button type="button" onclick="bcClearImg()"><i class="fas fa-xmark"></i></button>
                         </div>
-                        <div style="margin-top:16px">
-                            <label style="display:block;font-size:.72rem;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px">Or paste an image URL</label>
-                            <div class="dmbc-url-row">
-                                <input type="url" name="image_url" id="dmImgUrl" placeholder="https://dreammulk.com/storage/notifications/…" oninput="dmUrlInput()">
-                                <button type="button" class="dmbc-url-btn" onclick="dmPrevUrl()">Preview</button>
+
+                        <div class="bc-f" style="margin-top:14px;margin-bottom:0">
+                            <label>Or paste an image URL</label>
+                            <div style="display:flex;gap:8px">
+                                <input type="url" name="image_url" id="bcUrl" placeholder="https://dreammulk.com/storage/…" oninput="document.getElementById('bcFile').value=''">
+                                <button type="button" class="btn-ghost" onclick="bcShowImg(document.getElementById('bcUrl').value.trim())">Preview</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {{-- Settings --}}
-                <div class="dmbc-card">
-                    <div class="dmbc-card-hd"><h2>Settings</h2></div>
-                    <div class="dmbc-card-bd">
-                        <div class="dmbc-f">
-                            <label>Recipients <span class="req">*</span></label>
-                            <div class="dmbc-rc-grid">
-                                <div class="dmbc-rc">
-                                    <input type="radio" name="recipient_type" id="r-all" value="all" checked onchange="fetchCounts()">
-                                    <label for="r-all"><span class="rci">🌍</span> Everyone</label>
-                                </div>
-                                <div class="dmbc-rc">
-                                    <input type="radio" name="recipient_type" id="r-users" value="users" onchange="fetchCounts()">
-                                    <label for="r-users"><span class="rci">👤</span> Users only</label>
-                                </div>
-                                <div class="dmbc-rc">
-                                    <input type="radio" name="recipient_type" id="r-agents" value="agents" onchange="fetchCounts()">
-                                    <label for="r-agents"><span class="rci">🏷️</span> Agents only</label>
-                                </div>
-                                <div class="dmbc-rc">
-                                    <input type="radio" name="recipient_type" id="r-offices" value="offices" onchange="fetchCounts()">
-                                    <label for="r-offices"><span class="rci">🏢</span> Offices only</label>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="dmbc-f dmbc-2col">
+                {{-- ── SETTINGS ────────────────────────────────────────── --}}
+                <div class="card">
+                    <div class="card-hd"><div><p class="eyebrow mb-1">Delivery</p><h3 class="card-ttl">Settings</h3></div></div>
+                    <div class="p-4 md:p-5">
+                        <div class="bc-f bc-2">
                             <div>
-                                <label>Type <span class="req">*</span></label>
+                                <label>Type</label>
                                 <select name="type">
-                                    <option value="system">🔧 System</option>
-                                    <option value="property">🏠 Property</option>
-                                    <option value="promotion">🎉 Promotion</option>
-                                    <option value="alert">⚠️ Alert</option>
+                                    <option value="system">System</option>
+                                    <option value="property">Property</option>
+                                    <option value="promotion">Promotion</option>
+                                    <option value="alert">Alert</option>
                                 </select>
                             </div>
                             <div>
-                                <label>Priority <span class="req">*</span></label>
-                                <select name="priority" id="dmPriority" onchange="lp()">
+                                <label>Priority</label>
+                                <select name="priority" id="bcPriority">
                                     <option value="low">Low</option>
                                     <option value="medium" selected>Medium</option>
                                     <option value="high">High</option>
-                                    <option value="urgent">🚨 Urgent</option>
+                                    <option value="urgent">Urgent</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="dmbc-f">
-                            <label>Action URL <span class="hint">(where to open on tap)</span></label>
-                            <input type="text" name="action_url" placeholder="/properties  or  https://dreammulk.com/…">
+                        <div class="bc-f">
+                            <label>Action URL <span class="opt">— where it opens on tap</span></label>
+                            <input type="text" name="action_url" placeholder="/properties  or  https://dreammulk.com/…"
+                                   value="{{ $preset === 'winback' ? '/properties' : '' }}">
                         </div>
-                        <div class="dmbc-f">
-                            <label>Action Button Text <span class="hint">(optional)</span></label>
-                            <input type="text" name="action_text" maxlength="60" placeholder="e.g. View Properties">
-                        </div>
-                        <div class="dmbc-f">
-                            <label>Expires At <span class="hint">(blank = never)</span></label>
-                            <input type="datetime-local" name="expires_at">
+                        <div class="bc-f bc-2" style="margin-bottom:0">
+                            <div>
+                                <label>Button text <span class="opt">optional</span></label>
+                                <input type="text" name="action_text" maxlength="60" placeholder="View properties">
+                            </div>
+                            <div>
+                                <label>Expires <span class="opt">blank = never</span></label>
+                                <input type="datetime-local" name="expires_at">
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {{-- RIGHT --}}
+            {{-- ── PREVIEW PANEL ───────────────────────────────────────── --}}
             <div>
-                <div class="dmbc-panel">
-                    <div class="dmbc-panel-hd">
-                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                        </svg>
-                        <h2>Live Preview</h2>
-                    </div>
-                    <div style="padding:0 18px">
-                        <div class="dmbc-phone">
-                            <div class="dmbc-phone-scr">
-                                <div class="dmbc-ph-bar"><span>9:41</span><span>●●● ▶ ☰</span></div>
-                                <div class="dmbc-ph-ntf">Notifications · 3 new</div>
-                                <div class="dmbc-nb">
-                                    <div class="dmbc-nb-hd">
-                                        <div class="dmbc-nb-ico"></div>
-                                        <span class="dmbc-nb-app">Dream Mulk</span>
-                                        <span class="dmbc-nb-time">now</span>
+                <div class="card" style="position:sticky;top:20px">
+                    <div class="card-hd"><div><p class="eyebrow mb-1">Preview</p><h3 class="card-ttl">On the phone</h3></div></div>
+
+                    <div class="px-4 pt-3">
+                        <div class="bc-langbar">
+                            <button type="button" class="bc-langbtn on" data-plang="en" onclick="bcSetPreviewLang('en')">EN</button>
+                            <button type="button" class="bc-langbtn" data-plang="ar" onclick="bcSetPreviewLang('ar')">AR</button>
+                            <button type="button" class="bc-langbtn" data-plang="ku" onclick="bcSetPreviewLang('ku')">KU</button>
+                        </div>
+
+                        <div class="bc-phone">
+                            <div class="bc-scr">
+                                <div class="bc-bar"><span>9:41</span><span>▪▪▪ ⌁ ▮</span></div>
+                                <div class="bc-strip">Notifications</div>
+                                <div class="bc-note" id="bcNote">
+                                    <div class="bc-note-hd">
+                                        <div class="bc-note-ico"></div>
+                                        <span class="bc-note-app">Dream Mulk</span>
+                                        <span class="bc-note-time">now</span>
                                     </div>
-                                    <div class="dmbc-nb-body">
-                                        <img id="dmPrevNbImg" class="dmbc-nb-img" src="" alt="">
-                                        <div class="dmbc-nb-title" id="dmPrevTitle">Your notification title</div>
-                                        <div class="dmbc-nb-msg"   id="dmPrevMsg">Your notification message will appear here…</div>
-                                        <span class="dmbc-nb-badge medium" id="dmPrevBadge">● Medium</span>
+                                    <div class="bc-note-bd">
+                                        <img id="bcNoteImg" class="bc-note-img" src="" alt="">
+                                        <div class="bc-note-t" id="bcNoteT">Your title appears here</div>
+                                        <div class="bc-note-m" id="bcNoteM">And your message shows underneath…</div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="dmbc-stats">
-                        <div class="dmbc-stat"><div class="dmbc-stat-n" id="sU">—</div><div class="dmbc-stat-l">Users</div></div>
-                        <div class="dmbc-stat"><div class="dmbc-stat-n" id="sA">—</div><div class="dmbc-stat-l">Agents</div></div>
-                        <div class="dmbc-stat"><div class="dmbc-stat-n" id="sO">—</div><div class="dmbc-stat-l">Offices</div></div>
+
+                    <div class="bc-stats">
+                        <div class="bc-stat"><b id="sU">—</b><span>Users</span></div>
+                        <div class="bc-stat"><b id="sA">—</b><span>Agents</span></div>
+                        <div class="bc-stat"><b id="sO">—</b><span>Offices</span></div>
                     </div>
-                    <div class="dmbc-sub">
-                        <button type="submit" form="bcForm" class="dmbc-btn" id="dmBtn">
-                            <div class="dmbc-spin" id="dmSpin"></div>
-                            <svg id="dmBtnIco" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                            </svg>
-                            <span id="dmBtnLbl">Send Broadcast</span>
+
+                    <div class="bc-send">
+                        <button type="submit" form="bcForm" class="btn-solid" style="width:100%" id="bcBtn">
+                            <div class="bc-spin" id="bcSpin"></div>
+                            <i class="fas fa-paper-plane" id="bcBtnIco"></i>
+                            <span id="bcBtnTxt">Send broadcast</span>
                         </button>
-                        <p class="dmbc-sub-note">This action is immediate and irreversible.</p>
+                        <p class="text-[11px] font-semibold text-slate-400 text-center mt-2.5">
+                            Sends immediately and can't be undone.
+                        </p>
                     </div>
                 </div>
             </div>
-
         </div>
     </form>
 </div>
-</div>
 
 <script>
-document.querySelectorAll('.dmbc-ltab').forEach(t=>{
-    t.addEventListener('click',()=>{
-        const l=t.dataset.lang;
-        document.querySelectorAll('.dmbc-ltab').forEach(x=>x.classList.remove('on'));
-        document.querySelectorAll('.dmbc-lpane').forEach(x=>x.classList.remove('on'));
-        t.classList.add('on');
-        document.getElementById('lp-'+l).classList.add('on');
+/* ── Language tabs ─────────────────────────────────────────────── */
+document.querySelectorAll('.bc-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+        document.querySelectorAll('.bc-tab').forEach(t => t.classList.remove('on'));
+        document.querySelectorAll('.bc-pane').forEach(p => p.classList.remove('on'));
+        tab.classList.add('on');
+        document.getElementById('pane-' + tab.dataset.lang).classList.add('on');
+        bcSetPreviewLang(tab.dataset.lang);
     });
 });
-function lp(){
-    const t=document.getElementById('title_en').value||'Your notification title';
-    const m=document.getElementById('message_en').value||'Your notification message will appear here…';
-    const p=document.getElementById('dmPriority').value||'medium';
-    document.getElementById('dmPrevTitle').textContent=t;
-    document.getElementById('dmPrevMsg').textContent=m;
-    const b=document.getElementById('dmPrevBadge');
-    b.textContent={low:'● Low',medium:'● Medium',high:'● High',urgent:'🚨 Urgent'}[p];
-    b.className='dmbc-nb-badge '+p;
+
+/* ── Preview ───────────────────────────────────────────────────── */
+let bcPreviewLang = 'en';
+
+function bcSetPreviewLang(lang) {
+    bcPreviewLang = lang;
+    document.querySelectorAll('.bc-langbtn').forEach(b => b.classList.toggle('on', b.dataset.plang === lang));
+    bcPreview();
 }
-function dmCC(el,max,id){
-    const n=el.value.length,d=document.getElementById(id);
-    d.textContent=n+' / '+max;
-    d.className='dmbc-cc'+(n>=max?' over':n>max*.88?' warn':'');
+
+function bcPreview() {
+    const val = id => (document.getElementById(id)?.value || '').trim();
+
+    const title = val('t_' + bcPreviewLang) || val('t_en') || 'Your title appears here';
+    const msg   = val('m_' + bcPreviewLang) || val('m_en') || 'And your message shows underneath…';
+
+    document.getElementById('bcNoteT').textContent = title;
+    document.getElementById('bcNoteM').textContent = msg;
+    document.getElementById('bcNote').setAttribute('dir', bcPreviewLang === 'en' ? 'ltr' : 'rtl');
 }
-function dmFileChange(i){
-    const f=i.files[0];if(!f)return;
-    if(f.size>2097152){alert('Image must be under 2 MB.');i.value='';return;}
-    const r=new FileReader();
-    r.onload=e=>{dmShow(e.target.result);document.getElementById('dmImgUrl').value='';};
+
+function bcCount(el, max, id) {
+    const n = el.value.length;
+    const d = document.getElementById(id);
+    d.textContent = n + ' / ' + max;
+    d.className = 'bc-count' + (n >= max ? ' over' : n > max * 0.88 ? ' warn' : '');
+}
+
+/* ── Image ─────────────────────────────────────────────────────── */
+function bcFile(input) {
+    const f = input.files[0];
+    if (!f) return;
+    if (f.size > 2097152) { alert('Image must be under 2 MB.'); input.value = ''; return; }
+    const r = new FileReader();
+    r.onload = e => { bcShowImg(e.target.result); document.getElementById('bcUrl').value = ''; };
     r.readAsDataURL(f);
 }
-function dmUrlInput(){if(document.getElementById('dmImgUrl').value.trim())document.getElementById('dmFile').value='';}
-function dmPrevUrl(){const u=document.getElementById('dmImgUrl').value.trim();if(u)dmShow(u);}
-function dmShow(s){
-    document.getElementById('dmPrevImg').src=s;
-    document.getElementById('dmPrevWrap').classList.add('show');
-    const n=document.getElementById('dmPrevNbImg');n.src=s;n.classList.add('show');
+
+function bcShowImg(src) {
+    if (!src) return;
+    document.getElementById('bcPrevImg').src = src;
+    document.getElementById('bcPrevWrap').classList.add('show');
+    const n = document.getElementById('bcNoteImg');
+    n.src = src; n.classList.add('show');
 }
-function dmRmImg(){
-    document.getElementById('dmFile').value='';
-    document.getElementById('dmImgUrl').value='';
-    document.getElementById('dmPrevWrap').classList.remove('show');
-    const n=document.getElementById('dmPrevNbImg');n.src='';n.classList.remove('show');
+
+function bcClearImg() {
+    document.getElementById('bcFile').value = '';
+    document.getElementById('bcUrl').value = '';
+    document.getElementById('bcPrevWrap').classList.remove('show');
+    const n = document.getElementById('bcNoteImg');
+    n.src = ''; n.classList.remove('show');
 }
-const dz=document.getElementById('dmDrop');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
-dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
-dz.addEventListener('drop',e=>{
-    e.preventDefault();dz.classList.remove('over');
-    const f=e.dataTransfer.files[0];
-    if(f&&f.type.startsWith('image/')){
-        const dt=new DataTransfer();dt.items.add(f);
-        document.getElementById('dmFile').files=dt.files;
-        dmFileChange(document.getElementById('dmFile'));
+
+const bcDrop = document.getElementById('bcDrop');
+bcDrop.addEventListener('dragover', e => { e.preventDefault(); bcDrop.classList.add('over'); });
+bcDrop.addEventListener('dragleave', () => bcDrop.classList.remove('over'));
+bcDrop.addEventListener('drop', e => {
+    e.preventDefault(); bcDrop.classList.remove('over');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) {
+        const dt = new DataTransfer(); dt.items.add(f);
+        document.getElementById('bcFile').files = dt.files;
+        bcFile(document.getElementById('bcFile'));
     }
 });
-let _cT;
-function fetchCounts(){
-    clearTimeout(_cT);
-    _cT=setTimeout(async()=>{
-        const rt=document.querySelector('input[name=recipient_type]:checked')?.value||'all';
-        try{
-            const r=await fetch(`{{ route('admin.notifications.broadcast') }}?_counts=1&recipient_type=${rt}`,{headers:{'X-Requested-With':'XMLHttpRequest','Accept':'application/json'}});
-            if(!r.ok)return;
-            const j=await r.json();
-            if(j.counts){
-                document.getElementById('sU').textContent=j.counts.users??'—';
-                document.getElementById('sA').textContent=j.counts.agents??'—';
-                document.getElementById('sO').textContent=j.counts.offices??'—';
+
+/* ── Recipient counts ──────────────────────────────────────────── */
+let bcCountTimer;
+function bcCounts() {
+    clearTimeout(bcCountTimer);
+    bcCountTimer = setTimeout(async function () {
+        const rt = document.querySelector('input[name=recipient_type]:checked')?.value || 'all';
+        try {
+            const r = await fetch('{{ route("admin.notifications.broadcast") }}?_counts=1&recipient_type=' + rt, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+            });
+            if (!r.ok) return;
+            const j = await r.json();
+            if (j.counts) {
+                document.getElementById('sU').textContent = j.counts.users ?? '—';
+                document.getElementById('sA').textContent = j.counts.agents ?? '—';
+                document.getElementById('sO').textContent = j.counts.offices ?? '—';
             }
-        }catch(_){}
-    },400);
+        } catch (e) {}
+    }, 350);
 }
-fetchCounts();
-document.getElementById('bcForm').addEventListener('submit',async function(e){
+
+@if($preUsers->isNotEmpty())
+    document.getElementById('sU').textContent = {{ $preUsers->count() }};
+    document.getElementById('sA').textContent = 0;
+    document.getElementById('sO').textContent = 0;
+@else
+    bcCounts();
+@endif
+
+/* ── Submit ────────────────────────────────────────────────────── */
+document.getElementById('bcForm').addEventListener('submit', async function (e) {
     e.preventDefault();
-    if(!document.getElementById('title_en').value.trim()||!document.getElementById('message_en').value.trim()){showRes('err','✕ English title and message are required.');return;}
-    setLoad(true);
-    const fd=new FormData(this);
-    const uv=document.getElementById('dmImgUrl').value.trim();
-    if(!document.getElementById('dmFile').files.length&&uv)fd.set('image_url',uv);
-    try{
-        const res=await fetch('{{ route("admin.notifications.broadcast") }}',{method:'POST',headers:{'X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},body:fd});
-        const j=await res.json();
-        if(res.ok&&(j.status||j.success)){
-            const d=j.data??{};
-            showRes('ok',`✓ Broadcast sent to <strong>${d.sent_to??'?'}</strong> recipients — ${d.users??0} users, ${d.agents??0} agents, ${d.offices??0} offices.`);
-            if(d.warnings?.length)showWarns(d.warnings);
-            this.reset();dmRmImg();lp();
-        }else{
-            const errs=j.errors?'<br>'+Object.values(j.errors).flat().join('<br>'):'';
-            showRes('err','✕ '+(j.message??'Failed to send.')+errs);
+
+    if (!document.getElementById('t_en').value.trim() || !document.getElementById('m_en').value.trim()) {
+        bcResult('err', 'English title and message are required — they are the fallback for everyone.');
+        return;
+    }
+
+    bcLoading(true);
+
+    const fd = new FormData(this);
+    const url = document.getElementById('bcUrl').value.trim();
+    if (!document.getElementById('bcFile').files.length && url) fd.set('image_url', url);
+
+    try {
+        const res = await fetch('{{ route("admin.notifications.broadcast") }}', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+            body: fd
+        });
+        const j = await res.json();
+
+        if (res.ok && (j.status || j.success)) {
+            const d = j.data ?? {};
+            const byLang = d.by_language
+                ? Object.entries(d.by_language).map(([l, n]) => n + ' in ' + l.toUpperCase()).join(' · ')
+                : '';
+            bcResult('ok', 'Sent to <b>' + (d.sent_to ?? '?') + '</b> people.' + (byLang ? '<br>' + byLang : ''));
+            this.reset(); bcClearImg(); bcPreview();
+        } else {
+            const errs = j.errors ? '<br>' + Object.values(j.errors).flat().join('<br>') : '';
+            bcResult('err', (j.message ?? 'Failed to send.') + errs);
         }
-    }catch(err){showRes('err','✕ Network error: '+err.message);}
-    finally{setLoad(false);}
+    } catch (err) {
+        bcResult('err', 'Network error: ' + err.message);
+    } finally {
+        bcLoading(false);
+    }
 });
-function setLoad(on){
-    document.getElementById('dmBtn').disabled=on;
-    document.getElementById('dmBtnIco').style.display=on?'none':'';
-    document.getElementById('dmSpin').classList.toggle('on',on);
-    document.getElementById('dmBtnLbl').textContent=on?'Sending…':'Send Broadcast';
+
+function bcLoading(on) {
+    document.getElementById('bcBtn').disabled = on;
+    document.getElementById('bcBtnIco').style.display = on ? 'none' : '';
+    document.getElementById('bcSpin').classList.toggle('on', on);
+    document.getElementById('bcBtnTxt').textContent = on ? 'Sending…' : 'Send broadcast';
 }
-function showRes(type,html){
-    const el=document.getElementById('bcRes');
-    el.className='dmbc-result show '+type;
-    document.getElementById('bcResMsg').innerHTML=html;
-    document.getElementById('bcWarn').classList.remove('show');
-    el.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+function bcResult(type, html) {
+    const el = document.getElementById('bcRes');
+    el.className = 'bc-result show ' + type;
+    document.getElementById('bcResIco').className = 'fas mt-0.5 ' + (type === 'ok' ? 'fa-circle-check' : 'fa-circle-exclamation');
+    document.getElementById('bcResMsg').innerHTML = html;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
-function showWarns(w){
-    const box=document.getElementById('bcWarn');
-    document.getElementById('bcWarnList').innerHTML=w.map(x=>`<li>${x}</li>`).join('');
-    box.classList.add('show');
-}
-lp();
+
+bcPreview();
 </script>
 @endsection
