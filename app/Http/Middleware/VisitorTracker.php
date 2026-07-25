@@ -1,10 +1,17 @@
 <?php
 
 /*
-| SAVE AS: app/Services/VisitorTracker.php
-| (NOT in app/Console/Commands/ — that's where the WarmDashboardCache goes)
+| app/Http/Middleware/VisitorTracker.php
 |
-| Fixed: the "A void function must not return a value" fatal.
+| FIXED: app vs web detection.
+|
+| Your API routes are /v1/api/... so $request->is('api/*') never matched,
+| and every app visitor was being stored as source = 'web'.
+|
+| Now an "app" visit is anything that matches ANY of:
+|   • sends an X-Device-Id header
+|   • hits a path containing /api/  (api/*, v1/api/*, anything/api/*)
+|   • has a Dart / Flutter / OkHttp / CFNetwork user agent
 */
 
 namespace App\Http\Middleware;
@@ -28,6 +35,14 @@ class VisitorTracker
         'favicon.ico',
         'robots.txt',
         'sitemap.xml',
+    ];
+
+    /** Paths that mean "this came from the mobile app". */
+    protected array $apiPaths = [
+        'api/*',
+        'v1/api/*',
+        'api/v1/*',
+        '*/api/*',
     ];
 
     /**
@@ -95,24 +110,16 @@ class VisitorTracker
             return;
         }
 
-        $isApi    = $request->is('api/*');
-        $deviceId = $request->header('X-Device-Id');
-        $agent    = (string) $request->userAgent();
-        $userId   = $this->resolveUserId($request);
-
-        $platform = match (true) {
-            (bool) preg_match('/android/i', $agent)                   => 'android',
-            (bool) preg_match('/iphone|ipad|ios|cfnetwork/i', $agent)  => 'ios',
-            (bool) preg_match('/dart|okhttp/i', $agent)                => 'app',
-            default                                                    => 'browser',
-        };
+        $agent  = (string) $request->userAgent();
+        $userId = $this->resolveUserId($request);
+        $isApp  = $this->isApp($request, $agent);
 
         $inserted = DB::table('visits')->insertOrIgnore([
             'visitor_hash'  => $hash,
             'visit_date'    => $today,
             'user_id'       => $userId,
-            'source'        => ($isApi || $deviceId) ? 'app' : 'web',
-            'platform'      => $platform,
+            'source'        => $isApp ? 'app' : 'web',
+            'platform'      => $this->platform($agent, $isApp),
             'landing_path'  => mb_substr($request->path(), 0, 190),
             'referrer'      => mb_substr((string) $request->headers->get('referer'), 0, 190) ?: null,
             'sessions'      => 1,
@@ -124,7 +131,11 @@ class VisitorTracker
         ]);
 
         if ($inserted) {
-            $this->debug('new visitor', ['path' => $request->path(), 'user' => $userId ?: 'guest']);
+            $this->debug('new visitor', [
+                'path'   => $request->path(),
+                'source' => $isApp ? 'app' : 'web',
+                'user'   => $userId ?: 'guest',
+            ]);
             return;
         }
 
@@ -137,9 +148,41 @@ class VisitorTracker
                 'last_seen_at' => now(),
                 'updated_at'   => now(),
                 'user_id'      => $userId ?: DB::raw('user_id'),
+                // Promote to 'app' if any request in the session came from the app
+                'source'       => $isApp ? 'app' : DB::raw('source'),
             ]);
 
-        $this->debug('return session', ['path' => $request->path(), 'user' => $userId ?: 'guest']);
+        $this->debug('return session', [
+            'path'   => $request->path(),
+            'source' => $isApp ? 'app' : 'web',
+            'user'   => $userId ?: 'guest',
+        ]);
+    }
+
+    /**
+     * Did this request come from the mobile app?
+     */
+    protected function isApp(Request $request, string $agent): bool
+    {
+        if ($request->header('X-Device-Id')) {
+            return true;
+        }
+
+        if ($request->is(...$this->apiPaths)) {
+            return true;
+        }
+
+        return (bool) preg_match('/dart|flutter|okhttp|cfnetwork/i', $agent);
+    }
+
+    protected function platform(string $agent, bool $isApp): string
+    {
+        return match (true) {
+            (bool) preg_match('/android/i', $agent)                  => 'android',
+            (bool) preg_match('/iphone|ipad|ios|cfnetwork/i', $agent) => 'ios',
+            $isApp                                                   => 'app',
+            default                                                  => 'browser',
+        };
     }
 
     /**
