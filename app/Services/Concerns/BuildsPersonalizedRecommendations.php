@@ -68,12 +68,8 @@ trait BuildsPersonalizedRecommendations
             return $this->getGeneralRecommendations($limit);
         }
 
-        // Profile is expensive to build — never build it twice in 15 minutes
-        $profile = Cache::remember(
-            "taste_profile_{$userId}",
-            900,
-            fn() => app(\App\Services\Intelligence\UserTasteProfile::class)->build($userId)
-        );
+        // UserTasteProfile::build() already caches internally under the same key
+        $profile = app(\App\Services\Intelligence\UserTasteProfile::class)->build($userId);
 
         Log::info('🎯 REC: profile loaded', [
             'user_id'       => $userId,
@@ -98,6 +94,8 @@ trait BuildsPersonalizedRecommendations
             ], $limit, []);
         }
 
+        $seenIds = array_values($profile['seen_ids'] ?? []);
+
         $criteria = [
             'types'        => array_keys($profile['types']),
             'cities'       => array_keys($profile['cities']),
@@ -105,8 +103,18 @@ trait BuildsPersonalizedRecommendations
             'bedrooms'     => $profile['bedrooms'],
             'price'        => $this->sanePriceWindow($profile['price'] ?? [], $userId),
             'heat'         => $profile['heat_centroid'] ?? null,
-            'seen_ids'     => array_values($profile['seen_ids'] ?? []),
+            'seen_ids'     => $seenIds,
         ];
+
+        // ── Adaptive seen cap ────────────────────────────────────────────────
+        // If the user has already engaged with a large share of the catalogue,
+        // excluding all of it leaves nothing to recommend. Cap the exclusion.
+        $liveCount = Cache::remember('live_property_count', 600, fn() => Property::query()
+            ->where('is_active', true)->where('published', true)
+            ->whereNotIn('status', ['cancelled', 'pending', 'sold', 'rented'])
+            ->count());
+
+        $seenCap = ($liveCount > 0 && count($seenIds) >= $liveCount * 0.4) ? 30 : null;
 
         // ── Tiered relaxation ────────────────────────────────────────────────
         // Drop one constraint at a time until we have enough. Previously this
@@ -114,11 +122,11 @@ trait BuildsPersonalizedRecommendations
         // Each entry: [name, filters to drop, how many seen ids to exclude]
         //   null = exclude all seen, 30 = only the 30 most recent, 0 = exclude none
         $tiers = [
-            ['exact',       [],                                                                null],
-            ['no_bedrooms', ['bedrooms'],                                                      null],
-            ['no_price',    ['bedrooms', 'price'],                                             null],
-            ['no_city',     ['bedrooms', 'price', 'cities'],                                   null],
-            ['no_heat',     ['bedrooms', 'price', 'cities', 'heat'],                           null],
+            ['exact',       [],                                                                $seenCap],
+            ['no_bedrooms', ['bedrooms'],                                                      $seenCap],
+            ['no_price',    ['bedrooms', 'price'],                                             $seenCap],
+            ['no_city',     ['bedrooms', 'price', 'cities'],                                   $seenCap],
+            ['no_heat',     ['bedrooms', 'price', 'cities', 'heat'],                           $seenCap],
             ['recent_seen', ['bedrooms', 'price', 'cities', 'heat'],                           30],
             ['no_types',    ['bedrooms', 'price', 'cities', 'heat', 'types'],                  30],
             ['no_listing',  ['bedrooms', 'price', 'cities', 'heat', 'types', 'listing_type'],  30],
@@ -145,6 +153,7 @@ trait BuildsPersonalizedRecommendations
             'needed'   => $limit,
             'tier'     => $usedTier,
             'attempts' => $attempts,   // shows exactly which tier started working
+            'seen_cap' => $seenCap,    // null = excluded all seen, 30 = capped
         ]);
 
         // ── Top up if still short ────────────────────────────────────────────
