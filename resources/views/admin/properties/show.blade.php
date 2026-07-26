@@ -88,12 +88,13 @@
         ($todayViews * 3)
     ));
 
-    // Top viewers (most repeat visits)
+    // Top viewers (most repeat visits) — values() ensures integer keys (0,1,2...)
     $topViewers = $impressions->whereNotNull('user_id')
         ->groupBy('user_id')
         ->map(fn($g) => ['count' => $g->count(), 'last' => $g->max('created_at'), 'user' => $g->first()->user])
         ->sortByDesc('count')
-        ->take(10);
+        ->take(10)
+        ->values();
 
     // Price per sqm
     $area = (float)($property->area ?? 0);
@@ -565,6 +566,7 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                @php $maxCount = $topViewers->max(fn($d) => $d['count']); @endphp
                                 @forelse($topViewers as $rank => $data)
                                 @php $u = $data['user']; @endphp
                                 @if($u)
@@ -600,7 +602,7 @@
                                         <span style="font-size:.65rem;font-weight:700;color:var(--ink-3)"> visits</span>
                                     </td>
                                     <td>
-                                        @php $pct = min(100, (int)round(($data['count']/max(1,$topViewers->max('count')))*100)); @endphp
+                                        @php $pct = min(100, (int)round(($data['count'] / max(1, $maxCount)) * 100)); @endphp
                                         <div style="display:flex;align-items:center;gap:.5rem">
                                             <div class="interest">
                                                 <div class="interest-fill {{ $data['count'] > 5 ? 'int-high' : ($data['count'] > 2 ? 'int-med' : 'int-low') }}" style="width:{{ $pct }}%"></div>
