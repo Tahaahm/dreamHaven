@@ -1,900 +1,748 @@
 @extends('layouts.admin-layout')
 
-@section('title', 'Edit Property')
+@section('title', 'Edit Property — ' . (is_array($property->name) ? ($property->name['en'] ?? 'Property') : $property->name))
 
-@section('content')
-
-{{--
-    =========================================================
-    CRITICAL: DATA SAFETY LAYER
-    Converts Arrays/JSON to Strings before HTML rendering
-    =========================================================
---}}
 @php
-    // Helper function to safely convert values to string
-    $safeString = function($val) {
-        return is_array($val) ? '' : (string)($val ?? '');
-    };
+    // ── Safe data extraction ────────────────────────────────────────
+    $safe = fn($v) => is_array($v) ? '' : (string)($v ?? '');
 
-    // 1. Name
-    $rawName = $property->name;
-    $nameEn = is_array($rawName) ? ($rawName['en'] ?? '') : (is_string($rawName) ? $rawName : '');
-    $nameAr = is_array($rawName) ? ($rawName['ar'] ?? '') : '';
-    $nameKu = is_array($rawName) ? ($rawName['ku'] ?? '') : '';
+    $nameData = is_string($property->name) ? json_decode($property->name,true) : $property->name;
+    $nameEn = is_array($nameData) ? ($nameData['en'] ?? '') : (is_string($nameData) ? $nameData : '');
+    $nameAr = is_array($nameData) ? ($nameData['ar'] ?? '') : '';
+    $nameKu = is_array($nameData) ? ($nameData['ku'] ?? '') : '';
 
-    // 2. Description
-    $rawDesc = $property->description;
-    $descEn = is_array($rawDesc) ? ($rawDesc['en'] ?? '') : (is_string($rawDesc) ? $rawDesc : '');
-    $descAr = is_array($rawDesc) ? ($rawDesc['ar'] ?? '') : '';
-    $descKu = is_array($rawDesc) ? ($rawDesc['ku'] ?? '') : '';
+    $descData = is_string($property->description) ? json_decode($property->description,true) : $property->description;
+    $descEn = is_array($descData) ? ($descData['en'] ?? '') : (is_string($descData) ? $descData : '');
+    $descAr = is_array($descData) ? ($descData['ar'] ?? '') : '';
+    $descKu = is_array($descData) ? ($descData['ku'] ?? '') : '';
 
-    // 3. Price - UPDATED: Extract BOTH USD and IQD
-    $rawPrice = $property->price;
-    $priceIQD = 0;
-    $priceUSD = 0;
+    $priceData = is_string($property->price) ? json_decode($property->price,true) : $property->price;
+    $priceUSD = is_array($priceData) ? (float)($priceData['usd'] ?? 0) : 0;
+    $priceIQD = is_array($priceData) ? (float)($priceData['iqd'] ?? 0) : 0;
 
-    // Parse price if it's a string
-    $priceData = is_string($rawPrice) ? json_decode($rawPrice, true) : $rawPrice;
+    $typeData = is_string($property->type) ? json_decode($property->type,true) : $property->type;
+    $typeCategory = is_array($typeData) ? ($typeData['category'] ?? '') : (is_string($typeData) ? $typeData : '');
 
-    if (is_array($priceData)) {
-        // Direct extraction
-        $priceIQD = $priceData['iqd'] ?? 0;
-        $priceUSD = $priceData['usd'] ?? 0;
+    $roomsData = is_string($property->rooms) ? json_decode($property->rooms,true) : $property->rooms;
+    $roomsData = is_array($roomsData) ? $roomsData : [];
+    $roomBed   = $roomsData['bedroom']['count']    ?? $roomsData['bedroom']    ?? 0;
+    $roomBath  = $roomsData['bathroom']['count']   ?? $roomsData['bathroom']   ?? 0;
+    $roomLive  = $roomsData['living_room']['count'] ?? $roomsData['living_room'] ?? 0;
 
-        // Fallback for older data formats (single amount)
-        if ($priceIQD == 0 && $priceUSD == 0 && isset($priceData['amount'])) {
-            $currency = $priceData['currency'] ?? 'USD';
-            if ($currency === 'USD') {
-                $priceUSD = $priceData['amount'];
-            } else {
-                $priceIQD = $priceData['amount'];
-            }
-        }
-    } elseif (is_numeric($priceData)) {
-        // If it's just a number, assume IQD (or you can change logic)
-        $priceIQD = $priceData;
-    }
+    $locsData = is_string($property->locations) ? json_decode($property->locations,true) : $property->locations;
+    $locsData = is_array($locsData) ? $locsData : [];
+    $firstLoc = $locsData[0] ?? $locsData;
+    $lat = (float)($firstLoc['lat'] ?? 0);
+    $lng = (float)($firstLoc['lng'] ?? 0);
 
-    // 4. Type
-    $rawType = $property->type;
-    $typeCategory = is_array($rawType) ? ($rawType['category'] ?? '') : (is_string($rawType) ? $rawType : '');
+    $addrData = is_string($property->address_details) ? json_decode($property->address_details,true) : $property->address_details;
+    $addrData = is_array($addrData) ? $addrData : [];
+    $cityVal = is_array($addrData['city'] ?? null) ? ($addrData['city']['en'] ?? '') : ($addrData['city'] ?? '');
+    $distVal = is_array($addrData['district'] ?? null) ? ($addrData['district']['en'] ?? '') : ($addrData['district'] ?? '');
 
-    // 5. Amenities & Features
-    $rawAmenities = $property->amenities;
-    $amenitiesString = is_array($rawAmenities) ? implode(', ', $rawAmenities) : (is_string($rawAmenities) ? $rawAmenities : '');
+    $availData = is_array($property->availability) ? $property->availability : [];
+    $availFrom = $availData['from'] ?? '';
+    $availTo   = $availData['to']   ?? '';
 
-    $rawFeatures = $property->features;
-    $featuresString = is_array($rawFeatures) ? implode(', ', $rawFeatures) : (is_string($rawFeatures) ? $rawFeatures : '');
+    $constrData = is_array($property->construction_details) ? $property->construction_details : [];
+    $buildType    = $constrData['type']    ?? '';
+    $buildQuality = $constrData['quality'] ?? '';
 
-    // 6. Rooms
-    $rawRooms = is_array($property->rooms) ? $property->rooms : [];
-    $roomBed = $rawRooms['bedroom'] ?? 0;
-    if(is_array($roomBed)) $roomBed = $roomBed['count'] ?? 0;
+    $energyData   = is_array($property->energy_details) ? $property->energy_details : [];
+    $energyCert   = $energyData['certificate'] ?? '';
+    $energyKwh    = $energyData['consumption']  ?? '';
 
-    $roomBath = $rawRooms['bathroom'] ?? 0;
-    if(is_array($roomBath)) $roomBath = $roomBath['count'] ?? 0;
+    $furnData   = is_array($property->furnishing_details) ? $property->furnishing_details : [];
+    $furnLevel  = $furnData['level'] ?? '';
+    $furnItems  = is_array($furnData['items'] ?? null) ? implode(', ',$furnData['items']) : ($furnData['items'] ?? '');
 
-    $roomLiving = $rawRooms['living_room'] ?? 0;
-    if(is_array($roomLiving)) $roomLiving = $roomLiving['count'] ?? 0;
+    $seoData     = is_array($property->seo_metadata) ? $property->seo_metadata : [];
+    $seoTitle    = $seoData['title']       ?? '';
+    $seoDesc     = $seoData['description'] ?? '';
+    $seoKeywords = is_array($seoData['keywords'] ?? null) ? implode(', ',$seoData['keywords']) : ($seoData['keywords'] ?? '');
 
-    // 7. Location
-    $rawLocs = $property->locations;
-    $firstLoc = [];
-    if (is_array($rawLocs)) {
-        if (isset($rawLocs['lat'])) {
-            $firstLoc = $rawLocs;
-        } elseif (isset($rawLocs[0])) {
-            $firstLoc = $rawLocs[0];
-        }
-    }
-    $lat = $firstLoc['lat'] ?? 0;
-    $lng = $firstLoc['lng'] ?? 0;
+    $amenData  = is_string($property->amenities)        ? json_decode($property->amenities,true)        : $property->amenities;
+    $featData  = is_string($property->features)         ? json_decode($property->features,true)         : $property->features;
+    $nearData  = is_string($property->nearby_amenities) ? json_decode($property->nearby_amenities,true) : $property->nearby_amenities;
+    $amenStr   = is_array($amenData) ? implode(', ',$amenData) : (is_string($amenData) ? $amenData : '');
+    $featStr   = is_array($featData) ? implode(', ',$featData) : (is_string($featData) ? $featData : '');
+    $nearStr   = is_array($nearData) ? implode(', ',array_map(fn($n) => is_array($n)?($n['name']??''):$n, $nearData)) : (is_string($nearData) ? $nearData : '');
 
-    // 8. Address
-    $rawAddr = is_array($property->address_details) ? $property->address_details : [];
-    $cityVal = '';
-    if (isset($rawAddr['city']) && is_array($rawAddr['city'])) {
-        $cityVal = $rawAddr['city']['en'] ?? '';
-    } elseif (isset($rawAddr['city']) && is_string($rawAddr['city'])) {
-        $cityVal = $rawAddr['city'];
-    }
+    $imagesData = is_string($property->images) ? json_decode($property->images,true) : $property->images;
+    $images     = is_array($imagesData) ? array_filter($imagesData,fn($i)=>is_string($i)) : [];
 
-    $distVal = '';
-    if (isset($rawAddr['district']) && is_array($rawAddr['district'])) {
-        $distVal = $rawAddr['district']['en'] ?? '';
-    } elseif (isset($rawAddr['district']) && is_string($rawAddr['district'])) {
-        $distVal = $rawAddr['district'];
-    }
-
-    $fullAddr = is_string($property->address) ? $property->address : '';
-
-    // 9. Availability
-    $rawAvailability = is_array($property->availability) ? $property->availability : [];
-    $availableFrom = $rawAvailability['from'] ?? '';
-    $availableTo = $rawAvailability['to'] ?? '';
-
-    // 10. Floor Details
-    $rawFloorDetails = is_array($property->floor_details) ? $property->floor_details : [];
-    $totalFloors = $rawFloorDetails['total_floors'] ?? '';
-    $floorPosition = $rawFloorDetails['position'] ?? '';
-
-    // 11. Construction
-    $rawConstruction = is_array($property->construction_details) ? $property->construction_details : [];
-    $constructionType = $rawConstruction['type'] ?? '';
-    $constructionQuality = $rawConstruction['quality'] ?? '';
-
-    // 12. Energy
-    $rawEnergy = is_array($property->energy_details) ? $property->energy_details : [];
-    $energyCertificate = $rawEnergy['certificate'] ?? '';
-    $energyConsumption = $rawEnergy['consumption'] ?? '';
-
-    // 13. Furnishing
-    $rawFurnishing = is_array($property->furnishing_details) ? $property->furnishing_details : [];
-    $furnishingLevel = $rawFurnishing['level'] ?? '';
-    $furnishingItems = '';
-    if (isset($rawFurnishing['items']) && is_array($rawFurnishing['items'])) {
-        $furnishingItems = implode(', ', $rawFurnishing['items']);
-    } elseif (isset($rawFurnishing['items']) && is_string($rawFurnishing['items'])) {
-        $furnishingItems = $rawFurnishing['items'];
-    }
-
-    // 14. SEO
-    $rawSeo = is_array($property->seo_metadata) ? $property->seo_metadata : [];
-    $seoTitle = $rawSeo['title'] ?? '';
-    $seoDescription = $rawSeo['description'] ?? '';
-    $seoKeywords = '';
-    if (isset($rawSeo['keywords']) && is_array($rawSeo['keywords'])) {
-        $seoKeywords = implode(', ', $rawSeo['keywords']);
-    } elseif (isset($rawSeo['keywords']) && is_string($rawSeo['keywords'])) {
-        $seoKeywords = $rawSeo['keywords'];
-    }
-
-    // 15. Nearby
-    $rawNearby = is_array($property->nearby_amenities) ? $property->nearby_amenities : [];
-    $nearbyString = '';
-    if (is_array($rawNearby) && !empty($rawNearby)) {
-        $nearbyArray = array_map(function($item) {
-            if (is_array($item)) return $item['name'] ?? '';
-            return is_string($item) ? $item : '';
-        }, $rawNearby);
-        $nearbyString = implode(', ', array_filter($nearbyArray));
-    } elseif (is_string($rawNearby)) {
-        $nearbyString = $rawNearby;
-    }
-
-    // Links
-    $vTour = is_string($property->virtual_tour_url) ? $property->virtual_tour_url : '';
-    $fPlan = is_string($property->floor_plan_url) ? $property->floor_plan_url : '';
-
-    // Owner Information
-    $owner = $property->owner;
-    $ownerName = '';
-    $ownerEmail = '';
-    $ownerPhone = '';
-    $ownerBadge = '';
-    $ownerBadgeColor = '';
-
-    if ($owner) {
-        if ($property->owner_type === 'App\Models\User') {
-            $ownerName = $owner->username ?? 'N/A';
-            $ownerEmail = $owner->email ?? 'N/A';
-            $ownerPhone = $owner->phone ?? 'N/A';
-            $ownerBadge = 'User';
-            $ownerBadgeColor = 'bg-blue-100 text-blue-700';
-        } elseif ($property->owner_type === 'App\Models\Agent') {
-            $ownerName = $owner->agent_name ?? 'N/A';
-            $ownerEmail = $owner->primary_email ?? 'N/A';
-            $ownerPhone = $owner->primary_phone ?? 'N/A';
-            $ownerBadge = 'Agent';
-            $ownerBadgeColor = 'bg-emerald-100 text-emerald-700';
-        } elseif ($property->owner_type === 'App\Models\RealEstateOffice') {
-            $ownerName = $owner->company_name ?? 'N/A';
-            $ownerEmail = $owner->email_address ?? 'N/A';
-            $ownerPhone = $owner->phone_number ?? 'N/A';
-            $ownerBadge = 'Office';
-            $ownerBadgeColor = 'bg-purple-100 text-purple-700';
-        }
+    $ownerLabel = '';
+    if ($property->owner) {
+        $ownerLabel = $property->owner->agent_name ?? $property->owner->company_name ?? $property->owner->username ?? '';
     }
 @endphp
 
-<div class="max-w-[1600px] mx-auto pb-20 animate-in fade-in zoom-in-95 duration-500" x-data="{ activeTab: 'basic' }">
+@push('styles')
+<style>
+    :root {
+        --brand:    #303b97;
+        --brand-lt: #4b56b2;
+        --ink:      #0f172a;
+        --ink-2:    #475569;
+        --ink-3:    #94a3b8;
+        --border:   #e2e8f0;
+        --surface:  #f8fafc;
+        --green:    #10b981;
+        --amber:    #f59e0b;
+        --red:      #ef4444;
+        --radius:   14px;
+        --radius-lg:20px;
+        --shadow-sm:0 1px 3px rgba(15,23,42,.06);
+    }
 
-    {{-- Elegant Header --}}
-    <div class="mb-8">
-        {{-- Breadcrumb --}}
-        <div class="flex items-center gap-2 text-sm mb-4">
-            <a href="{{ route('admin.dashboard') }}" class="text-slate-400 hover:text-indigo-600 transition font-medium">
-                <i class="fas fa-home"></i> Dashboard
-            </a>
-            <i class="fas fa-chevron-right text-[10px] text-slate-300"></i>
-            <a href="{{ route('admin.properties.index') }}" class="text-slate-400 hover:text-indigo-600 transition font-medium">
-                Properties
-            </a>
-            <i class="fas fa-chevron-right text-[10px] text-slate-300"></i>
-            <span class="text-slate-700 font-semibold">Edit Property</span>
+    /* ── Layout ─────────────────────────────────────────────── */
+    .pe-wrap { max-width:1200px; margin:0 auto; padding-bottom:5rem; }
+
+    /* ── Topbar ──────────────────────────────────────────────── */
+    .pe-topbar { display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.5rem 0 1.75rem;flex-wrap:wrap; }
+    .pe-crumb  { display:flex;align-items:center;gap:.35rem;font-size:.7rem;font-weight:600;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;margin-bottom:.35rem; }
+    .pe-crumb a { color:var(--ink-3);text-decoration:none; }
+    .pe-crumb a:hover { color:var(--ink); }
+
+    /* ── Buttons ──────────────────────────────────────────────── */
+    .btn { display:inline-flex;align-items:center;gap:.4rem;padding:.6rem 1.15rem;border-radius:11px;font-size:.79rem;font-weight:800;cursor:pointer;border:none;transition:all .15s;text-decoration:none;white-space:nowrap; }
+    .btn--primary { background:var(--brand);color:#fff;box-shadow:0 4px 14px rgba(48,59,151,.3); }
+    .btn--primary:hover { background:#232d8a;transform:translateY(-1px); }
+    .btn--ghost   { background:#fff;border:1.5px solid var(--border);color:var(--ink-2); }
+    .btn--ghost:hover { background:var(--surface);color:var(--ink); }
+
+    /* ── Tab nav ──────────────────────────────────────────────── */
+    .tab-nav { display:flex;gap:.2rem;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.25rem;overflow-x:auto;scrollbar-width:none;margin-bottom:1.5rem; }
+    .tab-nav::-webkit-scrollbar { display:none; }
+    .tab-btn { border:none;background:transparent;padding:.6rem 1.1rem;font-size:.78rem;font-weight:800;color:var(--ink-3);border-radius:10px;cursor:pointer;transition:.14s;white-space:nowrap; }
+    .tab-btn.active { background:#fff;color:var(--brand);box-shadow:0 1px 4px rgba(15,23,42,.1); }
+    .tab-panel { display:none; }
+    .tab-panel.active { display:block; }
+
+    /* ── Cards ────────────────────────────────────────────────── */
+    .card { background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:1.25rem; }
+    .card-hd { display:flex;align-items:center;gap:.75rem;padding:1rem 1.3rem;border-bottom:1px solid var(--border);background:var(--surface); }
+    .card-icon { width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0; }
+    .card-ttl { font-size:.9rem;font-weight:800;color:var(--ink); }
+    .card-sub  { font-size:.72rem;font-weight:500;color:var(--ink-3); }
+    .card-body { padding:1.3rem; }
+
+    /* ── Form inputs ──────────────────────────────────────────── */
+    .lbl { display:block;font-size:.67rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-bottom:.4rem; }
+    .lbl .req { color:var(--red);margin-left:2px; }
+    .inp, .sel, .ta {
+        width:100%;padding:.65rem 1rem;
+        background:var(--surface);border:1.5px solid var(--border);
+        border-radius:var(--radius);font-size:.84rem;font-weight:600;color:var(--ink);
+        outline:none;appearance:none;transition:border-color .14s,box-shadow .14s;
+    }
+    .inp:focus,.sel:focus,.ta:focus { border-color:var(--brand);box-shadow:0 0 0 3px rgba(48,59,151,.1);background:#fff; }
+    .inp--mono { font-family:monospace;font-size:.8rem; }
+    .ta { resize:vertical;min-height:100px;line-height:1.65; }
+    .inp-icon { position:relative; }
+    .inp-icon .ic { position:absolute;left:.9rem;top:50%;transform:translateY(-50%);color:var(--ink-3);pointer-events:none;font-size:.8rem; }
+    .inp-icon .inp { padding-left:2.35rem; }
+
+    /* ── Grid helpers ─────────────────────────────────────────── */
+    .g2 { display:grid;grid-template-columns:1fr 1fr;gap:1rem; }
+    .g3 { display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem; }
+    .g4 { display:grid;grid-template-columns:repeat(4,1fr);gap:.85rem; }
+    @media(max-width:640px){ .g2,.g3,.g4 { grid-template-columns:1fr; } }
+
+    /* ── Room counter ─────────────────────────────────────────── */
+    .room-box { text-align:center;padding:1rem .75rem;background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);transition:.14s; }
+    .room-box:focus-within { border-color:var(--brand);background:#fff; }
+    .room-box .room-ico { font-size:.9rem;display:block;margin-bottom:.4rem; }
+    .room-box input { width:100%;background:transparent;border:none;outline:none;font-size:1.75rem;font-weight:900;color:var(--ink);text-align:center; }
+    .room-lbl { font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3); }
+
+    /* ── Toggle ───────────────────────────────────────────────── */
+    .tgl-row { display:flex;align-items:center;justify-content:space-between;padding:.7rem .9rem;border-radius:var(--radius);border:1.5px solid var(--border);cursor:pointer;transition:.13s; }
+    .tgl-row:hover { background:var(--surface); }
+    .tgl-lbl { font-size:.82rem;font-weight:700;color:var(--ink); }
+    .tgl-sub  { font-size:.68rem;font-weight:500;color:var(--ink-3); }
+    .tgl-slider { position:relative;width:40px;height:22px;background:var(--border);border-radius:99px;flex-shrink:0;transition:.16s; }
+    .tgl-slider::after { content:'';position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:3px;left:3px;transition:.16s;box-shadow:0 1px 3px rgba(0,0,0,.2); }
+    input:checked + .tgl-slider { background:var(--green); }
+    input:checked + .tgl-slider::after { left:21px; }
+
+    /* ── Image grid ───────────────────────────────────────────── */
+    .img-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:.65rem; }
+    .img-thumb { position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;border:1.5px solid var(--border);background:var(--surface); }
+    .img-thumb img { width:100%;height:100%;object-fit:cover; }
+    .img-thumb-overlay { position:absolute;inset:0;background:rgba(15,23,42,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:.15s;backdrop-filter:blur(4px); }
+    .img-thumb:hover .img-thumb-overlay { opacity:1; }
+
+    /* ── Sticky save bar ──────────────────────────────────────── */
+    .save-bar { position:sticky;bottom:1.5rem;z-index:50;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.85rem 1.25rem;background:var(--ink);border-radius:var(--radius-lg);box-shadow:0 8px 30px rgba(15,23,42,.3);margin-top:1.5rem;flex-wrap:wrap; }
+    .save-bar-text { font-size:.78rem;font-weight:600;color:rgba(255,255,255,.5); }
+    .save-bar-text strong { color:#fff;font-weight:800; }
+
+    /* ── Highlight badge ──────────────────────────────────────── */
+    .badge { display:inline-flex;align-items:center;gap:.25rem;padding:.2rem .6rem;border-radius:99px;font-size:.63rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em; }
+    .badge--blue { background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe; }
+    .badge--green { background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0; }
+    .badge--purple { background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe; }
+
+    /* ── Error box ────────────────────────────────────────────── */
+    .err-box { background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius);padding:.9rem 1.1rem;margin-bottom:1.25rem; }
+    .err-box li { font-size:.8rem;color:#991b1b;font-weight:600; }
+
+    /* ── Section divider ──────────────────────────────────────── */
+    .divider { border:none;border-top:1px solid var(--border);margin:1.1rem 0; }
+</style>
+@endpush
+
+@section('content')
+<div class="pe-wrap">
+
+    @if($errors->any())
+    <div class="err-box">
+        <p style="font-size:.8rem;font-weight:800;color:#b91c1c;margin:0 0 .35rem"><i class="fas fa-exclamation-circle mr-1"></i> Fix the following:</p>
+        <ul style="padding-left:1.2rem;margin:0">
+            @foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach
+        </ul>
+    </div>
+    @endif
+
+    {{-- ── Topbar ──────────────────────────────────────────────── --}}
+    <div class="pe-topbar">
+        <div>
+            <div class="pe-crumb">
+                <a href="{{ route('admin.dashboard') }}">Dashboard</a><span>/</span>
+                <a href="{{ route('admin.properties.index') }}">Properties</a><span>/</span>
+                Edit
+            </div>
+            <h1 style="font-size:1.4rem;font-weight:900;color:var(--ink);letter-spacing:-.025em;margin-bottom:.3rem">
+                {{ $nameEn ?: 'Edit Property' }}
+            </h1>
+            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                <span style="font-size:.7rem;font-weight:700;color:var(--ink-3)">ID:</span>
+                <span style="font-family:monospace;font-size:.72rem;font-weight:700;color:var(--ink)">{{ $property->id }}</span>
+                @if($ownerLabel)
+                    <span style="color:var(--border)">·</span>
+                    <span style="font-size:.72rem;font-weight:700;color:var(--ink-3)">Owner: <strong style="color:var(--ink)">{{ $ownerLabel }}</strong></span>
+                @endif
+            </div>
         </div>
-
-        {{-- Title & Actions --}}
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div>
-                <h1 class="text-4xl font-black text-slate-900 tracking-tight mb-2">
-                    Edit Property
-                </h1>
-                <p class="text-slate-500 font-medium">
-                    Property ID: <span class="font-mono font-bold text-slate-700">{{ $property->id }}</span>
-                </p>
-            </div>
-            <div class="flex items-center gap-3">
-                <a href="{{ route('admin.properties.index') }}" class="px-6 py-3 bg-white border-2 border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 flex items-center gap-2">
-                    <i class="fas fa-times"></i>
-                    <span>Cancel</span>
-                </a>
-                <button type="submit" form="editPropertyForm" class="px-8 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white font-bold rounded-2xl shadow-lg shadow-indigo-200 hover:shadow-xl hover:shadow-indigo-300 hover:-translate-y-0.5 transition-all duration-200 flex items-center gap-2">
-                    <i class="fas fa-save"></i>
-                    <span>Save Changes</span>
-                </button>
-            </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+            <a href="{{ route('admin.properties.show', $property->id) }}" class="btn btn--ghost">
+                <i class="fas fa-eye"></i> View
+            </a>
+            <a href="{{ route('admin.properties.index') }}" class="btn btn--ghost">Cancel</a>
+            <button type="submit" form="editPropertyForm" class="btn btn--primary">
+                <i class="fas fa-save"></i> Save Changes
+            </button>
         </div>
     </div>
 
-    {{-- Owner Information Card --}}
-    @if($owner)
-    <div class="bg-gradient-to-br from-slate-50 to-white border-2 border-slate-200 rounded-3xl p-8 mb-8 shadow-sm">
-        <div class="flex items-start justify-between mb-6">
-            <div class="flex items-center gap-4">
-                <div class="w-14 h-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-white text-xl font-black shadow-lg">
-                    <i class="fas fa-user-tie"></i>
-                </div>
-                <div>
-                    <h3 class="text-xl font-black text-slate-900 mb-1">Property Owner</h3>
-                    <span class="inline-block px-3 py-1 {{ $ownerBadgeColor }} rounded-full text-xs font-bold">
-                        {{ $ownerBadge }}
-                    </span>
-                </div>
-            </div>
+    {{-- ── Owner summary strip ─────────────────────────────────── --}}
+    @if($property->owner)
+    @php $o = $property->owner; $ownerType = class_basename($property->owner_type ?? ''); @endphp
+    <div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.3rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--brand),#818cf8);display:flex;align-items:center;justify-content:center;font-size:1rem;font-weight:900;color:#fff;flex-shrink:0">
+            {{ strtoupper(substr($ownerLabel, 0, 1)) }}
         </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div class="bg-white rounded-2xl p-5 border border-slate-200">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Owner Name</p>
-                <p class="text-lg font-black text-slate-900 truncate">{{ $ownerName }}</p>
-            </div>
-            <div class="bg-white rounded-2xl p-5 border border-slate-200">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Owner ID</p>
-                <p class="text-lg font-black text-slate-700 font-mono truncate">{{ $property->owner_id }}</p>
-            </div>
-            <div class="bg-white rounded-2xl p-5 border border-slate-200">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Email</p>
-                <p class="text-sm font-bold text-indigo-600 truncate">
-                    <i class="fas fa-envelope mr-1"></i>{{ $ownerEmail }}
-                </p>
-            </div>
-            <div class="bg-white rounded-2xl p-5 border border-slate-200">
-                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Phone</p>
-                <p class="text-sm font-bold text-emerald-600 truncate">
-                    <i class="fas fa-phone mr-1"></i>{{ $ownerPhone }}
-                </p>
-            </div>
+        <div>
+            <div style="font-weight:800;color:var(--ink);font-size:.9rem">{{ $ownerLabel }}</div>
+            <span class="badge badge--{{ $ownerType === 'Agent' ? 'green' : ($ownerType === 'RealEstateOffice' ? 'purple' : 'blue') }}">{{ $ownerType }}</span>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap">
+            <span style="font-size:.78rem;font-weight:600;color:var(--ink-3)">
+                <i class="fas fa-envelope mr-1"></i>{{ $o->primary_email ?? $o->email_address ?? $o->email ?? '—' }}
+            </span>
+            <span style="font-size:.78rem;font-weight:600;color:var(--ink-3)">
+                <i class="fas fa-phone mr-1"></i>{{ $o->primary_phone ?? $o->phone_number ?? $o->phone ?? '—' }}
+            </span>
         </div>
     </div>
     @endif
 
-    {{-- Modern Tab Navigation --}}
-    <div class="flex flex-wrap items-center gap-2 mb-8 select-none bg-white p-2 rounded-2xl border-2 border-slate-200 shadow-sm w-fit max-w-full overflow-x-auto">
-        @foreach([
-            'basic' => ['icon' => 'fa-home', 'label' => 'Basic Info'],
-            'details' => ['icon' => 'fa-layer-group', 'label' => 'Details'],
-            'location' => ['icon' => 'fa-map-marked-alt', 'label' => 'Location'],
-            'construction' => ['icon' => 'fa-hard-hat', 'label' => 'Construction'],
-            'media' => ['icon' => 'fa-images', 'label' => 'Media'],
-            'availability' => ['icon' => 'fa-calendar-alt', 'label' => 'Status'],
-            'seo' => ['icon' => 'fa-search', 'label' => 'SEO'],
-            'analytics' => ['icon' => 'fa-chart-pie', 'label' => 'Analytics']
-        ] as $key => $tab)
-            <button
-                type="button"
-                @click="activeTab = '{{ $key }}'"
-                :class="activeTab === '{{ $key }}' ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-200' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'"
-                class="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap">
-                <i class="fas {{ $tab['icon'] }}"></i>
-                <span>{{ $tab['label'] }}</span>
-            </button>
-        @endforeach
+    {{-- ── Tab navigation ──────────────────────────────────────── --}}
+    <div class="tab-nav" id="editTabs">
+        <button class="tab-btn active" data-tab="titles"><i class="fas fa-heading mr-1.5"></i> Names</button>
+        <button class="tab-btn" data-tab="pricing"><i class="fas fa-tag mr-1.5"></i> Pricing</button>
+        <button class="tab-btn" data-tab="details"><i class="fas fa-layer-group mr-1.5"></i> Details</button>
+        <button class="tab-btn" data-tab="location"><i class="fas fa-map-pin mr-1.5"></i> Location</button>
+        <button class="tab-btn" data-tab="construction"><i class="fas fa-hard-hat mr-1.5"></i> Build</button>
+        <button class="tab-btn" data-tab="media"><i class="fas fa-images mr-1.5"></i> Media</button>
+        <button class="tab-btn" data-tab="status"><i class="fas fa-toggle-on mr-1.5"></i> Status</button>
+        <button class="tab-btn" data-tab="seo"><i class="fas fa-search mr-1.5"></i> SEO</button>
+        <button class="tab-btn" data-tab="analytics"><i class="fas fa-chart-pie mr-1.5"></i> Analytics</button>
     </div>
 
     <form id="editPropertyForm" method="POST" action="{{ route('admin.properties.update', $property->id) }}" enctype="multipart/form-data">
         @csrf
         @method('PUT')
 
-        {{-- ================= TAB 1: BASIC INFO ================= --}}
-        <div x-show="activeTab === 'basic'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-
-            {{-- Property Titles Section --}}
-            <div class="bg-white rounded-3xl border-2 border-slate-200 shadow-sm p-8 mb-6">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                        <i class="fas fa-heading text-xl"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-2xl font-black text-slate-900">Property Titles</h2>
-                        <p class="text-sm text-slate-500 font-medium">Multi-language property names</p>
-                    </div>
+        {{-- ════ NAMES ═════════════════════════════════════════════ --}}
+        <div id="panel-titles" class="tab-panel active">
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#eff6ff;color:#3b82f6"><i class="fas fa-heading"></i></div>
+                    <div><div class="card-ttl">Property Names</div><div class="card-sub">Multi-language titles</div></div>
                 </div>
-
-                <div class="space-y-6">
-                    {{-- English Title --}}
-                    <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
-                        <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                            <i class="fas fa-flag text-blue-500"></i>
-                            <span>Title (English)</span>
-                            <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" name="name[en]" value="{{ $safeString($nameEn) }}" required
-                            class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-lg font-semibold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none"
-                            placeholder="Enter property title in English">
-                    </div>
-
-                    {{-- Arabic & Kurdish Titles --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
-                            <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                                <i class="fas fa-flag text-emerald-500"></i>
-                                <span>Title (Arabic)</span>
-                            </label>
-                            <input type="text" name="name[ar]" value="{{ $safeString($nameAr) }}"
-                                class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-lg font-semibold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none text-right"
-                                dir="rtl" placeholder="أدخل عنوان العقار بالعربية">
+                <div class="card-body">
+                    <div class="lbl">English Title <span class="req">*</span></div>
+                    <input type="text" name="name[en]" value="{{ old('name.en', $nameEn) }}" required class="inp" style="margin-bottom:1rem;font-size:1rem;font-weight:700" placeholder="Property title in English">
+                    <div class="g2">
+                        <div>
+                            <label class="lbl">Arabic Title</label>
+                            <input type="text" name="name[ar]" value="{{ old('name.ar', $nameAr) }}" class="inp" dir="rtl" style="text-align:right" placeholder="اسم العقار بالعربية">
                         </div>
-                        <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
-                            <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                                <i class="fas fa-flag text-amber-500"></i>
-                                <span>Title (Kurdish)</span>
-                            </label>
-                            <input type="text" name="name[ku]" value="{{ $safeString($nameKu) }}"
-                                class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-lg font-semibold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none text-right"
-                                dir="rtl" placeholder="ناونیشانی موڵک بە کوردی بنووسە">
+                        <div>
+                            <label class="lbl">Kurdish Title</label>
+                            <input type="text" name="name[ku]" value="{{ old('name.ku', $nameKu) }}" class="inp" dir="rtl" style="text-align:right" placeholder="ناوی موڵک بە کوردی">
                         </div>
                     </div>
                 </div>
             </div>
 
-            {{-- Descriptions Section --}}
-            <div class="bg-white rounded-3xl border-2 border-slate-200 shadow-sm p-8 mb-6">
-                <div class="flex items-center gap-3 mb-6">
-                    <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                        <i class="fas fa-align-left text-xl"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-2xl font-black text-slate-900">Property Descriptions</h2>
-                        <p class="text-sm text-slate-500 font-medium">Detailed property information in multiple languages</p>
-                    </div>
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#f5f3ff;color:#8b5cf6"><i class="fas fa-align-left"></i></div>
+                    <div><div class="card-ttl">Descriptions</div><div class="card-sub">Detailed text in multiple languages</div></div>
                 </div>
-
-                <div class="space-y-6">
-                    {{-- English Description --}}
-                    <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
-                        <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                            <i class="fas fa-flag text-blue-500"></i>
-                            <span>Description (English)</span>
-                        </label>
-                        <textarea name="description[en]" rows="5"
-                            class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none resize-none leading-relaxed"
-                            placeholder="Describe the property in detail...">{{ $safeString($descEn) }}</textarea>
-                    </div>
-
-                    {{-- Arabic & Kurdish Descriptions --}}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
-                            <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                                <i class="fas fa-flag text-emerald-500"></i>
-                                <span>Description (Arabic)</span>
-                            </label>
-                            <textarea name="description[ar]" rows="5"
-                                class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none resize-none leading-relaxed text-right"
-                                dir="rtl" placeholder="وصف العقار بالتفصيل...">{{ $safeString($descAr) }}</textarea>
+                <div class="card-body">
+                    <label class="lbl">English Description</label>
+                    <textarea name="description[en]" class="ta" style="margin-bottom:1rem" placeholder="Describe the property in detail…">{{ old('description.en', $descEn) }}</textarea>
+                    <div class="g2">
+                        <div>
+                            <label class="lbl">Arabic Description</label>
+                            <textarea name="description[ar]" class="ta" dir="rtl" style="text-align:right" placeholder="وصف العقار…">{{ old('description.ar', $descAr) }}</textarea>
                         </div>
-                        <div class="bg-gradient-to-br from-slate-50 to-white rounded-2xl p-6 border border-slate-200">
-                            <label class="block text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                                <i class="fas fa-flag text-amber-500"></i>
-                                <span>Description (Kurdish)</span>
-                            </label>
-                            <textarea name="description[ku]" rows="5"
-                                class="w-full px-5 py-4 bg-white border-2 border-slate-200 rounded-xl text-base font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none resize-none leading-relaxed text-right"
-                                dir="rtl" placeholder="وردەکاری موڵکەکە بە کوردی بنووسە...">{{ $safeString($descKu) }}</textarea>
+                        <div>
+                            <label class="lbl">Kurdish Description</label>
+                            <textarea name="description[ku]" class="ta" dir="rtl" style="text-align:right" placeholder="وردەکاری موڵکەکە…">{{ old('description.ku', $descKu) }}</textarea>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- ================= TAB 2: DETAILS (Pricing & Class) ================= --}}
-        <div x-show="activeTab === 'details'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-
-                {{-- Pricing Card --}}
-                <div class="bg-gradient-to-br from-emerald-50 to-white border-2 border-emerald-200 rounded-3xl p-8 shadow-sm">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-dollar-sign text-xl"></i>
-                        </div>
-                        <div>
-                            <h2 class="text-2xl font-black text-emerald-900">Pricing</h2>
-                            <p class="text-sm text-emerald-700 font-medium">Set property price</p>
-                        </div>
-                    </div>
-
-                    <div class="bg-white rounded-2xl p-6 border-2 border-emerald-200">
-
-                        {{-- UPDATED: Dual Inputs for USD and IQD --}}
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-3">
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-3">
-                                    <i class="fas fa-money-bill text-emerald-500 mr-1"></i>
-                                    Price (USD)
-                                </label>
-                                <div class="relative">
-                                    <span class="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-600 font-bold">$</span>
-                                    <input
-                                        type="number"
-                                        name="price_usd"
-                                        value="{{ $safeString($priceUSD) }}"
-                                        step="0.01"
-                                        required
-                                        class="w-full pl-8 pr-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-xl font-bold text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all duration-200 outline-none"
-                                        placeholder="0.00">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 mb-3">
-                                    <i class="fas fa-coins text-emerald-500 mr-1"></i>
-                                    Price (IQD)
-                                </label>
-                                <div class="relative">
-                                    <input
-                                        type="number"
-                                        name="price"
-                                        value="{{ $safeString($priceIQD) }}"
-                                        step="0.01"
-                                        required
-                                        class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-xl font-bold text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all duration-200 outline-none"
-                                        placeholder="0">
-                                    <span class="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">IQD</span>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
+        {{-- ════ PRICING ════════════════════════════════════════════ --}}
+        <div id="panel-pricing" class="tab-panel">
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#ecfdf5;color:#10b981"><i class="fas fa-dollar-sign"></i></div>
+                    <div><div class="card-ttl">Pricing</div><div class="card-sub">USD and IQD values</div></div>
                 </div>
-
-                {{-- Property Classification Card --}}
-                <div class="bg-gradient-to-br from-indigo-50 to-white border-2 border-indigo-200 rounded-3xl p-8 shadow-sm">
-                    <div class="flex items-center gap-3 mb-6">
-                        <div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                            <i class="fas fa-tags text-xl"></i>
+                <div class="card-body">
+                    <div class="g2" style="margin-bottom:1rem">
+                        <div>
+                            <label class="lbl">Price (USD) <span class="req">*</span></label>
+                            <div class="inp-icon">
+                                <span class="ic" style="font-weight:900;color:#10b981">$</span>
+                                <input type="number" name="price_usd" value="{{ old('price_usd', $priceUSD) }}" step="0.01" required class="inp" placeholder="0.00">
+                            </div>
                         </div>
                         <div>
-                            <h2 class="text-2xl font-black text-indigo-900">Classification</h2>
-                            <p class="text-sm text-indigo-700 font-medium">Property type and listing details</p>
+                            <label class="lbl">Price (IQD) <span class="req">*</span></label>
+                            <div class="inp-icon">
+                                <input type="number" name="price" value="{{ old('price', $priceIQD) }}" step="0.01" required class="inp" placeholder="0" style="padding-right:2.8rem">
+                                <span style="position:absolute;right:.9rem;top:50%;transform:translateY(-50%);font-size:.68rem;font-weight:800;color:var(--ink-3)">IQD</span>
+                            </div>
                         </div>
                     </div>
+                    @if($priceUSD > 0 && (float)($property->area ?? 0) > 0)
+                    <div style="background:#f0fdf4;border:1px solid #a7f3d0;border-radius:var(--radius);padding:.75rem 1rem;font-size:.8rem;font-weight:700;color:#065f46">
+                        <i class="fas fa-calculator mr-1"></i> ${{ number_format($priceUSD / (float)$property->area, 0) }}/m² based on {{ number_format((float)$property->area) }}m²
+                    </div>
+                    @endif
+                </div>
+            </div>
 
-                    <div class="space-y-5">
-                        <div class="bg-white rounded-2xl p-6 border-2 border-indigo-200">
-                            <label class="block text-sm font-bold text-slate-700 mb-3">
-                                <i class="fas fa-building text-indigo-500 mr-1"></i>
-                                Property Category
-                            </label>
-                            <select
-                                name="type[category]"
-                                class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold text-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none cursor-pointer">
-                                @foreach(['apartment', 'house', 'villa', 'office', 'land', 'commercial', 'industrial', 'warehouse'] as $opt)
-                                    <option value="{{ $opt }}" {{ $typeCategory == $opt ? 'selected' : '' }}>{{ ucfirst($opt) }}</option>
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#eef2ff;color:var(--brand)"><i class="fas fa-tags"></i></div>
+                    <div><div class="card-ttl">Classification</div><div class="card-sub">Type, listing, and area</div></div>
+                </div>
+                <div class="card-body">
+                    <div class="g3" style="margin-bottom:1rem">
+                        <div>
+                            <label class="lbl">Category</label>
+                            <select name="type[category]" class="sel">
+                                @foreach(['apartment','house','villa','office','land','commercial','industrial','warehouse'] as $opt)
+                                    <option value="{{ $opt }}" {{ $typeCategory == $opt ? 'selected':'' }}>{{ ucfirst($opt) }}</option>
                                 @endforeach
                             </select>
                         </div>
-
-                        <div class="grid grid-cols-2 gap-5">
-                            <div class="bg-white rounded-2xl p-6 border-2 border-indigo-200">
-                                <label class="block text-sm font-bold text-slate-700 mb-3">
-                                    <i class="fas fa-handshake text-indigo-500 mr-1"></i>
-                                    Listing Type
-                                </label>
-                                <select
-                                    name="listing_type"
-                                    class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold text-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none cursor-pointer">
-                                    <option value="sale" {{ $property->listing_type == 'sale' ? 'selected' : '' }}>For Sale</option>
-                                    <option value="rent" {{ $property->listing_type == 'rent' ? 'selected' : '' }}>For Rent</option>
-                                </select>
-                            </div>
-
-                            <div class="bg-white rounded-2xl p-6 border-2 border-indigo-200">
-                                <label class="block text-sm font-bold text-slate-700 mb-3">
-                                    <i class="fas fa-ruler-combined text-indigo-500 mr-1"></i>
-                                    Area (m²)
-                                </label>
-                                <input
-                                    type="number"
-                                    name="area"
-                                    value="{{ $safeString((float)$property->area) }}"
-                                    step="0.01"
-                                    required
-                                    class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold text-slate-700 font-mono focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none"
-                                    placeholder="0.00">
-                            </div>
+                        <div>
+                            <label class="lbl">Listing Type</label>
+                            <select name="listing_type" class="sel">
+                                <option value="sale"  {{ in_array($property->listing_type,['sale','sell']) ? 'selected':'' }}>For Sale</option>
+                                <option value="rent"  {{ $property->listing_type === 'rent'  ? 'selected':'' }}>For Rent</option>
+                            </select>
                         </div>
-
-                        <div class="bg-white rounded-2xl p-6 border-2 border-indigo-200">
-                            <label class="block text-sm font-bold text-slate-700 mb-3">
-                                <i class="fas fa-calendar-alt text-indigo-500 mr-1"></i>
-                                Rental Period
-                            </label>
-                            <select
-                                name="rental_period"
-                                class="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 rounded-xl text-base font-bold text-slate-700 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-200 outline-none cursor-pointer">
-                                <option value="">Not Applicable</option>
-                                <option value="daily" {{ $property->rental_period == 'daily' ? 'selected' : '' }}>Daily</option>
-                                <option value="weekly" {{ $property->rental_period == 'weekly' ? 'selected' : '' }}>Weekly</option>
-                                <option value="monthly" {{ $property->rental_period == 'monthly' ? 'selected' : '' }}>Monthly</option>
-                                <option value="yearly" {{ $property->rental_period == 'yearly' ? 'selected' : '' }}>Yearly</option>
+                        <div>
+                            <label class="lbl">Rental Period</label>
+                            <select name="rental_period" class="sel">
+                                <option value="">N/A</option>
+                                @foreach(['daily','weekly','monthly','yearly'] as $opt)
+                                    <option value="{{ $opt }}" {{ $property->rental_period == $opt ? 'selected':'' }}>{{ ucfirst($opt) }}</option>
+                                @endforeach
                             </select>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            {{-- Room Counts & Features --}}
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
-                    @foreach([
-                        ['label' => 'Bedrooms', 'name' => 'rooms[bedroom][count]', 'val' => $roomBed, 'icon' => 'fa-bed'],
-                        ['label' => 'Bathrooms', 'name' => 'rooms[bathroom][count]', 'val' => $roomBath, 'icon' => 'fa-bath'],
-                        ['label' => 'Living Rooms', 'name' => 'rooms[living_room][count]', 'val' => $roomLiving, 'icon' => 'fa-couch'],
-                        ['label' => 'Floor No.', 'name' => 'floor_number', 'val' => $property->floor_number, 'icon' => 'fa-layer-group'],
-                    ] as $field)
-                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-100 hover:border-indigo-200 transition group">
-                        <label class="text-[10px] font-bold text-slate-400 uppercase mb-2 block tracking-wider"><i class="fas {{ $field['icon'] }} mr-1"></i> {{ $field['label'] }}</label>
-                        <input type="number" name="{{ $field['name'] }}" value="{{ $safeString($field['val']) }}" class="bg-transparent text-3xl font-black text-slate-800 w-full outline-none group-hover:text-indigo-600 transition">
-                    </div>
-                    @endforeach
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-10 border-t border-slate-100 pt-8">
-                    <div class="space-y-6">
-                        <h4 class="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4">Features & Amenities</h4>
-                        <div>
-                            <label class="input-label">Amenities (Comma Separated)</label>
-                            <input type="text" name="amenities" value="{{ $safeString($amenitiesString) }}" class="input-modern" placeholder="Pool, Gym, WiFi...">
-                        </div>
-                        <div>
-                            <label class="input-label">Features (Comma Separated)</label>
-                            <input type="text" name="features" value="{{ $safeString($featuresString) }}" class="input-modern" placeholder="Balcony, View, Corner unit...">
-                        </div>
-                        <div>
-                            <label class="input-label">Nearby Amenities</label>
-                            <input type="text" name="nearby_amenities" value="{{ $safeString($nearbyString) }}" class="input-modern" placeholder="School, Mall, Park...">
-                        </div>
-                    </div>
-
-                    <div class="bg-slate-50 rounded-2xl p-8 border border-slate-100 h-full">
-                        <h4 class="text-sm font-bold text-slate-400 uppercase mb-6 tracking-wide">Furnishing & Utilities</h4>
-                        <div class="grid grid-cols-1 gap-6 mb-6">
-                             <div>
-                                <label class="input-label">Furnishing Level</label>
-                                <select name="furnishing_details[level]" class="input-modern">
-                                    <option value="">Select Level</option>
-                                    <option value="unfurnished" {{ $furnishingLevel == 'unfurnished' ? 'selected' : '' }}>Unfurnished</option>
-                                    <option value="semi-furnished" {{ $furnishingLevel == 'semi-furnished' ? 'selected' : '' }}>Semi-Furnished</option>
-                                    <option value="fully-furnished" {{ $furnishingLevel == 'fully-furnished' ? 'selected' : '' }}>Fully Furnished</option>
-                                    <option value="luxury-furnished" {{ $furnishingLevel == 'luxury-furnished' ? 'selected' : '' }}>Luxury</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="input-label">Furnished Items</label>
-                                <input type="text" name="furnishing_details[items]" value="{{ $safeString($furnishingItems) }}" class="input-modern" placeholder="Sofa, Bed, TV...">
-                            </div>
-                        </div>
-                        <div class="space-y-4">
-                            @foreach(['furnished' => 'Furnished', 'electricity' => 'Electricity', 'water' => 'Water Connection', 'internet' => 'Internet Available'] as $key => $label)
-                            <label class="flex items-center justify-between cursor-pointer group">
-                                <span class="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition">{{ $label }}</span>
-                                <div class="relative inline-block w-11 h-6 align-middle select-none transition duration-200 ease-in">
-                                    <input type="checkbox" name="{{ $key }}" value="1" {{ $property->$key ? 'checked' : '' }} class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-2 appearance-none cursor-pointer border-slate-300 checked:right-0 checked:border-emerald-500 transition-all duration-300"/>
-                                    <span class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-200 cursor-pointer peer-checked:bg-emerald-500"></span>
-                                </div>
-                            </label>
-                            @endforeach
-                        </div>
+                    <div>
+                        <label class="lbl">Total Area (m²) <span class="req">*</span></label>
+                        <input type="number" step="0.01" name="area" value="{{ old('area', (float)$property->area) }}" required class="inp" placeholder="0.00">
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- ================= TAB 3: LOCATION ================= --}}
-        <div x-show="activeTab === 'location'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div>
-                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-map-pin text-indigo-500"></i> Address Details</h3>
-                    <div class="space-y-5">
-                        <div class="grid grid-cols-2 gap-5">
-                            <div>
-                                <label class="input-label">City</label>
-                                <input type="text" name="address_details[city][en]" value="{{ $safeString($cityVal) }}" class="input-modern">
-                            </div>
-                            <div>
-                                <label class="input-label">District</label>
-                                <input type="text" name="address_details[district][en]" value="{{ $safeString($distVal) }}" class="input-modern">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="input-label">Detailed Address</label>
-                            <textarea name="address" rows="4" class="input-modern resize-none">{{ $safeString($fullAddr) }}</textarea>
-                        </div>
-                    </div>
+        {{-- ════ DETAILS ════════════════════════════════════════════ --}}
+        <div id="panel-details" class="tab-panel">
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#f5f3ff;color:#8b5cf6"><i class="fas fa-bed"></i></div>
+                    <div><div class="card-ttl">Rooms & Floor</div></div>
                 </div>
-
-                <div class="bg-slate-50 rounded-2xl p-8 border border-slate-100">
-                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-globe-americas text-indigo-500"></i> GPS Coordinates</h3>
-                    <div class="space-y-5">
-                        <div>
-                            <label class="input-label">Latitude</label>
-                            <input type="number" step="any" name="locations[0][lat]" value="{{ $safeString($lat) }}" class="input-modern font-mono">
+                <div class="card-body">
+                    <div class="g4">
+                        @foreach([['Bedrooms','rooms[bedroom][count]',$roomBed,'fa-bed','#3b82f6'],['Bathrooms','rooms[bathroom][count]',$roomBath,'fa-bath','#8b5cf6'],['Living Rooms','rooms[living_room][count]',$roomLive,'fa-couch','#10b981'],['Floor No.','floor_number',$property->floor_number,'fa-layer-group','#f59e0b']] as [$lbl,$name,$val,$ico,$clr])
+                        <div class="room-box">
+                            <i class="fas {{ $ico }} room-ico" style="color:{{ $clr }}"></i>
+                            <input type="number" name="{{ $name }}" value="{{ old($name, (int)$val) }}" min="0">
+                            <div class="room-lbl">{{ $lbl }}</div>
                         </div>
-                        <div>
-                            <label class="input-label">Longitude</label>
-                            <input type="number" step="any" name="locations[0][lng]" value="{{ $safeString($lng) }}" class="input-modern font-mono">
-                        </div>
-                        <div class="pt-4">
-                             @if($lat && $lng)
-                             <a target="_blank" href="https://www.google.com/maps/search/?api=1&query={{ $lat }},{{ $lng }}" class="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:text-indigo-600 hover:border-indigo-200 transition shadow-sm">
-                                <i class="fas fa-external-link-alt"></i> Verify on Google Maps
-                             </a>
-                             @endif
-                        </div>
+                        @endforeach
                     </div>
                 </div>
             </div>
-        </div>
 
-        {{-- ================= TAB 4: CONSTRUCTION ================= --}}
-        <div x-show="activeTab === 'construction'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 grid grid-cols-1 md:grid-cols-2 gap-10">
-                <div>
-                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-hard-hat text-amber-500"></i> Build Info</h3>
-                    <div class="grid grid-cols-2 gap-5 mb-5">
-                        <div>
-                            <label class="input-label">Year Built</label>
-                            <input type="number" name="year_built" value="{{ $safeString($property->year_built) }}" class="input-modern">
-                        </div>
-                         <div>
-                            <label class="input-label">Build Type</label>
-                            <select name="construction_details[type]" class="input-modern">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+                <div class="card">
+                    <div class="card-hd">
+                        <div class="card-icon" style="background:#fefce8;color:#ca8a04"><i class="fas fa-star"></i></div>
+                        <div><div class="card-ttl">Features & Amenities</div></div>
+                    </div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:.85rem">
+                        <div><label class="lbl">Features <span style="font-weight:500;text-transform:none;letter-spacing:0">(comma separated)</span></label>
+                            <input type="text" name="features" value="{{ old('features', $featStr) }}" class="inp" placeholder="Balcony, View, Corner unit…"></div>
+                        <div><label class="lbl">Amenities</label>
+                            <input type="text" name="amenities" value="{{ old('amenities', $amenStr) }}" class="inp" placeholder="Pool, Gym, WiFi…"></div>
+                        <div><label class="lbl">Nearby Amenities</label>
+                            <input type="text" name="nearby_amenities" value="{{ old('nearby_amenities', $nearStr) }}" class="inp" placeholder="School, Mall, Park…"></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-hd">
+                        <div class="card-icon" style="background:#ecfdf5;color:#10b981"><i class="fas fa-couch"></i></div>
+                        <div><div class="card-ttl">Furnishing & Utilities</div></div>
+                    </div>
+                    <div class="card-body">
+                        <div style="margin-bottom:.85rem">
+                            <label class="lbl">Furnishing Level</label>
+                            <select name="furnishing_details[level]" class="sel">
                                 <option value="">Select</option>
-                                @foreach(['concrete', 'brick', 'steel', 'wood', 'mixed'] as $opt)
-                                <option value="{{ $opt }}" {{ $constructionType == $opt ? 'selected' : '' }}>{{ ucfirst($opt) }}</option>
+                                @foreach(['unfurnished','semi-furnished','fully-furnished','luxury-furnished'] as $opt)
+                                    <option value="{{ $opt }}" {{ $furnLevel == $opt ? 'selected':'' }}>{{ ucfirst($opt) }}</option>
                                 @endforeach
                             </select>
                         </div>
-                    </div>
-                    <div>
-                        <label class="input-label">Build Quality</label>
-                        <select name="construction_details[quality]" class="input-modern">
-                            <option value="">Select</option>
-                            @foreach(['standard', 'premium', 'luxury', 'ultra-luxury'] as $opt)
-                            <option value="{{ $opt }}" {{ $constructionQuality == $opt ? 'selected' : '' }}>{{ ucfirst($opt) }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-
-                <div class="bg-emerald-50/50 rounded-2xl p-8 border border-emerald-100">
-                    <h3 class="text-lg font-black text-emerald-800 mb-6 flex items-center gap-2"><i class="fas fa-leaf text-emerald-500"></i> Energy Efficiency</h3>
-                    <div class="space-y-5">
-                        <div>
-                            <label class="input-label text-emerald-700">Energy Rating</label>
-                            <select name="energy_rating" class="input-modern bg-white border-emerald-200">
-                                <option value="">Not Rated</option>
-                                @foreach(['A++', 'A+', 'A', 'B', 'C', 'D', 'E', 'F', 'G'] as $opt)
-                                <option value="{{ $opt }}" {{ $property->energy_rating == $opt ? 'selected' : '' }}>{{ $opt }}</option>
-                                @endforeach
-                            </select>
+                        <div style="margin-bottom:1rem">
+                            <label class="lbl">Furnished Items</label>
+                            <input type="text" name="furnishing_details[items]" value="{{ old('furnishing_details.items', $furnItems) }}" class="inp" placeholder="Sofa, Bed, TV…">
                         </div>
-                        <div class="grid grid-cols-2 gap-5">
+                        <hr class="divider">
+                        @foreach(['furnished'=>['Furnished','fa-couch'],'electricity'=>['Electricity','fa-bolt'],'water'=>['Water','fa-droplet'],'internet'=>['Internet','fa-wifi']] as $key=>[$lbl,$ico])
+                        <label class="tgl-row" style="margin-bottom:.5rem;cursor:pointer">
                             <div>
-                                <label class="input-label text-emerald-700">Certificate No.</label>
-                                <input type="text" name="energy_details[certificate]" value="{{ $safeString($energyCertificate) }}" class="input-modern bg-white border-emerald-200">
+                                <div class="tgl-lbl"><i class="fas {{ $ico }} mr-1.5" style="color:var(--brand);font-size:.8rem"></i>{{ $lbl }}</div>
                             </div>
-                            <div>
-                                <label class="input-label text-emerald-700">kWh Consumption</label>
-                                <input type="number" name="energy_details[consumption]" value="{{ $safeString($energyConsumption) }}" class="input-modern bg-white border-emerald-200">
-                            </div>
-                        </div>
+                            <input type="checkbox" name="{{ $key }}" value="1" {{ $property->$key ? 'checked':'' }} style="display:none">
+                            <div class="tgl-slider"></div>
+                        </label>
+                        @endforeach
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- ================= TAB 5: MEDIA ================= --}}
-        <div x-show="activeTab === 'media'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 space-y-8">
-                <div>
-                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wide mb-4">Gallery</h3>
-                    <div class="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-6 gap-4">
-                        @if(is_array($property->images) && count($property->images) > 0)
-                            @foreach($property->images as $img)
-                                @if(is_string($img))
-                                <div class="relative group rounded-2xl overflow-hidden aspect-square border border-slate-200 shadow-sm bg-slate-50">
-                                    <img src="{{ asset($img) }}" class="w-full h-full object-cover transition duration-500 group-hover:scale-110">
-                                    <div class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center backdrop-blur-sm">
-                                        <button type="button" class="text-white bg-rose-500/80 p-3 rounded-xl hover:bg-rose-600 transition shadow-lg">
-                                            <i class="fas fa-trash-alt"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                @endif
-                            @endforeach
-                        @else
-                            <div class="col-span-full py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
-                                <i class="fas fa-images text-slate-300 text-4xl mb-3"></i>
-                                <p class="text-slate-400 text-sm font-medium">No images uploaded yet.</p>
-                            </div>
+        {{-- ════ LOCATION ═══════════════════════════════════════════ --}}
+        <div id="panel-location" class="tab-panel">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+                <div class="card">
+                    <div class="card-hd">
+                        <div class="card-icon" style="background:#fef2f2;color:#ef4444"><i class="fas fa-map-pin"></i></div>
+                        <div><div class="card-ttl">Address Details</div></div>
+                    </div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:.85rem">
+                        <div class="g2">
+                            <div><label class="lbl">City</label><input type="text" name="address_details[city][en]" value="{{ old('address_details.city.en', $cityVal) }}" class="inp" placeholder="Erbil"></div>
+                            <div><label class="lbl">District</label><input type="text" name="address_details[district][en]" value="{{ old('address_details.district.en', $distVal) }}" class="inp" placeholder="Azadi"></div>
+                        </div>
+                        <div><label class="lbl">Full Address</label><textarea name="address" class="ta" style="min-height:75px" placeholder="Street, Building…">{{ old('address', $property->address ?? '') }}</textarea></div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-hd">
+                        <div class="card-icon" style="background:#eff6ff;color:#3b82f6"><i class="fas fa-globe"></i></div>
+                        <div><div class="card-ttl">GPS Coordinates</div></div>
+                    </div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:.85rem">
+                        <div><label class="lbl">Latitude</label><input type="number" step="any" name="locations[0][lat]" value="{{ old('locations.0.lat', $lat ?: '') }}" class="inp inp--mono" placeholder="36.1900"></div>
+                        <div><label class="lbl">Longitude</label><input type="number" step="any" name="locations[0][lng]" value="{{ old('locations.0.lng', $lng ?: '') }}" class="inp inp--mono" placeholder="44.0090"></div>
+                        @if($lat && $lng)
+                        <a href="https://maps.google.com/?q={{ $lat }},{{ $lng }}" target="_blank" class="btn btn--ghost" style="justify-content:center;font-size:.75rem">
+                            <i class="fas fa-external-link-alt"></i> Verify on Google Maps
+                        </a>
+                        <div style="border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)">
+                            <iframe width="100%" height="160" frameborder="0" style="display:block;border:0"
+                                src="https://maps.google.com/maps?q={{ $lat }},{{ $lng }}&hl=en&z=15&output=embed"></iframe>
+                        </div>
                         @endif
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-8 text-center">
-                    <label class="block text-xs font-bold text-indigo-900 uppercase mb-3">Upload New Photos</label>
-                    <input type="file" name="images[]" multiple class="block w-full max-w-lg mx-auto text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-6 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 transition cursor-pointer bg-white rounded-xl border border-indigo-200 shadow-sm">
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="input-label">360° Virtual Tour URL</label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><i class="fas fa-cube"></i></span>
-                            <input type="url" name="virtual_tour_url" value="{{ $safeString($vTour) }}" class="input-modern pl-10">
+        {{-- ════ CONSTRUCTION ═══════════════════════════════════════ --}}
+        <div id="panel-construction" class="tab-panel">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+                <div class="card">
+                    <div class="card-hd">
+                        <div class="card-icon" style="background:#fffbeb;color:#d97706"><i class="fas fa-hard-hat"></i></div>
+                        <div><div class="card-ttl">Build Information</div></div>
+                    </div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:.85rem">
+                        <div><label class="lbl">Year Built</label>
+                            <input type="number" name="year_built" value="{{ old('year_built', $property->year_built) }}" class="inp" placeholder="2020"></div>
+                        <div><label class="lbl">Build Type</label>
+                            <select name="construction_details[type]" class="sel">
+                                <option value="">Select</option>
+                                @foreach(['concrete','brick','steel','wood','mixed'] as $opt)
+                                    <option value="{{ $opt }}" {{ $buildType == $opt ? 'selected':'' }}>{{ ucfirst($opt) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div><label class="lbl">Build Quality</label>
+                            <select name="construction_details[quality]" class="sel">
+                                <option value="">Select</option>
+                                @foreach(['standard','premium','luxury','ultra-luxury'] as $opt)
+                                    <option value="{{ $opt }}" {{ $buildQuality == $opt ? 'selected':'' }}>{{ ucfirst($opt) }}</option>
+                                @endforeach
+                            </select>
                         </div>
                     </div>
-                    <div>
-                        <label class="input-label">Floor Plan Image URL</label>
-                        <div class="relative">
-                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><i class="fas fa-ruler-combined"></i></span>
-                            <input type="url" name="floor_plan_url" value="{{ $safeString($fPlan) }}" class="input-modern pl-10">
+                </div>
+                <div class="card">
+                    <div class="card-hd">
+                        <div class="card-icon" style="background:#ecfdf5;color:#10b981"><i class="fas fa-leaf"></i></div>
+                        <div><div class="card-ttl">Energy Efficiency</div></div>
+                    </div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:.85rem">
+                        <div><label class="lbl">Energy Rating</label>
+                            <select name="energy_rating" class="sel">
+                                <option value="">Not Rated</option>
+                                @foreach(['A++','A+','A','B','C','D','E','F','G'] as $opt)
+                                    <option value="{{ $opt }}" {{ $property->energy_rating == $opt ? 'selected':'' }}>{{ $opt }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="g2">
+                            <div><label class="lbl">Certificate No.</label>
+                                <input type="text" name="energy_details[certificate]" value="{{ old('energy_details.certificate', $energyCert) }}" class="inp"></div>
+                            <div><label class="lbl">kWh Consumption</label>
+                                <input type="number" name="energy_details[consumption]" value="{{ old('energy_details.consumption', $energyKwh) }}" class="inp"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- ================= TAB 6: AVAILABILITY & STATUS ================= --}}
-        <div x-show="activeTab === 'availability'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 h-fit">
-                    <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-toggle-on text-emerald-500"></i> Availability</h3>
-
-                    <div class="mb-6">
-                        <label class="input-label">Global Status</label>
-                        <select name="status" class="input-modern cursor-pointer">
-                            @foreach(['available', 'pending', 'sold', 'rented', 'suspended'] as $st)
-                                <option value="{{ $st }}" {{ old('status', $property->status) == $st ? 'selected' : '' }}>{{ ucfirst($st) }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div>
-                             <label class="input-label">Available From</label>
-                             <input type="date" name="availability[from]" value="{{ $safeString($availableFrom) }}" class="input-modern">
-                        </div>
-                         <div>
-                             <label class="input-label">Available To</label>
-                             <input type="date" name="availability[to]" value="{{ $safeString($availableTo) }}" class="input-modern">
-                        </div>
-                    </div>
-
-                    <div class="space-y-4 pt-4 border-t border-slate-100">
-                        @foreach(['is_active' => 'Active Listing', 'published' => 'Publicly Visible', 'verified' => 'Verified Badge'] as $key => $label)
-                        <label class="flex items-center justify-between cursor-pointer group p-3 rounded-xl border border-slate-100 hover:border-indigo-100 hover:bg-slate-50 transition">
-                            <span class="text-sm font-bold text-slate-700">{{ $label }}</span>
-                            <div class="relative inline-block w-11 h-6 align-middle select-none transition duration-200 ease-in">
-                                <input type="checkbox" name="{{ $key }}" value="1" {{ old($key, $property->$key) ? 'checked' : '' }} class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-2 appearance-none cursor-pointer border-slate-300 checked:right-0 checked:border-emerald-500 transition-all duration-300"/>
-                                <span class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-200 cursor-pointer peer-checked:bg-emerald-500"></span>
+        {{-- ════ MEDIA ══════════════════════════════════════════════ --}}
+        <div id="panel-media" class="tab-panel">
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#f5f3ff;color:#8b5cf6"><i class="fas fa-images"></i></div>
+                    <div><div class="card-ttl">Gallery</div><div class="card-sub">{{ count($images) }} images uploaded</div></div>
+                </div>
+                <div class="card-body">
+                    @if(count($images))
+                    <div class="img-grid" style="margin-bottom:1.25rem">
+                        @foreach($images as $img)
+                        <div class="img-thumb">
+                            <img src="{{ asset($img) }}" alt="">
+                            <div class="img-thumb-overlay">
+                                <button type="button" style="background:rgba(239,68,68,.8);color:#fff;border:none;border-radius:9px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
                             </div>
+                        </div>
+                        @endforeach
+                    </div>
+                    @else
+                    <div style="text-align:center;padding:1.5rem;background:var(--surface);border-radius:var(--radius);border:2px dashed var(--border);margin-bottom:1.25rem">
+                        <i class="fas fa-images" style="font-size:2rem;color:var(--ink-3);display:block;margin-bottom:.5rem;opacity:.4"></i>
+                        <p style="font-size:.82rem;font-weight:600;color:var(--ink-3)">No images yet</p>
+                    </div>
+                    @endif
+
+                    <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:var(--radius);padding:1rem 1.15rem;text-align:center">
+                        <label class="lbl" style="margin-bottom:.6rem">Upload New Photos</label>
+                        <input type="file" name="images[]" multiple accept="image/*"
+                               class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 transition cursor-pointer">
+                        <p style="font-size:.68rem;font-weight:500;color:var(--ink-3);margin-top:.5rem">JPG, PNG, WebP · Max 5MB each</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#eff6ff;color:#3b82f6"><i class="fas fa-link"></i></div>
+                    <div><div class="card-ttl">Media Links</div></div>
+                </div>
+                <div class="card-body">
+                    <div class="g2">
+                        <div><label class="lbl">360° Virtual Tour URL</label>
+                            <div class="inp-icon"><span class="ic"><i class="fas fa-cube"></i></span>
+                                <input type="url" name="virtual_tour_url" value="{{ old('virtual_tour_url', $property->virtual_tour_url ?? '') }}" class="inp" placeholder="https://…">
+                            </div>
+                        </div>
+                        <div><label class="lbl">Floor Plan URL</label>
+                            <div class="inp-icon"><span class="ic"><i class="fas fa-ruler-combined"></i></span>
+                                <input type="url" name="floor_plan_url" value="{{ old('floor_plan_url', $property->floor_plan_url ?? '') }}" class="inp" placeholder="https://…">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ════ STATUS ══════════════════════════════════════════════ --}}
+        <div id="panel-status" class="tab-panel">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+                <div class="card">
+                    <div class="card-hd">
+                        <div class="card-icon" style="background:#ecfdf5;color:#10b981"><i class="fas fa-toggle-on"></i></div>
+                        <div><div class="card-ttl">Availability & Status</div></div>
+                    </div>
+                    <div class="card-body" style="display:flex;flex-direction:column;gap:.85rem">
+                        <div><label class="lbl">Global Status</label>
+                            <select name="status" class="sel">
+                                @foreach(['available','pending','sold','rented','suspended'] as $st)
+                                    <option value="{{ $st }}" {{ old('status',$property->status) == $st ? 'selected':'' }}>{{ ucfirst($st) }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="g2">
+                            <div><label class="lbl">Available From</label><input type="date" name="availability[from]" value="{{ old('availability.from', $availFrom) }}" class="inp"></div>
+                            <div><label class="lbl">Available To</label><input type="date" name="availability[to]" value="{{ old('availability.to', $availTo) }}" class="inp"></div>
+                        </div>
+                        <hr class="divider">
+                        @foreach(['is_active'=>['Active Listing','Make this listing visible'],'published'=>['Publicly Visible','Show on the website and app'],'verified'=>['Verified Badge','Show verification checkmark']] as $key=>[$lbl,$sub])
+                        <label class="tgl-row" style="cursor:pointer">
+                            <div><div class="tgl-lbl">{{ $lbl }}</div><div class="tgl-sub">{{ $sub }}</div></div>
+                            <input type="checkbox" name="{{ $key }}" value="1" {{ old($key,$property->$key) ? 'checked':'' }} style="display:none">
+                            <div class="tgl-slider"></div>
                         </label>
                         @endforeach
                     </div>
                 </div>
 
-                <div class="bg-gradient-to-br from-indigo-900 to-slate-900 rounded-3xl shadow-lg p-8 text-white relative overflow-hidden">
-                    <div class="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-indigo-500 rounded-full blur-3xl opacity-20"></div>
-
-                    <h3 class="text-lg font-black mb-6 flex items-center gap-2 relative z-10"><i class="fas fa-rocket text-amber-400"></i> Boost Promotion</h3>
-
-                    <label class="flex items-center justify-between cursor-pointer mb-8 relative z-10">
-                        <div>
-                            <span class="block text-sm font-bold text-white">Enable Boosting</span>
-                            <span class="text-xs text-indigo-300">Feature this property on top</span>
+                <div style="background:linear-gradient(145deg,#1e1b4b,#1a1d36);border-radius:var(--radius-lg);padding:1.3rem;color:#fff;position:relative;overflow:hidden">
+                    <div style="position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.05)"></div>
+                    <div style="position:relative;z-index:1">
+                        <div style="display:flex;align-items:center;gap:.65rem;margin-bottom:1.25rem">
+                            <div style="width:36px;height:36px;border-radius:10px;background:rgba(245,158,11,.2);display:flex;align-items:center;justify-content:center;color:#fbbf24"><i class="fas fa-rocket"></i></div>
+                            <div>
+                                <div style="font-size:.9rem;font-weight:800">Boost Promotion</div>
+                                <div style="font-size:.7rem;color:rgba(255,255,255,.4)">Feature this property on top</div>
+                            </div>
                         </div>
-                        <div class="relative inline-block w-12 h-6 align-middle select-none">
-                            <input type="checkbox" name="is_boosted" value="1" {{ old('is_boosted', $property->is_boosted) ? 'checked' : '' }} class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-none appearance-none cursor-pointer checked:right-0 transition-all duration-300"/>
-                            <span class="block overflow-hidden h-6 rounded-full bg-indigo-800/50 border border-indigo-700 cursor-pointer"></span>
-                        </div>
-                    </label>
-
-                    <div class="grid grid-cols-1 gap-5 relative z-10">
-                        <div>
-                            <label class="text-xs font-bold text-indigo-300 uppercase mb-1.5 block">Start Date</label>
-                            <input type="date" name="boost_start_date" value="{{ $safeString($property->boost_start_date) }}" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 text-sm font-bold text-white placeholder-indigo-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent transition outline-none">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-indigo-300 uppercase mb-1.5 block">End Date</label>
-                            <input type="date" name="boost_end_date" value="{{ $safeString($property->boost_end_date) }}" class="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 text-sm font-bold text-white placeholder-indigo-300 focus:ring-2 focus:ring-amber-400 focus:border-transparent transition outline-none">
+                        <label style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;cursor:pointer">
+                            <span style="font-size:.82rem;font-weight:700">Enable Boosting</span>
+                            <input type="checkbox" name="is_boosted" value="1" {{ old('is_boosted',$property->is_boosted) ? 'checked':'' }} style="display:none" id="boostChk">
+                            <div class="tgl-slider" onclick="document.getElementById('boostChk').click()"></div>
+                        </label>
+                        <div style="display:flex;flex-direction:column;gap:.7rem">
+                            <div>
+                                <label style="font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.4);display:block;margin-bottom:.3rem">Start Date</label>
+                                <input type="date" name="boost_start_date" value="{{ old('boost_start_date', $property->boost_start_date ?? '') }}"
+                                       style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:.55rem .9rem;font-size:.82rem;font-weight:700;color:#fff;outline:none">
+                            </div>
+                            <div>
+                                <label style="font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.4);display:block;margin-bottom:.3rem">End Date</label>
+                                <input type="date" name="boost_end_date" value="{{ old('boost_end_date', $property->boost_end_date ?? '') }}"
+                                       style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:.55rem .9rem;font-size:.82rem;font-weight:700;color:#fff;outline:none">
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        {{-- ================= TAB 7: SEO ================= --}}
-         <div x-show="activeTab === 'seo'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-8 max-w-4xl">
-                 <h3 class="text-lg font-black text-slate-800 mb-6 flex items-center gap-2"><i class="fas fa-search text-indigo-500"></i> SEO & Metadata</h3>
-
-                 <div class="space-y-6">
-                    <div>
-                        <label class="input-label">Meta Title (Max 60 chars)</label>
-                        <input type="text" name="seo_metadata[title]" value="{{ $safeString($seoTitle) }}" maxlength="60" class="input-modern">
-                    </div>
-                    <div>
-                        <label class="input-label">Meta Description (Max 160 chars)</label>
-                        <textarea name="seo_metadata[description]" rows="3" maxlength="160" class="input-modern resize-none">{{ $safeString($seoDescription) }}</textarea>
-                    </div>
-                    <div>
-                        <label class="input-label">Keywords (Comma Separated)</label>
-                        <input type="text" name="seo_metadata[keywords]" value="{{ $safeString($seoKeywords) }}" class="input-modern">
-                    </div>
-                 </div>
+        {{-- ════ SEO ════════════════════════════════════════════════ --}}
+        <div id="panel-seo" class="tab-panel">
+            <div class="card" style="max-width:780px">
+                <div class="card-hd">
+                    <div class="card-icon" style="background:#eef2ff;color:var(--brand)"><i class="fas fa-search"></i></div>
+                    <div><div class="card-ttl">SEO & Metadata</div><div class="card-sub">Improve search engine visibility</div></div>
+                </div>
+                <div class="card-body" style="display:flex;flex-direction:column;gap:.85rem">
+                    <div><label class="lbl">Meta Title <span style="font-weight:500;text-transform:none;letter-spacing:0">(max 60 chars)</span></label>
+                        <input type="text" name="seo_metadata[title]" value="{{ old('seo_metadata.title', $seoTitle) }}" maxlength="60" class="inp" placeholder="Short, keyword-rich title"></div>
+                    <div><label class="lbl">Meta Description <span style="font-weight:500;text-transform:none;letter-spacing:0">(max 160 chars)</span></label>
+                        <textarea name="seo_metadata[description]" maxlength="160" class="ta" style="min-height:75px" placeholder="Brief description for search results…">{{ old('seo_metadata.description', $seoDesc) }}</textarea></div>
+                    <div><label class="lbl">Keywords <span style="font-weight:500;text-transform:none;letter-spacing:0">(comma separated)</span></label>
+                        <input type="text" name="seo_metadata[keywords]" value="{{ old('seo_metadata.keywords', $seoKeywords) }}" class="inp" placeholder="apartment, Erbil, for sale…"></div>
+                </div>
             </div>
-         </div>
+        </div>
 
-        {{-- ================= TAB 8: ANALYTICS ================= --}}
-        <div x-show="activeTab === 'analytics'" x-transition:enter="transition ease-out duration-300 opacity-0 translate-y-2">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                @foreach([
-                    ['label' => 'Total Views', 'val' => $property->views, 'color' => 'text-slate-900', 'bg' => 'bg-white'],
-                    ['label' => 'Favorites', 'val' => $property->favorites_count, 'color' => 'text-rose-500', 'bg' => 'bg-white'],
-                    ['label' => 'Rating', 'val' => $property->rating, 'color' => 'text-amber-500', 'bg' => 'bg-white']
-                ] as $stat)
-                <div class="{{ $stat['bg'] }} rounded-3xl border border-slate-200 shadow-sm p-6 text-center">
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{{ $stat['label'] }}</p>
-                    <p class="text-4xl font-black {{ $stat['color'] }}">{{ number_format((float)$stat['val']) }}</p>
+        {{-- ════ ANALYTICS ══════════════════════════════════════════ --}}
+        <div id="panel-analytics" class="tab-panel">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.25rem">
+                @foreach([['Total Views',$property->views,'fa-eye','#3b82f6'],['Favorites',$property->favorites_count,'fa-heart','#ef4444'],['Rating',$property->rating,'fa-star','#f59e0b']] as [$lbl,$val,$ico,$clr])
+                <div style="background:#fff;border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.25rem;text-align:center">
+                    <i class="fas {{ $ico }}" style="color:{{ $clr }};font-size:1.25rem;display:block;margin-bottom:.5rem"></i>
+                    <p style="font-size:2rem;font-weight:900;color:var(--ink);line-height:1;margin-bottom:.25rem">{{ number_format((float)$val) }}</p>
+                    <p style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)">{{ $lbl }}</p>
                 </div>
                 @endforeach
             </div>
+            <div style="background:#0f172a;border-radius:var(--radius-lg);padding:1.25rem">
+                <label class="lbl" style="color:#64748b;margin-bottom:.6rem"><i class="fas fa-code mr-1"></i> Raw JSON Data</label>
+                <textarea readonly style="width:100%;height:200px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:12px;font-size:.72rem;font-family:monospace;color:#4ade80;padding:.85rem;resize:none;outline:none">{{ json_encode(['id'=>$property->id,'status'=>$property->status,'views'=>$property->views,'favorites'=>$property->favorites_count,'rating'=>$property->rating,'created_at'=>$property->created_at,'updated_at'=>$property->updated_at,'is_active'=>$property->is_active,'published'=>$property->published,'verified'=>$property->verified,'is_boosted'=>$property->is_boosted], JSON_PRETTY_PRINT) }}</textarea>
+            </div>
+        </div>
 
-            <div class="bg-slate-900 rounded-3xl p-8 shadow-lg">
-                <label class="block text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
-                    <i class="fas fa-code"></i> Investment Analysis (Raw Data)
-                </label>
-                <div class="relative">
-                    <textarea readonly class="w-full h-48 bg-slate-800/50 border border-slate-700 rounded-xl text-xs font-mono text-emerald-400 p-4 resize-none focus:outline-none">{{ is_array($property->investment_analysis) ? json_encode($property->investment_analysis, JSON_PRETTY_PRINT) : '{}' }}</textarea>
-                </div>
+        {{-- Sticky save bar --}}
+        <div class="save-bar">
+            <div class="save-bar-text">Editing <strong>{{ $nameEn ?: $property->id }}</strong></div>
+            <div style="display:flex;gap:.5rem">
+                <a href="{{ route('admin.properties.show', $property->id) }}" class="btn btn--ghost"
+                   style="color:rgba(255,255,255,.5);border-color:rgba(255,255,255,.15);background:transparent;font-size:.75rem">
+                    Discard
+                </a>
+                <button type="submit" class="btn" style="background:linear-gradient(135deg,#303b97,#4b56b2);color:#fff;box-shadow:0 4px 14px rgba(48,59,151,.4)">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
             </div>
         </div>
 
     </form>
 </div>
 
-{{-- Custom CSS for Toggles and Inputs --}}
-<style>
-    .input-label {
-        @apply block text-[11px] font-bold text-slate-400 uppercase mb-1.5 tracking-wide;
-    }
-    .input-modern {
-        @apply w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all duration-200 outline-none;
-    }
-    .toggle-checkbox:checked + .toggle-label {
-        @apply bg-indigo-600;
-    }
-</style>
+@push('scripts')
+<script>
+// ── Tab switching ──────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => { p.style.display='none'; p.classList.remove('active'); });
+        btn.classList.add('active');
+        const panel = document.getElementById('panel-' + btn.dataset.tab);
+        if (panel) { panel.style.display='block'; panel.classList.add('active'); }
+    });
+});
 
+// init: hide all non-active
+document.querySelectorAll('.tab-panel:not(.active)').forEach(p => p.style.display='none');
+</script>
+@endpush
 @endsection
