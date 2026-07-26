@@ -81,6 +81,7 @@ Route::get('/PropertyDetail/{property_id}', [PropertyController::class, 'showPor
 Route::get('/projects', [ProjectController::class, 'showProjects'])->name('projects.index');
 Route::get('/agents', [AgentController::class, 'index'])->name('agents.list');
 Route::get('/review', [AuthController::class, 'showReviews'])->name('agent.review');
+Route::post('properties/{id}/toggle', [AdminController::class, 'propertiesToggleActive'])->name('admin.properties.toggleActive');
 
 // Become Agent Routes
 Route::get('/become-agent', function () {
